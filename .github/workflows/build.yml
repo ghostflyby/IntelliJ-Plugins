@@ -1,0 +1,232 @@
+# GitHub Actions Workflow is created for testing and preparing the plugin release in the following steps:
+# - Validate Gradle Wrapper.
+# - Run 'test' and 'verifyPlugin' tasks.
+# - Run Qodana inspections.
+# - Run the 'buildPlugin' task and prepare artifact for further tests.
+# - Run the 'runPluginVerifier' task.
+# - Create a draft release.
+#
+# The workflow is triggered on push and pull_request events.
+#
+# GitHub Actions reference: https://help.github.com/en/actions
+#
+## JBIJPPTPL
+
+name: Build
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+  
+jobs:
+
+  discover:
+    name: Discover changed modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.discover.outputs.modules }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine modules
+        id: discover
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main --quiet || true
+          DIFF=$(git diff --name-only origin/main...HEAD || true)
+          if [ "$EVENT_NAME" = "push" ]; then
+            BASE="$BEFORE"
+            # Handle initial pushes or missing BEFORE
+            if [ -z "${BASE}" ] || [ "${BASE}" = "0000000000000000000000000000000000000000" ]; then
+              BASE=$(git rev-parse origin/main || echo "")
+            fi
+            DIFF=$(git diff --name-only "${BASE}...${AFTER}" || true)
+          else
+            DIFF=$(git diff --name-only origin/main...HEAD || true)
+          fi
+          CHANGED=$( { echo "$DIFF" | grep '^plugins/' || true; } | cut -d/ -f1-2 | sort -u | jq -R -s -c 'split("\n") | map(select(length>0)) | map(":" + gsub("/"; ":"))')
+          # Fallback: if push event and no modules detected, keep empty list (no release)
+          # To run for all modules instead, uncomment the following block.
+          # if [ "$EVENT_NAME" = "push" ] && [ "${CHANGED}" = "[]" ]; then
+          #   CHANGED=$(find plugins -mindepth 1 -maxdepth 1 -type d -print | sed 's|^|:|' | sed 's|/|:|g' | jq -R -s -c 'split("\n") | map(select(length>0))')
+          # fi
+          MODULES=${CHANGED:-[]}
+          echo "Changed modules: $MODULES"
+          echo "modules=$MODULES" >> "$GITHUB_OUTPUT"
+
+  build-and-check:
+    name: Build and Check
+    needs: [ discover ]
+    if: ${{ needs.discover.outputs.modules != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
+    steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Resolve module path
+        id: modpath
+        shell: bash
+        run: |
+          P=${{ matrix.module }}
+          P=${P#:}
+          echo "path=${P//:/\/}" >> "$GITHUB_OUTPUT"
+          echo "namesegment=${P//:/-}" >> "$GITHUB_OUTPUT"
+      - name: Build plugin
+        run: ./gradlew ${{ matrix.module }}:buildPlugin
+      - name: Prepare Plugin Artifact
+        id: artifact
+        shell: bash
+        run: |
+          cd ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/distributions
+          FILENAME=$(ls *.zip)
+          unzip "$FILENAME" -d content
+          BASENAME=$(basename "$FILENAME" .zip)
+          echo "filename=$BASENAME" >> $GITHUB_OUTPUT
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.filename }}
+          path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/distributions/content/*/*
+      - name: Run Tests
+        run: ./gradlew ${{ matrix.module }}:check
+      - name: Collect Tests Result
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests-result-${{ matrix.module }}
+          path: ${{ github.workspace }}/**/build/reports/tests
+      - name: Upload Code Coverage Report
+        uses: codecov/codecov-action@v5
+        with:
+          files: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/kover/report.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Run Plugin Verification tasks
+        run: ./gradlew ${{ matrix.module }}:verifyPlugin
+      - name: Collect Plugin Verifier Result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pluginVerifier-result-${{ steps.modpath.outputs.namesegment }}
+          path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
+
+  inspectCode:
+    name: Inspect code
+    needs: [ build-and-check ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+      - name: Qodana - Code Inspection
+        uses: JetBrains/qodana-action@v2025.1.1
+        with:
+          cache-default-branch-only: true
+
+  
+
+  releaseDraft:
+    name: Release draft
+    if: github.event_name != 'pull_request' && needs.discover.outputs.modules != '[]'
+    needs: [ build-and-check, inspectCode, discover ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 21
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+      - name: Resolve module path
+        id: modpath
+        shell: bash
+        run: |
+          P=${{ matrix.module }}
+          P=${P#:}
+          TAG_PATH=${P//plugins:/}
+          echo "tagpath=$TAG_PATH" >> "$GITHUB_OUTPUT"
+      - name: Export Properties
+        id: properties
+        shell: bash
+        run: |
+          PROPERTIES="$(./gradlew ${{ matrix.module }}:properties --console=plain -q)"
+          VERSION="$(echo "$PROPERTIES" | grep "^version:" | cut -f2- -d ' ')"
+          CHANGELOG="$(./gradlew ${{ matrix.module }}:getChangelog --unreleased --no-header --console=plain -q)"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Remove Old Release Drafts for this module
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/{owner}/{repo}/releases \
+            --jq '.[] | select(.draft == true and (.tag_name | startswith("'${{ steps.modpath.outputs.tagpath }}'"))) | .id' \
+            | xargs -I '{}' gh api -X DELETE repos/{owner}/{repo}/releases/{}
+      - name: Create Release Draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.modpath.outputs.tagpath }}-v${{ steps.properties.outputs.version }}" \
+            --draft \
+            --title "${{ steps.modpath.outputs.tagpath }} v${{ steps.properties.outputs.version }}" \
+            --notes "$(cat << 'EOM'
+          ${{ steps.properties.outputs.changelog }}
+          EOM
+          )"
