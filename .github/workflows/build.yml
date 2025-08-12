@@ -21,7 +21,7 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-  
+
 jobs:
 
   discover:
@@ -166,7 +166,7 @@ jobs:
         with:
           cache-default-branch-only: true
 
-  
+
 
   releaseDraft:
     name: Release draft

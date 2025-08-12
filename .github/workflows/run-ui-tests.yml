@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [":plugins:template"]
+        module: [ ":plugins:template" ]
         include:
           - os: ubuntu-latest
             runIde: |

@@ -17,6 +17,7 @@
  */
 
 package dev.ghostflyby.selectionlivetemplate
+
 import com.intellij.codeInsight.template.Template
 import com.intellij.codeInsight.template.TemplateSubstitutor
 import com.intellij.codeInsight.template.impl.TemplateImpl
@@ -34,7 +35,8 @@ internal class ExpandSelectionTemplateSubstitutor : TemplateSubstitutor {
 
         if (previous.isNullOrEmpty() ||
             @Suppress("UnstableApiUsage")
-            !template.isSelectionTemplate)
+            !template.isSelectionTemplate
+        )
             return null
         return template.apply {
             @Suppress("UnstableApiUsage")
