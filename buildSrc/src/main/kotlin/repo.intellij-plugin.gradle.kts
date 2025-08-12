@@ -49,6 +49,11 @@ dependencies {
 
         testFramework(TestFrameworkType.Platform)
     }
+
+    // Keep test dependencies locally versioned via version catalog
+    testImplementation(libs.junit)
+    testImplementation(libs.opentest4j)
+
 }
 
 intellijPlatform {
@@ -116,6 +121,15 @@ tasks {
         this.sandboxSystemDirectory = rootProject.layout.buildDirectory.dir("idea-sandbox/system")
     }
     publishPlugin { dependsOn(patchChangelog) }
+
+    patchPluginXml {
+        vendorName = "ghostflyby"
+        vendorEmail = "ghostflyby+intellij@outlook.com"
+    }
+
+    processResources {
+        from(rootProject.file("LICENSE"))
+    }
 }
 
 intellijPlatformTesting {
