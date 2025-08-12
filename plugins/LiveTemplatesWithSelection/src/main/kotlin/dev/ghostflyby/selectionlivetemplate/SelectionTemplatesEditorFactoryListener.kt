@@ -17,13 +17,13 @@
  */
 
 package dev.ghostflyby.selectionlivetemplate
+
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.event.*
 import com.intellij.openapi.util.Key
-import kotlin.text.contentEquals
 
 @Service
 internal class PluginDisposable : Disposable.Default

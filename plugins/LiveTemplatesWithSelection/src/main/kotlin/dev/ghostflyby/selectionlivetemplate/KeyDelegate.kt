@@ -17,6 +17,7 @@
  */
 
 package dev.ghostflyby.selectionlivetemplate
+
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolder
 import kotlin.reflect.KProperty
