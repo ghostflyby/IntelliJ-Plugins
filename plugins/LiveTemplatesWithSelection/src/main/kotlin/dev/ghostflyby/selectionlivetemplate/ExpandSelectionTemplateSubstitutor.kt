@@ -16,7 +16,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.livetemplateswithselection
+package dev.ghostflyby.selectionlivetemplate
 import com.intellij.codeInsight.template.Template
 import com.intellij.codeInsight.template.TemplateSubstitutor
 import com.intellij.codeInsight.template.impl.TemplateImpl

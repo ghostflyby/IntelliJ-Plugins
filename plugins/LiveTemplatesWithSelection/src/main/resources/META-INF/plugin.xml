@@ -16,8 +16,8 @@
   ~ <https://www.gnu.org/licenses/>.
   -->
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
-<idea-plugin package="dev.ghostflyby.livetemplateswithselection">
-    <id>dev.ghostflyby.LiveTemplatesWithSelection</id>
+<idea-plugin package="dev.ghostflyby.selectionlivetemplate">
+    <id>dev.ghostflyby.selectionlivetemplate</id>
     <name>Live Templates with Selection</name>
     <vendor>ghostflyby</vendor>
 
@@ -25,8 +25,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <editorFactoryListener
-            implementation="dev.ghostflyby.livetemplateswithselection.SelectionTemplatesEditorFactoryListener" />
+            implementation="dev.ghostflyby.selectionlivetemplate.SelectionTemplatesEditorFactoryListener" />
         <liveTemplateSubstitutor
-            implementation="dev.ghostflyby.livetemplateswithselection.ExpandSelectionTemplateSubstitutor" />
+            implementation="dev.ghostflyby.selectionlivetemplate.ExpandSelectionTemplateSubstitutor" />
     </extensions>
 </idea-plugin>

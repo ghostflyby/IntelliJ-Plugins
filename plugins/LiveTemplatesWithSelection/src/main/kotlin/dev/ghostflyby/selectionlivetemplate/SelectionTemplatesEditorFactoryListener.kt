@@ -16,7 +16,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.livetemplateswithselection
+package dev.ghostflyby.selectionlivetemplate
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
