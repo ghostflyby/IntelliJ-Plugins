@@ -6,28 +6,6 @@
       <inspection_tool class="CommitNamingConvention" enabled="true" level="WARNING" enabled_by_default="true" />
     </profile>
   </component>
-  <component name="IssueNavigationConfiguration">
-    <option name="links">
-      <list>
-        <IssueNavigationLink>
-          <option name="issueRegexp" value="\(#(\d+)\)" />
-          <option name="linkRegexp" value="https://github.com/ghostflyby/intellij-platform-plugin-template/issues/$1" />
-        </IssueNavigationLink>
-        <IssueNavigationLink>
-          <option name="issueRegexp" value="#(\d+)" />
-          <option name="linkRegexp" value="https://github.com/ghostflyby/intellij-platform-plugin-template/issues/$1" />
-        </IssueNavigationLink>
-        <IssueNavigationLink>
-          <option name="issueRegexp" value="GH-(\d+)" />
-          <option name="linkRegexp" value="https://github.com/ghostflyby/intellij-platform-plugin-template/issues/$1" />
-        </IssueNavigationLink>
-        <IssueNavigationLink>
-          <option name="issueRegexp" value="([^/\n\s]+/[^#\n\s]+)#(\d+)" />
-          <option name="linkRegexp" value="https://github.com/$1/issues/$2" />
-        </IssueNavigationLink>
-      </list>
-    </option>
-  </component>
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
   </component>
