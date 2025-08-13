@@ -18,6 +18,7 @@
 
 plugins {
     id("repo.intellij-plugin")
+    kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
 version = "0.0.1"
@@ -28,7 +29,39 @@ intellijPlatform {
     }
 }
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.java")
-    bundledPlugin("com.intellij.gradle")
+sourceSets {
+    val common by creating
+    val gradle by creating
+
+    tasks.jar {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        from(common.output, main.map { it.output }, gradle.output)
+    }
 }
+
+kotlin.target.compilations {
+    val main by getting
+    val common by getting
+    val gradle by getting
+    main.associateWith(common)
+    gradle.associateWith(common)
+}
+
+samWithReceiver {
+    annotation("org.gradle.api.HasImplicitReceiver")
+}
+
+dependencies {
+    val commonCompileOnly by configurations.getting
+    val gradleCompileOnly by configurations.getting
+
+    commonCompileOnly(kotlin("stdlib"))
+    gradleCompileOnly(gradleKotlinDsl())
+    gradleCompileOnly(gradleApi())
+
+    intellijPlatform {
+        bundledPlugin("com.intellij.java")
+        bundledPlugin("com.intellij.gradle")
+    }
+}
+
