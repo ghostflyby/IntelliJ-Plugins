@@ -20,6 +20,7 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.utils.asPath
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -147,6 +148,21 @@ tasks {
 
     processResources {
         from(rootProject.file("LICENSE"))
+    }
+
+    if (System.getenv("CI") != null && System.getenv("GH_RELEASE_TAG") != null) {
+        val upload = tasks.register<Exec>("uploadReleaseAssets") {
+            val plugin = tasks.buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
+            commandLine(
+                "gh", "release", "upload",
+                providers.environmentVariable("GH_RELEASE_TAG"),
+                plugin,
+            )
+        }
+
+        publishPlugin {
+            finalizedBy(upload)
+        }
     }
 }
 
