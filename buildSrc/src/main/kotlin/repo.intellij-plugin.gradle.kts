@@ -150,20 +150,23 @@ tasks {
         from(rootProject.file("LICENSE"))
     }
 
-    if (System.getenv("CI") != null && System.getenv("GH_RELEASE_TAG") != null) {
-        val upload = tasks.register<Exec>("uploadReleaseAssets") {
-            val plugin = tasks.buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
-            commandLine(
-                "gh", "release", "upload",
-                providers.environmentVariable("GH_RELEASE_TAG"),
-                plugin,
-            )
-        }
+    val ci = providers.environmentVariable("CI").map { it.toBoolean() }
+    val ghReleaseTag = providers.environmentVariable("GH_RELEASE_TAG")
 
+    tasks.register<Exec>("uploadReleaseAssets") {
+        onlyIf { ci.get() && ghReleaseTag.map { it.isNotBlank() }.get() }
+        inputs.property("ghReleaseTag", ghReleaseTag)
+        val plugin = tasks.buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
+        commandLine(
+            "gh", "release", "upload",
+            ghReleaseTag,
+            plugin,
+        )
         publishPlugin {
-            finalizedBy(upload)
+            finalizedBy(this@register)
         }
     }
+
 }
 
 intellijPlatformTesting {
