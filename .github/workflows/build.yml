@@ -43,7 +43,7 @@ jobs:
           AFTER: ${{ github.sha }}
         run: |
           # Fetch main to compare diffs; ignore failures
-          & git fetch origin main --quiet | Out-Null
+          git fetch origin main --quiet | Out-Null
 
           # Compute the diff range depending on event type
           $diff = @()
@@ -52,13 +52,13 @@ jobs:
               $base = $env:BEFORE
               if ([string]::IsNullOrEmpty($base) -or $base -eq '0000000000000000000000000000000000000000')
               {
-                  $base = (& git rev-parse origin/main) 2> $null
+                  $base = (git rev-parse origin/main) 2> $null
               }
-              $diff = (& git diff --name-only "$base...$env:AFTER") 2> $null
+              $diff = (git diff --name-only "$base...$env:AFTER") 2> $null
           }
           else
           {
-              $diff = (& git diff --name-only origin/main...HEAD) 2> $null
+              $diff = (git diff --name-only origin/main...HEAD) 2> $null
           }
 
           if (-not $diff)
@@ -84,7 +84,7 @@ jobs:
                   Sort-Object -Unique
 
           # Map to :plugins:module format and emit JSON array
-          $modules = $paths | ForEach-Object $_ -replace 'plugins/', ':plugins:'
+          $modules = $paths | ForEach-Object { $_ -replace 'plugins/', ':plugins:' }
           if ($modules.Count -eq 0)
           {
               $modules = Get-ChildItem -Path 'plugins/*' -Directory | ForEach-Object { ":plugins:$( $_.Name )" }
