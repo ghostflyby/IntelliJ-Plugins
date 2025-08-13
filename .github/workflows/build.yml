@@ -84,12 +84,12 @@ jobs:
                   Sort-Object -Unique
 
           # Map to :plugins:module format and emit JSON array
-          $modules = $paths | ForEach-Object { $_ -replace 'plugins/', ':plugins:' }
+          [string[]]$modules = $paths | ForEach-Object { $_ -replace 'plugins/', ':plugins:' }
           if ($modules.Count -eq 0)
           {
               $modules = Get-ChildItem -Path 'plugins/*' -Directory | ForEach-Object { ":plugins:$( $_.Name )" }
           }
-          $json = $modules | ConvertTo-Json -Compress
+          $json = $modules | ConvertTo-Json -Compress -AsArray
 
           Write-Host "Changed modules: $json"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "modules=$json"
