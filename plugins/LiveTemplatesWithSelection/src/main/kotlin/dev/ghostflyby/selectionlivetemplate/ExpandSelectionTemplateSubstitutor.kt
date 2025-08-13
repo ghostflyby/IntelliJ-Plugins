@@ -33,15 +33,16 @@ internal class ExpandSelectionTemplateSubstitutor : TemplateSubstitutor {
         substitutionContext.document.replacedSelection = null
 
 
-        if (previous.isNullOrEmpty() ||
-            @Suppress("UnstableApiUsage")
-            !template.isSelectionTemplate
-        )
+        if (previous.isNullOrEmpty())
             return null
-        return template.apply {
-            @Suppress("UnstableApiUsage")
-            string = template.string.replace(SELECTION, previous.replace("$", "$$"))
+
+        val string = (template as Template).string
+
+        if (!string.contains(SELECTION)) {
+            return null
         }
+
+        return TemplateImpl(template.key, string.replace(SELECTION, previous.replace("$", "$$")), template.groupName)
     }
 
     companion object {
