@@ -23,6 +23,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.gradle</depends>
+    <depends>com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <java.programPatcher implementation="dev.ghostflyby.dcevm.DCEVMProgramPatcher" />
