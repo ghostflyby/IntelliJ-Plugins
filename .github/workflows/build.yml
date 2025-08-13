@@ -36,34 +36,63 @@ jobs:
           fetch-depth: 0
       - name: Determine modules
         id: discover
-        shell: bash
+        shell: pwsh
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
         run: |
-          set -euo pipefail
-          git fetch origin main --quiet || true
-          DIFF=$(git diff --name-only origin/main...HEAD || true)
-          if [ "$EVENT_NAME" = "push" ]; then
-            BASE="$BEFORE"
-            # Handle initial pushes or missing BEFORE
-            if [ -z "${BASE}" ] || [ "${BASE}" = "0000000000000000000000000000000000000000" ]; then
-              BASE=$(git rev-parse origin/main || echo "")
-            fi
-            DIFF=$(git diff --name-only "${BASE}...${AFTER}" || true)
+          # Fetch main to compare diffs; ignore failures
+          & git fetch origin main --quiet | Out-Null
+
+          # Compute the diff range depending on event type
+          $diff = @()
+          if ($env:EVENT_NAME -eq 'push')
+          {
+              $base = $env:BEFORE
+              if ([string]::IsNullOrEmpty($base) -or $base -eq '0000000000000000000000000000000000000000')
+              {
+                  $base = (& git rev-parse origin/main) 2> $null
+              }
+              $diff = (& git diff --name-only "$base...$env:AFTER") 2> $null
+          }
           else
-            DIFF=$(git diff --name-only origin/main...HEAD || true)
-          fi
-          CHANGED=$( { echo "$DIFF" | grep '^plugins/' || true; } | cut -d/ -f1-2 | sort -u | jq -R -s -c 'split("\n") | map(select(length>0)) | map(":" + gsub("/"; ":"))')
-          # Fallback: if push event and no modules detected, keep empty list (no release)
-          # To run for all modules instead, uncomment the following block.
-          if [ "$EVENT_NAME" = "push" ] && [ "${CHANGED}" = "[]" ]; then
-            CHANGED=$(find plugins -mindepth 1 -maxdepth 1 -type d -print | sed 's|^|:|' | sed 's|/|:|g' | jq -R -s -c 'split("\n") | map(select(length>0))')
-          fi
-          MODULES=${CHANGED:-[]}
-          echo "Changed modules: $MODULES"
-          echo "modules=$MODULES" >> "$GITHUB_OUTPUT"
+          {
+              $diff = (& git diff --name-only origin/main...HEAD) 2> $null
+          }
+
+          if (-not $diff)
+          {
+              $diff = @()
+          }
+
+          # Keep only paths under plugins/, reduce to first two segments, unique
+          $paths = $diff |
+                  Where-Object { $_ -match '^plugins/' } |
+                  ForEach-Object {
+                      $parts = $_.Split('/')
+                      if ($parts.Length -ge 2)
+                      {
+                          ($parts[0..1] -join '/')
+                      }
+                      else
+                      {
+                          $null
+                      }
+                  } |
+                  Where-Object { $_ } |
+                  Sort-Object -Unique
+
+          # Map to :plugins:module format and emit JSON array
+          $modules = $paths | ForEach-Object $_ -replace 'plugins/', ':plugins:'
+          if ($modules.Count -eq 0)
+          {
+              $modules = Get-ChildItem -Path 'plugins/*' -Directory | ForEach-Object { ":plugins:$( $_.Name )" }
+          }
+          $json = $modules | ConvertTo-Json -Compress
+
+          Write-Host "Changed modules: $json"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "modules=$json"
 
   build-and-check:
     name: Build and Check
