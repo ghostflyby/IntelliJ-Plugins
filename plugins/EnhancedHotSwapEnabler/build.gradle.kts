@@ -64,4 +64,12 @@ dependencies {
         bundledPlugin("com.intellij.gradle")
     }
 }
+tasks.prepareSandbox {
+    val common by sourceSets.getting
+    val commonFiles = common.output.asFileTree.map { it.toPath() }.toSet()
+    exclude {
+        it.file.toPath() in commonFiles
+    }
+    includeEmptyDirs = false
+}
 
