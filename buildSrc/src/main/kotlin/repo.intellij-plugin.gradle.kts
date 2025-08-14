@@ -166,6 +166,7 @@ tasks {
     val upload = tasks.register<Exec>("uploadReleaseAssets") {
         inputs.property("ghReleaseTag", ghReleaseTag)
         inputs.property("isGitHubActions", isGitHubActions)
+        inputs.file(path)
         group = "publishing"
         description = "Uploads release assets to GitHub for the specified tag."
         onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
@@ -179,7 +180,7 @@ tasks {
     }
 
     publishPlugin {
-        dependsOn(upload)
+        finalizedBy(upload)
     }
 
 }
