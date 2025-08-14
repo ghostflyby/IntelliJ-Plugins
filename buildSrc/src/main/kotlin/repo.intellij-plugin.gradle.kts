@@ -19,7 +19,9 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -30,6 +32,13 @@ plugins {
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
     alias(libs.plugins.qodana) // Gradle Qodana Plugin
     alias(libs.plugins.kover) // Gradle Kover Plugin}
+}
+
+
+val buildLogic = extensions.create<BuildLogicSettings>("buildLogic").apply {
+    platformType.convention(providers.gradleProperty("platformType").map { IntelliJPlatformType.fromCode(it) })
+    platformVersion.convention(providers.gradleProperty("platformVersion"))
+    pluginSinceBuild.convention(providers.gradleProperty("pluginSinceBuild"))
 }
 
 group = providers.gradleProperty("pluginGroup").get()
@@ -61,10 +70,7 @@ dependencies {
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
-            create(
-                providers.gradleProperty("platformType"),
-                providers.gradleProperty("platformVersion"),
-            )
+            create(buildLogic.platformType, buildLogic.platformVersion)
         }
 
         testFramework(TestFrameworkType.Platform)
@@ -78,6 +84,7 @@ dependencies {
 
 intellijPlatform {
     pluginConfiguration {
+        version = buildLogic.pluginVersion
 
         description = providers.fileContents(layout.projectDirectory.file("README.md")).asText.map {
             val start = "<!-- Plugin description -->"
@@ -103,7 +110,7 @@ intellijPlatform {
             }
         }
 
-        ideaVersion { sinceBuild = providers.gradleProperty("pluginSinceBuild") }
+        ideaVersion { sinceBuild = buildLogic.pluginSinceBuild }
     }
 
     signing {
@@ -179,7 +186,7 @@ tasks {
 
 intellijPlatformTesting {
     runIde {
-        register("runIdeForUiTests") {
+        register("runIdeForUiTests")<IntelliJPlatformTestingExtension.RunIdeParameters> {
             task {
                 jvmArgumentProviders += CommandLineArgumentProvider {
                     listOf(

@@ -22,8 +22,6 @@ plugins {
 
 version = "1.0.1"
 
-intellijPlatform {
-    pluginConfiguration {
-        version = project.version.toString()
-    }
+buildLogic {
+    pluginVersion = version.toString()
 }
