@@ -41,8 +41,17 @@ internal class ExpandSelectionTemplateSubstitutor : TemplateSubstitutor {
         if (!string.contains(SELECTION)) {
             return null
         }
+        val newString = string
+            .replace(
+                SELECTION,
+                previous.replace("$", "$$")
+            )
 
-        return TemplateImpl(template.key, string.replace(SELECTION, previous.replace("$", "$$")), template.groupName)
+        return TemplateImpl(template.key, newString, template.groupName).apply {
+            template.variables.forEach {
+                addVariable(it)
+            }
+        }
     }
 
     companion object {
