@@ -47,6 +47,7 @@ kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.fromTarget("21")
     }
+    explicitApi()
 }
 
 repositories {
