@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Non `$SELECTION$` live templates variables missing
+
 ## [1.0.1] - 2025-08-13
 
 ### Added
