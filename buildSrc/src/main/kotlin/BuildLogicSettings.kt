@@ -16,10 +16,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-import javax.inject.Inject
 
 /*
  * Copyright (c) 2025 ghostflyby <ghostflyby+intellij@outlook.com>
@@ -38,10 +36,9 @@ import javax.inject.Inject
  * License along with this library; if not, see
  * <https://www.gnu.org/licenses/>.
  */
-abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory) {
-    abstract val platformType: Property<IntelliJPlatformType>
-    abstract val platformVersion: Property<String>
-    abstract val pluginVersion: Property<String>
-    abstract val pluginSinceBuild: Property<String>
-
+interface BuildLogicSettings {
+    val platformType: Property<IntelliJPlatformType>
+    val platformVersion: Property<String>
+    val pluginVersion: Property<String>
+    val pluginSinceBuild: Property<String>
 }
