@@ -160,26 +160,29 @@ tasks {
 
     val isGitHubActions = providers.environmentVariable("GITHUB_ACTIONS").map { it.toBoolean() }
     val ghReleaseTag = providers.environmentVariable("GH_RELEASE_TAG")
+    val path =
+        buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
 
-    publishPlugin {
+    val upload = tasks.register<Exec>("uploadReleaseAssets") {
         inputs.property("ghReleaseTag", ghReleaseTag)
         inputs.property("isGitHubActions", isGitHubActions)
-        doLast {
-            if (isGitHubActions.get()) {
-                logger.lifecycle("Uploaded release assets to GitHub for tag: ${ghReleaseTag.get()}")
-            } else {
-                logger.lifecycle("Skipping upload of release assets to GitHub, not running in GitHub Actions")
-            }
-            providers.exec {
-                commandLine(
-                    "gh",
-                    "release",
-                    "upload",
-                    ghReleaseTag.get(),
-                    buildPlugin.flatMap { it.archiveFile }.map { it.asPath },
-                )
-            }.result.get()
-        }
+        inputs.file(path)
+        group = "publishing"
+        description = "Uploads release assets to GitHub for the specified tag."
+        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
+        commandLine("gh")
+        argumentProviders.add(CommandLineArgumentProvider {
+            val args = mutableListOf<String>()
+            args.add("release")
+            args.add("upload")
+            args.add(ghReleaseTag.get())
+            args.add(path.get().toString())
+            args
+        })
+    }
+
+    publishPlugin {
+        finalizedBy(upload)
     }
 
 }

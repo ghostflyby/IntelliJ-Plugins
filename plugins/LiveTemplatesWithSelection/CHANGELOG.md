@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2025-08-14
+
 ### Fixed
 
 - Non `$SELECTION$` live templates variables missing
@@ -19,5 +21,6 @@
 
 - Stop using internal APIs
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.1
