@@ -68,7 +68,10 @@ dependencies {
             create(buildLogic.platformType.map {
                 logger.lifecycle("Using IntelliJ Platform type: $it")
                 it
-            }, buildLogic.platformVersion)
+            }, buildLogic.platformVersion.map {
+                logger.lifecycle("Using IntelliJ Platform version: $it")
+                it
+            })
         }
 
         testFramework(TestFrameworkType.Platform)

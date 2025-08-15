@@ -43,12 +43,14 @@ plugins {
 
 version = "0.0.1"
 
+logger.lifecycle("Start buildLogic settings for EnhancedHotSwapEnabler")
 buildLogic {
     pluginVersion = version.toString()
     platformType = IntelliJPlatformType.IntellijIdeaCommunity
     platformVersion = "2025.2"
     pluginSinceBuild = "252"
 }
+logger.lifecycle("End buildLogic settings for EnhancedHotSwapEnabler")
 
 
 sourceSets {
