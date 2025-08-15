@@ -44,9 +44,10 @@ plugins {
 version = "0.0.1"
 
 buildLogic {
-    pluginVersion = "0.0.1"
+    pluginVersion = version.toString()
     platformType = IntelliJPlatformType.IntellijIdeaCommunity
     platformVersion = "2025.1"
+    pluginSinceBuild = "251"
 }
 
 

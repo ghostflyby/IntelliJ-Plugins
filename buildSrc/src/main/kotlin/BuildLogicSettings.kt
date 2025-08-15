@@ -16,8 +16,12 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.kotlin.dsl.property
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import javax.inject.Inject
 
 /*
  * Copyright (c) 2025 ghostflyby <ghostflyby+intellij@outlook.com>
@@ -36,9 +40,12 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
  * License along with this library; if not, see
  * <https://www.gnu.org/licenses/>.
  */
-interface BuildLogicSettings {
-    val platformType: Property<IntelliJPlatformType>
-    val platformVersion: Property<String>
-    val pluginVersion: Property<String>
-    val pluginSinceBuild: Property<String>
+abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory, providers: ProviderFactory) {
+    val platformType: Property<IntelliJPlatformType> = objects.property<IntelliJPlatformType>()
+        .convention(providers.gradleProperty("platformType").map { IntelliJPlatformType.fromCode(it) })
+    val platformVersion: Property<String> = objects.property<String>()
+        .convention(providers.gradleProperty("platformVersion"))
+    val pluginVersion: Property<String> = objects.property()
+    val pluginSinceBuild: Property<String> = objects.property<String>()
+        .convention(providers.gradleProperty("pluginSinceBuild"))
 }
