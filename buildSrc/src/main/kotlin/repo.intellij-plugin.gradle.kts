@@ -65,7 +65,10 @@ dependencies {
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
-            create(buildLogic.platformType, buildLogic.platformVersion)
+            create(buildLogic.platformType.map {
+                logger.lifecycle("Using IntelliJ Platform type: $it")
+                it
+            }, buildLogic.platformVersion)
         }
 
         testFramework(TestFrameworkType.Platform)
