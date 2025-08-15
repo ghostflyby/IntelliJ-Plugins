@@ -59,21 +59,25 @@ repositories {
     intellijPlatform { defaultRepositories() }
 }
 
-dependencies {
-    intellijPlatform {
+afterEvaluate {
+    dependencies.intellijPlatform {
         val localPlatform = rootProject.file(".idea/intellijPlatform")
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
             create(buildLogic.platformType, buildLogic.platformVersion)
         }
-
-        testFramework(TestFrameworkType.Platform)
     }
+}
+
+dependencies {
 
     // Keep test dependencies locally versioned via version catalog
     testImplementation(libs.junit)
     testImplementation(libs.opentest4j)
+    intellijPlatform {
+        testFramework(TestFrameworkType.Platform)
+    }
 
 }
 
