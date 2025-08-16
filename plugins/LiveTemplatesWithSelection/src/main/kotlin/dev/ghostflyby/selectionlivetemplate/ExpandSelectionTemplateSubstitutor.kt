@@ -38,7 +38,8 @@ internal class ExpandSelectionTemplateSubstitutor : TemplateSubstitutor {
 
         val string = (template as Template).string
 
-        if (!string.contains(SELECTION)) {
+        @Suppress("UnstableApiUsage")
+        if (!template.isSelectionTemplate) {
             return null
         }
         val newString = string
