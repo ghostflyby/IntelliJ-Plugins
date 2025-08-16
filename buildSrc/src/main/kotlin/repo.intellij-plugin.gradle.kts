@@ -21,6 +21,7 @@ import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -122,6 +123,10 @@ intellijPlatform {
         token = providers.environmentVariable("PUBLISH_TOKEN")
         channels = this@intellijPlatform.pluginConfiguration.version
             .map { listOf(it.substringAfter('-', "").substringBefore('.').ifEmpty { "default" }) }
+    }
+
+    pluginVerification {
+        this.verificationReportsFormats.add(VerifyPluginTask.VerificationReportsFormats.MARKDOWN)
     }
 
     pluginVerification { ides { recommended() } }
