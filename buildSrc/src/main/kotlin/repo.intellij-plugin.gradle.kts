@@ -19,7 +19,6 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
 import org.jetbrains.intellij.platform.gradle.utils.asPath
@@ -35,11 +34,7 @@ plugins {
 }
 
 
-val buildLogic = extensions.create<BuildLogicSettings>("buildLogic").apply {
-    platformType.convention(providers.gradleProperty("platformType").map { IntelliJPlatformType.fromCode(it) })
-    platformVersion.convention(providers.gradleProperty("platformVersion"))
-    pluginSinceBuild.convention(providers.gradleProperty("pluginSinceBuild"))
-}
+val buildLogic = extensions.create<BuildLogicSettings>("buildLogic")
 
 group = providers.gradleProperty("pluginGroup").get()
 
@@ -64,21 +59,25 @@ repositories {
     intellijPlatform { defaultRepositories() }
 }
 
-dependencies {
-    intellijPlatform {
+afterEvaluate {
+    dependencies.intellijPlatform {
         val localPlatform = rootProject.file(".idea/intellijPlatform")
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
             create(buildLogic.platformType, buildLogic.platformVersion)
         }
-
-        testFramework(TestFrameworkType.Platform)
     }
+}
+
+dependencies {
 
     // Keep test dependencies locally versioned via version catalog
     testImplementation(libs.junit)
     testImplementation(libs.opentest4j)
+    intellijPlatform {
+        testFramework(TestFrameworkType.Platform)
+    }
 
 }
 
