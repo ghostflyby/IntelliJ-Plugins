@@ -34,6 +34,7 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
         configuration: RunProfile,
         javaParameters: JavaParameters,
     ) {
+        if (javaParameters.vmParametersList.parameters.none { it.startsWith("-agentlib:jdwp") }) return
         val javaHome = javaParameters.jdk?.homePath ?: return
 
         val support = getDcevmSupport(

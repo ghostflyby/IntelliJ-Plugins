@@ -7,3 +7,8 @@
 ### Added
 
 - Initial scaffold
+
+### Fixed
+
+- Not editing parameters for non-debug starts
+- Wrong gradle plugin class name

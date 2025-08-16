@@ -44,7 +44,7 @@ dependencies {
     classpath files(${path.toGroovyStringLiteral()})
 }
 }
-pluginManager.apply(ghostflyby.intellijplugin.dcevm.gradle.IntelliJDcevmGradlePlugin)
+pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
 """.trimIndent()
         )
     }

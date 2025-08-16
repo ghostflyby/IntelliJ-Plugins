@@ -26,12 +26,10 @@ import org.gradle.kotlin.dsl.withType
 
 internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
     override fun apply(target: Gradle) = target.allprojects {
-        logger.lifecycle("Applying $this")
         val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).map { it.toBoolean() }
         val enableHotswapAgent = providers.environmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY).map { it.toBoolean() }
         tasks.withType<JavaExec>().configureEach {
 
-            logger.lifecycle("Preparing $this")
             val dcevmSupportProvider = javaLauncher.map { launcher ->
                 val javaHome = launcher.metadata.installationPath.asFile.toPath()
                 getDcevmSupport(javaHome) { exe ->
@@ -43,6 +41,7 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
 
 
             doFirst {
+                if (args.none { it.startsWith("-agentlib:jdwp") }) return@doFirst
                 if (enableDcevm.get()) {
                     val support = dcevmSupportProvider.get()
                     if (support is DCEVMSupport.NeedsArgs)
