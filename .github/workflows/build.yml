@@ -170,7 +170,7 @@ jobs:
           path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
       - name: Plugin Verifier Summary
         shell: pwsh
-        with:
+        env:
           reports: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
         run: |
           gci ${env:reports}/*/*.md | gc | Out-File -Encoding utf8 -Append $env:GITHUB_STEP_SUMMARY
