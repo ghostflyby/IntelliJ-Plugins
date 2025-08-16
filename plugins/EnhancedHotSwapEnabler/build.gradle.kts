@@ -41,7 +41,7 @@ plugins {
     kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
-version = "0.0.2"
+version = "1.0.0"
 
 buildLogic {
     pluginVersion = version.toString()
