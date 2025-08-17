@@ -18,51 +18,67 @@
 
 package dev.ghostflyby.dcevm
 
+import com.intellij.execution.configurations.RunConfigurationBase
+import com.intellij.execution.configurations.RunProfile
 import com.intellij.openapi.components.*
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 
-internal interface HotSwapConfigWithDefault : HotSwapConfig {
-    override val enable: Boolean
-    override val enableHotswapAgent: Boolean
+internal interface HotSwapConfigLike {
+    val enable: Boolean?
+    val enableHotswapAgent: Boolean?
 }
 
-internal interface HotSwapConfigMutable : HotSwapConfig {
+internal interface HotSwapConfigMutable : HotSwapConfigLike {
     override var enable: Boolean?
     override var enableHotswapAgent: Boolean?
-    fun setFrom(other: HotSwapConfig) {
+    fun setFrom(other: HotSwapConfigLike) {
         enable = other.enable ?: enable
         enableHotswapAgent = other.enableHotswapAgent ?: enableHotswapAgent
     }
 }
 
-internal interface HotSwapConfig {
-    val enable: Boolean?
-    val enableHotswapAgent: Boolean?
-
-}
-
-private fun HotSwapConfig.areEquals(other: Any?): Boolean {
-    if (this === other) return true
-    if (other !is HotSwapConfig) return false
-    return enable == other.enable && enableHotswapAgent == other.enableHotswapAgent
-}
-
-private fun HotSwapConfig.hash(): Int {
-    var result = enable?.hashCode() ?: 0
-    result = 31 * result + (enableHotswapAgent?.hashCode() ?: 0)
-    return result
-}
-
 internal data class HotSwapConfigState(
-    override val enable: Boolean? = null,
-    override val enableHotswapAgent: Boolean? = null,
-) : HotSwapConfig {
-    override fun equals(other: Any?): Boolean = areEquals(other)
+    override var enable: Boolean? = null,
+    override var enableHotswapAgent: Boolean? = null,
+) : HotSwapConfigMutable
 
-    override fun hashCode(): Int = hash()
+internal object HotSwapRunConfigurationDataKey {
+    val KEY: Key<HotSwapConfigState> = Key.create("HotSwapEnabler.State")
+}
+
+internal data class ResolvedHotSwapConfig(
+    val enable: Boolean,
+    val enableHotswapAgent: Boolean,
+)
+
+internal fun effectiveHotSwapConfig(
+    profile: RunProfile?,
+    project: Project?,
+): ResolvedHotSwapConfig {
+    val app = service<AppSettings>()
+    val projectUser = project?.getService(ProjectUserSettings::class.java)
+    val projectShared = project?.getService(ProjectSharedSettings::class.java)
+    val runState = (profile as? RunConfigurationBase<*>)?.getUserData(HotSwapRunConfigurationDataKey.KEY)
+
+    val enable = runState?.enable
+        ?: projectUser?.enable
+        ?: projectShared?.enable
+        ?: app.enable
+
+    val enableHotswapAgent = runState?.enableHotswapAgent
+        ?: projectUser?.enableHotswapAgent
+        ?: projectShared?.enableHotswapAgent
+        ?: app.enableHotswapAgent
+
+    return ResolvedHotSwapConfig(
+        enable = enable ?: false,
+        enableHotswapAgent = enableHotswapAgent ?: false,
+    )
 }
 
 
-internal abstract class HotSwapPersistent(config: HotSwapConfigState) :
+internal sealed class HotSwapPersistent(config: HotSwapConfigState) :
     SerializablePersistentStateComponent<HotSwapConfigState>(
         config
     ), HotSwapConfigMutable {
@@ -80,23 +96,16 @@ internal abstract class HotSwapPersistent(config: HotSwapConfigState) :
                 it.copy(enableHotswapAgent = value)
             }
         }
-
-    override fun equals(other: Any?): Boolean = areEquals(other)
-
-    override fun hashCode(): Int = hash()
 }
 
 @Service
 @State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
 internal class AppSettings : HotSwapPersistent(HotSwapConfigState(true, enableHotswapAgent = true))
 
-internal open class BranchSettings : HotSwapPersistent(HotSwapConfigState())
-
 @Service(Service.Level.PROJECT)
 @State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
-internal class ProjectSharedSettings : BranchSettings()
+internal class ProjectSharedSettings : HotSwapPersistent(HotSwapConfigState())
 
 @Service(Service.Level.PROJECT)
 @State(name = "HotSwapEnabler", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
-internal class ProjectUserSettings : BranchSettings()
-
+internal class ProjectUserSettings : HotSwapPersistent(HotSwapConfigState())

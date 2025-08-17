@@ -18,15 +18,13 @@
 
 package dev.ghostflyby.dcevm
 
-import com.intellij.openapi.observable.properties.ObservableMutableProperty
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
-import com.intellij.ui.dsl.builder.Cell
-import com.intellij.ui.dsl.builder.bindState
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.ThreeStateCheckBox
 import javax.swing.JComponent
-import kotlin.reflect.KMutableProperty0
 
 internal sealed class DCEVMConfigurable : Configurable, HotSwapConfigMutable {
 
@@ -41,23 +39,18 @@ internal sealed class DCEVMConfigurable : Configurable, HotSwapConfigMutable {
     }
 
     private var modified = false
-    private fun modify(unused: Any?) {
-        modified = true
-    }
 
+    private var ui: HotSwapPanelUi? = null
     final override fun reset() {
         this.setFrom(persistent)
+        ui?.refreshFrom(this)
     }
 
-    override fun createComponent(): JComponent =
-        panel {
-            row("Enable DCEVM") {
-                threeStateCheckBox("Enable DCEVM").bindStateToBoolean(::enable).onChanged(::modify)
-            }
-            row("Enable Hotswap Agent") {
-                threeStateCheckBox("Enable hotswap agent").bindStateToBoolean(::enableHotswapAgent).onChanged(::modify)
-            }
-        }
+    override fun createComponent(): JComponent {
+        val ui = createHotSwapPanelAndControls(this) { modified = true }
+        this.ui = ui
+        return ui.panel
+    }
 
     final override fun apply() {
         persistent.setFrom(this)
@@ -67,28 +60,66 @@ internal sealed class DCEVMConfigurable : Configurable, HotSwapConfigMutable {
     override var enableHotswapAgent: Boolean? = null
 }
 
-internal class ThreeStataBooleanProperty(
-    private val property: KMutableProperty0<Boolean?>,
-) : ObservableMutableProperty<ThreeStateCheckBox.State> {
-    override fun set(value: ThreeStateCheckBox.State) {
-        property.set(
-            when (value) {
-                ThreeStateCheckBox.State.SELECTED -> true
-                ThreeStateCheckBox.State.NOT_SELECTED -> false
-                ThreeStateCheckBox.State.DONT_CARE -> null
-            }
-        )
-    }
-
-    override fun get(): ThreeStateCheckBox.State {
-        return when (property.get()) {
-            true -> ThreeStateCheckBox.State.SELECTED
-            false -> ThreeStateCheckBox.State.NOT_SELECTED
-            null -> ThreeStateCheckBox.State.DONT_CARE
-        }
-    }
-
+private fun Boolean?.toState(): ThreeStateCheckBox.State = when (this) {
+    true -> ThreeStateCheckBox.State.SELECTED
+    false -> ThreeStateCheckBox.State.NOT_SELECTED
+    null -> ThreeStateCheckBox.State.DONT_CARE
 }
 
-internal fun <T : ThreeStateCheckBox> Cell<T>.bindStateToBoolean(property: KMutableProperty0<Boolean?>): Cell<T> =
-    this.bindState(ThreeStataBooleanProperty(property))
+private fun ThreeStateCheckBox.State.toBool(): Boolean? = when (this) {
+    ThreeStateCheckBox.State.SELECTED -> true
+    ThreeStateCheckBox.State.NOT_SELECTED -> false
+    ThreeStateCheckBox.State.DONT_CARE -> null
+}
+
+internal data class HotSwapPanelUi(
+    val panel: JComponent,
+    val dcevm: ThreeStateCheckBox,
+    val agent: ThreeStateCheckBox,
+) {
+    fun refreshFrom(model: HotSwapConfigMutable) {
+        dcevm.state = model.enable.toState()
+        agent.state = model.enableHotswapAgent.toState()
+    }
+}
+
+internal fun createHotSwapPanelAndControls(
+    model: HotSwapConfigMutable,
+    onChange: () -> Unit = {},
+): HotSwapPanelUi {
+    lateinit var dcevm: ThreeStateCheckBox
+    lateinit var agent: ThreeStateCheckBox
+    val panel = panel {
+        row {
+            dcevm = threeStateCheckBox("Enable DCEVM").applyToComponent {
+                state = model.enable.toState()
+            }.onChanged {
+                model.enable = dcevm.state.toBool()
+                onChange()
+            }.component
+        }
+        row {
+            agent = threeStateCheckBox("Enable hotswap agent").applyToComponent {
+                state = model.enableHotswapAgent.toState()
+            }.onChanged {
+                model.enableHotswapAgent = agent.state.toBool()
+                onChange()
+            }.component
+        }
+    }
+    return HotSwapPanelUi(panel, dcevm, agent)
+}
+
+internal class AppDCEVMConfigurable : DCEVMConfigurable() {
+    override val persistent: HotSwapPersistent = service<AppSettings>()
+}
+
+internal class ProjectUserDCEVMConfigurable(project: Project) :
+    DCEVMConfigurable() {
+    override val persistent: HotSwapPersistent = project.service<ProjectUserSettings>()
+}
+
+internal class ProjectSharedDCEVMConfigurable(project: Project) :
+    DCEVMConfigurable() {
+    override val persistent: HotSwapPersistent = project.service<ProjectSharedSettings>()
+}

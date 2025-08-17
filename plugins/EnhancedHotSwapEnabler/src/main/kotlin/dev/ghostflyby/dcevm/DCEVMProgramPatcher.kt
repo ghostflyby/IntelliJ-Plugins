@@ -35,6 +35,11 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
         javaParameters: JavaParameters,
     ) {
         if (javaParameters.vmParametersList.parameters.none { it.startsWith("-agentlib:jdwp") }) return
+        val effective = effectiveHotSwapConfig(
+            configuration,
+            (configuration as? com.intellij.execution.configurations.RunConfigurationBase<*>)?.project
+        )
+        if (!effective.enable) return
         val javaHome = javaParameters.jdk?.homePath ?: return
 
         val support = getDcevmSupport(
@@ -52,6 +57,11 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
 
         if (support is DCEVMSupport.NeedsArgs) {
             javaParameters.vmParametersList.addAll(support.args)
+        }
+        if (effective.enableHotswapAgent) {
+            if (javaParameters.vmParametersList.parameters.none { it == JVM_OPTION_EXTERNAL_HOTSWAP_AGENT }) {
+                javaParameters.vmParametersList.add(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+            }
         }
 
     }

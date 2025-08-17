@@ -27,6 +27,13 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <java.programPatcher implementation="dev.ghostflyby.dcevm.DCEVMProgramPatcher" />
+        <runConfigurationExtension implementation="dev.ghostflyby.dcevm.HotSwapRunConfigurationExtension" />
+        <applicationConfigurable displayName="DCEVM and Hotswap Agent" id="dev.ghostflyby.dcevm.application"
+            instance="dev.ghostflyby.dcevm.AppDCEVMConfigurable" />
+        <projectConfigurable displayName="DCEVM and Hotswap Agent (Workspace)" id="dev.ghostflyby.dcevm.projectUser"
+            instance="dev.ghostflyby.dcevm.ProjectUserDCEVMConfigurable" />
+        <projectConfigurable displayName="DCEVM and Hotswap Agent (Project)" id="dev.ghostflyby.dcevm.projectShared"
+            instance="dev.ghostflyby.dcevm.ProjectSharedDCEVMConfigurable" />
     </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <taskManager implementation="dev.ghostflyby.dcevm.DCEVMGradleManagerExtension" />
