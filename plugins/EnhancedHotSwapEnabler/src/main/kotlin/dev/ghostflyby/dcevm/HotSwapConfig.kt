@@ -40,21 +40,25 @@ internal interface HotSwapConfig {
 
 }
 
+private fun HotSwapConfig.areEquals(other: Any?): Boolean {
+    if (this === other) return true
+    if (other !is HotSwapConfig) return false
+    return enable == other.enable && enableHotswapAgent == other.enableHotswapAgent
+}
+
+private fun HotSwapConfig.hash(): Int {
+    var result = enable?.hashCode() ?: 0
+    result = 31 * result + (enableHotswapAgent?.hashCode() ?: 0)
+    return result
+}
+
 internal data class HotSwapConfigState(
     override val enable: Boolean? = null,
     override val enableHotswapAgent: Boolean? = null,
 ) : HotSwapConfig {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is HotSwapConfig) return false
-        return enable == other.enable && enableHotswapAgent == other.enableHotswapAgent
-    }
+    override fun equals(other: Any?): Boolean = areEquals(other)
 
-    override fun hashCode(): Int {
-        var result = enable?.hashCode() ?: 0
-        result = 31 * result + (enableHotswapAgent?.hashCode() ?: 0)
-        return result
-    }
+    override fun hashCode(): Int = hash()
 }
 
 
@@ -77,30 +81,22 @@ internal abstract class HotSwapPersistent(config: HotSwapConfigState) :
             }
         }
 
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is HotSwapConfig) return false
-        return enable == other.enable && enableHotswapAgent == other.enableHotswapAgent
-    }
+    override fun equals(other: Any?): Boolean = areEquals(other)
 
-    override fun hashCode(): Int {
-        var result = enable?.hashCode() ?: 0
-        result = 31 * result + (enableHotswapAgent?.hashCode() ?: 0)
-        return result
-    }
+    override fun hashCode(): Int = hash()
 }
 
-@Service(Service.Level.APP)
-@State(name = "HotswapApp", storages = [Storage("HotSwapEnabler.xml")])
+@Service
+@State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
 internal class AppSettings : HotSwapPersistent(HotSwapConfigState(true, enableHotswapAgent = true))
 
 internal open class BranchSettings : HotSwapPersistent(HotSwapConfigState())
 
-@Service
-@State(name = "HotswapProjectShared", storages = [Storage("HotSwapEnabler.xml")])
+@Service(Service.Level.PROJECT)
+@State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
 internal class ProjectSharedSettings : BranchSettings()
 
-@Service
-@State(name = "HotswapProjectShared", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+@Service(Service.Level.PROJECT)
+@State(name = "HotSwapEnabler", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
 internal class ProjectUserSettings : BranchSettings()
 
