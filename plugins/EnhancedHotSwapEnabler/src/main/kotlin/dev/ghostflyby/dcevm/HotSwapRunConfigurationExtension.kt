@@ -72,7 +72,7 @@ internal class HotSwapRunConfigurationExtension : RunConfigurationExtension() {
         }
     }
 
-    override fun getEditorTitle(): String = "Enhanced HotSwap"
+    override fun getEditorTitle(): String = Bundle.message("configuration.section.name")
 
     override fun <T : RunConfigurationBase<*>> updateJavaParameters(
         configuration: T,

@@ -32,7 +32,7 @@ internal sealed class DCEVMConfigurable : Configurable {
     protected val state = HotSwapConfigViewModel()
 
     override fun getDisplayName(): @NlsContexts.ConfigurableName String {
-        return "DCEVM and Hotswap Agent"
+        return Bundle.message("configuration.title")
     }
 
     final override fun isModified(): Boolean {
@@ -63,13 +63,14 @@ internal fun createHotSwapPanelAndControls(
 ) =
     panel {
         row {
-            checkBox("Inherit DCEVM from higher level").bindSelected(model.inheritProperty)
+            checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
         }.visible(inheritEnabled)
         row {
-            checkBox("Enable DCEVM").bindSelected(model.enableProperty).enabledIf(model.enableEditableProperty)
+            checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
+                .enabledIf(model.enableEditableProperty)
         }
         row {
-            checkBox("Enable hotswap agent")
+            checkBox(Bundle.message("checkbox.hotswapAgent"))
                 .bindSelected(model.enableHotswapAgentProperty)
                 .enabledIf(model.enableHotswapAgentEditableProperty)
         }
