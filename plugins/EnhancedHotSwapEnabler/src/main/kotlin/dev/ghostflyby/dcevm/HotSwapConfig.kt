@@ -24,17 +24,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolder
 
-internal interface HotSwapConfigLike {
-    val inherit: Boolean
-    val enable: Boolean
-    val enableHotswapAgent: Boolean
-}
-
-internal interface HotSwapConfigMutable : HotSwapConfigLike {
-    override var inherit: Boolean
-    override var enable: Boolean
-    override var enableHotswapAgent: Boolean
-    fun setFrom(other: HotSwapConfigLike): HotSwapConfigMutable {
+internal interface HotSwapConfig {
+    var inherit: Boolean
+    var enable: Boolean
+    var enableHotswapAgent: Boolean
+    fun setFrom(other: HotSwapConfig): HotSwapConfig {
         enable = other.enable
         enableHotswapAgent = other.enableHotswapAgent
         inherit = other.inherit
@@ -46,8 +40,8 @@ internal data class HotSwapConfigState(
     override var inherit: Boolean = true,
     override var enable: Boolean = false,
     override var enableHotswapAgent: Boolean = false,
-) : HotSwapConfigMutable {
-    override fun setFrom(other: HotSwapConfigLike): HotSwapConfigState {
+) : HotSwapConfig {
+    override fun setFrom(other: HotSwapConfig): HotSwapConfigState {
         super.setFrom(other)
         return this
     }
@@ -57,7 +51,7 @@ internal class HotSwapConfigViewModel(
     inherit: Boolean = true,
     enable: Boolean = false,
     enableHotswapAgent: Boolean = false,
-) : HotSwapConfigMutable {
+) : HotSwapConfig {
     private val graph = PropertyGraph("HotSwapConfigViewModel")
     val inheritProperty = graph.property(inherit)
     val enableProperty = graph.property(enable)
@@ -116,7 +110,7 @@ internal fun effectiveHotSwapConfig(
 internal sealed class HotSwapPersistent(config: HotSwapConfigState) :
     SerializablePersistentStateComponent<HotSwapConfigState>(
         config
-    ), HotSwapConfigMutable {
+    ), HotSwapConfig {
     override var enable
         get() = state.enable
         set(value) {
