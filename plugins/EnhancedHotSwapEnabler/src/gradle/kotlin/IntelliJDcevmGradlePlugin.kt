@@ -44,6 +44,8 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
 
 
             doFirst {
+                val taskNames = target.startParameter.taskNames
+                if (path !in taskNames && name !in taskNames) return@doFirst
                 if (!debuggerEnabled.get() || !enableDcevm.get()) return@doFirst
                 val support = dcevmSupportProvider.get()
                 if (support is DCEVMSupport.NeedsArgs)
