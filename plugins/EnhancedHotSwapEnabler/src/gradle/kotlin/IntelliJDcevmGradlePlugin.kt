@@ -28,6 +28,9 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
     override fun apply(target: Gradle) = target.allprojects {
         val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).map { it.toBoolean() }
         val enableHotswapAgent = providers.environmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY).map { it.toBoolean() }
+        // see org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtensionDebuggerBridge.Companion
+        // use environment variable to avoid doFirst ordering issues
+        val debuggerEnabled = providers.environmentVariable("DEBUGGER_ENABLED").map { it.toBoolean() }
         tasks.withType<JavaExec>().configureEach {
 
             val dcevmSupportProvider = javaLauncher.map { launcher ->
@@ -41,13 +44,11 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
 
 
             doFirst {
-                if (args.none { it.startsWith("-agentlib:jdwp") }) return@doFirst
-                if (enableDcevm.get()) {
-                    val support = dcevmSupportProvider.get()
-                    if (support is DCEVMSupport.NeedsArgs)
-                        jvmArgs(support.args)
-                    logger.lifecycle("DCEVM enabled for task $name")
-                }
+                if (!debuggerEnabled.get() || !enableDcevm.get()) return@doFirst
+                val support = dcevmSupportProvider.get()
+                if (support is DCEVMSupport.NeedsArgs)
+                    jvmArgs(support.args)
+                logger.lifecycle("DCEVM enabled for task $name")
                 if (enableHotswapAgent.get()) {
                     jvmArgs(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
                     logger.lifecycle("HotswapAgent enabled for task $name")
