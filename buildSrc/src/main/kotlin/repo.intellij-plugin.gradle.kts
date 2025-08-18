@@ -24,6 +24,7 @@ import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTesting
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
     java // Java support
@@ -53,6 +54,10 @@ kotlin {
         jvmTarget = JvmTarget.fromTarget("21")
     }
     explicitApi()
+    @OptIn(ExperimentalAbiValidation::class)
+    abiValidation {
+        enabled = true
+    }
 }
 
 repositories {
