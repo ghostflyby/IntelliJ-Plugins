@@ -46,7 +46,12 @@ internal data class HotSwapConfigState(
     override var inherit: Boolean = true,
     override var enable: Boolean = false,
     override var enableHotswapAgent: Boolean = false,
-) : HotSwapConfigMutable
+) : HotSwapConfigMutable {
+    override fun setFrom(other: HotSwapConfigLike): HotSwapConfigState {
+        super.setFrom(other)
+        return this
+    }
+}
 
 internal class HotSwapConfigViewModel(
     inherit: Boolean = true,
@@ -77,7 +82,7 @@ internal class HotSwapConfigViewModel(
 }
 
 internal object HotSwapRunConfigurationDataKey {
-    val KEY: Key<HotSwapConfigMutable> = Key.create("HotSwapEnabler.State")
+    val KEY: Key<HotSwapConfigState> = Key.create("HotSwapEnabler.State")
 }
 
 internal data class ResolvedHotSwapConfig(
@@ -138,7 +143,13 @@ internal sealed class HotSwapPersistent(config: HotSwapConfigState) :
 
 @Service
 @State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
-internal class AppSettings : HotSwapPersistent(HotSwapConfigState(false, enable = true, enableHotswapAgent = true))
+internal class AppSettings : HotSwapPersistent(HotSwapConfigState(false, enable = true, enableHotswapAgent = true)) {
+    override var inherit: Boolean
+        get() = false
+        @Suppress("unused")
+        set(value) {
+        }
+}
 
 @Service(Service.Level.PROJECT)
 @State(name = "HotSwapEnablerShared", storages = [Storage("HotSwapEnabler.xml")])

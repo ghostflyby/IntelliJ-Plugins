@@ -46,7 +46,7 @@ internal class HotSwapRunConfigurationExtension : RunConfigurationExtension() {
     override fun writeExternal(runConfiguration: RunConfigurationBase<*>, element: Element) {
         val state = runConfiguration.getUserData(HotSwapRunConfigurationDataKey.KEY) ?: return
         val child = element.getOrCreateChild("hotSwapEnabler")
-        XmlSerializer.serializeInto(HotSwapConfigState(state.enable, state.enableHotswapAgent), child)
+        XmlSerializer.serializeInto(state, child)
     }
 
     override fun cleanUserData(runConfigurationBase: RunConfigurationBase<*>) {
@@ -59,16 +59,17 @@ internal class HotSwapRunConfigurationExtension : RunConfigurationExtension() {
             private val ui = createHotSwapPanelAndControls(model)
 
             override fun resetEditorFrom(s: P) {
-                val st = configuration.getUserData(HotSwapRunConfigurationDataKey.KEY)
+                val st = s.getUserData(HotSwapRunConfigurationDataKey.KEY)
                 if (st != null) model.setFrom(st)
             }
 
             override fun applyEditorTo(s: P) {
                 val newState = HotSwapConfigState().setFrom(model)
-                configuration.putUserData(HotSwapRunConfigurationDataKey.KEY, newState)
+                s.putUserData(HotSwapRunConfigurationDataKey.KEY, newState)
             }
 
             override fun createEditor(): JComponent = ui
+
         }
     }
 

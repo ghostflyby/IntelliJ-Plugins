@@ -65,14 +65,20 @@ internal fun createHotSwapPanelAndControls(
         row {
             checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
         }.visible(inheritEnabled)
-        row {
-            checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
-                .enabledIf(model.enableEditableProperty)
-        }
-        row {
-            checkBox(Bundle.message("checkbox.hotswapAgent"))
-                .bindSelected(model.enableHotswapAgentProperty)
-                .enabledIf(model.enableHotswapAgentEditableProperty)
+        (if (inheritEnabled) ::indent else {
+            {
+                this.it()
+            }
+        }) {
+            row {
+                checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
+                    .enabledIf(model.enableEditableProperty)
+            }
+            row {
+                checkBox(Bundle.message("checkbox.hotswapAgent"))
+                    .bindSelected(model.enableHotswapAgentProperty)
+                    .enabledIf(model.enableHotswapAgentEditableProperty)
+            }
         }
     }
 
