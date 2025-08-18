@@ -23,6 +23,8 @@ import com.intellij.execution.configurations.RunProfile
 import com.intellij.openapi.components.*
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
+import com.intellij.util.xmlb.Converter
+import com.intellij.util.xmlb.annotations.Attribute
 
 internal interface HotSwapConfigLike {
     val enable: Boolean?
@@ -38,8 +40,25 @@ internal interface HotSwapConfigMutable : HotSwapConfigLike {
     }
 }
 
+internal class NullableBooleanConverter : Converter<Boolean?>() {
+    override fun toString(value: Boolean?): String = when (value) {
+        true -> "true"
+        false -> "false"
+        null -> "inherit"
+    }
+
+    override fun fromString(value: String): Boolean? = when (value) {
+        "true" -> true
+        "false" -> false
+        "inherit" -> null
+        else -> null
+    }
+}
+
 internal data class HotSwapConfigState(
+    @Attribute("enable", converter = NullableBooleanConverter::class)
     override var enable: Boolean? = null,
+    @Attribute("enableHotswapAgent", converter = NullableBooleanConverter::class)
     override var enableHotswapAgent: Boolean? = null,
 ) : HotSwapConfigMutable
 
@@ -57,8 +76,8 @@ internal fun effectiveHotSwapConfig(
     project: Project?,
 ): ResolvedHotSwapConfig {
     val app = service<AppSettings>()
-    val projectUser = project?.getService(ProjectUserSettings::class.java)
-    val projectShared = project?.getService(ProjectSharedSettings::class.java)
+    val projectUser = project?.service<ProjectUserSettings>()
+    val projectShared = project?.service<ProjectSharedSettings>()
     val runState = (profile as? RunConfigurationBase<*>)?.getUserData(HotSwapRunConfigurationDataKey.KEY)
 
     val enable = runState?.enable
@@ -103,9 +122,9 @@ internal sealed class HotSwapPersistent(config: HotSwapConfigState) :
 internal class AppSettings : HotSwapPersistent(HotSwapConfigState(true, enableHotswapAgent = true))
 
 @Service(Service.Level.PROJECT)
-@State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
+@State(name = "HotSwapEnablerShared", storages = [Storage("HotSwapEnabler.xml")])
 internal class ProjectSharedSettings : HotSwapPersistent(HotSwapConfigState())
 
 @Service(Service.Level.PROJECT)
-@State(name = "HotSwapEnabler", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+@State(name = "HotSwapEnablerUser", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
 internal class ProjectUserSettings : HotSwapPersistent(HotSwapConfigState())

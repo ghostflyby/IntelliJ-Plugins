@@ -37,7 +37,7 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
             PathManager.getJarPathForClass(DCEVMGradleManagerExtension::class.java) ?: return
 
         settings.addInitScript(
-            "intellij-ghostflyby.intellijplugin.dcevm.gradle.dcevm",
+            "ghostflyby.intellij.gradle.dcevm",
             """
 initscript{
 dependencies {
