@@ -10,7 +10,6 @@
 #
 # GitHub Actions reference: https://help.github.com/en/actions
 #
-## JBIJPPTPL
 
 name: Build
 on:
@@ -138,14 +137,15 @@ jobs:
         run: |
           cd ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/distributions
           FILENAME=$(ls *.zip)
-          unzip "$FILENAME" -d content
           BASENAME=$(basename "$FILENAME" .zip)
+          REALPATH=$(realpath "$FILENAME")
           echo "filename=$BASENAME" >> $GITHUB_OUTPUT
+          echo "pluginpath=$REALPATH" >> $GITHUB_OUTPUT
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.filename }}
-          path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/distributions/content/*/*
+          path: ${{ steps.artifact.outputs.pluginpath }}
       - name: Run Tests
         run: ./gradlew ${{ matrix.module }}:check
       - name: Collect Tests Result
@@ -167,6 +167,13 @@ jobs:
         with:
           name: pluginVerifier-result-${{ steps.modpath.outputs.namesegment }}
           path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
+      - name: Plugin Verifier Summary
+        shell: pwsh
+        env:
+          reports: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
+        run: |
+          gci ${env:reports}/*/*.md | gc | Out-File -Encoding utf8 -Append $env:GITHUB_STEP_SUMMARY
+  
 
   inspectCode:
     name: Inspect code
@@ -201,6 +208,9 @@ jobs:
         uses: JetBrains/qodana-action@v2025.2.1
         with:
           cache-default-branch-only: true
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+          QODANA_ENDPOINT: 'https://qodana.cloud'
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
