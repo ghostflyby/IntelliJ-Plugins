@@ -56,7 +56,7 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
         settings: GradleExecutionSettings,
         listener: ExternalSystemTaskNotificationListener,
     ): Boolean {
-        val project = id.project
+        val project = id.findProject()
         val resolved = effectiveHotSwapConfig(settings, project)
         settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, resolved.enable.toString())
         settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
