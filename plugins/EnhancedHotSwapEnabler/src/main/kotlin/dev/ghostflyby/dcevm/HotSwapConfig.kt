@@ -18,52 +18,66 @@
 
 package dev.ghostflyby.dcevm
 
-import com.intellij.execution.configurations.RunConfigurationBase
-import com.intellij.execution.configurations.RunProfile
 import com.intellij.openapi.components.*
+import com.intellij.openapi.observable.properties.PropertyGraph
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
-import com.intellij.util.xmlb.Converter
-import com.intellij.util.xmlb.annotations.Attribute
+import com.intellij.openapi.util.UserDataHolder
 
 internal interface HotSwapConfigLike {
-    val enable: Boolean?
-    val enableHotswapAgent: Boolean?
+    val inherit: Boolean
+    val enable: Boolean
+    val enableHotswapAgent: Boolean
 }
 
 internal interface HotSwapConfigMutable : HotSwapConfigLike {
-    override var enable: Boolean?
-    override var enableHotswapAgent: Boolean?
-    fun setFrom(other: HotSwapConfigLike) {
-        enable = other.enable ?: enable
-        enableHotswapAgent = other.enableHotswapAgent ?: enableHotswapAgent
-    }
-}
-
-internal class NullableBooleanConverter : Converter<Boolean?>() {
-    override fun toString(value: Boolean?): String = when (value) {
-        true -> "true"
-        false -> "false"
-        null -> "inherit"
-    }
-
-    override fun fromString(value: String): Boolean? = when (value) {
-        "true" -> true
-        "false" -> false
-        "inherit" -> null
-        else -> null
+    override var inherit: Boolean
+    override var enable: Boolean
+    override var enableHotswapAgent: Boolean
+    fun setFrom(other: HotSwapConfigLike): HotSwapConfigMutable {
+        enable = other.enable
+        enableHotswapAgent = other.enableHotswapAgent
+        inherit = other.inherit
+        return this
     }
 }
 
 internal data class HotSwapConfigState(
-    @Attribute("enable", converter = NullableBooleanConverter::class)
-    override var enable: Boolean? = null,
-    @Attribute("enableHotswapAgent", converter = NullableBooleanConverter::class)
-    override var enableHotswapAgent: Boolean? = null,
+    override var inherit: Boolean = true,
+    override var enable: Boolean = false,
+    override var enableHotswapAgent: Boolean = false,
 ) : HotSwapConfigMutable
 
+internal class HotSwapConfigViewModel(
+    inherit: Boolean = true,
+    enable: Boolean = false,
+    enableHotswapAgent: Boolean = false,
+) : HotSwapConfigMutable {
+    private val graph = PropertyGraph("HotSwapConfigViewModel")
+    val inheritProperty = graph.property(inherit)
+    val enableProperty = graph.property(enable)
+    val enableEditableProperty = graph.property(!inherit).apply {
+        dependsOn(inheritProperty) {
+            !inheritProperty.get()
+        }
+    }
+    val enableHotswapAgentProperty = graph.property(enableHotswapAgent)
+    val enableHotswapAgentEditableProperty = graph.property(!inherit && enable).apply {
+        fun reset(): Boolean {
+            return !inheritProperty.get() && enableProperty.get()
+        }
+        dependsOn(enableEditableProperty, ::reset)
+        dependsOn(enableProperty, ::reset)
+    }
+
+    override var inherit by inheritProperty
+
+    override var enable by enableProperty
+    override var enableHotswapAgent by enableHotswapAgentProperty
+}
+
 internal object HotSwapRunConfigurationDataKey {
-    val KEY: Key<HotSwapConfigState> = Key.create("HotSwapEnabler.State")
+    val KEY: Key<HotSwapConfigMutable> = Key.create("HotSwapEnabler.State")
 }
 
 internal data class ResolvedHotSwapConfig(
@@ -72,28 +86,25 @@ internal data class ResolvedHotSwapConfig(
 )
 
 internal fun effectiveHotSwapConfig(
-    profile: RunProfile?,
+    profile: UserDataHolder?,
     project: Project?,
 ): ResolvedHotSwapConfig {
-    val app = service<AppSettings>()
-    val projectUser = project?.service<ProjectUserSettings>()
-    val projectShared = project?.service<ProjectSharedSettings>()
-    val runState = (profile as? RunConfigurationBase<*>)?.getUserData(HotSwapRunConfigurationDataKey.KEY)
+    val config = sequence {
+        yield(profile?.getUserData(HotSwapRunConfigurationDataKey.KEY))
+        yield(project?.service<ProjectUserSettings>())
+        yield(project?.service<ProjectSharedSettings>())
+        yield(service<AppSettings>())
+    }
+        .filterNotNull().filter {
+            !it.inherit
+        }.map {
+            ResolvedHotSwapConfig(
+                enable = it.enable,
+                enableHotswapAgent = it.enableHotswapAgent
+            )
+        }.first()
 
-    val enable = runState?.enable
-        ?: projectUser?.enable
-        ?: projectShared?.enable
-        ?: app.enable
-
-    val enableHotswapAgent = runState?.enableHotswapAgent
-        ?: projectUser?.enableHotswapAgent
-        ?: projectShared?.enableHotswapAgent
-        ?: app.enableHotswapAgent
-
-    return ResolvedHotSwapConfig(
-        enable = enable ?: false,
-        enableHotswapAgent = enableHotswapAgent ?: false,
-    )
+    return config
 }
 
 
@@ -115,11 +126,19 @@ internal sealed class HotSwapPersistent(config: HotSwapConfigState) :
                 it.copy(enableHotswapAgent = value)
             }
         }
+
+    override var inherit
+        get() = state.inherit
+        set(value) {
+            updateState {
+                it.copy(inherit = value)
+            }
+        }
 }
 
 @Service
 @State(name = "HotSwapEnabler", storages = [Storage("HotSwapEnabler.xml")])
-internal class AppSettings : HotSwapPersistent(HotSwapConfigState(true, enableHotswapAgent = true))
+internal class AppSettings : HotSwapPersistent(HotSwapConfigState(false, enable = true, enableHotswapAgent = true))
 
 @Service(Service.Level.PROJECT)
 @State(name = "HotSwapEnablerShared", storages = [Storage("HotSwapEnabler.xml")])

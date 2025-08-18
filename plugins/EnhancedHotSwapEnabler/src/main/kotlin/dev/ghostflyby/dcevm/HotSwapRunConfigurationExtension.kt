@@ -18,6 +18,7 @@
 
 package dev.ghostflyby.dcevm
 
+import com.intellij.execution.RunConfigurationExtension
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
@@ -27,7 +28,7 @@ import com.intellij.util.xmlb.XmlSerializer
 import org.jdom.Element
 import javax.swing.JComponent
 
-internal class HotSwapRunConfigurationExtension : com.intellij.execution.RunConfigurationExtension() {
+internal class HotSwapRunConfigurationExtension : RunConfigurationExtension() {
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean =
         true
@@ -44,7 +45,6 @@ internal class HotSwapRunConfigurationExtension : com.intellij.execution.RunConf
 
     override fun writeExternal(runConfiguration: RunConfigurationBase<*>, element: Element) {
         val state = runConfiguration.getUserData(HotSwapRunConfigurationDataKey.KEY) ?: return
-        if (state.enable == null && state.enableHotswapAgent == null) return
         val child = element.getOrCreateChild("hotSwapEnabler")
         XmlSerializer.serializeInto(HotSwapConfigState(state.enable, state.enableHotswapAgent), child)
     }
@@ -55,7 +55,7 @@ internal class HotSwapRunConfigurationExtension : com.intellij.execution.RunConf
 
     override fun <P : RunConfigurationBase<*>> createEditor(configuration: P): SettingsEditor<P?> {
         return object : SettingsEditor<P?>() {
-            private var model = HotSwapConfigState()
+            private var model = HotSwapConfigViewModel()
             private val ui = createHotSwapPanelAndControls(model)
 
             override fun resetEditorFrom(s: P) {
@@ -64,7 +64,7 @@ internal class HotSwapRunConfigurationExtension : com.intellij.execution.RunConf
             }
 
             override fun applyEditorTo(s: P) {
-                val newState = model.copy()
+                val newState = HotSwapConfigState().setFrom(model)
                 configuration.putUserData(HotSwapRunConfigurationDataKey.KEY, newState)
             }
 

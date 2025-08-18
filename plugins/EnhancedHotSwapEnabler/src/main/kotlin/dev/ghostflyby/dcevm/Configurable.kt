@@ -22,14 +22,14 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
+import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.util.ui.ThreeStateCheckBox
 import javax.swing.JComponent
 
 internal sealed class DCEVMConfigurable : Configurable {
 
     abstract val persistent: HotSwapPersistent
-    protected val state: HotSwapConfigState = HotSwapConfigState()
+    protected val state = HotSwapConfigViewModel()
 
     override fun getDisplayName(): @NlsContexts.ConfigurableName String {
         return "DCEVM and Hotswap Agent"
@@ -37,7 +37,8 @@ internal sealed class DCEVMConfigurable : Configurable {
 
     final override fun isModified(): Boolean {
         return persistent.enable != state.enable ||
-                persistent.enableHotswapAgent != state.enableHotswapAgent
+                persistent.enableHotswapAgent != state.enableHotswapAgent ||
+                persistent.inherit != state.inherit
     }
 
     final override fun reset() {
@@ -55,64 +56,31 @@ internal sealed class DCEVMConfigurable : Configurable {
 
 }
 
-private fun Boolean?.toState(): ThreeStateCheckBox.State = when (this) {
-    true -> ThreeStateCheckBox.State.SELECTED
-    false -> ThreeStateCheckBox.State.NOT_SELECTED
-    null -> ThreeStateCheckBox.State.DONT_CARE
-}
-
-private fun ThreeStateCheckBox.State.toBool(): Boolean? = when (this) {
-    ThreeStateCheckBox.State.SELECTED -> true
-    ThreeStateCheckBox.State.NOT_SELECTED -> false
-    ThreeStateCheckBox.State.DONT_CARE -> null
-}
 
 internal fun createHotSwapPanelAndControls(
-    model: HotSwapConfigMutable,
+    model: HotSwapConfigViewModel,
+    inheritEnabled: Boolean = true,
 ) =
     panel {
         row {
-            threeStateCheckBox("Enable DCEVM").applyToComponent {
-                state = model.enable.toState()
-            }.onChanged {
-                model.enable = it.state.toBool()
-            }.component
+            checkBox("Inherit DCEVM from higher level").bindSelected(model.inheritProperty)
+        }.visible(inheritEnabled)
+        row {
+            checkBox("Enable DCEVM").bindSelected(model.enableProperty).enabledIf(model.enableEditableProperty)
         }
         row {
-            threeStateCheckBox("Enable hotswap agent").applyToComponent {
-                state = model.enableHotswapAgent.toState()
-            }.onChanged {
-                model.enableHotswapAgent = it.state.toBool()
-            }.component
+            checkBox("Enable hotswap agent")
+                .bindSelected(model.enableHotswapAgentProperty)
+                .enabledIf(model.enableHotswapAgentEditableProperty)
         }
     }
 
-
-internal fun createHotSwapPanelTwoState(
-    model: HotSwapConfigMutable,
-) =
-    panel {
-        row {
-            checkBox("Enable DCEVM").applyToComponent {
-                isSelected = (model.enable == true)
-            }.onChanged {
-                model.enable = it.isSelected
-            }.component
-        }
-        row {
-            checkBox("Enable hotswap agent").applyToComponent {
-                isSelected = (model.enableHotswapAgent == true)
-            }.onChanged {
-                model.enableHotswapAgent = it.isSelected
-            }.component
-        }
-    }
 
 internal class AppDCEVMConfigurable : DCEVMConfigurable() {
     override val persistent: HotSwapPersistent = service<AppSettings>()
     override fun createComponent(): JComponent {
         state.setFrom(persistent)
-        return createHotSwapPanelTwoState(state)
+        return createHotSwapPanelAndControls(state, false)
     }
 }
 

@@ -23,6 +23,7 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.runners.JavaProgramPatcher
+import com.intellij.openapi.util.UserDataHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,7 +37,7 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
     ) {
         if (javaParameters.vmParametersList.parameters.none { it.startsWith("-agentlib:jdwp") }) return
         val effective = effectiveHotSwapConfig(
-            configuration,
+            configuration as? UserDataHolder,
             (configuration as? com.intellij.execution.configurations.RunConfigurationBase<*>)?.project
         )
         if (!effective.enable) return

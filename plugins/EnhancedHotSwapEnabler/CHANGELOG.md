@@ -7,6 +7,7 @@
 ### Added
 
 - Initial scaffold
+- Configurations and settings supports
 
 ### Fixed
 
