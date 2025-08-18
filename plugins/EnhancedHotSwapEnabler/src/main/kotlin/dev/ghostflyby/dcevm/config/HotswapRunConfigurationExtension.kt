@@ -29,6 +29,7 @@ import dev.ghostflyby.dcevm.Bundle
 import org.jdom.Element
 import javax.swing.JComponent
 
+// do not change qualified name to avoid breaking existing configurations
 internal class HotswapRunConfigurationExtension : RunConfigurationExtension() {
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean =
