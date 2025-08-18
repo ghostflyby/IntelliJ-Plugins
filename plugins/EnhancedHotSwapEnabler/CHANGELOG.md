@@ -4,12 +4,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Configurations and settings supports
+
 ## [1.0.0] - 2025-08-16
 
 ### Added
 
 - Initial scaffold
-- Configurations and settings supports
 
 ### Fixed
 
