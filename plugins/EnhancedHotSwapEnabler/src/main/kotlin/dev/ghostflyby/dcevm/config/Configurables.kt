@@ -16,20 +16,19 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.dcevm
+package dev.ghostflyby.dcevm.config
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
-import com.intellij.ui.dsl.builder.bindSelected
-import com.intellij.ui.dsl.builder.panel
+import dev.ghostflyby.dcevm.Bundle
 import javax.swing.JComponent
 
 internal sealed class DCEVMConfigurable : Configurable {
 
-    abstract val persistent: HotSwapPersistent
-    protected val state = HotSwapConfigViewModel()
+    abstract val persistent: HotswapPersistent
+    protected val state = HotswapConfigViewModel()
 
     override fun getDisplayName(): @NlsContexts.ConfigurableName String {
         return Bundle.message("configuration.title")
@@ -47,7 +46,7 @@ internal sealed class DCEVMConfigurable : Configurable {
 
     override fun createComponent(): JComponent {
         state.setFrom(persistent)
-        return createHotSwapPanelAndControls(state)
+        return hotswapConfigView(state)
     }
 
     final override fun apply() {
@@ -57,46 +56,22 @@ internal sealed class DCEVMConfigurable : Configurable {
 }
 
 
-internal fun createHotSwapPanelAndControls(
-    model: HotSwapConfigViewModel,
-    inheritEnabled: Boolean = true,
-) =
-    panel {
-        row {
-            checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
-        }.visible(inheritEnabled)
-        (if (inheritEnabled) ::indent else {
-            {
-                this.it()
-            }
-        }) {
-            row {
-                checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
-                    .enabledIf(model.enableEditableProperty)
-            }
-            row {
-                checkBox(Bundle.message("checkbox.hotswapAgent"))
-                    .bindSelected(model.enableHotswapAgentProperty)
-                    .enabledIf(model.enableHotswapAgentEditableProperty)
-            }
-        }
-    }
 
 
 internal class AppDCEVMConfigurable : DCEVMConfigurable() {
-    override val persistent: HotSwapPersistent = service<AppSettings>()
+    override val persistent: HotswapPersistent = service<AppSettings>()
     override fun createComponent(): JComponent {
         state.setFrom(persistent)
-        return createHotSwapPanelAndControls(state, false)
+        return hotswapConfigView(state, false)
     }
 }
 
 internal class ProjectUserDCEVMConfigurable(project: Project) :
     DCEVMConfigurable() {
-    override val persistent: HotSwapPersistent = project.service<ProjectUserSettings>()
+    override val persistent: HotswapPersistent = project.service<ProjectUserSettings>()
 }
 
 internal class ProjectSharedDCEVMConfigurable(project: Project) :
     DCEVMConfigurable() {
-    override val persistent: HotSwapPersistent = project.service<ProjectSharedSettings>()
+    override val persistent: HotswapPersistent = project.service<ProjectSharedSettings>()
 }

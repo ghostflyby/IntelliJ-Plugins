@@ -20,6 +20,7 @@ package dev.ghostflyby.dcevm
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
