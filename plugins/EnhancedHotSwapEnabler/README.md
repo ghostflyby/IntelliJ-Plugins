@@ -1,12 +1,17 @@
+# Enhanced Hotswap Enabler
+
+[![Version](https://img.shields.io/jetbrains/plugin/v/28214.svg)](https://plugins.jetbrains.com/plugin/28214)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/28214)](https://plugins.jetbrains.com/plugin/28214)
+
 <!-- Plugin description -->
 
-# How to use
+## How to use
 
 Select a JDK supporting dcevm (JetBrainsRuntime bundled with IntelliJ e.g.) for RunConfigurations.
 
 Start the RunConfiguration with debug mode.
 
-# features
+## features
 
 1. Enables `-XX:EnhancedClassRedefinition` in RunConfigurations when supported JDKs are used.
 2. Supports gradle tasks with `JavaExec` type.
