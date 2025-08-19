@@ -51,6 +51,7 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
         )
     }
 
+    @Suppress("SameReturnValue")
     override fun executeTasks(
         projectPath: String,
         id: ExternalSystemTaskId,
