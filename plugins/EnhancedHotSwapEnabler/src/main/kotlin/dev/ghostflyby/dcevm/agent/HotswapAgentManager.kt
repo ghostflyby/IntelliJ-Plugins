@@ -97,11 +97,11 @@ internal class HotswapAgentManager(private val scope: CoroutineScope) {
             try {
                 cacheDir.createDirectories()
                 val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
-                coroutineToIndicator {
+                coroutineToIndicator<Unit> { indicator ->
                     HttpRequests.request(latestJarUrl)
                         .productNameAsUserAgent()
                         .connect { request ->
-                            request.saveToFile(tmp.toFile(), it)
+                            request.saveToFile(tmp, indicator)
                         }
                 }
                 Files.move(
