@@ -23,7 +23,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.platform.ide.progress.ModalTaskOwner
 import com.intellij.platform.ide.progress.TaskCancellation
@@ -98,14 +97,12 @@ internal class HotswapAgentManager(private val scope: CoroutineScope) {
             try {
                 cacheDir.createDirectories()
                 val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
-                coroutineToIndicator<Unit> { // not using `it` as not available on 251
-                    val indicator = ProgressManager.getGlobalProgressIndicator()
-                    HttpRequests.request(latestJarUrl)
-                        .productNameAsUserAgent()
-                        .connect { request ->
-                            request.saveToFile(tmp, indicator)
-                        }
-                }
+                val indicator = ProgressManager.getGlobalProgressIndicator()
+                HttpRequests.request(latestJarUrl)
+                    .productNameAsUserAgent()
+                    .connect { request ->
+                        request.saveToFile(tmp, indicator)
+                    }
                 Files.move(
                     tmp, agentJarPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE
                 )
