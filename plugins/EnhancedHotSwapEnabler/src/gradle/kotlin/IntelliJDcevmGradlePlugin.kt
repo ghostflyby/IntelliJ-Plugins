@@ -24,6 +24,7 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.kotlin.dsl.withType
 
 
+@Suppress("unused")
 internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
     override fun apply(target: Gradle) = target.allprojects {
         val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).map { it.toBoolean() }
