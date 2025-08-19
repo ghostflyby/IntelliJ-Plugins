@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Auto download and configure the HotSwapAgent [#39](https://github.com/ghostflyby/IntelliJ-Plugins/pull/39)
+
 ## [1.1.0] - 2025-08-19
 
 ### Added

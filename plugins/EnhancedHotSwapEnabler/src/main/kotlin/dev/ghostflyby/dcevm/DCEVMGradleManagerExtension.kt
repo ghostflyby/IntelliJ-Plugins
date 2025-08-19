@@ -20,6 +20,7 @@ package dev.ghostflyby.dcevm
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.dcevm.agent.HotswapAgentManager
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
@@ -50,16 +51,22 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
         )
     }
 
+    @Suppress("SameReturnValue")
     override fun executeTasks(
         projectPath: String,
         id: ExternalSystemTaskId,
         settings: GradleExecutionSettings,
         listener: ExternalSystemTaskNotificationListener,
     ): Boolean {
-        val project = id.findProject()
+        val project = id.findProject() ?: return false
         val resolved = effectiveHotSwapConfig(settings, project)
         settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, resolved.enable.toString())
         settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
+        if (resolved.enableHotswapAgent) {
+            // pass agent jar path to Gradle if we already have it; also kick off download if missing
+            val jar = HotswapAgentManager.getInstance().getLocalAgentJar(project) ?: return false
+            settings.addEnvironmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY, jar.toAbsolutePath().toString())
+        }
         return false
     }
 
