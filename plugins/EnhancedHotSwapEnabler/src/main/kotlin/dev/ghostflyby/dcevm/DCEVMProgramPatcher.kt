@@ -21,8 +21,11 @@ package dev.ghostflyby.dcevm
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.JavaParameters
+import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.runners.JavaProgramPatcher
+import com.intellij.openapi.util.UserDataHolder
+import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,6 +38,11 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
         javaParameters: JavaParameters,
     ) {
         if (javaParameters.vmParametersList.parameters.none { it.startsWith("-agentlib:jdwp") }) return
+        val effective = effectiveHotSwapConfig(
+            configuration as? UserDataHolder,
+            (configuration as? RunConfigurationBase<*>)?.project
+        )
+        if (!effective.enable) return
         val javaHome = javaParameters.jdk?.homePath ?: return
 
         val support = getDcevmSupport(
@@ -52,6 +60,11 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
 
         if (support is DCEVMSupport.NeedsArgs) {
             javaParameters.vmParametersList.addAll(support.args)
+        }
+        if (effective.enableHotswapAgent) {
+            if (javaParameters.vmParametersList.parameters.none { it == JVM_OPTION_EXTERNAL_HOTSWAP_AGENT }) {
+                javaParameters.vmParametersList.add(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+            }
         }
 
     }

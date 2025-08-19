@@ -20,6 +20,7 @@ package dev.ghostflyby.dcevm
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
@@ -37,7 +38,7 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
             PathManager.getJarPathForClass(DCEVMGradleManagerExtension::class.java) ?: return
 
         settings.addInitScript(
-            "intellij-ghostflyby.intellijplugin.dcevm.gradle.dcevm",
+            "ghostflyby.intellij.gradle.dcevm",
             """
 initscript{
 dependencies {
@@ -55,8 +56,10 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
         settings: GradleExecutionSettings,
         listener: ExternalSystemTaskNotificationListener,
     ): Boolean {
-        settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, "true")
-        settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, "false")
+        val project = id.findProject()
+        val resolved = effectiveHotSwapConfig(settings, project)
+        settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, resolved.enable.toString())
+        settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
         return false
     }
 

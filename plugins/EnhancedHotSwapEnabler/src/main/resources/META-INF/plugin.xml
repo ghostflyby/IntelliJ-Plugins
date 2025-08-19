@@ -18,7 +18,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>dev.ghostflyby.dcevm</id>
-    <name>Enhanced HotSwap Enabler</name>
+    <name>Enhanced Hotswap Enabler</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -27,6 +27,15 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <java.programPatcher implementation="dev.ghostflyby.dcevm.DCEVMProgramPatcher" />
+        <runConfigurationExtension implementation="dev.ghostflyby.dcevm.config.HotswapRunConfigurationExtension" />
+        <applicationConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.application"
+            instance="dev.ghostflyby.dcevm.config.AppDCEVMConfigurable" key="configuration.title" parentId="build" />
+        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectUser"
+            instance="dev.ghostflyby.dcevm.config.ProjectUserDCEVMConfigurable" key="configuration.title.project"
+            parentId="build" />
+        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectShared"
+            instance="dev.ghostflyby.dcevm.config.ProjectSharedDCEVMConfigurable" key="configuration.title.workspace"
+            parentId="build" />
     </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <taskManager implementation="dev.ghostflyby.dcevm.DCEVMGradleManagerExtension" />
