@@ -48,4 +48,10 @@ internal class HotswapConfigViewModel(
 
     override var enable by enableProperty
     override var enableHotswapAgent by enableHotswapAgentProperty
+
+    /**
+     * for top-level configuration, this should be `false`,
+     * as Application level settings have no parent to inherit from.
+     */
+    var inheritEnable = true
 }

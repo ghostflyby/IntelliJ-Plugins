@@ -62,7 +62,7 @@ internal class AppDCEVMConfigurable : DCEVMConfigurable() {
     override val persistent: HotswapPersistent = service<AppSettings>()
     override fun createComponent(): JComponent {
         state.setFrom(persistent)
-        return hotswapConfigView(state, false)
+        return hotswapConfigView(state.apply { inheritEnable = false })
     }
 }
 

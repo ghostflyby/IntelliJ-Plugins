@@ -25,18 +25,16 @@ import dev.ghostflyby.dcevm.Bundle
 /**
  * Creates a UI panel for configuring hot swap settings.
  * @param model The view model to bind
- * @param inheritEnabled Whether the inherit checkbox should be visible and enabled
  * @return A panel with the hot swap configuration options
  */
 internal fun hotswapConfigView(
     model: HotswapConfigViewModel,
-    inheritEnabled: Boolean = true,
 ) =
     panel {
         row {
             checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
-        }.visible(inheritEnabled)
-        (if (inheritEnabled) ::indent else {
+        }.visible(model.inheritEnable)
+        (if (model.inheritEnable) ::indent else {
             {
                 this.it()
             }

@@ -29,11 +29,13 @@
         <java.programPatcher implementation="dev.ghostflyby.dcevm.DCEVMProgramPatcher" />
         <runConfigurationExtension implementation="dev.ghostflyby.dcevm.config.HotswapRunConfigurationExtension" />
         <applicationConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.application"
-            instance="dev.ghostflyby.dcevm.config.AppDCEVMConfigurable" key="configuration.title" />
+            instance="dev.ghostflyby.dcevm.config.AppDCEVMConfigurable" key="configuration.title" parentId="build" />
         <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectUser"
-            instance="dev.ghostflyby.dcevm.config.ProjectUserDCEVMConfigurable" key="configuration.title.project" />
+            instance="dev.ghostflyby.dcevm.config.ProjectUserDCEVMConfigurable" key="configuration.title.project"
+            parentId="build" />
         <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectShared"
-            instance="dev.ghostflyby.dcevm.config.ProjectSharedDCEVMConfigurable" key="configuration.title.workspace" />
+            instance="dev.ghostflyby.dcevm.config.ProjectSharedDCEVMConfigurable" key="configuration.title.workspace"
+            parentId="build" />
     </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <taskManager implementation="dev.ghostflyby.dcevm.DCEVMGradleManagerExtension" />
