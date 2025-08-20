@@ -10,6 +10,10 @@
 
 ## [1.2.0] - 2025-08-19
 
+### Fixed
+
+- configuration cache problem [#43](https://github.com/ghostflyby/IntelliJ-Plugins/issues/43)
+
 ### Added
 
 - Auto download and configure the HotSwapAgent [#39](https://github.com/ghostflyby/IntelliJ-Plugins/pull/39)
