@@ -70,7 +70,9 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
 
             val agentJar = manager.getLocalAgentJar(project) ?: return
             val arg = "-javaagent:${agentJar.toAbsolutePath()}"
-            javaParameters.vmParametersList.add(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+            if (support !is DCEVMSupport.NeedsArgs) {
+                javaParameters.vmParametersList.add(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+            }
             javaParameters.vmParametersList.add(arg)
         }
 

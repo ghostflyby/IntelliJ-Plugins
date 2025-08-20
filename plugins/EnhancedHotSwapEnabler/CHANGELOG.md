@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- detect altjvm on different OSes [#45](https://github.com/ghostflyby/IntelliJ-Plugins/pull/45)
+
 ## [1.2.0] - 2025-08-19
 
 ### Fixed
