@@ -31,12 +31,13 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
         val manualTasks = providers.environmentVariable(DCEVM_MANUAL_TASKS_KEY)
             .map { JsonSlurper().parse(it.toCharArray()) as Collection<*> }
 
-        val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).map { it.toBoolean() }
-        val enableHotswapAgent = providers.environmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY).map { it.toBoolean() }
+        val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).orElse("false").map { it.toBoolean() }
+        val enableHotswapAgent =
+            providers.environmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY).orElse("false").map { it.toBoolean() }
         // see org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtensionDebuggerBridge.Companion
         // use environment variable to avoid doFirst ordering issues
-        val debuggerEnabled = providers.environmentVariable("DEBUGGER_ENABLED").map { it.toBoolean() }
-        val hotswapAgentJarPath = providers.environmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY)
+        val debuggerEnabled = providers.environmentVariable("DEBUGGER_ENABLED").orElse("false").map { it.toBoolean() }
+        val hotswapAgentJarPath = providers.environmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY).orElse("[]")
         tasks.withType<JavaExec>().configureEach {
 
             val dcevmSupportProvider = javaLauncher.map { launcher ->
@@ -54,8 +55,9 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
                 if (path !in taskNames && name !in taskNames) return@doFirst
 
 
-                if (!debuggerEnabled.get() || !enableDcevm.get()) return@doFirst
-                logger.lifecycle("DCEVM enabled for task $name")
+                if (!debuggerEnabled.get()
+                    || !enableDcevm.get()
+                ) return@doFirst
 
                 val support = dcevmSupportProvider.get()
                 if (support is DCEVMSupport.NeedsArgs)
