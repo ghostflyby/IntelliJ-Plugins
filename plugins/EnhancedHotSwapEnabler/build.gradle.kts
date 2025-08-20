@@ -23,7 +23,7 @@ plugins {
     kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
-version = "1.2.1"
+version = "1.2.2"
 
 buildLogic {
     pluginVersion = version.toString()
