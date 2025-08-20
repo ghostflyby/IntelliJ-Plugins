@@ -18,6 +18,7 @@
 
 package dev.ghostflyby.dcevm
 
+import groovy.json.JsonSlurper
 import org.gradle.api.Plugin
 import org.gradle.api.invocation.Gradle
 import org.gradle.api.tasks.JavaExec
@@ -27,6 +28,9 @@ import org.gradle.kotlin.dsl.withType
 @Suppress("unused")
 internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
     override fun apply(target: Gradle) = target.allprojects {
+        val manualTasks = providers.environmentVariable(DCEVM_MANUAL_TASKS_KEY)
+            .map { JsonSlurper().parse(it.toCharArray()) as Collection<*> }
+
         val enableDcevm = providers.environmentVariable(ENABLE_DCEVM_ENV_KEY).map { it.toBoolean() }
         val enableHotswapAgent = providers.environmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY).map { it.toBoolean() }
         // see org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtensionDebuggerBridge.Companion
@@ -46,7 +50,7 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
 
 
             doFirst {
-                val taskNames = target.startParameter.taskNames
+                val taskNames = manualTasks.get()
                 if (path !in taskNames && name !in taskNames) return@doFirst
 
 
