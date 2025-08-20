@@ -67,7 +67,9 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
                     // Always add external
                     val jar = hotswapAgentJarPath.get()
                     if (jar.isNotBlank()) {
-                        jvmArgs(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+                        if (support !is DCEVMSupport.NeedsArgs) {
+                            jvmArgs(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
+                        }
                         jvmArgs("-javaagent:$jar")
                         logger.lifecycle("HotswapAgent enabled for task $name")
                     }
