@@ -86,7 +86,7 @@ private fun getDcevmSupport(
     } ?: DCEVMSupport.None
 
 
-private val l: List<String> = buildList {
+private val l = run {
     val locations = arrayOf("lib/dcevm", "bin/dcevm", "lib/i386/dcevm", "lib/amd64/dcevm")
     val prefix = arrayOf("", "jre/")
     locations.flatMap {
