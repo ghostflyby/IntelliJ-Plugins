@@ -21,6 +21,7 @@ import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 plugins {
     id("repo.intellij-plugin")
     kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
+    kotlin("plugin.serialization") version libs.versions.kotlin
 }
 
 version = "1.2.1"
