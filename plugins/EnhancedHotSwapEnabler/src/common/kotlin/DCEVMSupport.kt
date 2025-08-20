@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ForkJoinPool
 import kotlin.io.path.isDirectory
 
+internal const val DCEVM_MANUAL_TASKS_KEY = "ijDcevmManualTasks"
 internal const val ENABLE_DCEVM_ENV_KEY = "ijEnableDcevm"
 internal const val ENABLE_HOTSWAP_AGENT_ENV_KEY = "ijEnableHotswapAgent"
 internal const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY = "ijHotswapAgentJarPath"
