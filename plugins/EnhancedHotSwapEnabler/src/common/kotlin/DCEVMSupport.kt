@@ -72,7 +72,7 @@ internal fun getDcevmSupport(
 private fun getDcevmSupport(
     javaHome: Path,
     optionLinesProvider: (javaExecutable: String) -> Sequence<String>,
-): DCEVMSupport = if (javaHome.resolve("lib/dcevm").isDirectory() || javaHome.resolve("jre/lib/dcevm").isDirectory()) {
+): DCEVMSupport = if (installedAsAltJvm(javaHome)) {
     DCEVMSupport.AltJvm
 } else
     optionLinesProvider(javaHome.resolve("bin/java").toString()).firstOrNull {
@@ -84,3 +84,16 @@ private fun getDcevmSupport(
             else -> DCEVMSupport.None
         }
     } ?: DCEVMSupport.None
+
+
+private val l: List<String> = buildList {
+    val locations = arrayOf("lib/dcevm", "bin/dcevm", "lib/i386/dcevm", "lib/amd64/dcevm")
+    val prefix = arrayOf("", "jre/")
+    locations.flatMap {
+        prefix.map { p -> "$p$it" }
+    }
+}
+
+private fun installedAsAltJvm(javaHome: Path): Boolean = l.stream().parallel().anyMatch {
+    javaHome.resolve(it).isDirectory()
+}
