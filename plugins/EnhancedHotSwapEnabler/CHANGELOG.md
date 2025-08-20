@@ -7,6 +7,7 @@
 ### Fixed
 
 - detect altjvm on different OSes [#45](https://github.com/ghostflyby/IntelliJ-Plugins/pull/45)
+- check dcevm on java 1.8 with proper flags [#46](https://github.com/ghostflyby/IntelliJ-Plugins/pull/46)
 
 ## [1.2.0] - 2025-08-19
 
