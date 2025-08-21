@@ -8,7 +8,7 @@ withinDocker: false
 profile:
   name: qodana.recommended
 plugins:
-  - id: devkit
+  - id: DevKit
 exclude:
   - name: All
     paths:
