@@ -24,17 +24,25 @@ import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.service
 import com.intellij.openapi.options.SettingsEditor
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.UserDataHolder
 import com.intellij.openapi.util.removeUserData
 import com.intellij.util.xmlb.XmlSerializer
 import dev.ghostflyby.dcevm.Bundle
+import dev.ghostflyby.dcevm.PluginDisposable
 import org.jdom.Element
 import javax.swing.JComponent
 
 // do not change qualified name to avoid breaking existing configurations
 internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), Disposable {
+
+    init {
+        val plugin = service<PluginDisposable>()
+        Disposer.register(plugin, this)
+    }
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean =
         true
@@ -90,8 +98,8 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
     }
 
     override fun dispose() {
-        ProjectManager.getInstance().openProjects.map {
-            RunManager.getInstance(it)
+        service<ProjectManager>().openProjects.map {
+            it.service<RunManager>()
         }.forEach {
             it.allConfigurationsList.filterIsInstance<UserDataHolder>()
                 .forEach { holder ->
