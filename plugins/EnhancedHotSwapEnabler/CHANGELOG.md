@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- make gradle plugin a optional dependency [#48](https://github.com/ghostflyby/IntelliJ-Plugins/pull/48)
+
 ### Fixed
 
 - UserData memory leak in RunConfigurationExtension [#49](https://github.com/ghostflyby/IntelliJ-Plugins/pull/49)

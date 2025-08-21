@@ -22,7 +22,7 @@
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.gradle</depends>
+    <depends optional="true" config-file="gradle.xml">com.intellij.gradle</depends>
     <depends>com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -36,8 +36,5 @@
         <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectShared"
             instance="dev.ghostflyby.dcevm.config.ProjectSharedDCEVMConfigurable" key="configuration.title.workspace"
             parentId="build" />
-    </extensions>
-    <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
-        <taskManager implementation="dev.ghostflyby.dcevm.DCEVMGradleManagerExtension" />
     </extensions>
 </idea-plugin>
