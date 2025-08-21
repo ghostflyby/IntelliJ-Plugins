@@ -44,7 +44,7 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
                 val javaHome = launcher.metadata.installationPath.asFile.toPath()
                 getDcevmSupport(javaHome) { exe ->
                     providers.exec {
-                        commandLine(exe, "-XX:+PrintFlagsFinal", "--version")
+                        commandLine(exe, "-XX:+PrintFlagsFinal", "-version")
                     }.standardOutput.asText.get().splitToSequence("\n")
                 }
             }

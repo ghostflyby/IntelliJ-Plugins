@@ -55,7 +55,7 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
             GeneralCommandLine(
                 it,
                 "-XX:+PrintFlagsFinal",
-                "--version"
+                "-version"
             ).createProcess().inputStream.bufferedReader().use { reader ->
                 reader.readLines().asSequence()
             }
