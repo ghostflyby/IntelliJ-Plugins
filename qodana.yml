@@ -7,6 +7,8 @@ linter: qodana-jvm-community
 withinDocker: false
 profile:
   name: qodana.recommended
+plugins:
+  - id: devkit
 exclude:
   - name: All
     paths:
