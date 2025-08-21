@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- UserData memory leak in RunConfigurationExtension [#49](https://github.com/ghostflyby/IntelliJ-Plugins/pull/49)
+
 ## [1.2.2] - 2025-08-20
 
 ### Fixed
