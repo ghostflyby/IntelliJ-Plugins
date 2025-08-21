@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- make gradle plugin a optional dependency [#48](https://github.com/ghostflyby/IntelliJ-Plugins/pull/48)
+
 ### Fixed
 
 - detect altjvm on different OSes [#45](https://github.com/ghostflyby/IntelliJ-Plugins/pull/45)
