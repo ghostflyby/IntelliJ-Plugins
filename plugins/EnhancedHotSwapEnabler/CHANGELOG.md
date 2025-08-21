@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.2.3] - 2025-08-21
+
 ### Changed
 
 - make gradle plugin a optional dependency [#48](https://github.com/ghostflyby/IntelliJ-Plugins/pull/48)
@@ -46,7 +48,8 @@
 - Not editing parameters for non-debug starts
 - Wrong gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.0...v1.2.2
 [1.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.0...v1.1.0
