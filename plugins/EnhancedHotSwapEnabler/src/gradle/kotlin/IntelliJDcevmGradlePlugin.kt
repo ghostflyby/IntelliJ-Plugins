@@ -40,19 +40,20 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
         val hotswapAgentJarPath = providers.environmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY).orElse("[]")
         tasks.withType<JavaExec>().configureEach {
 
-            val dcevmSupportProvider = javaLauncher.map { launcher ->
-                val javaHome = launcher.metadata.installationPath.asFile.toPath()
-                getDcevmSupport(javaHome) { exe ->
-                    providers.exec {
-                        commandLine(exe, "-XX:+PrintFlagsFinal", "-version")
-                    }.standardOutput.asText.get().splitToSequence("\n")
-                }
-            }
 
 
             doFirst {
                 val taskNames = manualTasks.get()
                 if (path !in taskNames && name !in taskNames) return@doFirst
+
+                val dcevmSupportProvider = javaLauncher.map { launcher ->
+                    val javaHome = launcher.metadata.installationPath.asFile.toPath()
+                    getDcevmSupport(javaHome) { exe ->
+                        ProcessBuilder().command(
+                            exe, "-XX:+PrintFlagsFinal", "-version"
+                        ).start().inputReader().readLines().asSequence()
+                    }
+                }
 
 
                 if (!debuggerEnabled.get()
