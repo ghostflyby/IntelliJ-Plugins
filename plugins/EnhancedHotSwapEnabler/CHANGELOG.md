@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- move vmOptions check to doFirst to reuse
+  configuration-cache [#54](https://github.com/ghostflyby/IntelliJ-Plugins/pull/54)
+
 ## [1.2.3] - 2025-08-21
 
 ### Changed
