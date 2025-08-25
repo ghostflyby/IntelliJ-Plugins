@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- correct initial state by listening to focus event
+- correct initial mode by listening to editor focus and created event
 
 ## [1.0.0] - 2025-08-25
 

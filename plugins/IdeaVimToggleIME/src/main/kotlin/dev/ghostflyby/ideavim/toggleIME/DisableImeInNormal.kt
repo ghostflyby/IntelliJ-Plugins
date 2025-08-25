@@ -56,4 +56,8 @@ private object ImeEditorListener : EditorListener {
     override fun focusGained(editor: VimEditor) {
         editor.toggleIme()
     }
+
+    override fun created(editor: VimEditor) {
+        editor.toggleIme()
+    }
 }
