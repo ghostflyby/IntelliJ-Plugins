@@ -20,6 +20,7 @@ package dev.ghostflyby.ideavim.toggleIME
 
 import com.maddyhome.idea.vim.api.VimEditor
 import com.maddyhome.idea.vim.api.injector
+import com.maddyhome.idea.vim.common.EditorListener
 import com.maddyhome.idea.vim.common.ModeChangeListener
 import com.maddyhome.idea.vim.extension.VimExtension
 import com.maddyhome.idea.vim.newapi.ij
@@ -32,15 +33,27 @@ internal class DisableImeInNormal : VimExtension {
     override fun init() {
         @Suppress("UnstableApiUsage")
         injector.listenersNotifier.modeChangeListeners.add(ImeVimModeListener)
+        @Suppress("UnstableApiUsage")
+        injector.listenersNotifier.myEditorListeners.add(ImeEditorListener)
     }
 }
 
 private object ImeVimModeListener : ModeChangeListener {
     override fun modeChanged(editor: VimEditor, oldMode: Mode) {
-        val ime = when (editor.mode) {
-            is Mode.NORMAL, is Mode.VISUAL, is Mode.SELECT -> false
-            else -> true
-        }
-        editor.ij.contentComponent.enableInputMethods(ime)
+        editor.toggleIme()
+    }
+}
+
+private fun VimEditor.toggleIme() {
+    val ime = when (mode) {
+        is Mode.NORMAL, is Mode.VISUAL, is Mode.SELECT -> false
+        else -> true
+    }
+    ij.contentComponent.enableInputMethods(ime)
+}
+
+private object ImeEditorListener : EditorListener {
+    override fun focusGained(editor: VimEditor) {
+        editor.toggleIme()
     }
 }
