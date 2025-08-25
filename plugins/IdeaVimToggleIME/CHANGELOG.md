@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- correct initial state by listening to focus event
+
 ## [1.0.0] - 2025-08-25
 
 ### Added
