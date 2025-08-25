@@ -194,6 +194,10 @@ tasks {
         finalizedBy(upload)
     }
 
+    check {
+        finalizedBy(checkLegacyAbi)
+    }
+
 }
 
 intellijPlatformTesting {
