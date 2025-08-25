@@ -24,6 +24,7 @@ version = "1.0.0"
 
 buildLogic {
     pluginVersion = version.toString()
+    pluginSinceBuild = "252"
 }
 
 dependencies.intellijPlatform {
