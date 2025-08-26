@@ -36,6 +36,7 @@ internal class CocoaRecentProjectsListener : RecentProjectsManager.RecentProject
 
         recentsManager.getRecentPaths()
             .map { Path(it).toUri() }
+            .asReversed()
             .forEach {
                 addDocuments(it)
             }
@@ -53,31 +54,19 @@ internal class StartUp : ProjectActivity {
 }
 
 private fun addDocuments(url: URI) {
-    val pool = Foundation.NSAutoreleasePool()
-    try {
+    runInEdt {
         val controllerClass = Foundation.getObjcClass("NSDocumentController")
         val controller = Foundation.invoke(controllerClass, "sharedDocumentController")
         val nsUrlClass = Foundation.getObjcClass("NSURL")
         val url = Foundation.invoke(nsUrlClass, "URLWithString:", Foundation.nsString(url.toString()))
-        runInEdt {
-            Foundation.invoke(controller, "noteNewRecentDocumentURL:", url)
-        }
-
-
-    } finally {
-        pool.drain()
+        Foundation.invoke(controller, "noteNewRecentDocumentURL:", url)
     }
 }
 
 private fun clearDocuments() {
-    val pool = Foundation.NSAutoreleasePool()
-    try {
+    runInEdt {
         val controllerClass = Foundation.getObjcClass("NSDocumentController")
         val controller = Foundation.invoke(controllerClass, "sharedDocumentController")
-        runInEdt {
-            Foundation.invoke(controller, "clearRecentDocuments:", null)
-        }
-    } finally {
-        pool.drain()
+        Foundation.invoke(controller, "clearRecentDocuments:", null)
     }
 }
