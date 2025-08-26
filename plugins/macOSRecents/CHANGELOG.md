@@ -3,3 +3,7 @@
 # MacOSRecents Changelog
 
 ## [Unreleased]
+
+### Added
+
+- Initial implementation of the MacOSRecents plugin.
