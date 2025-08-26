@@ -180,14 +180,14 @@ tasks {
         description = "Uploads release assets to GitHub for the specified tag."
         onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
         commandLine("gh")
-        argumentProviders.add(CommandLineArgumentProvider {
-            val args = mutableListOf<String>()
-            args.add("release")
-            args.add("upload")
-            args.add(ghReleaseTag.get())
-            args.add(path.get().toString())
-            args
-        })
+        argumentProviders.add {
+            buildList {
+                add("release")
+                add("upload")
+                add(ghReleaseTag.get())
+                add(path.get().toString())
+            }
+        }
     }
 
     publishPlugin {
