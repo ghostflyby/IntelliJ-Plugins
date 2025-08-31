@@ -56,11 +56,13 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
                 }
 
 
+                val support = dcevmSupportProvider.get()
+
                 if (!debuggerEnabled.get()
                     || !enableDcevm.get()
+                    || support is DCEVMSupport.None
                 ) return@doFirst
 
-                val support = dcevmSupportProvider.get()
                 if (support is DCEVMSupport.NeedsArgs)
                     jvmArgs(support.args)
 
