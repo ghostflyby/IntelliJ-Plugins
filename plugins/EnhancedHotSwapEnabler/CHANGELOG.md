@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.2.5] - 2025-08-31
+
 ### Fixed
 
 - check `None` DCEVM Support case before enabling in
@@ -60,7 +62,8 @@
 - Not editing parameters for non-debug starts
 - Wrong gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.4...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.0...v1.2.2
