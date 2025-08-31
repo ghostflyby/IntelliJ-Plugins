@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- check `None` DCEVM Support case before enabling in
+  gradle [#65](https://github.com/ghostflyby/IntelliJ-Plugins/pull/65)
+
 ## [1.2.4] - 2025-08-24
 
 ### Fixed
