@@ -71,7 +71,9 @@ afterEvaluate {
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
-            create(buildLogic.platformType, buildLogic.platformVersion)
+            create(buildLogic.platformType, buildLogic.platformVersion) {
+                useCache = true
+            }
         }
     }
 }
