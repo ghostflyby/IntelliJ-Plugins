@@ -79,7 +79,7 @@ jobs:
           RELEASE_NOTE=$(mktemp)
           echo "$CHANGELOG" > $RELEASE_NOTE
 
-          ./gradlew :plugins${{ steps.mod.outputs.gradle_path }}:patchChangelog --release-note-file=$RELEASE_NOTE
+          ./gradlew --configuration-cache :plugins${{ steps.mod.outputs.gradle_path }}:patchChangelog --release-note-file=$RELEASE_NOTE
           rm $RELEASE_NOTE
 
       # Publish the plugin to JetBrains Marketplace
@@ -91,7 +91,7 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: ./gradlew :plugin${{ steps.mod.outputs.gradle_path }}:publishPlugin
+        run: ./gradlew --configuration-cache :plugin${{ steps.mod.outputs.gradle_path }}:publishPlugin
 
       # Create a pull request
       - name: Create Pull Request
