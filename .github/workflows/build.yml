@@ -130,7 +130,7 @@ jobs:
           echo "path=${P//:/\/}" >> "$GITHUB_OUTPUT"
           echo "namesegment=${P//:/-}" >> "$GITHUB_OUTPUT"
       - name: Build plugin
-        run: ./gradlew ${{ matrix.module }}:buildPlugin
+        run: ./gradlew --configuration-cache ${{ matrix.module }}:buildPlugin
       - name: Prepare Plugin Artifact
         id: artifact
         shell: bash
@@ -147,7 +147,7 @@ jobs:
           name: ${{ steps.artifact.outputs.filename }}
           path: ${{ steps.artifact.outputs.pluginpath }}
       - name: Run Tests
-        run: ./gradlew ${{ matrix.module }}:check
+        run: ./gradlew --configuration-cache ${{ matrix.module }}:check
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
@@ -160,7 +160,7 @@ jobs:
           files: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/kover/report.xml
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Run Plugin Verification tasks
-        run: ./gradlew ${{ matrix.module }}:verifyPlugin
+        run: ./gradlew --configuration-cache ${{ matrix.module }}:verifyPlugin
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
@@ -225,6 +225,11 @@ jobs:
       matrix:
         module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
       - name: Fetch Sources
         uses: actions/checkout@v5
         with:
@@ -251,9 +256,9 @@ jobs:
         id: properties
         shell: bash
         run: |
-          PROPERTIES="$(./gradlew ${{ matrix.module }}:properties --console=plain -q)"
+          PROPERTIES="$(./gradlew --configuration-cache ${{ matrix.module }}:properties --console=plain -q)"
           VERSION="$(echo "$PROPERTIES" | grep "^version:" | cut -f2- -d ' ')"
-          CHANGELOG="$(./gradlew ${{ matrix.module }}:getChangelog --unreleased --no-header --console=plain -q)"
+          CHANGELOG="$(./gradlew --configuration-cache ${{ matrix.module }}:getChangelog --unreleased --no-header --console=plain -q)"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGELOG" >> $GITHUB_OUTPUT

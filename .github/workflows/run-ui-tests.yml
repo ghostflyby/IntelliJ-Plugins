@@ -26,13 +26,18 @@ jobs:
             runIde: |
               export DISPLAY=:99.0
               Xvfb -ac :99 -screen 0 1920x1080x16 &
-              ./gradlew "$MODULE:runIdeForUiTests" &
+              ./gradlew --configuration-cache "$MODULE:runIdeForUiTests" &
           - os: windows-latest
             runIde: Start-Process -FilePath .\gradlew.bat -ArgumentList "$(($env:MODULE)):runIdeForUiTests"
           - os: macos-latest
-            runIde: ./gradlew "$MODULE:runIdeForUiTests" &
+            runIde: ./gradlew --configuration-cache "$MODULE:runIdeForUiTests" &
 
     steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
 
       - name: Fetch Sources
         uses: actions/checkout@v5
@@ -59,4 +64,4 @@ jobs:
           retry-delay: 30s
 
       - name: Tests
-        run: ./gradlew "$MODULE:test"
+        run: ./gradlew --configuration-cache "$MODULE:test"
