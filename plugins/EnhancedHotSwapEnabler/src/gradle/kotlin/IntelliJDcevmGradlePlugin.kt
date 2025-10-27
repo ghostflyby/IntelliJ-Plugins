@@ -1,7 +1,11 @@
 /*
- * Copyright (c) 2025 ghostflyby <ghostflyby+intellij@outlook.com>
+ * Copyright (c) 2025 ghostflyby
+ * SPDX-FileCopyrightText: 2025 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
  *
- * This program is free software; you can redistribute it and/or
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 3.0 of the License, or (at your option) any later version.
@@ -39,7 +43,6 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
         val debuggerEnabled = providers.environmentVariable("DEBUGGER_ENABLED").orElse("false").map { it.toBoolean() }
         val hotswapAgentJarPath = providers.environmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY).orElse("[]")
         tasks.withType<JavaExec>().configureEach {
-
 
 
             doFirst {

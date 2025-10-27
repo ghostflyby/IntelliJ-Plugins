@@ -1,0 +1,7 @@
+<component name="CopyrightManager">
+  <copyright>
+    <option name="keyword" value="SPDX-FileCopyrightText" />
+    <option name="notice" value="SPDX-FileCopyrightText: &amp;#36;originalComment.match(&quot;SPDX-FileCopyrightText: (\d+)&quot;, 1, &quot;-&quot;, &quot;&amp;#36;today.year&quot;)&amp;#36;today.year &amp;#36;username&#10;SPDX-License-Identifier: LGPL-3.0-or-later" />
+    <option name="myName" value="short" />
+  </copyright>
+</component>

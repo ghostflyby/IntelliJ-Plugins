@@ -1,7 +1,11 @@
 /*
- * Copyright (c) 2025 ghostflyby <ghostflyby+intellij@outlook.com>
+ * Copyright (c) 2025 ghostflyby
+ * SPDX-FileCopyrightText: 2025 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
  *
- * This program is free software; you can redistribute it and/or
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
  * License as published by the Free Software Foundation; either
  * version 3.0 of the License, or (at your option) any later version.
@@ -67,7 +71,8 @@ repositories {
 
 afterEvaluate {
     dependencies.intellijPlatform {
-        val localPlatform = rootProject.file(".idea/intellijPlatform")
+        val relative = buildLogic.platformType.map { "build/intellij/${it.code}" }
+        val localPlatform = rootProject.file(relative.get())
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
