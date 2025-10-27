@@ -2,6 +2,17 @@
   <settings>
     <module2copyright>
       <element module="sources" copyright="default" />
+      <element module="resources" copyright="short" />
     </module2copyright>
+    <LanguageOptions name="Properties">
+      <option name="fileTypeOverride" value="3" />
+      <option name="block" value="false" />
+    </LanguageOptions>
+    <LanguageOptions name="XML">
+      <option name="fileTypeOverride" value="3" />
+      <option name="addBlankAfter" value="false" />
+      <option name="block" value="false" />
+      <option name="prefixLines" value="false" />
+    </LanguageOptions>
   </settings>
 </component>
