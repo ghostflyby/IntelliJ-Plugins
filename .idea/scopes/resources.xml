@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="resources" pattern="file:resources/META-INF/*.xml||file:resources/messages/*.properties" />
+</component>

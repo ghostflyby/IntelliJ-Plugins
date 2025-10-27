@@ -71,7 +71,8 @@ repositories {
 
 afterEvaluate {
     dependencies.intellijPlatform {
-        val localPlatform = rootProject.file(".idea/intellijPlatform")
+        val relative = buildLogic.platformType.map { "build/intellij/${it.code}" }
+        val localPlatform = rootProject.file(relative.get())
         if (localPlatform.exists()) {
             local(localPlatform.readText())
         } else {
