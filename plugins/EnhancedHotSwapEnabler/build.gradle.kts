@@ -21,6 +21,8 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("repo.intellij-plugin")
@@ -81,3 +83,13 @@ tasks.prepareSandbox {
     includeEmptyDirs = false
 }
 
+
+tasks.withType<KotlinCompile>().named { it != "compileKotlin" }.configureEach {
+    compilerOptions {
+        jvmTarget = JvmTarget.fromTarget("17")
+    }
+}
+tasks.withType<JavaCompile>().named { it != "compileJava" }.configureEach {
+    sourceCompatibility = "21"
+    targetCompatibility = "17"
+}
