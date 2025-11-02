@@ -21,13 +21,15 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("repo.intellij-plugin")
     kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
-version = "1.2.5"
+version = "1.3.5"
 
 buildLogic {
     pluginVersion = version.toString()
@@ -81,3 +83,13 @@ tasks.prepareSandbox {
     includeEmptyDirs = false
 }
 
+tasks.withType<KotlinCompile>().configureEach {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    targetCompatibility = "17"
+    sourceCompatibility = "21"
+}
