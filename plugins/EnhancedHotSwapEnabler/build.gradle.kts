@@ -83,13 +83,13 @@ tasks.prepareSandbox {
     includeEmptyDirs = false
 }
 
-tasks.withType<KotlinCompile>().configureEach {
+tasks.withType<KotlinCompile>().named { it == "compileCommonKotlin" || it == "compileGradleKotlin" }.configureEach {
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
+        jvmTarget = JvmTarget.JVM_1_8
     }
 }
 
-tasks.withType<JavaCompile>().configureEach {
-    targetCompatibility = "17"
+tasks.withType<JavaCompile>().named { it == "compileCommonJava" || it == "compileGradleJava" }.configureEach {
+    targetCompatibility = "1.8"
     sourceCompatibility = "21"
 }
