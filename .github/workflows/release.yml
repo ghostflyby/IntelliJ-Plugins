@@ -107,7 +107,7 @@ jobs:
           git config user.name "GitHub Action"
 
           git checkout -b $BRANCH
-          git commit -am "chore: Changelog update - v$VERSION [skip ci]"
+          git commit -am "chore: Changelog update - $VERSION [skip ci]"
           git push --set-upstream origin $BRANCH
           
           gh label create "$LABEL" \
@@ -116,10 +116,9 @@ jobs:
             || true
 
           PR_URL=$(gh pr create \
-          --title "chore: Changelog update - v$VERSION [skip ci]" \
-          --body "Current pull request contains patched \CHANGELOG.md\ file for the \$VERSION\ version." \
+          --title "chore: Changelog update - $VERSION [skip ci]" \
+          --body "Current pull request contains patched CHANGELOG.md file for the $VERSION version." \
           --label "$LABEL" \
           --head "$BRANCH" )
           
-          gh pr review "$PR_URL" --approve
           gh pr merge "$PR_URL" --squash --auto
