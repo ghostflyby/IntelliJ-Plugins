@@ -20,21 +20,22 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-}
+package dev.ghostflyby.spotless
 
-version = "0.0.1"
+import com.intellij.ide.actionsOnSave.impl.ActionsOnSaveFileDocumentManagerListener
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
 
-buildLogic {
-    pluginVersion = version.toString()
-}
+internal class SpotlessActionOnSave : ActionsOnSaveFileDocumentManagerListener.DocumentUpdatingActionOnSave() {
+    override suspend fun updateDocument(
+        project: Project,
+        document: Document,
+    ) {
+        FileDocumentManager.getInstance().getFile(document)
+    }
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.gradle")
-    bundledPlugin("org.jetbrains.idea.maven")
-}
+    override val presentableName: String
+        get() = "Spotless Apply"
 
-dependencies {
-    implementation(libs.ktor.client.cio)
 }

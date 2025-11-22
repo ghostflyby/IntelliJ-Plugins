@@ -20,21 +20,24 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-}
+package dev.ghostflyby.spotless
 
-version = "0.0.1"
+import com.intellij.openapi.vcs.CheckinProjectPanel
+import com.intellij.openapi.vcs.changes.CommitContext
+import com.intellij.openapi.vcs.checkin.CheckinHandler
+import com.intellij.openapi.vcs.checkin.CheckinHandlerFactory
 
-buildLogic {
-    pluginVersion = version.toString()
-}
+internal class SpotlessCommitHandlerFactory : CheckinHandlerFactory() {
+    override fun createHandler(
+        panel: CheckinProjectPanel,
+        commitContext: CommitContext,
+    ): CheckinHandler {
+        panel.roots
+        val project = panel.project
+        if (!project.isSpotlessEnabled) {
+            return CheckinHandler.DUMMY
+        }
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.gradle")
-    bundledPlugin("org.jetbrains.idea.maven")
-}
-
-dependencies {
-    implementation(libs.ktor.client.cio)
+        TODO()
+    }
 }

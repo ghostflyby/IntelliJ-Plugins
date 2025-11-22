@@ -20,21 +20,31 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-}
+package dev.ghostflyby.spotless.gradle
 
-version = "0.0.1"
+import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
+import org.gradle.util.GradleVersion
+import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
+import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
 
-buildLogic {
-    pluginVersion = version.toString()
-}
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.gradle")
-    bundledPlugin("org.jetbrains.idea.maven")
-}
-
-dependencies {
-    implementation(libs.ktor.client.cio)
+internal class SpotlessGradleExtension : GradleTaskManagerExtension {
+    override fun configureTasks(
+        projectPath: String,
+        id: ExternalSystemTaskId,
+        settings: GradleExecutionSettings,
+        gradleVersion: GradleVersion?,
+    ) {
+        settings.addInitScript(
+            "dev.ghostflyby.spotless.daemon",
+            """
+            initscript {
+                repositories {
+                    mavenCentral()
+                    gradlePluginPortal()
+                }
+            }
+        """.trimIndent(),
+        )
+    }
 }

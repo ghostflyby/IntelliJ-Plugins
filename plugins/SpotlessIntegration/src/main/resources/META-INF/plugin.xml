@@ -1,11 +1,18 @@
 <!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
-<idea-plugin package="dev.ghostflyby.spotless">
+<idea-plugin>
     <id>dev.ghostflyby.spotless</id>
     <name>Spotless Integration</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <actionOnSave implementation="dev.ghostflyby.spotless.SpotlessActionOnSave" order="after FormatOnSaveAction"/>
+        <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>
+        <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
+    </extensions>
+    <projectListeners>
+    </projectListeners>
 </idea-plugin>
