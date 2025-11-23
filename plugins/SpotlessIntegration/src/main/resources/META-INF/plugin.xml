@@ -7,12 +7,11 @@
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends optional="true" config-file="gradle.xml">com.intellij.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <actionOnSave implementation="dev.ghostflyby.spotless.SpotlessActionOnSave" order="after FormatOnSaveAction"/>
+        <actionOnSave implementation="dev.ghostflyby.spotless.SpotlessActionOnSave"/>
         <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
     </extensions>
-    <projectListeners>
-    </projectListeners>
 </idea-plugin>

@@ -22,10 +22,12 @@
 
 package dev.ghostflyby.spotless.gradle
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
+import kotlin.io.path.Path
 
 
 internal class SpotlessGradleExtension : GradleTaskManagerExtension {
@@ -35,6 +37,7 @@ internal class SpotlessGradleExtension : GradleTaskManagerExtension {
         settings: GradleExecutionSettings,
         gradleVersion: GradleVersion?,
     ) {
+        service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
         settings.addInitScript(
             "dev.ghostflyby.spotless.daemon",
             """
@@ -43,6 +46,10 @@ internal class SpotlessGradleExtension : GradleTaskManagerExtension {
                     mavenCentral()
                     gradlePluginPortal()
                 }
+            }
+
+            pluginManager.withPlugin("com.diffplug.spotless") {
+                pluginManager.apply('dev.ghostflyby.spotless.daemon')
             }
         """.trimIndent(),
         )
