@@ -22,21 +22,26 @@
 
 package dev.ghostflyby.spotless.gradle
 
+import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
 import com.intellij.openapi.externalSystem.model.ProjectSystemId
+import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExecutionSettings
 import com.intellij.openapi.externalSystem.model.project.ExternalEntityData
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
+import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
+import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
 import org.jetbrains.plugins.gradle.tooling.ModelBuilderService
+import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.io.Serializable
 import java.nio.file.Path
 import kotlin.io.path.absolute
@@ -130,3 +135,23 @@ internal class SpotlessGradleStateHolder {
     }
 
 }
+
+internal fun runGradleSpotlessDaemon(
+    project: com.intellij.openapi.project.Project,
+    externalProject: Path,
+    unixSocketPath: Path,
+) {
+    val settings = ExternalSystemTaskExecutionSettings().apply {
+        externalSystemIdString = GradleConstants.SYSTEM_ID.id
+        externalProjectPath = externalProject.toString()
+        scriptParameters = "-Pdev.ghostflyby.spotless.daemon.unixsocket=${unixSocketPath.toAbsolutePath()}"
+    }
+    val exe = TaskExecutionSpec.create()
+        .withProject(project)
+        .withSettings(settings)
+        .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)
+        .build()
+    ExternalSystemUtil.runTask(exe)
+}
+
+

@@ -30,85 +30,26 @@ public interface SpotlessExtension {
     public companion object {
         @JvmStatic
         public val EP_NAME: ExtensionPointName<SpotlessExtension> =
-            ExtensionPointName.create<SpotlessExtension>("dev.ghostflyby.spotless.extension")
+            ExtensionPointName.create<SpotlessExtension>("dev.ghostflyby.spotless.spotlessDaemonProvider")
     }
 
+    /**
+     * Check if Spotless is applicable to the given project, called before calling [startDaemon]
+     * @return `true` if Spotless can be used for the given project, `false` otherwise or the external system sync has not yet completed
+     */
     public fun isApplicableTo(project: Project, externalProject: Path): Boolean
 
     /**
-     * Apply Spotless to a single file **without writing to disk**
+     * Start a Spotless Daemon for the given project
+     * @return Path to the daemon socket file with an http service
      *
-     * do not window the input for bulk processing, implement [applyToMultiple] instead
-     *
-     * see [Spotless IDE_HOOK](https://github.com/diffplug/spotless/blob/main/plugin-gradle/IDE_HOOK.md)
-     *
-     * @param externalProject The root path of the external project
-     * @param absolutePath The absolute path of the file to format
-     * @param fileContent The current content of the file, which may be unsaved changes
-     *
+     * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
-    public suspend fun applyToSingle(
+    public suspend fun startDaemon(
+        project: Project,
         externalProject: Path,
-        absolutePath: Path,
-        fileContent: String,
-    ): SpotlessSingleFileResult
-
-    public suspend fun applyToProject(
-        externalProject: Path,
-    )
+    ): Path
 
 }
 
 
-public sealed interface SpotlessSingleFileResult {
-    /**
-     * Formatted successfully with the file on disk untouched
-     * @property content The formatted output
-     */
-    public data class Dirty(public val content: String) : SpotlessSingleFileResult
-
-    /**
-     * Untouched as already formatted
-     */
-    public object Clean : SpotlessSingleFileResult
-
-    /**
-     * Not covered by Spotless, either no formater for the filetype or path pattern not included
-     */
-    public object NotCovered : SpotlessSingleFileResult
-    public interface Failed : SpotlessSingleFileResult {
-        /**
-         * Description or stacktrace of the failure
-         */
-        public val message: String
-    }
-
-    /**
-     * The formatter did not converge after multiple attempts
-     *
-     * Result loops in `A -> B -> A -> B -> ...` e.g.
-     */
-    public data class DidNotConverge(override val message: String) : Failed
-
-    /**
-     * Error occurred during formatting, see `message` for details
-     */
-    public data class Error(override val message: String) : Failed
-
-    public companion object {
-        /**
-         * Parse the output of a Spotless CLI invocation for a single file
-         *
-         * see [Spotless IDE_HOOK](https://github.com/diffplug/spotless/blob/main/plugin-gradle/IDE_HOOK.md)
-         */
-        public fun parse(stderr: String, stdout: String): SpotlessSingleFileResult {
-            return when {
-                stderr.isEmpty() -> NotCovered
-                stderr.startsWith("IS DIRTY") -> Dirty(stdout)
-                stderr.startsWith("IS CLEAN") -> Clean
-                stderr.startsWith("DID NOT CONVERGE") -> DidNotConverge(stderr.removePrefix("DID NOT CONVERGE"))
-                else -> Error(stderr)
-            }
-        }
-    }
-}

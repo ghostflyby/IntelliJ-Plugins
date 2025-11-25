@@ -14,4 +14,9 @@
         <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
     </extensions>
+
+    <extensionPoints>
+        <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.SpotlessExtension"
+                        dynamic="true"/>
+    </extensionPoints>
 </idea-plugin>

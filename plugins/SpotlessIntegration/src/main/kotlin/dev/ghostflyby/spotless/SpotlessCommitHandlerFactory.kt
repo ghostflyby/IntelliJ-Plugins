@@ -33,11 +33,6 @@ internal class SpotlessCommitHandlerFactory : CheckinHandlerFactory() {
         commitContext: CommitContext,
     ): CheckinHandler {
         panel.roots
-        val project = panel.project
-        if (!project.isSpotlessEnabled) {
-            return CheckinHandler.DUMMY
-        }
-
         TODO()
     }
 }

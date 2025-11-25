@@ -31,6 +31,7 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
+import com.intellij.psi.PsiFile
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
@@ -64,6 +65,12 @@ internal fun VirtualFile.findGradleRoot(project: Project): Path? {
     val module = fileIndex.getModuleForFile(this)  // 不关心 library sources 的话这个就够用
 
     return module?.gradleRoot ?: toNioPathOrNull()?.let { project.gradleRootForPath(it) }
+}
+
+internal fun PsiFile.findGradleRoot(): Path? {
+    val project = this.project
+
+    return virtualFile?.findGradleRoot(project)
 }
 
 
