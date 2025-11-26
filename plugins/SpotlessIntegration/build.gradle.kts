@@ -34,7 +34,3 @@ dependencies.intellijPlatform {
     bundledPlugin("com.intellij.gradle")
     bundledPlugin("org.jetbrains.idea.maven")
 }
-
-dependencies {
-    implementation(libs.ktor.client.cio)
-}

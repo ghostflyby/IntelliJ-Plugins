@@ -22,36 +22,60 @@
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.openapi.components.service
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
-import org.gradle.util.GradleVersion
-import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
-import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
-import kotlin.io.path.Path
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.toNioPathOrNull
+import dev.ghostflyby.spotless.SpotlessDaemonHost
+import dev.ghostflyby.spotless.SpotlessExtension
+import org.jetbrains.plugins.gradle.settings.GradleSettings
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.div
 
+internal class SpotlessGradleExtension : SpotlessExtension {
 
-internal class SpotlessGradleExtension : GradleTaskManagerExtension {
-    override fun configureTasks(
-        projectPath: String,
-        id: ExternalSystemTaskId,
-        settings: GradleExecutionSettings,
-        gradleVersion: GradleVersion?,
-    ) {
-        service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
-        settings.addInitScript(
-            "dev.ghostflyby.spotless.daemon",
-            """
-            initscript {
-                repositories {
-                    mavenCentral()
-                    gradlePluginPortal()
-                }
-            }
+    private val daemons = ConcurrentHashMap<Path, SpotlessDaemonHost>()
 
-            pluginManager.withPlugin("com.diffplug.spotless") {
-                pluginManager.apply('dev.ghostflyby.spotless.daemon')
-            }
-        """.trimIndent(),
-        )
+    override fun isApplicableTo(
+        project: Project,
+        externalProject: Path?,
+    ): Boolean {
+        return GradleSettings.getInstance(project).linkedProjectsSettings
+            .any { it.externalProjectPath == externalProject?.toString() }
     }
+
+    override suspend fun getDaemon(
+        project: Project,
+        externalProject: Path,
+    ): SpotlessDaemonHost {
+        return daemons.computeIfAbsent(externalProject) {
+            val dir: Path = Files.createTempDirectory(null)
+            val unixSocketPath = dir / "spotless-daemon.sock"
+            runGradleSpotlessDaemon(
+                project,
+                externalProject,
+                unixSocketPath,
+            )
+            SpotlessDaemonHost.Unix(unixSocketPath)
+        }
+    }
+
+    override fun findExternalProjectPath(
+        project: Project,
+        virtualFile: VirtualFile,
+    ): Path? {
+        val ioPath = virtualFile.toNioPathOrNull() ?: return null
+        val abs = ioPath.toAbsolutePath().normalize()
+
+        val rootDirs = GradleSettings.getInstance(project).linkedProjectsSettings
+            .mapNotNull { it.externalProjectPath }
+            .map { Paths.get(it).toAbsolutePath().normalize() }
+
+        return rootDirs
+            .filter { abs.startsWith(it) }
+            .maxByOrNull { it.nameCount }
+    }
+
 }

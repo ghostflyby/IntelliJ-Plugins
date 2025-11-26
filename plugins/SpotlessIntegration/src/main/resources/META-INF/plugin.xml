@@ -10,8 +10,8 @@
     <depends optional="true" config-file="gradle.xml">com.intellij.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>
-        <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
+        <!--        <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>-->
+        <!--        <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>-->
         <fileEncodingProvider implementation="dev.ghostflyby.spotless.SpotlessFileEncodingProvider"/>
     </extensions>
 

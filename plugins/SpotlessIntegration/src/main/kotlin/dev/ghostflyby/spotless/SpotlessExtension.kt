@@ -22,34 +22,52 @@
 
 package dev.ghostflyby.spotless
 
-import com.intellij.openapi.extensions.ExtensionPointName
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 
-public interface SpotlessExtension {
-    public companion object {
-        @JvmStatic
-        public val EP_NAME: ExtensionPointName<SpotlessExtension> =
-            ExtensionPointName.create<SpotlessExtension>("dev.ghostflyby.spotless.spotlessDaemonProvider")
-    }
+public interface SpotlessExtension : Disposable {
 
     /**
-     * Check if Spotless is applicable to the given project, called before calling [startDaemon]
+     * Check if Spotless is applicable to the given project, called before calling [getDaemon]
+     * Note: return false if you are not sure yet, the external system sync may not have completed yet
      * @return `true` if Spotless can be used for the given project, `false` otherwise or the external system sync has not yet completed
      */
-    public fun isApplicableTo(project: Project, externalProject: Path): Boolean
+    public fun isApplicableTo(project: Project, externalProject: Path?): Boolean
 
     /**
      * Start a Spotless Daemon for the given project
      * @return Path to the daemon socket file with an http service
-     *
+     * @param externalProject The external project path as returned by [findExternalProjectPath]
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
-    public suspend fun startDaemon(
+    public suspend fun getDaemon(
         project: Project,
         externalProject: Path,
-    ): Path
+    ): SpotlessDaemonHost
+
+    /**
+     * Find the external project path for the given virtual file
+     * @return Path to the external project or `null` if not found
+     */
+    public fun findExternalProjectPath(project: Project, virtualFile: VirtualFile): Path?
+
+    /**
+     * Dispose resources held by this extension, stop started daemons etc.
+     *
+     * You don't need to register a [SpotlessExtension]
+     * to [com.intellij.openapi.util.Disposer] or other parent,
+     * [Spotless] service will do it for you
+     */
+    override fun dispose() {
+
+    }
 
 }
 
 
+public sealed interface SpotlessDaemonHost {
+    public data class Localhost(val port: Int) : SpotlessDaemonHost
+    public data class Unix(val path: Path) : SpotlessDaemonHost
+}

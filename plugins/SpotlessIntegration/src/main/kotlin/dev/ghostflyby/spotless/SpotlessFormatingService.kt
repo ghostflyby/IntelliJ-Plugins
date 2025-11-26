@@ -25,14 +25,60 @@ package dev.ghostflyby.spotless
 import com.intellij.formatting.service.AsyncDocumentFormattingService
 import com.intellij.formatting.service.AsyncFormattingRequest
 import com.intellij.formatting.service.FormattingService
+import com.intellij.openapi.components.service
+import com.intellij.openapi.components.serviceAsync
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
-public class SpotlessFormatingService : AsyncDocumentFormattingService() {
-    override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask {
-        formattingRequest.context
-        TODO("Not yet implemented")
+internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
+    override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
+        val project = formattingRequest.context.project
+        val virtualFile = formattingRequest.context.virtualFile ?: return null
+        val spotless = service<Spotless>()
+        if (!spotless.canFormatSync(project, virtualFile)) {
+            return null
+        }
+        return SpotlessFormattingTask(project, virtualFile, formattingRequest)
     }
+
+    private class SpotlessFormattingTask(
+        val project: Project,
+        val virtualFile: VirtualFile,
+        val formattingRequest: AsyncFormattingRequest,
+    ) : FormattingTask {
+        private var job: Job? = null
+        override fun cancel(): Boolean {
+            job?.cancel()
+            return true
+        }
+
+        override fun run() {
+            runBlocking {
+                val spotless = project.serviceAsync<Spotless>()
+                job = launch {
+                    val result = spotless.format(
+                        project,
+                        virtualFile,
+                        formattingRequest.documentText,
+                    )
+                    if (result is SpotlessFormatResult.Dirty) {
+                        formattingRequest.onTextReady(result.content)
+                    } else {
+                        TODO("Handle other results")
+                    }
+                }
+                job?.join()
+            }
+        }
+
+
+    }
+
 
     override fun getNotificationGroupId(): String {
         return spotlessNotificationGroupId
@@ -45,7 +91,7 @@ public class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun getFeatures(): Set<FormattingService.Feature?> = emptySet()
 
     override fun canFormat(file: PsiFile): Boolean {
-        file.virtualFile.toNioPath()
-        TODO("Not yet implemented")
+        val virtualFile = file.viewProvider.virtualFile
+        return service<Spotless>().canFormatSync(file.project, virtualFile)
     }
 }
