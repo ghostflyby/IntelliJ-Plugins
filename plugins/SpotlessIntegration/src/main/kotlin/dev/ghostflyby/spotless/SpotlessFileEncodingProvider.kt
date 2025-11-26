@@ -19,23 +19,18 @@
  * License along with this library; if not, see
  * <https://www.gnu.org/licenses/>.
  */
-
 package dev.ghostflyby.spotless
 
-import com.intellij.ide.actionsOnSave.impl.ActionsOnSaveFileDocumentManagerListener
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.encoding.FileEncodingProvider
+import java.nio.charset.Charset
 
-internal class SpotlessActionOnSave : ActionsOnSaveFileDocumentManagerListener.DocumentUpdatingActionOnSave() {
-    override suspend fun updateDocument(
-        project: Project,
-        document: Document,
-    ) {
-        FileDocumentManager.getInstance().getFile(document)
+internal class SpotlessFileEncodingProvider : FileEncodingProvider {
+    override fun getEncoding(
+        virtualFile: VirtualFile,
+        project: Project?,
+    ): Charset {
+        TODO("Not yet implemented")
     }
-
-    override val presentableName: String
-        get() = "Spotless Apply"
-
 }
