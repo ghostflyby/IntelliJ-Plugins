@@ -134,6 +134,7 @@ internal fun runGradleSpotlessDaemon(
     val exe = TaskExecutionSpec.create()
         .withProject(project)
         .withSettings(settings)
+        .withSystemId(GradleConstants.SYSTEM_ID)
         .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)
         .build()
     ExternalSystemUtil.runTask(exe)
