@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.spotless.gradle
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
@@ -32,6 +33,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.Path
 import kotlin.io.path.div
 
 internal class SpotlessGradleExtension : SpotlessExtension {
@@ -40,10 +42,10 @@ internal class SpotlessGradleExtension : SpotlessExtension {
 
     override fun isApplicableTo(
         project: Project,
-        externalProject: Path?,
     ): Boolean {
+        val holder = service<SpotlessGradleStateHolder>()
         return GradleSettings.getInstance(project).linkedProjectsSettings
-            .any { it.externalProjectPath == externalProject?.toString() }
+            .any { holder.isSpotlessEnabledForProjectDir(Path(it.externalProjectPath)) }
     }
 
     override suspend fun getDaemon(
