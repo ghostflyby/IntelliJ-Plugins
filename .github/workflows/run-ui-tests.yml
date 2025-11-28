@@ -45,7 +45,7 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
-          distribution: zulu
+          distribution: jetbrains
           java-version: 21
 
       - name: Setup Gradle
