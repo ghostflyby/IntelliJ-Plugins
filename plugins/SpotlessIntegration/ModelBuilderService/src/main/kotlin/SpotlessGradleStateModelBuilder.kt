@@ -36,16 +36,21 @@ public annotation class SpotlessIntegrationPluginInternalApi
 @SpotlessIntegrationPluginInternalApi
 public class SpotlessGradleStateModelBuilder : ModelBuilderService {
 
-    override fun canBuild(modelName: String): Boolean = modelName == SpotlessGradleState::class.java.name
+    override fun canBuild(modelName: String): Boolean = modelName == SpotlessGradleStateModel::class.java.name
 
     override fun buildAll(modelName: String, project: Project): Any {
-        return SpotlessGradleState(
+        return SpotlessGradleStateModelImpl(
             project.pluginManager.hasPlugin("com.diffplug.spotless"),
         )
     }
 }
 
+
 @SpotlessIntegrationPluginInternalApi
-public data class SpotlessGradleState(
+public interface SpotlessGradleStateModel : Serializable {
+    public val spotless: Boolean
+}
+
+internal data class SpotlessGradleStateModelImpl(
     val spotless: Boolean,
 ) : Serializable

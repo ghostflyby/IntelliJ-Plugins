@@ -65,7 +65,7 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
         gradleModule: IdeaModule,
         ideModule: DataNode<ModuleData>,
     ) {
-        val myModel = resolverCtx.getExtraProject(gradleModule, SpotlessGradleState::class.java)
+        val myModel = resolverCtx.getExtraProject(gradleModule, SpotlessGradleStateModel::class.java)
         if (myModel != null) {
             ideModule.createChild(
                 SpotlessGradleStateData.KEY,
@@ -79,7 +79,7 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
     }
 
 
-    override fun getExtraProjectModelClasses() = setOf(SpotlessGradleState::class.java)
+    override fun getExtraProjectModelClasses() = setOf(SpotlessGradleStateModel::class.java)
 
     override fun getToolingExtensionsClasses() = setOf(SpotlessGradleStateModelBuilder::class.java)
 
