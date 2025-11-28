@@ -42,6 +42,7 @@ import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExten
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
 
 
@@ -104,7 +105,7 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
 @Service
 internal class SpotlessGradleStateHolder {
 
-    private val dataByModuleId = mutableMapOf<Path, SpotlessGradleStateData>()
+    private val dataByModuleId = ConcurrentHashMap<Path, SpotlessGradleStateData>()
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
         dataByModuleId.clear()
