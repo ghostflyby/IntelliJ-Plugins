@@ -34,7 +34,7 @@ public interface SpotlessExtension : Disposable {
      * Note: return false if you are not sure yet, the external system sync may not have completed yet
      * @return `true` if Spotless can be used for the given project, `false` otherwise or the external system sync has not yet completed
      */
-    public fun isApplicableTo(project: Project, externalProject: Path?): Boolean
+    public fun isApplicableTo(project: Project): Boolean
 
     /**
      * Start a Spotless Daemon for the given project

@@ -83,7 +83,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
 
     private val https = ConcurrentHashMap<SpotlessDaemonHost, HttpClient>()
     private fun http(path: SpotlessDaemonHost): HttpClient {
-        return https.computeIfAbsent(path) {
+        return https.getOrPut(path) {
             HttpClient(OkHttp) {
                 engine {
                     config {
@@ -113,9 +113,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
 
     public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean = scope.async {
         val external = virtualFile.findExternalRoot(project) ?: return@async false
-        if (!isApplicableTo(project, external)) {
-            return@async false
-        }
         val filePath = virtualFile.toNioPathOrNull() ?: return@async false
         val daemon = findDaemon(project, external) ?: return@async false
         val result = http(daemon).format(daemon, filePath, "", dryrun = true)
@@ -125,15 +122,15 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public fun canFormatSync(
         project: Project,
         virtualFile: VirtualFile,
-        timeout: Duration = 200.milliseconds,
+        timeout: Duration = 500.milliseconds,
     ): Boolean = runBlocking {
         withTimeoutOrNull(timeout) {
             canFormat(project, virtualFile)
         } ?: false
     }
 
-    private fun isApplicableTo(project: Project, externalProject: Path?): Boolean {
-        return EP_NAME.findFirstSafe { it.isApplicableTo(project, externalProject) } != null
+    private fun isApplicableTo(project: Project): Boolean {
+        return EP_NAME.findFirstSafe { it.isApplicableTo(project) } != null
     }
 
 
@@ -141,12 +138,12 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost? {
-        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project, externalProject) } ?: return null
+        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project) } ?: return null
         return ext.getDaemon(project, externalProject)
     }
 
     private fun VirtualFile.findExternalRoot(project: Project): Path? {
-        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project, null) } ?: return null
+        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project) } ?: return null
         return ext.findExternalProjectPath(project, this)
     }
 
