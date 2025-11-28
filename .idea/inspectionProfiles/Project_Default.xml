@@ -26,7 +26,7 @@
         <constraint name="Parameter" within="" contains="" />
       </replaceConfiguration>
     </inspection_tool>
+    <inspection_tool class="ThreadingConcurrency" enabled="true" level="ERROR" enabled_by_default="true" />
     <inspection_tool class="UnstableApiUsage" enabled="true" level="ERROR" enabled_by_default="true" editorAttributes="ERRORS_ATTRIBUTES" />
-    <inspection_tool class="ae16d93d-8ddb-3379-a0d8-6277df53c5f9" enabled="true" level="WARNING" enabled_by_default="true" />
   </profile>
 </component>

@@ -19,14 +19,18 @@
  * License along with this library; if not, see
  * <https://www.gnu.org/licenses/>.
  */
+package dev.ghostflyby.spotless
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.encoding.FileEncodingProvider
+import java.nio.charset.Charset
+
+internal class SpotlessFileEncodingProvider : FileEncodingProvider {
+    override fun getEncoding(
+        virtualFile: VirtualFile,
+        project: Project?,
+    ): Charset {
+        TODO("Not yet implemented")
     }
-}
-plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
 }

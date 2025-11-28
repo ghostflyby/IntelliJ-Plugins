@@ -20,13 +20,17 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
 plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
+    id("repo.intellij-plugin")
+}
+
+version = "0.0.1"
+
+buildLogic {
+    pluginVersion = version.toString()
+}
+
+dependencies.intellijPlatform {
+    bundledPlugin("com.intellij.gradle")
+    bundledPlugin("org.jetbrains.idea.maven")
 }
