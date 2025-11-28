@@ -16,7 +16,7 @@
     </extensions>
 
     <extensionPoints>
-        <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.SpotlessExtension"
+        <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.SpotlessDaemonProvider"
                         dynamic="true"/>
     </extensionPoints>
 </idea-plugin>

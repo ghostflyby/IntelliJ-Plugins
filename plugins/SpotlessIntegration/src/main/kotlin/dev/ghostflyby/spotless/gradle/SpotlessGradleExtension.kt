@@ -27,18 +27,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.SpotlessDaemonHost
-import dev.ghostflyby.spotless.SpotlessExtension
+import dev.ghostflyby.spotless.SpotlessDaemonProvider
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
 import kotlin.io.path.div
 
-internal class SpotlessGradleExtension : SpotlessExtension {
-
-    private val daemons = ConcurrentHashMap<Path, SpotlessDaemonHost>()
+internal class SpotlessGradleExtension : SpotlessDaemonProvider {
 
     override fun isApplicableTo(
         project: Project,
@@ -48,20 +45,18 @@ internal class SpotlessGradleExtension : SpotlessExtension {
             .any { holder.isSpotlessEnabledForProjectDir(Path(it.externalProjectPath)) }
     }
 
-    override suspend fun getDaemon(
+    override suspend fun startDaemon(
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
-        return daemons.computeIfAbsent(externalProject) {
-            val dir: Path = Files.createTempDirectory(null)
-            val unixSocketPath = dir / "spotless-daemon.sock"
-            runGradleSpotlessDaemon(
-                project,
-                externalProject,
-                unixSocketPath,
-            )
-            SpotlessDaemonHost.Unix(unixSocketPath)
-        }
+        val dir: Path = Files.createTempDirectory(null)
+        val unixSocketPath = dir / "spotless-daemon.sock"
+        runGradleSpotlessDaemon(
+            project,
+            externalProject,
+            unixSocketPath,
+        )
+        return SpotlessDaemonHost.Unix(unixSocketPath)
     }
 
     override fun findExternalProjectPath(

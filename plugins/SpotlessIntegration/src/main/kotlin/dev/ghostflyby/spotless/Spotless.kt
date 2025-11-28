@@ -58,20 +58,20 @@ internal const val spotlessNotificationGroupId = "Spotless Notifications"
 public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public companion object {
         @JvmStatic
-        public val EP_NAME: ExtensionPointName<SpotlessExtension> =
-            ExtensionPointName.create<SpotlessExtension>("dev.ghostflyby.spotless.spotlessDaemonProvider")
+        public val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
+            ExtensionPointName.create<SpotlessDaemonProvider>("dev.ghostflyby.spotless.spotlessDaemonProvider")
     }
 
     init {
         EP_NAME.forEachExtensionSafe(::addDisposable)
         EP_NAME.addExtensionPointListener(
             scope,
-            object : ExtensionPointListener<SpotlessExtension> {
-                override fun extensionAdded(extension: SpotlessExtension, pluginDescriptor: PluginDescriptor) {
+            object : ExtensionPointListener<SpotlessDaemonProvider> {
+                override fun extensionAdded(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
                     addDisposable(extension)
                 }
 
-                override fun extensionRemoved(extension: SpotlessExtension, pluginDescriptor: PluginDescriptor) {
+                override fun extensionRemoved(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
                     Disposer.dispose(extension)
                 }
             },
@@ -100,24 +100,39 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         }
     }
 
+    private val hosts = ConcurrentHashMap<Path, SpotlessDaemonHost>()
+
+    private suspend fun SpotlessDaemonProvider.getDaemon(
+        project: Project,
+        externalProject: Path,
+    ): SpotlessDaemonHost {
+        return hosts.getOrPut(externalProject) {
+            val host = startDaemon(project, externalProject)
+            Disposer.register(this) {
+                val daemon = hosts.remove(externalProject) ?: return@register
+                https.remove(daemon)?.close()
+            }
+            host
+        }
+    }
+
     public suspend fun format(
         project: Project,
         virtualFile: VirtualFile,
         content: CharSequence,
     ): SpotlessFormatResult = scope.async {
-        val externalProject = virtualFile.findExternalRoot(project) ?: return@async NotCovered
-        val path = virtualFile.toNioPathOrNull() ?: return@async NotCovered
-        val daemon = findDaemon(project, externalProject) ?: return@async Clean
-        http(daemon).format(daemon, path, content)
+        val filePath = virtualFile.toNioPathOrNull() ?: return@async NotCovered
+        val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
+        val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
+        val daemon = extension.getDaemon(project, externalProject)
+        if (!http(daemon).healthCheck(daemon)) {
+            return@async Error("Spotless Daemon is not responding")
+        }
+        http(daemon).format(daemon, filePath, content)
     }.await()
 
-    public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean = scope.async {
-        val external = virtualFile.findExternalRoot(project) ?: return@async false
-        val filePath = virtualFile.toNioPathOrNull() ?: return@async false
-        val daemon = findDaemon(project, external) ?: return@async false
-        val result = http(daemon).format(daemon, filePath, "", dryrun = true)
-        result == Clean
-    }.await()
+    public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean =
+        format(project, virtualFile, "") == Clean
 
     public fun canFormatSync(
         project: Project,
@@ -127,20 +142,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         withTimeoutOrNull(timeout) {
             canFormat(project, virtualFile)
         } ?: false
-    }
-
-
-    private suspend fun findDaemon(
-        project: Project,
-        externalProject: Path,
-    ): SpotlessDaemonHost? {
-        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project) } ?: return null
-        return ext.getDaemon(project, externalProject)
-    }
-
-    private fun VirtualFile.findExternalRoot(project: Project): Path? {
-        val ext = EP_NAME.findFirstSafe { it.isApplicableTo(project) } ?: return null
-        return ext.findExternalProjectPath(project, this)
     }
 
 }
@@ -169,11 +170,25 @@ public sealed interface SpotlessFormatResult {
 
 }
 
+private suspend fun HttpClient.healthCheck(
+    spotlessHost: SpotlessDaemonHost,
+): Boolean {
+    val response = get("/") {
+        when (spotlessHost) {
+            is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
+            is SpotlessDaemonHost.Unix -> Unit// unixSocket(spotlessHost.path.toString())
+        }
+        url {
+            protocol = URLProtocol.HTTP
+        }
+    }
+    return response.status == HttpStatusCode.OK
+}
+
 private suspend fun HttpClient.format(
     spotlessHost: SpotlessDaemonHost,
     path: Path,
     content: CharSequence,
-    dryrun: Boolean = false,
 ): SpotlessFormatResult {
     val response = post("/") {
         when (spotlessHost) {
@@ -184,7 +199,7 @@ private suspend fun HttpClient.format(
             protocol = URLProtocol.HTTP
         }
         parameter("path", path)
-        if (dryrun) {
+        if (content.isEmpty()) {
             parameter("dryrun", null)
         }
         contentType(ContentType.Text.Plain)

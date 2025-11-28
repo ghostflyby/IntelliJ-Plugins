@@ -27,22 +27,22 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 
-public interface SpotlessExtension : Disposable {
+public interface SpotlessDaemonProvider : Disposable {
 
     /**
-     * Check if Spotless is applicable to the given project, called before calling [getDaemon]
+     * Check if Spotless is applicable to the given project, called before calling [startDaemon]
      * Note: return false if you are not sure yet, the external system sync may not have completed yet
      * @return `true` if Spotless can be used for the given project, `false` otherwise or the external system sync has not yet completed
      */
     public fun isApplicableTo(project: Project): Boolean
 
     /**
-     * Start a Spotless Daemon for the given project
-     * @return Path to the daemon socket file with an http service
+     * Start a Spotless Daemon for the given project, the caller is responsible for
+     * @return a newly started [SpotlessDaemonHost]
      * @param externalProject The external project path as returned by [findExternalProjectPath]
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
-    public suspend fun getDaemon(
+    public suspend fun startDaemon(
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost
@@ -54,11 +54,10 @@ public interface SpotlessExtension : Disposable {
     public fun findExternalProjectPath(project: Project, virtualFile: VirtualFile): Path?
 
     /**
-     * Dispose resources held by this extension, stop started daemons etc.
+     * [Spotless] is automatically registered as the parent disposable of all [SpotlessDaemonProvider]s.
      *
-     * You don't need to register a [SpotlessExtension]
-     * to [com.intellij.openapi.util.Disposer] or other parent,
-     * [Spotless] service will do it for you
+     * You DON'T need to stop the daemons here, just clean up other resources if needed.
+     *
      */
     override fun dispose() {
 
