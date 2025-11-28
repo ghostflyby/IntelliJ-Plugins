@@ -1,0 +1,88 @@
+public final class dev/ghostflyby/spotless/Spotless : com/intellij/openapi/Disposable$Default {
+	public static final field Companion Ldev/ghostflyby/spotless/Spotless$Companion;
+	public fun <init> (Lkotlinx/coroutines/CoroutineScope;)V
+	public final fun canFormat (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun canFormatSync-SxA4cEA (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;J)Z
+	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
+	public final fun format (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Ljava/lang/CharSequence;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static final fun getEP_NAME ()Lcom/intellij/openapi/extensions/ExtensionPointName;
+}
+
+public final class dev/ghostflyby/spotless/Spotless$Companion {
+	public final fun getEP_NAME ()Lcom/intellij/openapi/extensions/ExtensionPointName;
+}
+
+public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost {
+}
+
+public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Localhost : dev/ghostflyby/spotless/SpotlessDaemonHost {
+	public fun <init> (I)V
+	public final fun component1 ()I
+	public final fun copy (I)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;IILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPort ()I
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Unix : dev/ghostflyby/spotless/SpotlessDaemonHost {
+	public fun <init> (Ljava/nio/file/Path;)V
+	public final fun component1 ()Ljava/nio/file/Path;
+	public final fun copy (Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getPath ()Ljava/nio/file/Path;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/ghostflyby/spotless/SpotlessExtension : com/intellij/openapi/Disposable {
+	public fun dispose ()V
+	public abstract fun findExternalProjectPath (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ljava/nio/file/Path;
+	public abstract fun getDaemon (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun isApplicableTo (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;)Z
+}
+
+public final class dev/ghostflyby/spotless/SpotlessExtension$DefaultImpls {
+	public static fun dispose (Ldev/ghostflyby/spotless/SpotlessExtension;)V
+}
+
+public abstract interface class dev/ghostflyby/spotless/SpotlessFormatResult {
+}
+
+public final class dev/ghostflyby/spotless/SpotlessFormatResult$Clean : dev/ghostflyby/spotless/SpotlessFormatResult {
+	public static final field INSTANCE Ldev/ghostflyby/spotless/SpotlessFormatResult$Clean;
+}
+
+public final class dev/ghostflyby/spotless/SpotlessFormatResult$Dirty : dev/ghostflyby/spotless/SpotlessFormatResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/ghostflyby/spotless/SpotlessFormatResult$Dirty;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessFormatResult$Dirty;Ljava/lang/String;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessFormatResult$Dirty;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/spotless/SpotlessFormatResult$Error : dev/ghostflyby/spotless/SpotlessFormatResult {
+	public fun <init> (Ljava/lang/String;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;)Ldev/ghostflyby/spotless/SpotlessFormatResult$Error;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessFormatResult$Error;Ljava/lang/String;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessFormatResult$Error;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getMessage ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/spotless/SpotlessFormatResult$NotCovered : dev/ghostflyby/spotless/SpotlessFormatResult {
+	public static final field INSTANCE Ldev/ghostflyby/spotless/SpotlessFormatResult$NotCovered;
+}
+
+public final class dev/ghostflyby/spotless/gradle/SpotlessGradleTaskManagerExtension : org/jetbrains/plugins/gradle/service/task/GradleTaskManagerExtension {
+	public fun <init> ()V
+	public fun configureTasks (Ljava/lang/String;Lcom/intellij/openapi/externalSystem/model/task/ExternalSystemTaskId;Lorg/jetbrains/plugins/gradle/settings/GradleExecutionSettings;Lorg/gradle/util/GradleVersion;)V
+}
+

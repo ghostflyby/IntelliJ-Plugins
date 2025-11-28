@@ -1,0 +1,13 @@
+public abstract interface class dev/ghostflyby/spotless/gradle/SpotlessGradleStateModel : java/io/Serializable {
+	public abstract fun getSpotless ()Z
+}
+
+public final class dev/ghostflyby/spotless/gradle/SpotlessGradleStateModelBuilder : org/jetbrains/plugins/gradle/tooling/ModelBuilderService {
+	public fun <init> ()V
+	public fun buildAll (Ljava/lang/String;Lorg/gradle/api/Project;)Ljava/lang/Object;
+	public fun canBuild (Ljava/lang/String;)Z
+}
+
+public abstract interface annotation class dev/ghostflyby/spotless/gradle/SpotlessIntegrationPluginInternalApi : java/lang/annotation/Annotation {
+}
+
