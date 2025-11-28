@@ -8,7 +8,6 @@ changelog = "2.4.0"
 intelliJPlatform = "2.10.4"
 kotlin = "2.2.21"
 kover = "0.9.3"
-qodana = "2025.2.1"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -16,7 +15,7 @@ opentest4j = { group = "org.opentest4j", name = "opentest4j", version.ref = "ope
 
 [plugins]
 changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
-intelliJPlatform = { id = "org.jetbrains.intellij.platform", version.ref = "intelliJPlatform" }
+intellij-platform = { id = "org.jetbrains.intellij.platform", version.ref = "intelliJPlatform" }
+intellij-module = { id = "org.jetbrains.intellij.platform.module", version.ref = "intelliJPlatform" }
 kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
-qodana = { id = "org.jetbrains.qodana", version.ref = "qodana" }

@@ -66,10 +66,13 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
                         virtualFile,
                         formattingRequest.documentText,
                     )
-                    if (result is SpotlessFormatResult.Dirty) {
-                        formattingRequest.onTextReady(result.content)
-                    } else {
-                        TODO("Handle other results")
+                    when (result) {
+                        SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> Unit
+                        is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
+                        is SpotlessFormatResult.Error -> formattingRequest.onError(
+                            Bundle.message("spotless.format.notification.error.title"),
+                            result.message,
+                        )
                     }
                 }
                 job?.join()

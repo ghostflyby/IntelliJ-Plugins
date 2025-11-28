@@ -20,20 +20,22 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-}
+package dev.ghostflyby.spotless
 
-version = "0.0.1"
+import com.intellij.DynamicBundle
+import org.jetbrains.annotations.Nls
+import org.jetbrains.annotations.PropertyKey
+import java.util.function.Supplier
 
-buildLogic {
-    pluginVersion = version.toString()
-}
+private const val BUNDLE = "messages.Bundle"
 
-dependencies {
-    intellijPlatform {
-        bundledPlugin("com.intellij.gradle")
-        bundledPlugin("org.jetbrains.idea.maven")
-    }
-    implementation(project("ModelBuilderService"))
+internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
+    @JvmStatic
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
+        getMessage(key, *params)
+
+    @JvmStatic
+    @Nls
+    fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls Supplier<String> =
+        getLazyMessage(key, *params)
 }

@@ -40,27 +40,10 @@ import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
-import org.jetbrains.plugins.gradle.tooling.ModelBuilderService
 import org.jetbrains.plugins.gradle.util.GradleConstants
-import java.io.Serializable
 import java.nio.file.Path
 import kotlin.io.path.absolute
 
-
-internal class SpotlessGradleStateModelBuilder : ModelBuilderService {
-
-    override fun canBuild(modelName: String): Boolean = modelName == SpotlessGradleState::class.java.name
-
-    override fun buildAll(modelName: String, project: Project): Any {
-        return SpotlessGradleState(
-            project.pluginManager.hasPlugin("com.diffplug.spotless"),
-        )
-    }
-}
-
-internal data class SpotlessGradleState(
-    val spotless: Boolean,
-) : Serializable
 
 internal data class SpotlessGradleStateData(
     val projectDirectory: Path,
@@ -75,6 +58,7 @@ internal data class SpotlessGradleStateData(
     }
 }
 
+@SpotlessIntegrationPluginInternalApi
 internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverExtension(),
     GradleProjectResolverExtension {
     override fun populateModuleExtraModels(

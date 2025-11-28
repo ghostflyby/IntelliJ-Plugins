@@ -30,3 +30,5 @@ rootProject.name = "IntelliJ-Plugins"
 file("plugins").listFiles()?.filter { it.isDirectory }?.forEach { pluginDir ->
     include(":plugins:${pluginDir.name}")
 }
+
+include("plugins:SpotlessIntegration:ModelBuilderService")

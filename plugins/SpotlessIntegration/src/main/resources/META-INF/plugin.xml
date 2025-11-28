@@ -11,8 +11,8 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <!--        <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>-->
-        <!--        <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>-->
-        <fileEncodingProvider implementation="dev.ghostflyby.spotless.SpotlessFileEncodingProvider"/>
+        <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
+        <!--        <fileEncodingProvider implementation="dev.ghostflyby.spotless.SpotlessFileEncodingProvider"/>-->
     </extensions>
 
     <extensionPoints>

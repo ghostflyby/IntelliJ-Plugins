@@ -20,20 +20,20 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("repo.intellij-plugin")
+    id("repo.intellij-module")
 }
 
-version = "0.0.1"
-
-buildLogic {
-    pluginVersion = version.toString()
+kotlin {
+    compilerOptions.jvmTarget = JvmTarget.JVM_1_8
 }
 
-dependencies {
-    intellijPlatform {
-        bundledPlugin("com.intellij.gradle")
-        bundledPlugin("org.jetbrains.idea.maven")
-    }
-    implementation(project("ModelBuilderService"))
+java {
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies.intellijPlatform {
+    bundledPlugin("com.intellij.gradle")
 }

@@ -20,81 +20,19 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
-    java // Java support
-    alias(libs.plugins.kotlin) // Kotlin support
-    alias(libs.plugins.intelliJPlatform) // IntelliJ Platform Gradle Plugin
+    id("repo.intellij-module")
+    alias(libs.plugins.intellij.platform) // IntelliJ Platform Gradle Plugin
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
-    alias(libs.plugins.qodana) // Gradle Qodana Plugin
-    alias(libs.plugins.kover) // Gradle Kover Plugin}
 }
 
-
-val buildLogic = extensions.create<BuildLogicSettings>("buildLogic")
-
-group = providers.gradleProperty("pluginGroup").get()
-
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-        @Suppress("UnstableApiUsage")
-        vendor = JvmVendorSpec.JETBRAINS
-    }
-}
-
-kotlin {
-    jvmToolchain(21)
-    compilerOptions {
-        jvmTarget = JvmTarget.fromTarget("21")
-    }
-    explicitApi()
-    @OptIn(ExperimentalAbiValidation::class)
-    abiValidation {
-        enabled = true
-    }
-}
-
-repositories {
-    mavenCentral()
-    intellijPlatform { defaultRepositories() }
-}
-
-afterEvaluate {
-    dependencies.intellijPlatform {
-        val relative = buildLogic.platformType.map { "build/intellij/${it.code}" }
-        val localPlatform = rootProject.file(relative.get())
-        if (localPlatform.exists()) {
-            local(localPlatform.readText())
-        } else {
-            create(buildLogic.platformType, buildLogic.platformVersion) {
-                useCache = true
-            }
-        }
-    }
-}
-
-dependencies {
-
-    // Keep test dependencies locally versioned via version catalog
-    testImplementation(libs.junit)
-    testImplementation(libs.opentest4j)
-    intellijPlatform {
-        testFramework(TestFrameworkType.Platform)
-    }
-
-}
+val buildLogic: BuildLogicSettings by extensions
 
 intellijPlatform {
     pluginConfiguration {
@@ -151,16 +89,7 @@ changelog {
     repositoryUrl = providers.gradleProperty("pluginRepositoryUrl")
 }
 
-kover { reports { total { xml { onCheck = true } } } }
-
 tasks {
-    withType<Test> {
-        testLogging {
-            exceptionFormat = TestExceptionFormat.FULL
-            events("failed", "skipped")
-        }
-    }
-
     prepareSandbox {
         disabledPlugins.add("org.jetbrains.completion.full.line")
         this.sandboxSystemDirectory = rootProject.layout.buildDirectory.dir("idea-sandbox/system")
@@ -201,10 +130,6 @@ tasks {
 
     publishPlugin {
         finalizedBy(upload)
-    }
-
-    check {
-        finalizedBy(checkLegacyAbi)
     }
 
 }
