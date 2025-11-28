@@ -51,6 +51,7 @@ public interface SpotlessGradleStateModel : Serializable {
     public val spotless: Boolean
 }
 
+@SpotlessIntegrationPluginInternalApi
 internal data class SpotlessGradleStateModelImpl(
-    val spotless: Boolean,
-) : Serializable
+    override val spotless: Boolean,
+) : Serializable, SpotlessGradleStateModel
