@@ -129,10 +129,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         } ?: false
     }
 
-    private fun isApplicableTo(project: Project): Boolean {
-        return EP_NAME.findFirstSafe { it.isApplicableTo(project) } != null
-    }
-
 
     private suspend fun findDaemon(
         project: Project,
