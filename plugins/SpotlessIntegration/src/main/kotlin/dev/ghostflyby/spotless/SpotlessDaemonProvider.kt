@@ -23,8 +23,12 @@
 package dev.ghostflyby.spotless
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import io.ktor.client.request.*
+import io.ktor.http.*
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
 public interface SpotlessDaemonProvider : Disposable {
@@ -66,7 +70,39 @@ public interface SpotlessDaemonProvider : Disposable {
 }
 
 
-public sealed interface SpotlessDaemonHost {
-    public data class Localhost(val port: Int) : SpotlessDaemonHost
-    public data class Unix(val path: Path) : SpotlessDaemonHost
+public sealed interface SpotlessDaemonHost : Disposable {
+    public data class Localhost(val port: Int) : SpotlessDaemonHost {
+
+        override fun dispose() {
+            runBlocking {
+                runCatching {
+                    service<Spotless>().http.post("/stop") {
+                        url {
+                            protocol = URLProtocol.HTTP
+                        }
+                        host = "localhost"
+                        port = this@Localhost.port
+                    }
+                }
+            }
+        }
+    }
+
+    public data class Unix(val path: Path) : SpotlessDaemonHost {
+
+
+        override fun dispose() {
+            runBlocking {
+                runCatching {
+                    service<Spotless>().http.post("/stop") {
+                        url {
+                            protocol = URLProtocol.HTTP
+                        }
+                        unixSocket(path.toString())
+                    }
+                }
+            }
+        }
+    }
+
 }

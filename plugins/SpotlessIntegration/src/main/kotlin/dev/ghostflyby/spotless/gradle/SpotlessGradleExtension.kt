@@ -51,12 +51,14 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     ): SpotlessDaemonHost {
         val dir: Path = Files.createTempDirectory(null)
         val unixSocketPath = dir / "spotless-daemon.sock"
+        val host = SpotlessDaemonHost.Unix(unixSocketPath)
         runGradleSpotlessDaemon(
             project,
             externalProject,
             unixSocketPath,
+            host,
         )
-        return SpotlessDaemonHost.Unix(unixSocketPath)
+        return host
     }
 
     override fun findExternalProjectPath(

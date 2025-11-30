@@ -31,6 +31,8 @@ import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExe
 import com.intellij.openapi.externalSystem.model.project.ExternalEntityData
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
+import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
+import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
@@ -38,6 +40,7 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import com.intellij.openapi.util.Disposer
 import dev.ghostflyby.spotless.Spotless
+import dev.ghostflyby.spotless.SpotlessDaemonHost
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentHashSetOf
 import org.gradle.api.Project
@@ -133,6 +136,7 @@ internal fun runGradleSpotlessDaemon(
     project: com.intellij.openapi.project.Project,
     externalProject: Path,
     unixSocketPath: Path,
+    host: SpotlessDaemonHost.Unix,
 ) {
     val settings = ExternalSystemTaskExecutionSettings().apply {
         externalSystemIdString = GradleConstants.SYSTEM_ID.id
@@ -145,6 +149,13 @@ internal fun runGradleSpotlessDaemon(
         .withProject(project)
         .withSettings(settings)
         .withSystemId(GradleConstants.SYSTEM_ID)
+        .withListener(
+            object : ExternalSystemTaskNotificationListener {
+                override fun onEnd(projectPath: String, id: ExternalSystemTaskId) {
+                    host.dispose()
+                }
+            },
+        )
         .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)
         .build()
     ExternalSystemUtil.runTask(exe)

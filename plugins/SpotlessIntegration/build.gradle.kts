@@ -20,6 +20,9 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.intellij.platform.gradle.extensions.excludeCoroutines
+import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
+
 plugins {
     id("repo.intellij-plugin")
 }
@@ -36,4 +39,9 @@ dependencies {
         bundledPlugin("org.jetbrains.idea.maven")
     }
     implementation(project("ModelBuilderService"))
+    implementation(libs.ktor.client.cio) {
+        excludeCoroutines()
+        excludeKotlinStdlib()
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
 }

@@ -33,20 +33,15 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
 import io.ktor.client.*
-import io.ktor.client.engine.okhttp.*
+import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import java.net.InetAddress
-import java.net.Socket
-import java.net.UnixDomainSocketAddress
-import java.nio.channels.SocketChannel
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import javax.net.SocketFactory
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -80,24 +75,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     private fun addDisposable(disposable: Disposable): Unit = Disposer.register(this, disposable)
 
 
-    private val https = ConcurrentHashMap<SpotlessDaemonHost, HttpClient>()
-    private fun http(path: SpotlessDaemonHost): HttpClient {
-        return https.getOrPut(path) {
-            HttpClient(OkHttp) {
-                engine {
-                    config {
-                        if (path is SpotlessDaemonHost.Unix) socketFactory(
-                            UnixSocketFactory(
-                                UnixDomainSocketAddress.of(
-                                    path.path,
-                                ),
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-    }
+    internal val http = HttpClient(CIO)
 
     private val hosts = ConcurrentHashMap<Path, SpotlessDaemonHost>()
 
@@ -108,8 +86,10 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         return hosts.getOrPut(externalProject) {
             val host = startDaemon(project, externalProject)
             Disposer.register(this) {
-                val daemon = hosts.remove(externalProject) ?: return@register
-                https.remove(daemon)?.close()
+                hosts.remove(externalProject)?.let { Disposer.dispose(it) }
+            }
+            Disposer.register(host) {
+                hosts.remove(externalProject)
             }
             host
         }
@@ -124,10 +104,10 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
         val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
         val daemon = extension.getDaemon(project, externalProject)
-        if (!http(daemon).healthCheck(daemon)) {
+        if (!http.healthCheck(daemon)) {
             return@async Error("Spotless Daemon is not responding")
         }
-        http(daemon).format(daemon, filePath, content)
+        http.format(daemon, filePath, content)
     }.await()
 
     public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean =
@@ -136,9 +116,15 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public fun canFormatSync(
         project: Project,
         virtualFile: VirtualFile,
+        // TODO: use timeout
         timeout: Duration = 500.milliseconds,
     ): Boolean = runBlocking {
         canFormat(project, virtualFile)
+    }
+
+    override fun dispose() {
+        http.close()
+        hosts.forEach { (_, host) -> Disposer.dispose(host) }
     }
 
 }
@@ -165,6 +151,7 @@ public sealed interface SpotlessFormatResult {
      */
     public data class Error(val message: String) : SpotlessFormatResult
 
+
 }
 
 private suspend fun HttpClient.healthCheck(
@@ -173,7 +160,7 @@ private suspend fun HttpClient.healthCheck(
     val response = get("/") {
         when (spotlessHost) {
             is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
-            is SpotlessDaemonHost.Unix -> Unit// unixSocket(spotlessHost.path.toString())
+            is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
         }
         url {
             protocol = URLProtocol.HTTP
@@ -190,7 +177,7 @@ private suspend fun HttpClient.format(
     val response = post("/") {
         when (spotlessHost) {
             is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
-            is SpotlessDaemonHost.Unix -> Unit// unixSocket(spotlessHost.path.toString())
+            is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
         }
         url {
             protocol = URLProtocol.HTTP
@@ -220,30 +207,4 @@ private suspend fun HttpClient.format(
 
         else -> Error("Unexpected response status: ${response.status}\n${response.bodyAsText()}")
     }
-}
-
-internal class UnixSocketFactory(private val socketAddress: UnixDomainSocketAddress) : SocketFactory() {
-
-    override fun createSocket(): Socket? {
-        return SocketChannel.open(socketAddress).socket()
-    }
-
-
-    override fun createSocket(p0: String?, p1: Int): Socket? = createSocket()
-
-    override fun createSocket(
-        p0: String?,
-        p1: Int,
-        p2: InetAddress?,
-        p3: Int,
-    ): Socket? = createSocket()
-
-    override fun createSocket(p0: InetAddress?, p1: Int): Socket? = createSocket()
-
-    override fun createSocket(
-        p0: InetAddress?,
-        p1: Int,
-        p2: InetAddress?,
-        p3: Int,
-    ): Socket? = createSocket()
 }
