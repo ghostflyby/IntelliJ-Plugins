@@ -23,8 +23,7 @@
 package dev.ghostflyby.spotless.gradle
 
 import com.intellij.execution.executors.DefaultRunExecutor
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
+import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
 import com.intellij.openapi.externalSystem.model.ProjectSystemId
@@ -32,17 +31,21 @@ import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExe
 import com.intellij.openapi.externalSystem.model.project.ExternalEntityData
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
+import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
+import com.intellij.openapi.util.Disposer
+import dev.ghostflyby.spotless.Spotless
+import kotlinx.collections.immutable.PersistentSet
+import kotlinx.collections.immutable.persistentHashSetOf
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
 
 
@@ -59,6 +62,7 @@ internal data class SpotlessGradleStateData(
     }
 }
 
+
 @SpotlessIntegrationPluginInternalApi
 internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverExtension(),
     GradleProjectResolverExtension {
@@ -68,13 +72,16 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
     ) {
         val myModel = resolverCtx.getExtraProject(gradleModule, SpotlessGradleStateModel::class.java)
         if (myModel != null) {
-            ideModule.createChild(
+            val re = ideModule.createChild(
                 SpotlessGradleStateData.KEY,
                 SpotlessGradleStateData(
                     gradleModule.gradleProject.projectDirectory.toPath().absolute(),
                     myModel.spotless,
                 ),
             )
+            Disposer.register(service<Spotless>()) {
+                re.clear(true)
+            }
         }
         nextResolver.populateModuleExtraModels(gradleModule, ideModule)
     }
@@ -97,28 +104,29 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
         project: com.intellij.openapi.project.Project,
         modelsProvider: IdeModifiableModelsProvider,
     ) {
-        val holder = service<SpotlessGradleStateHolder>()
+        val holder = project.service<SpotlessGradleStateHolder>()
         holder.updateFrom(toImport)
     }
 }
 
-@Service
-internal class SpotlessGradleStateHolder {
 
-    private val dataByModuleId = ConcurrentHashMap<Path, SpotlessGradleStateData>()
+@Service(Service.Level.PROJECT)
+@State(name = "SpotlessGradleIntegration", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+internal class SpotlessGradleStateHolder
+    : SerializablePersistentStateComponent<PersistentSet<Path>>(persistentHashSetOf()) {
+    fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
+        return state.contains(path)
+    }
 
-    fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
-        dataByModuleId.clear()
-        nodes.forEach { node ->
-            val value = node.data
-            dataByModuleId[value.projectDirectory] = value
+    fun updateFrom(nodes: MutableCollection<out DataNode<SpotlessGradleStateData>>) {
+        updateState {
+            it.clear()
+        }
+        val path = nodes.filter { it.data.spotless }.map { it.data.projectDirectory }
+        updateState { old ->
+            old.addAll(path)
         }
     }
-
-    fun isSpotlessEnabledForProjectDir(projectDir: Path): Boolean {
-        return dataByModuleId[projectDir]?.spotless == true
-    }
-
 }
 
 internal fun runGradleSpotlessDaemon(
@@ -129,9 +137,11 @@ internal fun runGradleSpotlessDaemon(
     val settings = ExternalSystemTaskExecutionSettings().apply {
         externalSystemIdString = GradleConstants.SYSTEM_ID.id
         externalProjectPath = externalProject.toString()
+        taskNames = listOf("spotlessDaemon")
         scriptParameters = "-Pdev.ghostflyby.spotless.daemon.unixsocket=${unixSocketPath.toAbsolutePath()}"
     }
     val exe = TaskExecutionSpec.create()
+        .withProgressExecutionMode(ProgressExecutionMode.NO_PROGRESS_ASYNC)
         .withProject(project)
         .withSettings(settings)
         .withSystemId(GradleConstants.SYSTEM_ID)

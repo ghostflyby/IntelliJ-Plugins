@@ -40,7 +40,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override fun isApplicableTo(
         project: Project,
     ): Boolean {
-        val holder = service<SpotlessGradleStateHolder>()
+        val holder = project.service<SpotlessGradleStateHolder>()
         return GradleSettings.getInstance(project).linkedProjectsSettings
             .any { holder.isSpotlessEnabledForProjectDir(Path(it.externalProjectPath)) }
     }

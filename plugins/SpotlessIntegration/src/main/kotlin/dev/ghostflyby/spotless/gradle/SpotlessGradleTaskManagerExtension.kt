@@ -37,19 +37,23 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         settings: GradleExecutionSettings,
         gradleVersion: GradleVersion?,
     ) {
-        service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
+        id.project.service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
         settings.addInitScript(
             "dev.ghostflyby.spotless.daemon",
             """
             initscript {
                 repositories {
-                    mavenCentral()
                     gradlePluginPortal()
+                }
+                dependencies {
+                    classpath("dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.2.1")
                 }
             }
 
-            pluginManager.withPlugin("com.diffplug.spotless") {
-                pluginManager.apply('dev.ghostflyby.spotless.daemon')
+            allprojects {
+                pluginManager.withPlugin("com.diffplug.spotless") {
+                    pluginManager.apply(dev.ghostflyby.spotless.daemon.SpotlessDaemon)
+                }
             }
         """.trimIndent(),
         )

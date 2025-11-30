@@ -40,7 +40,6 @@ import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
 import java.net.InetAddress
 import java.net.Socket
 import java.net.UnixDomainSocketAddress
@@ -139,9 +138,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         virtualFile: VirtualFile,
         timeout: Duration = 500.milliseconds,
     ): Boolean = runBlocking {
-        withTimeoutOrNull(timeout) {
-            canFormat(project, virtualFile)
-        } ?: false
+        canFormat(project, virtualFile)
     }
 
 }
