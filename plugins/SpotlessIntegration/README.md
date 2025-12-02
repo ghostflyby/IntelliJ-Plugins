@@ -6,8 +6,8 @@ integrates with Spotless.
 
 ## features
 
-1. Detects Spotless maven and gradle plugin
-2. Automatically formats code on file save
-3. Checks and formats on commit
+1. Detects Spotless maven (TODO) and gradle plugin
+2. Act as a formatter for covered files
+3. On-the-fly formatting just in the IDE
 
 <!-- Plugin description end -->
