@@ -41,18 +41,18 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         settings.addInitScript(
             "dev.ghostflyby.spotless.daemon",
             """
-            initscript {
-                repositories {
-                    gradlePluginPortal()
+            gradle.allprojects { proj ->
+                proj.buildscript {
+                    repositories {
+                        gradlePluginPortal()
+                    }
+                    dependencies {
+                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.2.7"
+                    }
                 }
-                dependencies {
-                    classpath("dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.2.1")
-                }
-            }
 
-            allprojects {
-                pluginManager.withPlugin("com.diffplug.spotless") {
-                    pluginManager.apply(dev.ghostflyby.spotless.daemon.SpotlessDaemon)
+                proj.pluginManager.withPlugin("com.diffplug.spotless") {
+                    proj.apply plugin: "dev.ghostflyby.spotless.daemon"
                 }
             }
         """.trimIndent(),

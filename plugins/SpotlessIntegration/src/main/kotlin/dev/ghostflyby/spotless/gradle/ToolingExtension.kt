@@ -43,6 +43,7 @@ import dev.ghostflyby.spotless.Spotless
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentHashSetOf
+import kotlinx.collections.immutable.toPersistentHashSet
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
@@ -116,18 +117,14 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
 @Service(Service.Level.PROJECT)
 @State(name = "SpotlessGradleIntegration", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
 internal class SpotlessGradleStateHolder
-    : SerializablePersistentStateComponent<PersistentSet<Path>>(persistentHashSetOf()) {
+    : SerializablePersistentStateComponent<PersistentSet<String>>(persistentHashSetOf()) {
     fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
-        return state.contains(path)
+        return state.contains(path.toString())
     }
 
     fun updateFrom(nodes: MutableCollection<out DataNode<SpotlessGradleStateData>>) {
         updateState {
-            it.clear()
-        }
-        val path = nodes.filter { it.data.spotless }.map { it.data.projectDirectory }
-        updateState { old ->
-            old.addAll(path)
+            nodes.filter { it.data.spotless }.map { it.data.projectDirectory.toString() }.toPersistentHashSet()
         }
     }
 }
@@ -152,8 +149,13 @@ internal fun runGradleSpotlessDaemon(
         .withListener(
             object : ExternalSystemTaskNotificationListener {
                 override fun onEnd(projectPath: String, id: ExternalSystemTaskId) {
-                    host.dispose()
+                    Disposer.dispose(host)
                 }
+
+                override fun onCancel(projectPath: String, id: ExternalSystemTaskId) {
+                    Disposer.dispose(host)
+                }
+
             },
         )
         .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)

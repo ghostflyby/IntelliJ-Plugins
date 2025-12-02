@@ -42,6 +42,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.absolute
+import kotlin.io.path.absolutePathString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -83,7 +85,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
-        return hosts.getOrPut(externalProject) {
+        return hosts.getOrPut(externalProject.normalize().absolute()) {
             val host = startDaemon(project, externalProject)
             Disposer.register(this) {
                 hosts.remove(externalProject)?.let { Disposer.dispose(it) }
@@ -182,7 +184,7 @@ private suspend fun HttpClient.format(
         url {
             protocol = URLProtocol.HTTP
         }
-        parameter("path", path)
+        parameter("path", path.normalize().absolutePathString())
         if (content.isEmpty()) {
             parameter("dryrun", null)
         }
