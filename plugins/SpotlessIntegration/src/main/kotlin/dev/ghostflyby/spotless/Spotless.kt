@@ -158,18 +158,22 @@ public sealed interface SpotlessFormatResult {
 
 private suspend fun HttpClient.healthCheck(
     spotlessHost: SpotlessDaemonHost,
-): Boolean {
-    val response = get("/") {
-        when (spotlessHost) {
-            is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
-            is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
+): Boolean =
+    runCatching {
+
+        get("/") {
+            when (spotlessHost) {
+                is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
+                is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
+            }
+            url {
+                protocol = URLProtocol.HTTP
+            }
         }
-        url {
-            protocol = URLProtocol.HTTP
-        }
-    }
-    return response.status == HttpStatusCode.OK
-}
+    }.map { response ->
+        response.status == HttpStatusCode.OK
+    }.getOrElse { false }
+
 
 private suspend fun HttpClient.format(
     spotlessHost: SpotlessDaemonHost,
