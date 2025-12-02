@@ -59,7 +59,7 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
 
         override fun run() {
             runBlocking {
-                val spotless = project.serviceAsync<Spotless>()
+                val spotless = serviceAsync<Spotless>()
                 job = launch {
                     val result = spotless.format(
                         project,

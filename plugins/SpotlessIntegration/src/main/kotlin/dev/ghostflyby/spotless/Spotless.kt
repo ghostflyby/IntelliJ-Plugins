@@ -42,7 +42,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -50,7 +49,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal const val spotlessNotificationGroupId = "Spotless Notifications"
 
-@Service
+@Service(Service.Level.APP)
 public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public companion object {
         @JvmStatic
@@ -79,19 +78,20 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
 
     internal val http = HttpClient(CIO)
 
-    private val hosts = ConcurrentHashMap<Path, SpotlessDaemonHost>()
+    private val hosts = ConcurrentHashMap<String, SpotlessDaemonHost>()
 
     private suspend fun SpotlessDaemonProvider.getDaemon(
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
-        return hosts.getOrPut(externalProject.normalize().absolute()) {
+        val pathString = externalProject.normalize().absolutePathString()
+        return hosts.getOrPut(pathString) {
             val host = startDaemon(project, externalProject)
             Disposer.register(this) {
-                hosts.remove(externalProject)?.let { Disposer.dispose(it) }
+                hosts.remove(pathString)?.let { Disposer.dispose(it) }
             }
             Disposer.register(host) {
-                hosts.remove(externalProject)
+                hosts.remove(pathString)
             }
             host
         }
