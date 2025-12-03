@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+## [1.3.6] - 2025-11-22
+
+### Fixed
+
+- downgrade hotswap gradle plugin jvm target 1.8 for old gradle
+  capability [#99](https://github.com/ghostflyby/IntelliJ-Plugins/pull/99)
+
 ## [1.3.5] - 2025-11-03
 
 ### Added
@@ -68,7 +75,8 @@
 - Not editing parameters for non-debug starts
 - Wrong gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.5...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.6...HEAD
+[1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.5...v1.3.5
 [1.2.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.3...v1.2.4
