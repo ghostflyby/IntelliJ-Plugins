@@ -58,6 +58,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
             unixSocketPath,
             host,
         )
+        project.service<SpotlessGradleStateHolder>().daemons.add(host)
         return host
     }
 

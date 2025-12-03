@@ -41,9 +41,6 @@ import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import com.intellij.openapi.util.Disposer
 import dev.ghostflyby.spotless.Spotless
 import dev.ghostflyby.spotless.SpotlessDaemonHost
-import kotlinx.collections.immutable.PersistentSet
-import kotlinx.collections.immutable.persistentHashSetOf
-import kotlinx.collections.immutable.toPersistentHashSet
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
@@ -51,6 +48,7 @@ import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtensi
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
 import kotlin.io.path.absolute
+import kotlin.io.path.absolutePathString
 
 
 internal data class SpotlessGradleStateData(
@@ -115,18 +113,34 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
 
 
 @Service(Service.Level.PROJECT)
-@State(name = "SpotlessGradleIntegration", storages = [Storage(StoragePathMacros.WORKSPACE_FILE)])
+@State(
+    name = "SpotlessGradleIntegration",
+    storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
+)
 internal class SpotlessGradleStateHolder
-    : SerializablePersistentStateComponent<PersistentSet<String>>(persistentHashSetOf()) {
+    : SerializablePersistentStateComponent<SpotlessGradleStateHolder.PathsState>(PathsState()) {
     fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
-        return state.contains(path.toString())
+        return state.paths.contains(path.absolutePathString())
     }
 
-    fun updateFrom(nodes: MutableCollection<out DataNode<SpotlessGradleStateData>>) {
+    val daemons = mutableListOf<SpotlessDaemonHost>()
+
+    fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
         updateState {
-            nodes.filter { it.data.spotless }.map { it.data.projectDirectory.toString() }.toPersistentHashSet()
+            PathsState(
+                nodes.asSequence()
+                    .filter { it.data.spotless }
+                    .map { it.data.projectDirectory.absolutePathString() }
+                    .toSet(),
+            )
         }
+        daemons.forEach { Disposer.dispose(it) }
+        daemons.clear()
     }
+
+    internal data class PathsState(
+        @JvmField val paths: Set<String> = emptySet(),
+    )
 }
 
 internal fun runGradleSpotlessDaemon(
