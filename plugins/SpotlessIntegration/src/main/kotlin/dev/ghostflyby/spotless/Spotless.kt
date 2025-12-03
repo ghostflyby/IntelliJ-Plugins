@@ -40,6 +40,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
@@ -118,10 +119,11 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public fun canFormatSync(
         project: Project,
         virtualFile: VirtualFile,
-        // TODO: use timeout
         timeout: Duration = 500.milliseconds,
     ): Boolean = runBlocking {
-        canFormat(project, virtualFile)
+        withTimeoutOrNull(timeout) {
+            canFormat(project, virtualFile)
+        } ?: false
     }
 
     override fun dispose() {
