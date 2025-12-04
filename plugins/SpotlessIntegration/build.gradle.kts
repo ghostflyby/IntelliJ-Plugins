@@ -20,6 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.extensions.excludeCoroutines
 import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 
@@ -31,6 +32,9 @@ version = "0.0.1"
 
 buildLogic {
     pluginVersion = version.toString()
+    platformType = IntelliJPlatformType.IntellijIdeaCommunity
+    platformVersion = "2025.1"
+    pluginSinceBuild = "251"
 }
 
 dependencies {
