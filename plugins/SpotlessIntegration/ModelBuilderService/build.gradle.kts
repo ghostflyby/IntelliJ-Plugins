@@ -20,10 +20,18 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("repo.intellij-module")
+}
+
+buildLogic {
+    pluginVersion = version.toString()
+    platformType = IntelliJPlatformType.IntellijIdeaCommunity
+    platformVersion = "2025.1"
+    pluginSinceBuild = "251"
 }
 
 kotlin {
