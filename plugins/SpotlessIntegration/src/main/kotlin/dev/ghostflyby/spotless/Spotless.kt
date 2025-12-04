@@ -53,7 +53,7 @@ internal const val spotlessNotificationGroupId = "Spotless Notifications"
 @Service(Service.Level.APP)
 public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public companion object {
-        @JvmStatic
+        @JvmField
         public val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
             ExtensionPointName.create<SpotlessDaemonProvider>("dev.ghostflyby.spotless.spotlessDaemonProvider")
     }

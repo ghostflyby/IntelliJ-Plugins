@@ -60,6 +60,7 @@ internal data class SpotlessGradleStateData(
     }
 
     companion object Companion {
+        @JvmField
         val KEY: Key<SpotlessGradleStateData> = Key.create(SpotlessGradleStateData::class.java, 1)
     }
 }
@@ -134,6 +135,7 @@ internal class SpotlessGradleStateHolder
                     .toSet(),
             )
         }
+        nodes.forEach { it.clear(true) }
         daemons.forEach { Disposer.dispose(it) }
         daemons.clear()
     }
