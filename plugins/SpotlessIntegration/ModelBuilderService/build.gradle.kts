@@ -30,8 +30,8 @@ plugins {
 buildLogic {
     pluginVersion = version.toString()
     platformType = IntelliJPlatformType.IntellijIdeaCommunity
-    platformVersion = "2025.1"
-    pluginSinceBuild = "251"
+    platformVersion = "2025.2"
+    pluginSinceBuild = "252"
 }
 
 kotlin {
