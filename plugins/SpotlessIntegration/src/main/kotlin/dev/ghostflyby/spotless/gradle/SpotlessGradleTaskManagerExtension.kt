@@ -40,6 +40,7 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         id.project.service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
         settings.addInitScript(
             "dev.ghostflyby.spotless.daemon",
+            @Suppress("SpellCheckingInspection")
             """
             gradle.allprojects { proj ->
                 proj.buildscript {

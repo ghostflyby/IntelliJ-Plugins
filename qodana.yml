@@ -10,4 +10,13 @@ profile:
 plugins:
   - id: DevKit
 exclude:
-  - name: SpellCheckingInspection
+  - name: All
+    paths:
+      - build
+      - buildSrc/build
+      - plugins/*/build
+      - LICENSE
+      - gradlew
+      - gradlew.bat
+      - .intellijPlatform
+

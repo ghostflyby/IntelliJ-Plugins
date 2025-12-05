@@ -47,6 +47,7 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
 
         settings.addInitScript(
             "ghostflyby.intellij.gradle.dcevm",
+            @Suppress("SpellCheckingInspection")
             """
 initscript{
 dependencies {
@@ -54,7 +55,7 @@ dependencies {
 }
 }
 pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
-""".trimIndent()
+""".trimIndent(),
         )
     }
 
@@ -71,7 +72,7 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
         settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
         settings.addEnvironmentVariable(
             DCEVM_MANUAL_TASKS_KEY,
-            Json.encodeToString(ListSerializer(String.serializer()), settings.tasks)
+            Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
         )
         if (resolved.enableHotswapAgent) {
             // pass agent jar path to Gradle if we already have it; also kick off download if missing
