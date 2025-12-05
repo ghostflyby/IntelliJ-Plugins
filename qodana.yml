@@ -4,12 +4,10 @@
 version: "1.0"
 projectJDK: "21"
 linter: qodana-jvm-community
-withinDocker: false
+withinDocker: "false"
 profile:
-  name: qodana.recommended
+  name: Project Default
 plugins:
   - id: DevKit
 exclude:
-  - name: All
-    paths:
-      - .qodana
+  - name: SpellCheckingInspection

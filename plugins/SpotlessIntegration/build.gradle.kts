@@ -20,13 +20,32 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.extensions.excludeCoroutines
+import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
+
 plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
+    id("repo.intellij-plugin")
+}
+
+version = "0.0.1"
+
+buildLogic {
+    pluginVersion = version.toString()
+    platformType = IntelliJPlatformType.IntellijIdeaCommunity
+    platformVersion = "2025.2"
+    pluginSinceBuild = "252"
+}
+
+dependencies {
+    intellijPlatform {
+        bundledPlugin("com.intellij.gradle")
+        bundledPlugin("org.jetbrains.idea.maven")
+    }
+    implementation(project("ModelBuilderService"))
+    implementation(libs.ktor.client.cio) {
+        excludeCoroutines()
+        excludeKotlinStdlib()
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
 }

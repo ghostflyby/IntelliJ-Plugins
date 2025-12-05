@@ -20,13 +20,19 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
+package dev.ghostflyby.spotless
+
+import com.intellij.openapi.vcs.CheckinProjectPanel
+import com.intellij.openapi.vcs.changes.CommitContext
+import com.intellij.openapi.vcs.checkin.CheckinHandler
+import com.intellij.openapi.vcs.checkin.CheckinHandlerFactory
+
+internal class SpotlessCommitHandlerFactory : CheckinHandlerFactory() {
+    override fun createHandler(
+        panel: CheckinProjectPanel,
+        commitContext: CommitContext,
+    ): CheckinHandler {
+        panel.roots
+        TODO()
     }
-}
-plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
 }

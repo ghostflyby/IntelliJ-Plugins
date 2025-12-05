@@ -20,13 +20,22 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
-plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
+package dev.ghostflyby.spotless
+
+import com.intellij.DynamicBundle
+import org.jetbrains.annotations.Nls
+import org.jetbrains.annotations.PropertyKey
+import java.util.function.Supplier
+
+private const val BUNDLE = "messages.Bundle"
+
+internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
+    @JvmStatic
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
+        getMessage(key, *params)
+
+    @JvmStatic
+    @Nls
+    fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls Supplier<String> =
+        getLazyMessage(key, *params)
 }

@@ -1,0 +1,15 @@
+<!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
+        <taskManager implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleTaskManagerExtension"/>
+        <projectResolve implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleProjectResolverExtension"/>
+    </extensions>
+    <extensions defaultExtensionNs="com.intellij">
+        <externalProjectDataService implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleStateDataService"/>
+    </extensions>
+    <extensions defaultExtensionNs="dev.ghostflyby.spotless">
+        <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
+    </extensions>
+</idea-plugin>

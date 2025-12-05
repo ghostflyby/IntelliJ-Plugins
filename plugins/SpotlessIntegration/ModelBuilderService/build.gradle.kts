@@ -20,13 +20,28 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-dependencyResolutionManagement {
-    @Suppress("UnstableApiUsage")
-    repositories {
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("dev.panuszewski.typesafe-conventions") version "0.10.0"
+    id("repo.intellij-module")
+}
+
+buildLogic {
+    pluginVersion = version.toString()
+    platformType = IntelliJPlatformType.IntellijIdeaCommunity
+    platformVersion = "2025.2"
+    pluginSinceBuild = "252"
+}
+
+kotlin {
+    compilerOptions.jvmTarget = JvmTarget.JVM_1_8
+}
+
+java {
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+dependencies.intellijPlatform {
+    bundledPlugin("com.intellij.gradle")
 }
