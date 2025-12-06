@@ -61,7 +61,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     init {
         EP_NAME.forEachExtensionSafe(::addDisposable)
         EP_NAME.addExtensionPointListener(
-            scope,
             object : ExtensionPointListener<SpotlessDaemonProvider> {
                 override fun extensionAdded(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
                     addDisposable(extension)
@@ -71,6 +70,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
                     Disposer.dispose(extension)
                 }
             },
+            this,
         )
     }
 
