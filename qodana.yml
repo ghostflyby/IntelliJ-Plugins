@@ -19,4 +19,4 @@ exclude:
       - gradlew
       - gradlew.bat
       - .intellijPlatform
-
+  - name: SpellCheckingInspection
