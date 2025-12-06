@@ -26,7 +26,7 @@ import com.intellij.openapi.components.*
 
 internal sealed class HotswapPersistent(config: HotswapConfigState) :
     SerializablePersistentStateComponent<HotswapConfigState>(
-        config
+        config,
     ), HotswapConfig {
     override var enable
         get() = state.enable
@@ -57,9 +57,7 @@ internal sealed class HotswapPersistent(config: HotswapConfigState) :
 internal class AppSettings : HotswapPersistent(HotswapConfigState(false, enable = true, enableHotswapAgent = true)) {
     override var inherit: Boolean
         get() = false
-        @Suppress("unused")
-        set(value) {
-        }
+        set(_) {}
 }
 
 @Service(Service.Level.PROJECT)

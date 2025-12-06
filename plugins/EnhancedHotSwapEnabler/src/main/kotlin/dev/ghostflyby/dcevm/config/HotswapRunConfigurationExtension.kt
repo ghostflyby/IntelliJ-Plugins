@@ -93,6 +93,7 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
 
     override fun getEditorTitle(): String = Bundle.message("configuration.section.name")
 
+    @Suppress("EmptyMethod")
     override fun <T : RunConfigurationBase<*>> updateJavaParameters(
         configuration: T,
         params: JavaParameters,
