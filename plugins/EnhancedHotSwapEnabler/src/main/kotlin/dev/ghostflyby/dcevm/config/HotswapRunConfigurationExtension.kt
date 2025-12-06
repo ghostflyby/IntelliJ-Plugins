@@ -93,10 +93,6 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
 
     override fun getEditorTitle(): String = Bundle.message("configuration.section.name")
 
-    /**
-     * empty implementation for capability with old IntelliJ versions
-     * @see RunConfigurationExtension.updateJavaParameters
-     */
     override fun <T : RunConfigurationBase<*>> updateJavaParameters(
         configuration: T,
         params: JavaParameters,
