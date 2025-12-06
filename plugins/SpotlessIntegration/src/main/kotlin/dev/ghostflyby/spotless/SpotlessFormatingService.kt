@@ -26,7 +26,6 @@ import com.intellij.formatting.service.AsyncDocumentFormattingService
 import com.intellij.formatting.service.AsyncFormattingRequest
 import com.intellij.formatting.service.FormattingService
 import com.intellij.openapi.components.service
-import com.intellij.openapi.components.serviceAsync
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.vfs.VirtualFile
@@ -59,7 +58,7 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
 
         override fun run() {
             runBlocking {
-                val spotless = serviceAsync<Spotless>()
+                val spotless = service<Spotless>()
                 job = launch {
                     val result = spotless.format(
                         project,
