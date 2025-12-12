@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- no duplicated listeners registering [#115](https://github.com/ghostflyby/IntelliJ-Plugins/pull/115)
+
 ## [1.0.2] - 2025-08-14
 
 ### Fixed
@@ -14,7 +18,8 @@
 
 ### Added
 
-- Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
+- Initial scaffold created
+  from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
 - Implementing the main functionality to expand `$SELECTION$`
 
 ### Fixed
@@ -22,5 +27,7 @@
 - Stop using internal APIs
 
 [Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.2...HEAD
+
 [1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.1...v1.0.2
+
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.1
