@@ -192,7 +192,7 @@ private suspend fun HttpClient.format(
         }
         parameter("path", path.normalize().absolutePathString())
         if (content.isEmpty()) {
-            parameter("dryrun", null)
+            parameter("dryrun", "")
         }
         contentType(ContentType.Text.Plain)
         setBody(content)
