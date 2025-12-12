@@ -8,21 +8,21 @@
 
 ### Fixed
 
-- downgrade hotswap gradle plugin jvm target 1.8 for old gradle
+- downgrade hotswap Gradle plugin jvm target 1.8 for old Gradle
   capability [#99](https://github.com/ghostflyby/IntelliJ-Plugins/pull/99)
 
 ## [1.3.5] - 2025-11-03
 
 ### Added
 
-- Support gradle running on Java 17 [#90](https://github.com/ghostflyby/IntelliJ-Plugins/pull/90)
+- Support Gradle running on Java 17 [#90](https://github.com/ghostflyby/IntelliJ-Plugins/pull/90)
 
 ## [1.2.5] - 2025-08-31
 
 ### Fixed
 
 - check `None` DCEVM Support case before enabling in
-  gradle [#65](https://github.com/ghostflyby/IntelliJ-Plugins/pull/65)
+  Gradle [#65](https://github.com/ghostflyby/IntelliJ-Plugins/pull/65)
 
 ## [1.2.4] - 2025-08-24
 
@@ -35,7 +35,7 @@
 
 ### Changed
 
-- make gradle plugin a optional dependency [#48](https://github.com/ghostflyby/IntelliJ-Plugins/pull/48)
+- make Gradle plugin a optional dependency [#48](https://github.com/ghostflyby/IntelliJ-Plugins/pull/48)
 
 ### Fixed
 
@@ -73,15 +73,24 @@
 ### Fixed
 
 - Not editing parameters for non-debug starts
-- Wrong gradle plugin class name
+- Wrong Gradle plugin class name
 
 [Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.6...HEAD
+
 [1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.5...v1.3.6
+
 [1.3.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.5...v1.3.5
+
 [1.2.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.4...v1.2.5
+
 [1.2.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.3...v1.2.4
+
 [1.2.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.2...v1.2.3
+
 [1.2.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.0...v1.2.2
+
 [1.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.1.0...v1.2.0
+
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.0...v1.1.0
+
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.0

@@ -3,7 +3,7 @@
 
 <idea-plugin>
     <id>dev.ghostflyby.spotless</id>
-    <name>Spotless Integration</name>
+    <name>Spotless</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
