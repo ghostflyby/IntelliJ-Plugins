@@ -154,7 +154,7 @@ internal fun runGradleSpotlessDaemon(
     val settings = ExternalSystemTaskExecutionSettings().apply {
         externalSystemIdString = GradleConstants.SYSTEM_ID.id
         externalProjectPath = externalProject.toString()
-        taskNames = listOf("spotlessDaemon")
+        taskNames = listOf(":spotlessDaemon")
         scriptParameters = "-Pdev.ghostflyby.spotless.daemon.unixsocket=${unixSocketPath.toAbsolutePath()}"
     }
     val exe = TaskExecutionSpec.create()

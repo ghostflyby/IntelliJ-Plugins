@@ -28,6 +28,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import dev.ghostflyby.spotless.SpotlessDaemonProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Files
 import java.nio.file.Path
@@ -49,7 +51,9 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
-        val dir: Path = Files.createTempDirectory(null)
+        val dir: Path = withContext(Dispatchers.IO) {
+            Files.createTempDirectory(null)
+        }
         val unixSocketPath = dir / "spotless-daemon.sock"
         val host = SpotlessDaemonHost.Unix(unixSocketPath)
         runGradleSpotlessDaemon(
@@ -75,7 +79,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
 
         return rootDirs
             .filter { abs.startsWith(it) }
-            .maxByOrNull { it.nameCount }
+            .minByOrNull { it.nameCount }
     }
 
 }
