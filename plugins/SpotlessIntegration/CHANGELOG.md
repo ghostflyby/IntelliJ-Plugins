@@ -8,6 +8,10 @@
 
 - only run daemon task in rootProject [#118](https://github.com/ghostflyby/IntelliJ-Plugins/pull/118)
 
+### Fixed
+
+- fix: no longer timeout when a file is unchanged [#120](https://github.com/ghostflyby/IntelliJ-Plugins/pull/120)
+
 ## [0.0.1] - 2025-12-12
 
 ### Added
