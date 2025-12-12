@@ -48,7 +48,7 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
                         gradlePluginPortal()
                     }
                     dependencies {
-                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.2.7"
+                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.4.0"
                     }
                 }
 
