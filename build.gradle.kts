@@ -20,6 +20,10 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+plugins {
+    id(libs.plugins.intellij.module.get().pluginId)
+}
+
 allprojects {
     repositories { mavenCentral() }
 }
@@ -27,4 +31,10 @@ allprojects {
 tasks {
     // Keep wrapper version management at the root
     wrapper { gradleVersion = providers.gradleProperty("gradleVersion").get() }
+}
+
+repositories {
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
