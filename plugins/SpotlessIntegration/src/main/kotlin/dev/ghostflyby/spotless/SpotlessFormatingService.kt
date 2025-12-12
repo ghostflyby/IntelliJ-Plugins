@@ -38,10 +38,6 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
         val project = formattingRequest.context.project
         val virtualFile = formattingRequest.context.virtualFile ?: return null
-        val spotless = service<Spotless>()
-        if (!spotless.canFormatSync(project, virtualFile)) {
-            return null
-        }
         return SpotlessFormattingTask(project, virtualFile, formattingRequest)
     }
 
@@ -66,7 +62,10 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
                         formattingRequest.documentText,
                     )
                     when (result) {
-                        SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> Unit
+                        SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> formattingRequest.onTextReady(
+                            null
+                        )
+
                         is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
                         is SpotlessFormatResult.Error -> formattingRequest.onError(
                             Bundle.message("spotless.format.notification.error.title"),
