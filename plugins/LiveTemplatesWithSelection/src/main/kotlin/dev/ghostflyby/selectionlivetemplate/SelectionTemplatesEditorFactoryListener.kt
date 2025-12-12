@@ -27,6 +27,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.event.*
+import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 
 @Service
@@ -36,9 +37,17 @@ internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 
     override fun editorCreated(event: EditorFactoryEvent) =
         event.editor.run {
-            if (isViewer) return
+            if (isViewer || getUserData(listenerAttachedKey) != null) return
+            putUserData(listenerAttachedKey, Unit)
             val disposable = service<PluginDisposable>()
+            if (selectionModel.hasSelection()) {
+                document.previousSelection = selectionModel.selectedText
+            }
             document.addDocumentListener(MyDocumentListener, disposable)
+            Disposer.register(disposable) {
+                document.previousSelection = null
+                document.replacedSelection = null
+            }
             selectionModel.addSelectionListener(MySelectionListener, disposable)
         }
 
@@ -47,6 +56,7 @@ internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 private val previousSelectionKey = Key<String>("previousSelection")
 private val replacedSelectionKey = Key<String>("replacedSelection")
 
+private val listenerAttachedKey = Key<Unit>("selectionTemplateListenerAttached")
 
 private var Document.previousSelection by previousSelectionKey
 internal var Document.replacedSelection by replacedSelectionKey
@@ -65,10 +75,10 @@ private object MyDocumentListener : DocumentListener {
     override fun documentChanged(event: DocumentEvent) {
         val doc = event.document
 
+        val previousSelection = doc.previousSelection ?: return
 
-        if (doc.previousSelection.contentEquals(event.oldFragment)) {
-            doc.replacedSelection = doc.previousSelection
+        if (previousSelection.contentEquals(event.oldFragment)) {
+            doc.replacedSelection = previousSelection
         }
     }
 }
-
