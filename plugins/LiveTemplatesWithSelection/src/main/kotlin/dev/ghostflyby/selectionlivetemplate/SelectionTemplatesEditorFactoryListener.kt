@@ -37,8 +37,8 @@ internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 
     override fun editorCreated(event: EditorFactoryEvent) =
         event.editor.run {
-            if (isViewer || getUserData(listenerAttachedKey) != null) return
-            putUserData(listenerAttachedKey, Unit)
+            if (isViewer || document.getUserData(listenerAttachedKey) != null) return
+            document.putUserData(listenerAttachedKey, Unit)
             val disposable = service<PluginDisposable>()
             if (selectionModel.hasSelection()) {
                 document.previousSelection = selectionModel.selectedText
