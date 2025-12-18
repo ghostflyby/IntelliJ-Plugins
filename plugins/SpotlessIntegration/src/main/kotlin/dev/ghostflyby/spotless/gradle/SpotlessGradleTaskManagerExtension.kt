@@ -25,6 +25,8 @@ package dev.ghostflyby.spotless.gradle
 import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import org.gradle.util.GradleVersion
+import org.intellij.lang.annotations.Language
+import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
 import kotlin.io.path.Path
@@ -38,17 +40,28 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         gradleVersion: GradleVersion?,
     ) {
         id.project.service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
-        settings.addInitScript(
-            "dev.ghostflyby.spotless.daemon",
-            @Suppress("SpellCheckingInspection")
-            """
+        val persistent = id.project.service<SpotlessGradlePersistent>()
+        val daemonVersion = persistent.gradleDaemonVersion.trim()
+        val daemonJar = persistent.gradleDaemonJar.trim()
+
+        @Suppress("GroovyAssignabilityCheck")
+        @Language("gradle")
+        val s =
+            $$"""
             gradle.allprojects { proj ->
                 proj.buildscript {
                     repositories {
                         gradlePluginPortal()
                     }
                     dependencies {
-                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:0.4.0"
+                        def daemonJar = '$${daemonJar.toGroovyStringLiteral()}'
+                        def daemonVersion = '$${daemonVersion.toGroovyStringLiteral()}'
+                        if (daemonJar) {
+                            classpath files(daemonJar)
+                        } else {
+                            def resolved = daemonVersion ? daemonVersion : '0.4.0'
+                            classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:$resolved"
+                        }
                     }
                 }
 
@@ -56,7 +69,10 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
                     proj.apply plugin: "dev.ghostflyby.spotless.daemon"
                 }
             }
-        """.trimIndent(),
+        """.trimIndent()
+        settings.addInitScript(
+            "dev.ghostflyby.spotless.daemon",
+            s
         )
     }
 }
