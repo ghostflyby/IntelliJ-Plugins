@@ -39,7 +39,6 @@ import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjec
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.NlsSafe
 import dev.ghostflyby.spotless.Spotless
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import org.gradle.api.Project
@@ -120,7 +119,7 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
 )
 internal class SpotlessGradleStateHolder
-    : SerializablePersistentStateComponent<SpotlessGradleStateHolder.State>(State()) {
+    : SerializablePersistentStateComponent<SpotlessGradleStateHolder.PathsState>(PathsState()) {
     fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
         return state.paths.contains(path.absolutePathString())
     }
@@ -128,9 +127,9 @@ internal class SpotlessGradleStateHolder
     val daemons = mutableListOf<SpotlessDaemonHost>()
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
-        updateState { state ->
-            state.copy(
-                paths = nodes.asSequence()
+        updateState {
+            PathsState(
+                nodes.asSequence()
                     .filter { it.data.spotless }
                     .map { it.data.projectDirectory.absolutePathString() }
                     .toSet(),
@@ -141,22 +140,8 @@ internal class SpotlessGradleStateHolder
         daemons.clear()
     }
 
-    var gradleDaemonVersion: @NlsSafe String
-        get() = state.gradleDaemonVersion
-        set(value) {
-            state = state.copy(gradleDaemonVersion = value)
-        }
-
-    var gradleDaemonJar: @NlsSafe String
-        get() = state.gradleDaemonJar
-        set(value) {
-            state = state.copy(gradleDaemonJar = value)
-        }
-
-    internal data class State(
+    internal data class PathsState(
         @JvmField val paths: Set<String> = emptySet(),
-        @JvmField val gradleDaemonVersion: String = "",
-        @JvmField val gradleDaemonJar: String = "",
     )
 }
 
