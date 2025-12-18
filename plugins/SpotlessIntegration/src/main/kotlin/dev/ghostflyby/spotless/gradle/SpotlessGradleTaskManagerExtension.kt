@@ -25,7 +25,6 @@ package dev.ghostflyby.spotless.gradle
 import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import org.gradle.util.GradleVersion
-import org.intellij.lang.annotations.Language
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
@@ -44,10 +43,8 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         val daemonVersion = persistent.gradleDaemonVersion.trim()
         val daemonJar = persistent.gradleDaemonJar.trim()
 
-        @Suppress("GroovyAssignabilityCheck")
-        @Language("gradle")
-        val s =
-            $$"""
+        val s = @Suppress("SpellCheckingInspection")
+        $$"""
             gradle.allprojects { proj ->
                 proj.buildscript {
                     repositories {
