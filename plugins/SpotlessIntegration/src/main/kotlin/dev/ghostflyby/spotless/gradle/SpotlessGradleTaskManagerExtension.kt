@@ -39,7 +39,7 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         gradleVersion: GradleVersion?,
     ) {
         id.project.service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
-        val persistent = id.project.service<SpotlessGradlePersistent>()
+        val persistent = id.project.service<SpotlessGradleStateHolder>()
         val daemonVersion = persistent.gradleDaemonVersion.trim()
         val daemonJar = persistent.gradleDaemonJar.trim()
 
@@ -51,8 +51,8 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
                         gradlePluginPortal()
                     }
                     dependencies {
-                        def daemonJar = '$${daemonJar.toGroovyStringLiteral()}'
-                        def daemonVersion = '$${daemonVersion.toGroovyStringLiteral()}'
+                        def daemonJar = $${daemonJar.toGroovyStringLiteral()}
+                        def daemonVersion = $${daemonVersion.toGroovyStringLiteral()}
                         if (daemonJar) {
                             classpath files(daemonJar)
                         } else {

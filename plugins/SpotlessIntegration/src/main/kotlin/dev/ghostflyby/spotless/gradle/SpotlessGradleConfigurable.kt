@@ -33,7 +33,7 @@ import dev.ghostflyby.spotless.Bundle
 internal class SpotlessGradleConfigurable(private val project: Project) :
     BoundConfigurable(Bundle.message("spotless.configuration.title.workspace")) {
 
-    private val settings = project.service<SpotlessGradlePersistent>()
+    private val settings = project.service<SpotlessGradleStateHolder>()
 
     override fun createPanel() = panel {
         row(Bundle.message("spotless.configuration.daemonVersion.label")) {
