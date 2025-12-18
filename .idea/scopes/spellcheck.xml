@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="spellcheck" pattern="file:*.api||file[IntelliJ-Plugins]:gradlew||file[IntelliJ-Plugins]:gradlew.bat||file[IntelliJ-Plugins]:LICENSE" />
+</component>

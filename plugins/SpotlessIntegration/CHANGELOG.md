@@ -6,6 +6,9 @@
 
 ### Added
 
+- configuration options for Spotless Gradle daemon version and
+  jar [#127](https://github.com/ghostflyby/IntelliJ-Plugins/pull/127)
+
 ### Changed
 
 ### Deprecated
@@ -34,5 +37,7 @@
 - Support for automatic code formatting using Spotless.
 
 [Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v0.1.1...HEAD
+
 [0.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v0.0.1...v0.1.1
+
 [0.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v0.0.1
