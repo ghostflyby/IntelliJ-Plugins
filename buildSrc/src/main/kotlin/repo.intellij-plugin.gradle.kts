@@ -86,6 +86,7 @@ intellijPlatform {
 
 changelog {
     repositoryUrl = providers.gradleProperty("pluginRepositoryUrl")
+    versionPrefix = project.name + "-v"
 }
 
 tasks {

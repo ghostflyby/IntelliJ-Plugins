@@ -116,7 +116,7 @@ jobs:
             || true
 
           PR_URL=$(gh pr create \
-          --title "chore: Changelog update - v$VERSION [skip ci]" \
+          --title "chore: Changelog update - $VERSION [skip ci]" \
           --body "Current pull request contains patched CHANGELOG.md file for the $VERSION version." \
           --label "$LABEL" \
           --head "$BRANCH" )

@@ -6,8 +6,6 @@
 
 ### Added
 
-- update default Spotless Gradle daemon version to 0.5.1 [#131](https://github.com/ghostflyby/IntelliJ-Plugins/pull/131)
-
 ### Changed
 
 ### Deprecated
@@ -17,6 +15,12 @@
 ### Fixed
 
 ### Security
+
+## [0.3.0] - 2025-12-19
+
+### Added
+
+- update default Spotless Gradle daemon version to 0.5.1 [#131](https://github.com/ghostflyby/IntelliJ-Plugins/pull/131)
 
 ## [0.2.0] - 2025-12-18
 
@@ -42,10 +46,12 @@
 - Initial release of the Spotless Integration plugin for IntelliJ IDEA.
 - Support for automatic code formatting using Spotless.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.3.0...HEAD
 
-[0.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v0.1.1...v0.2.0
+[0.3.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.2.0...SpotlessIntegration-v0.3.0
 
-[0.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v0.0.1...v0.1.1
+[0.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.1.1...SpotlessIntegration-v0.2.0
 
-[0.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v0.0.1
+[0.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.0.1...SpotlessIntegration-v0.1.1
+
+[0.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/SpotlessIntegration-v0.0.1
