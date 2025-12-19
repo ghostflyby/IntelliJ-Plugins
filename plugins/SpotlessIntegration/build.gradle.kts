@@ -28,7 +28,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "0.2.0"
+version = "0.3.0"
 
 buildLogic {
     pluginVersion = version.toString()
