@@ -56,7 +56,7 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
                         if (daemonJar) {
                             classpath files(daemonJar)
                         } else {
-                            def resolved = daemonVersion ? daemonVersion : '0.5.1'
+                            def resolved = daemonVersion ? daemonVersion : '0.5.4'
                             classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:$resolved"
                         }
                     }
