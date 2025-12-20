@@ -8,6 +8,8 @@
 
 ### Changed
 
+- update default Spotless Gradle daemon version to 0.5.4 [#133](https://github.com/ghostflyby/IntelliJ-Plugins/pull/133)
+
 ### Deprecated
 
 ### Removed
