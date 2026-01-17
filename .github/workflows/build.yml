@@ -142,7 +142,7 @@ jobs:
           echo "filename=$BASENAME" >> $GITHUB_OUTPUT
           echo "pluginpath=$REALPATH" >> $GITHUB_OUTPUT
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.artifact.outputs.filename }}
           path: ${{ steps.artifact.outputs.pluginpath }}
@@ -150,7 +150,7 @@ jobs:
         run: ./gradlew --configuration-cache ${{ matrix.module }}:check
       - name: Collect Tests Result
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: tests-result-${{ matrix.module }}
           path: ${{ github.workspace }}/**/build/reports/tests
@@ -163,7 +163,7 @@ jobs:
         run: ./gradlew --configuration-cache ${{ matrix.module }}:verifyPlugin
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: pluginVerifier-result-${{ steps.modpath.outputs.namesegment }}
           path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
