@@ -1,0 +1,26 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+
+    <id>dev.ghostflyby.vitepress</id>
+    <name>Markdown</name>
+    <vendor>ghostflyby</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.intellij.plugins.markdown</depends>
+    <depends>org.jetbrains.plugins.vue</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <lang.parserDefinition
+                language="VitePress"
+                implementationClass="dev.ghostflyby.vitepress.VitePressParserDefinition"/>
+        <lang.fileViewProviderFactory
+                language="Vue"
+                id="ViteFileViewerProviderFactory"
+                implementationClass="dev.ghostflyby.vitepress.ViteFileViewProviderFactory"/>
+        <fileType name="VitePress" language="VitePress"
+                  implementationClass="dev.ghostflyby.vitepress.VitePressFiletype"/>
+    </extensions>
+
+</idea-plugin>
