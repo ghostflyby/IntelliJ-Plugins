@@ -51,15 +51,16 @@ public class VitePressParserDefinition : MarkdownParserDefinition() {
     }
 
     override fun getFileNodeType(): IFileElementType {
-        return VitePressTokenTypes.VITE_PRESS_FILE_NODE_TYPE
+        return VitePressTokenTypes.FILE_ELEMENT_TYPE
     }
 
 
 }
 
-public class VitePressTokenTypes : MarkdownTokenTypes {
+public interface VitePressTokenTypes : MarkdownTokenTypes {
     public companion object {
-        public val VITE_PRESS_FILE_NODE_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
+        @JvmField
+        public val FILE_ELEMENT_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
             "VITE_PRESS_FILE",
             VitePressLanguage,
         )
