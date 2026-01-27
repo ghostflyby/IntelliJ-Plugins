@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.vitepress
+package dev.ghostflyby.vitepress.markdown
 
 import org.intellij.lang.annotations.Language
 import org.intellij.markdown.MarkdownParsingException
@@ -91,10 +91,11 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
 
         /**
          * Open tag with a required `>` (not self-closing) that should continue until a closing tag.
-         * Examples: `<tag>`, `<tag whatever>`
+         * Allows trailing content on the same line.
+         * Examples: `<tag>`, `<tag whatever>`, `<tag>text`.
          */
         @Language("RegExp")
-        private const val OPEN_TAG_BLOCK = "</?[^\\s>/][^\\n>]*[^/]>\\s*$"
+        private const val OPEN_TAG_BLOCK = "</?[^\\s>/][^\\n>]*[^/]>.*"
 
 
         /**
