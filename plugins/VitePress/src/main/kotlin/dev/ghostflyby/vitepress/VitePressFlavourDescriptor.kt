@@ -54,9 +54,9 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
         productionHolder, constraintsBase,
     ) {
         override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> =
-            super.getMarkerBlockProviders()
-                .filter { it !is HtmlBlockProvider } +
-                    listOf(VitePressHtmlBlockProvider(), GitHubTableMarkerProvider())
+            super.getMarkerBlockProviders().map {
+                if (it is HtmlBlockProvider) VitePressHtmlBlockProvider() else it
+            } + GitHubTableMarkerProvider()
 
         override fun populateConstraintsTokens(
             pos: LookaheadText.Position,
