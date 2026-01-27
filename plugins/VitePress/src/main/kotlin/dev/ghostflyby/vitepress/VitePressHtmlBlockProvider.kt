@@ -82,26 +82,26 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
 
     public companion object {
         /**
-         * Single-line tag (open or close) with a required `>`; ends immediately.
-         * This avoids forcing a blank line to terminate the block for `<tag>`.
+         * Single-line tag start without closing `>` OR self-closing `/>`; ends immediately.
+         * Examples: `<tag`, `<tag whatever`, `<tag/>`, `<tag />`
          */
+        @Suppress("RegExpUnnecessaryNonCapturingGroup")
         @Language("RegExp")
-        private const val SINGLE_LINE_TAG = "</?[^\\s>/][^\\n>]*>\\s*$"
+        private const val IMMEDIATE_TAG = "(?:</?[^\\s>/][^\\n>]*$|</?[^\\s>/][^\\n>]*?/\\s*>\\s*$)"
 
         /**
-         * Allow very permissive HTML-ish tag starts to get Vue template services early.
-         * Examples that should match: `<tag`, `<tag whatever`, `<tag/>`, `</tag`, `<tag @aria-busy=\"true\">`
-         * Also allows non-standard tag starts like `<_x` or `<x:y` to avoid false negatives.
+         * Open tag with a required `>` (not self-closing) that should continue until a closing tag.
+         * Examples: `<tag>`, `<tag whatever>`
          */
         @Language("RegExp")
-        private const val LAX_TAG_START = "</?[^\\s>][^\\n>]*>?"
+        private const val OPEN_TAG_BLOCK = "</?[^\\s>/][^\\n>]*[^/]>\\s*$"
 
 
         /**
          * CommonMark HTML blocks:
          * 0..4: same as upstream
-         * 5: single-line tag (ends immediately)
-         * 6: lax tag start (any tag name + any trailing content, optional '>') -> ends on blank line (null)
+         * 5: immediate tag (no `>` or self-closing `/>`)
+         * 6: open tag with `>` continues until a closing tag
          */
         private val OPEN_CLOSE_REGEXES: List<Pair<Regex, Regex?>> = listOf(
             // 0
@@ -120,11 +120,11 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
             // 4
             Regex("<!\\[CDATA\\[") to Regex("]]>"),
 
-            // 5 (single-line tag with immediate termination)
-            Regex(SINGLE_LINE_TAG, RegexOption.IGNORE_CASE) to Regex(">"),
+            // 5 (immediate tag)
+            Regex(IMMEDIATE_TAG, RegexOption.IGNORE_CASE) to Regex("$"),
 
-            // 6 (CommonMark type 6 but WITHOUT block-tag whitelist, lax attrs/closing)
-            Regex(LAX_TAG_START, RegexOption.IGNORE_CASE) to null,
+            // 6 (open tag -> end at next closing tag)
+            Regex(OPEN_TAG_BLOCK, RegexOption.IGNORE_CASE) to Regex("</[^>]+>", RegexOption.IGNORE_CASE),
         )
 
         private val FIND_START_REGEX = Regex(
