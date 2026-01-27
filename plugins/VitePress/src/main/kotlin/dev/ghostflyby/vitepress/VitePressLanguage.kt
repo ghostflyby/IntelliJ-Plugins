@@ -34,7 +34,7 @@ public object VitePressLanguage : Language(MarkdownLanguage.INSTANCE, "VitePress
     private fun readResolve(): Any = VitePressLanguage
 }
 
-public class VitePressFiletype : LanguageFileType(VitePressLanguage) {
+public sealed class VitePressFiletype private constructor() : LanguageFileType(VitePressLanguage) {
     override fun getName(): String = "VitePress"
 
     override fun getDescription(): @NlsContexts.Label String = name
@@ -42,6 +42,8 @@ public class VitePressFiletype : LanguageFileType(VitePressLanguage) {
     override fun getDefaultExtension(): @NlsSafe String = "mdv"
 
     override fun getIcon(): Icon? = null
+
+    public companion object INSTANCE : VitePressFiletype()
 
 }
 

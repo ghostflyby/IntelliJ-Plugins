@@ -19,7 +19,7 @@
                 language="Vue"
                 id="ViteFileViewerProviderFactory"
                 implementationClass="dev.ghostflyby.vitepress.ViteFileViewProviderFactory"/>
-        <fileType name="VitePress" language="VitePress"
+        <fileType name="VitePress" language="VitePress" fieldName="INSTANCE"
                   implementationClass="dev.ghostflyby.vitepress.VitePressFiletype"/>
     </extensions>
 
