@@ -16,7 +16,7 @@
                 language="VitePress"
                 implementationClass="dev.ghostflyby.vitepress.VitePressParserDefinition"/>
         <lang.fileViewProviderFactory
-                language="Vue"
+                language="VitePress"
                 id="ViteFileViewerProviderFactory"
                 implementationClass="dev.ghostflyby.vitepress.ViteFileViewProviderFactory"/>
         <fileType name="VitePress" language="VitePress" fieldName="INSTANCE"
