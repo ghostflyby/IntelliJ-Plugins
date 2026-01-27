@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.vitepress
+package dev.ghostflyby.vitepress.markdown
 
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.flavours.commonmark.CommonMarkMarkerProcessor

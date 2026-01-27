@@ -30,6 +30,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.stubs.PsiFileStub
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.IStubFileElementType
+import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserAdapter
