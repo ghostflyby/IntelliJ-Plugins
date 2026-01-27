@@ -21,6 +21,7 @@
                 implementationClass="dev.ghostflyby.vitepress.ViteFileViewProviderFactory"/>
         <fileType name="VitePress" language="VitePress" fieldName="INSTANCE"
                   implementationClass="dev.ghostflyby.vitepress.VitePressFiletype"/>
+        <multiLangCommenter implementation="dev.ghostflyby.vitepress.VitePressCommentProvider"/>
     </extensions>
 
 </idea-plugin>
