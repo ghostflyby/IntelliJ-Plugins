@@ -1,0 +1,60 @@
+public final class dev/ghostflyby/vitepress/ViteFileViewProvider : com/intellij/psi/MultiplePsiFilesPerDocumentFileViewProvider, com/intellij/psi/templateLanguages/TemplateLanguageFileViewProvider {
+	public fun <init> (Lcom/intellij/psi/PsiManager;Lcom/intellij/openapi/vfs/VirtualFile;Z)V
+	public synthetic fun cloneInner (Lcom/intellij/openapi/vfs/VirtualFile;)Lcom/intellij/psi/MultiplePsiFilesPerDocumentFileViewProvider;
+	public synthetic fun getBaseLanguage ()Lcom/intellij/lang/Language;
+	public fun getBaseLanguage ()Ldev/ghostflyby/vitepress/VitePressLanguage;
+	public fun getLanguages ()Ljava/util/Set;
+	public synthetic fun getTemplateDataLanguage ()Lcom/intellij/lang/Language;
+	public fun getTemplateDataLanguage ()Lorg/jetbrains/vuejs/lang/html/VueLanguage;
+}
+
+public abstract class dev/ghostflyby/vitepress/VitePressFiletype : com/intellij/openapi/fileTypes/LanguageFileType {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressFiletype$INSTANCE;
+	public fun getDefaultExtension ()Ljava/lang/String;
+	public fun getDescription ()Ljava/lang/String;
+	public fun getIcon ()Ljavax/swing/Icon;
+	public fun getName ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressFiletype$INSTANCE : dev/ghostflyby/vitepress/VitePressFiletype {
+}
+
+public class dev/ghostflyby/vitepress/VitePressFlavourDescriptor : org/intellij/markdown/flavours/gfm/GFMFlavourDescriptor {
+	public static final field Companion Ldev/ghostflyby/vitepress/VitePressFlavourDescriptor$Companion;
+	public fun <init> ()V
+	public fun getMarkerProcessorFactory ()Lorg/intellij/markdown/parser/MarkerProcessorFactory;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressFlavourDescriptor$Companion : dev/ghostflyby/vitepress/VitePressFlavourDescriptor {
+}
+
+public final class dev/ghostflyby/vitepress/VitePressHtmlBlockProvider : org/intellij/markdown/parser/markerblocks/MarkerBlockProvider {
+	public static final field Companion Ldev/ghostflyby/vitepress/VitePressHtmlBlockProvider$Companion;
+	public fun <init> ()V
+	public fun createMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/MarkerProcessor$StateInfo;)Ljava/util/List;
+	public fun interruptsParagraph (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)Z
+}
+
+public final class dev/ghostflyby/vitepress/VitePressHtmlBlockProvider$Companion {
+}
+
+public final class dev/ghostflyby/vitepress/VitePressLanguage : com/intellij/lang/Language {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressLanguage;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressParserDefinition : org/intellij/plugins/markdown/lang/parser/MarkdownParserDefinition {
+	public fun <init> ()V
+	public fun createFile (Lcom/intellij/psi/FileViewProvider;)Lcom/intellij/psi/PsiFile;
+	public fun createLexer (Lcom/intellij/openapi/project/Project;)Lcom/intellij/lexer/Lexer;
+	public fun createParser (Lcom/intellij/openapi/project/Project;)Lcom/intellij/lang/PsiParser;
+	public fun getFileNodeType ()Lcom/intellij/psi/tree/IFileElementType;
+}
+
+public abstract interface class dev/ghostflyby/vitepress/VitePressTokenTypes : org/intellij/plugins/markdown/lang/MarkdownTokenTypes {
+	public static final field Companion Ldev/ghostflyby/vitepress/VitePressTokenTypes$Companion;
+	public static final field FILE_ELEMENT_TYPE Lcom/intellij/psi/tree/IFileElementType;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressTokenTypes$Companion {
+}
+
