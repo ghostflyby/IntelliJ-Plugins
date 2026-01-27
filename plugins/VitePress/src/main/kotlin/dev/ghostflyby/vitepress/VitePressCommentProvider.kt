@@ -28,7 +28,6 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiFile
 import com.intellij.psi.templateLanguages.MultipleLangCommentProvider
-import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
 import org.jetbrains.vuejs.lang.html.VueLanguage
 
 internal class VitePressCommentProvider : MultipleLangCommentProvider {
@@ -50,6 +49,6 @@ internal class VitePressCommentProvider : MultipleLangCommentProvider {
         file: PsiFile,
         viewProvider: FileViewProvider,
     ): Boolean {
-        return file is MarkdownFile && file.language == VitePressLanguage
+        return file.language.`is`(VitePressLanguage)
     }
 }
