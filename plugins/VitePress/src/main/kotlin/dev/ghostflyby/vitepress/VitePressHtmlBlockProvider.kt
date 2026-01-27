@@ -35,7 +35,7 @@ import org.intellij.markdown.parser.markerblocks.impl.HtmlBlockMarkerBlock
 /**
  * VitePress / Vue SFC template friendly variant of HtmlBlockProvider:
  * - Accepts ANY tag name for CommonMark HTML block type 6 (no whitelist)
- * - Accepts Vue directive / shorthand attrs: `:foo`, `@click`, `#slot`, `v-bind:[]`, `:[]`, etc.
+ * - Lax: treats `<tag` and `<tag ...` (even without `>`) as HTML block starters to favor Vue services
  */
 public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.StateInfo> {
     override fun createMarkerBlocks(
@@ -58,7 +58,7 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
     }
 
     override fun interruptsParagraph(pos: LookaheadText.Position, constraints: MarkdownConstraints): Boolean {
-        return matches(pos, constraints) in 0..6
+        return matches(pos, constraints) in OPEN_CLOSE_REGEXES.indices
     }
 
     private fun matches(pos: LookaheadText.Position, constraints: MarkdownConstraints): Int {
@@ -81,50 +81,27 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
     }
 
     public companion object {
-        // Tag name: keep as in upstream (enough for Vue components: MyComp / my-comp)
-        private const val TAG_NAME = "[A-Za-z][A-Za-z0-9-]*"
+        /**
+         * Single-line tag (open or close) with a required `>`; ends immediately.
+         * This avoids forcing a blank line to terminate the block for `<tag>`.
+         */
+        @Language("RegExp")
+        private const val SINGLE_LINE_TAG = "</?[^\\s>/][^\\n>]*>\\s*$"
 
         /**
-         * Vue-friendly attribute name:
-         * - allow `:foo`, `@click`, `#slot`
-         * - allow bracketed argument forms: `v-bind:[]`, `:[]`
-         * - allow normal HTML names: `foo`, `data-x`, `aria-label`, `xlink:href`, etc.
-         *
+         * Allow very permissive HTML-ish tag starts to get Vue template services early.
+         * Examples that should match: `<tag`, `<tag whatever`, `<tag/>`, `</tag`, `<tag @aria-busy=\"true\">`
+         * Also allows non-standard tag starts like `<_x` or `<x:y` to avoid false negatives.
          */
-        @Suppress("RegExpUnnecessaryNonCapturingGroup")
         @Language("RegExp")
-        private const val ATTR_NAME =
-            "(?:[A-Za-z_][A-Za-z0-9_.:-]*" +                           // normal
-                    "|[:@#][A-Za-z_][A-Za-z0-9_.:-]*" +                // :foo @click #slot
-                    "|[A-Za-z_][A-Za-z0-9_.:-]*:\\[[^]\\s\"'=<>`]+]" + // v-bind:[arg]
-                    "|[:@#]\\[[^]\\s\"'=<>`]+]" +                      // :[arg] @[event]? #[]? (accept)
-                    "|[:@#]" +                                         // : @ # (accept bare, be permissive for proper intellisense)
-                    ")"
+        private const val LAX_TAG_START = "</?[^\\s>][^\\n>]*>?"
 
-        // Attribute value: keep upstream style (already handles '...' / "..." / bare)
-        @Language("RegExp")
-        private const val ATTR_VALUE = "\\s*=\\s*(?:[^ \"'=<>`]+|'[^']*'|\"[^\"]*\")"
-
-        @Language("RegExp")
-        private const val ATTRIBUTE = "\\s+${ATTR_NAME}(?:${ATTR_VALUE})?"
-
-        // Allow any amount of attributes; keep it line-based (same as upstream intent)
-        @Language("RegExp")
-        private const val OPEN_TAG = "<${TAG_NAME}(?:${ATTRIBUTE})*\\s*/?>"
-
-        /** Closing tag allowance is not in public spec version yet (upstream comment) */
-        @Language("RegExp")
-        private const val CLOSE_TAG = "</${TAG_NAME}\\s*>"
 
         /**
          * CommonMark HTML blocks:
          * 0..4: same as upstream
-         * 5: modified type
-         * 6: ANY tag name (no whitelist) -> ends on blank line (null)
-         * 6: upstream type
-         * 7 (open/close tag with attrs) -> ends on blank line (null)
-         *
-         * For VitePress, the key is (5): without it, many Vue component blocks won't start.
+         * 5: single-line tag (ends immediately)
+         * 6: lax tag start (any tag name + any trailing content, optional '>') -> ends on blank line (null)
          */
         private val OPEN_CLOSE_REGEXES: List<Pair<Regex, Regex?>> = listOf(
             // 0
@@ -143,12 +120,11 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
             // 4
             Regex("<!\\[CDATA\\[") to Regex("]]>"),
 
-            // 5 (CommonMark type 6 but WITHOUT block-tag whitelist, Vue-friendly attrs)
-            @Suppress("RegExpUnnecessaryNonCapturingGroup")
-            Regex("</?(?:$TAG_NAME)(?:$ATTRIBUTE)*\\s*/?>", RegexOption.IGNORE_CASE) to null,
+            // 5 (single-line tag with immediate termination)
+            Regex(SINGLE_LINE_TAG, RegexOption.IGNORE_CASE) to Regex(">"),
 
-            // 6 (CommonMark type 7, Vue-friendly attrs)
-            Regex("(?:$OPEN_TAG|$CLOSE_TAG)(?: |$)") to null,
+            // 6 (CommonMark type 6 but WITHOUT block-tag whitelist, lax attrs/closing)
+            Regex(LAX_TAG_START, RegexOption.IGNORE_CASE) to null,
         )
 
         private val FIND_START_REGEX = Regex(
