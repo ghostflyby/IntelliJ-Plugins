@@ -31,7 +31,6 @@ import com.intellij.psi.stubs.PsiFileStub
 import com.intellij.psi.tree.IFileElementType
 import com.intellij.psi.tree.IStubFileElementType
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
-import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserAdapter
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserDefinition
@@ -52,18 +51,13 @@ public class VitePressParserDefinition : MarkdownParserDefinition() {
     }
 
     override fun getFileNodeType(): IFileElementType {
-        return VitePressTokenTypes.FILE_ELEMENT_TYPE
+        return VITEPRESS_FILE_ELEMENT_TYPE
     }
-
 
 }
 
-public interface VitePressTokenTypes : MarkdownTokenTypes {
-    public companion object {
-        @JvmField
-        public val FILE_ELEMENT_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
-            "VITE_PRESS_FILE",
-            VitePressLanguage,
-        )
-    }
-}
+@JvmField
+public val VITEPRESS_FILE_ELEMENT_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
+    "VITE_PRESS_FILE",
+    VitePressLanguage,
+)
