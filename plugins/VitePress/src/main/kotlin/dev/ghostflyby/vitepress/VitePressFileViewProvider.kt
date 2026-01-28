@@ -31,7 +31,7 @@ import com.intellij.psi.templateLanguages.TemplateLanguageFileViewProvider
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes.MARKDOWN_TEMPLATE_DATA
 import org.jetbrains.vuejs.lang.html.VueLanguage
 
-public class ViteFileViewProvider(manager: PsiManager, virtualFile: VirtualFile, eventSystemEnabled: Boolean) :
+public class VitePressFileViewProvider(manager: PsiManager, virtualFile: VirtualFile, eventSystemEnabled: Boolean) :
     MultiplePsiFilesPerDocumentFileViewProvider(
         manager,
         virtualFile, eventSystemEnabled,
@@ -45,8 +45,8 @@ public class ViteFileViewProvider(manager: PsiManager, virtualFile: VirtualFile,
     }
 
 
-    override fun cloneInner(fileCopy: VirtualFile): ViteFileViewProvider {
-        return ViteFileViewProvider(manager, fileCopy, false)
+    override fun cloneInner(fileCopy: VirtualFile): VitePressFileViewProvider {
+        return VitePressFileViewProvider(manager, fileCopy, false)
     }
 
     private val langs = setOf(VitePressLanguage, VueLanguage)
@@ -65,18 +65,17 @@ public class ViteFileViewProvider(manager: PsiManager, virtualFile: VirtualFile,
         return file
     }
 
-
-}
-
-internal class ViteFileViewProviderFactory : FileViewProviderFactory {
-
-    override fun createFileViewProvider(
-        file: VirtualFile,
-        language: Language,
-        manager: PsiManager,
-        eventSystemEnabled: Boolean,
-    ): FileViewProvider {
-        return ViteFileViewProvider(manager, file, eventSystemEnabled)
+    public class Factory : FileViewProviderFactory {
+        override fun createFileViewProvider(
+            file: VirtualFile,
+            language: Language,
+            manager: PsiManager,
+            eventSystemEnabled: Boolean,
+        ): FileViewProvider {
+            return VitePressFileViewProvider(manager, file, eventSystemEnabled)
+        }
     }
+
+
 }
 
