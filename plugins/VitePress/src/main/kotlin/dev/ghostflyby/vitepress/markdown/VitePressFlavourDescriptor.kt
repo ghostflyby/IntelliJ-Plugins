@@ -35,7 +35,9 @@ import org.intellij.markdown.parser.ProductionHolder
 import org.intellij.markdown.parser.constraints.CommonMarkdownConstraints
 import org.intellij.markdown.parser.constraints.MarkdownConstraints
 import org.intellij.markdown.parser.constraints.getCharsEaten
+import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockProvider
+import org.intellij.markdown.parser.markerblocks.impl.ParagraphMarkerBlock
 import org.intellij.markdown.parser.markerblocks.providers.HtmlBlockProvider
 import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 import kotlin.math.min
@@ -53,10 +55,54 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
     ) : CommonMarkMarkerProcessor(
         productionHolder, constraintsBase,
     ) {
-        override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> =
-            super.getMarkerBlockProviders().map {
-                if (it is HtmlBlockProvider) VitePressHtmlBlockProvider() else it
-            } + GitHubTableMarkerProvider()
+        private val paragraphInterrupts: (LookaheadText.Position, MarkdownConstraints) -> Boolean =
+            { position, constraints ->
+                getMarkerBlockProviders().any { it.interruptsParagraph(position, constraints) }
+            }
+
+        private val providers = listOf(VitePressCustomFenceProvider()) + super.getMarkerBlockProviders().map {
+            if (it is HtmlBlockProvider) VitePressHtmlBlockProvider() else it
+        } + GitHubTableMarkerProvider()
+
+        override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> {
+            return providers
+        }
+
+        override fun createNewMarkerBlocks(
+            pos: LookaheadText.Position,
+            productionHolder: ProductionHolder,
+        ): List<MarkerBlock> {
+            if (pos.offsetInCurrentLine == -1) {
+                return NO_BLOCKS
+            }
+
+            // Prevent paragraph/list creation on fence closing line while the fence is still open.
+            if (stateInfo.lastBlock is VitePressCustomFenceMarkerBlock && VitePressCustomFenceProvider.CLOSING_REGEX.matches(
+                    pos.currentLineFromPosition,
+                )
+            ) {
+                return NO_BLOCKS
+            }
+
+            for (provider in getMarkerBlockProviders()) {
+                val list = provider.createMarkerBlocks(pos, productionHolder, stateInfo)
+                if (list.isNotEmpty()) {
+                    return list
+                }
+            }
+
+            if (pos.offsetInCurrentLine >= stateInfo.nextConstraints.getCharsEaten(pos.currentLine) && pos.charsToNonWhitespace() != null) {
+                return listOf(
+                    ParagraphMarkerBlock(
+                        stateInfo.currentConstraints,
+                        productionHolder.mark(),
+                        paragraphInterrupts,
+                    ),
+                )
+            }
+
+            return NO_BLOCKS
+        }
 
         override fun populateConstraintsTokens(
             pos: LookaheadText.Position,
@@ -79,14 +125,11 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
             }
 
             val type = when (constraints.types.lastOrNull()) {
-                '>' ->
-                    MarkdownTokenTypes.BLOCK_QUOTE
+                '>' -> MarkdownTokenTypes.BLOCK_QUOTE
 
-                '.', ')' ->
-                    MarkdownTokenTypes.LIST_NUMBER
+                '.', ')' -> MarkdownTokenTypes.LIST_NUMBER
 
-                else ->
-                    MarkdownTokenTypes.LIST_BULLET
+                else -> MarkdownTokenTypes.LIST_BULLET
             }
             val middleOffset = pos.offset - pos.offsetInCurrentLine + offset
             val endOffset = min(
