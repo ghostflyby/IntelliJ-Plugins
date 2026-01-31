@@ -31,28 +31,30 @@ import com.intellij.openapi.editor.highlighter.EditorHighlighter
 import com.intellij.openapi.fileTypes.EditorHighlighterProvider
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
+import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.tree.IElementType
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import org.intellij.plugins.markdown.highlighting.MarkdownSyntaxHighlighter
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypeSets
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownMergingLexer
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
-import org.jetbrains.vuejs.lang.html.highlighting.VueSyntaxHighlighterFactory
+import org.jetbrains.vuejs.lang.html.VueLanguage
 
 
 private object VPMarkdownHighlighter : MarkdownSyntaxHighlighter() {
     override fun getHighlightingLexer(): Lexer {
-        return object : LayeredLexer(MarkdownToplevelLexer(VitePressFlavourDescriptor)) {
-            init {
-                registerSelfStoppingLayer(
-                    MarkdownMergingLexer(), MarkdownTokenTypeSets.INLINE_HOLDING_ELEMENT_TYPES.getTypes(),
-                    IElementType.EMPTY_ARRAY,
-                )
-            }
-        }
+        return VitePressSyntaxHighlighterLexer()
+    }
+}
+
+internal class VitePressSyntaxHighlighterLexer : LayeredLexer(MarkdownToplevelLexer(VitePressFlavourDescriptor)) {
+    init {
+        registerSelfStoppingLayer(
+            MarkdownMergingLexer(), MarkdownTokenTypeSets.INLINE_HOLDING_ELEMENT_TYPES.getTypes(),
+            emptyArray(),
+        )
     }
 }
 
@@ -74,13 +76,10 @@ internal class VitePressHighlighterFactory : EditorHighlighterProvider {
     ): EditorHighlighter {
 
 
-        val vue = factory.getSyntaxHighlighter(project, virtualFile)
+        val vue = SyntaxHighlighterFactory.getSyntaxHighlighter(VueLanguage, project, virtualFile)
         return VitePressHighlighter(
             vue,
             colors,
         )
     }
 }
-
-private val factory = VueSyntaxHighlighterFactory()
-
