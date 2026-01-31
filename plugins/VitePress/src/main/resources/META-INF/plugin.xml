@@ -7,7 +7,7 @@
     <name>Markdown</name>
     <vendor>ghostflyby</vendor>
 
-    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.ultimate</depends>
     <depends>org.intellij.plugins.markdown</depends>
     <depends>org.jetbrains.plugins.vue</depends>
 
