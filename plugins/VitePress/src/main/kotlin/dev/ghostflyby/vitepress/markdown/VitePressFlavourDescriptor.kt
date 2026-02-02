@@ -22,51 +22,39 @@
 
 package dev.ghostflyby.vitepress.markdown
 
-import org.intellij.markdown.MarkdownTokenTypes
-import org.intellij.markdown.flavours.commonmark.CommonMarkMarkerProcessor
 import org.intellij.markdown.flavours.gfm.GFMConstraints
-import org.intellij.markdown.flavours.gfm.GFMFlavourDescriptor
-import org.intellij.markdown.flavours.gfm.GFMTokenTypes
 import org.intellij.markdown.flavours.gfm.table.GitHubTableMarkerProvider
 import org.intellij.markdown.parser.LookaheadText
 import org.intellij.markdown.parser.MarkerProcessor
 import org.intellij.markdown.parser.MarkerProcessorFactory
 import org.intellij.markdown.parser.ProductionHolder
-import org.intellij.markdown.parser.constraints.CommonMarkdownConstraints
 import org.intellij.markdown.parser.constraints.MarkdownConstraints
-import org.intellij.markdown.parser.constraints.getCharsEaten
 import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockProvider
 import org.intellij.markdown.parser.markerblocks.providers.HtmlBlockProvider
-import org.intellij.markdown.parser.sequentialparsers.SequentialParser
-import kotlin.math.min
+import org.intellij.plugins.markdown.lang.parser.MarkdownDefaultFlavour
+import org.intellij.plugins.markdown.lang.parser.MarkdownDefaultMarkerProcessor
 
-public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
+public open class VitePressFlavourDescriptor : MarkdownDefaultFlavour() {
     override val markerProcessorFactory: MarkerProcessorFactory
-        get() = object : MarkerProcessorFactory {
-            override fun createMarkerProcessor(productionHolder: ProductionHolder): MarkerProcessor<*> =
-                VitePressMarkerProcessor(productionHolder, GFMConstraints.BASE)
-        }
+        get() = VitePressMarkerProcessor.Factory
 
     public class VitePressMarkerProcessor(
         productionHolder: ProductionHolder,
-        constraintsBase: CommonMarkdownConstraints,
-    ) : CommonMarkMarkerProcessor(
+        constraintsBase: MarkdownConstraints,
+    ) : MarkdownDefaultMarkerProcessor(
         productionHolder, constraintsBase,
     ) {
 
         // Offset of a line whose paragraph should be suppressed (used for closing fences).
         private var skipParagraphOffset: Int = -1
 
-        private val providers =
-            listOf(VitePressCustomFenceProvider { skipParagraphOffset = it }) +
+        override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> {
+            return listOf(VitePressCustomFenceProvider { skipParagraphOffset = it }) +
                     super.getMarkerBlockProviders().map {
                         if (it is HtmlBlockProvider) VitePressHtmlBlockProvider()
                         else it
                     } + GitHubTableMarkerProvider()
-
-        override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> {
-            return providers
         }
 
         override fun createNewMarkerBlocks(
@@ -80,46 +68,11 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
             return super.createNewMarkerBlocks(pos, productionHolder)
         }
 
-        override fun populateConstraintsTokens(
-            pos: LookaheadText.Position,
-            constraints: MarkdownConstraints,
-            productionHolder: ProductionHolder,
-        ) {
-            if (constraints !is GFMConstraints || !constraints.hasCheckbox()) {
-                super.populateConstraintsTokens(pos, constraints, productionHolder)
-                return
-            }
-
-            val line = pos.currentLine
-            var offset = pos.offsetInCurrentLine
-            while (offset < line.length && line[offset] != '[') {
-                offset++
-            }
-            if (offset == line.length) {
-                super.populateConstraintsTokens(pos, constraints, productionHolder)
-                return
-            }
-
-            val type = when (constraints.types.lastOrNull()) {
-                '>' -> MarkdownTokenTypes.BLOCK_QUOTE
-
-                '.', ')' -> MarkdownTokenTypes.LIST_NUMBER
-
-                else -> MarkdownTokenTypes.LIST_BULLET
-            }
-            val middleOffset = pos.offset - pos.offsetInCurrentLine + offset
-            val endOffset = min(
-                pos.offset - pos.offsetInCurrentLine + constraints.getCharsEaten(pos.currentLine),
-                pos.nextLineOrEofOffset,
-            )
-
-            productionHolder.addProduction(
-                listOf(
-                    SequentialParser.Node(pos.offset..middleOffset, type),
-                    SequentialParser.Node(middleOffset..endOffset, GFMTokenTypes.CHECK_BOX),
-                ),
-            )
+        public object Factory : MarkerProcessorFactory {
+            override fun createMarkerProcessor(productionHolder: ProductionHolder): MarkerProcessor<*> =
+                VitePressMarkerProcessor(productionHolder, GFMConstraints.BASE)
         }
+
     }
 
     public companion object : VitePressFlavourDescriptor()

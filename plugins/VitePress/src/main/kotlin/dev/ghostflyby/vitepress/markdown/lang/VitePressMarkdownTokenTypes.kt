@@ -20,13 +20,20 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.vitepress.markdown
+package dev.ghostflyby.vitepress.markdown.lang
 
-import org.intellij.markdown.IElementType
-import org.intellij.markdown.MarkdownElementType
+import com.intellij.psi.tree.IElementType
+import dev.ghostflyby.vitepress.markdown.VitePressMarkdownTokenTypes
+import org.intellij.plugins.markdown.lang.MarkdownElementType.platformType
+import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 
-public object VitePressMarkdownElementTypes {
+public object VitePressMarkdownTokenTypes : MarkdownTokenTypes {
     @JvmField
-    public val CUSTOM_FENCE: IElementType = MarkdownElementType("VITE_PRESS_CUSTOM_FENCE")
+    public val CUSTOM_FENCE_START: IElementType = platformType(VitePressMarkdownTokenTypes.CUSTOM_FENCE_START)
 
+    @JvmField
+    public val CUSTOM_FENCE_INFO: IElementType = platformType(VitePressMarkdownTokenTypes.CUSTOM_FENCE_INFO)
+
+    @JvmField
+    public val CUSTOM_FENCE_END: IElementType = platformType(VitePressMarkdownTokenTypes.CUSTOM_FENCE_END)
 }

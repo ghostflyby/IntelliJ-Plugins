@@ -20,13 +20,25 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.vitepress.markdown
+package dev.ghostflyby.vitepress.markdown.lang
 
-import org.intellij.markdown.IElementType
-import org.intellij.markdown.MarkdownElementType
+import com.intellij.psi.PsiFile
+import com.intellij.psi.stubs.PsiFileStub
+import com.intellij.psi.tree.IElementType
+import com.intellij.psi.tree.IFileElementType
+import com.intellij.psi.tree.IStubFileElementType
+import dev.ghostflyby.vitepress.VitePressLanguage
+import dev.ghostflyby.vitepress.markdown.VitePressMarkdownElementTypes
+import org.intellij.plugins.markdown.lang.MarkdownElementType.platformType
+import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 
-public object VitePressMarkdownElementTypes {
+public object VitePressMarkdownElementTypes : MarkdownElementTypes {
     @JvmField
-    public val CUSTOM_FENCE: IElementType = MarkdownElementType("VITE_PRESS_CUSTOM_FENCE")
+    public val CUSTOM_FENCE: IElementType = platformType(VitePressMarkdownElementTypes.CUSTOM_FENCE)
 
+    @JvmField
+    public val FILE_ELEMENT_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
+        "VITE_PRESS_FILE",
+        VitePressLanguage,
+    )
 }

@@ -26,7 +26,7 @@ public final class dev/ghostflyby/vitepress/markdown/VitePressCustomFenceProvide
 	public fun interruptsParagraph (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)Z
 }
 
-public class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor : org/intellij/markdown/flavours/gfm/GFMFlavourDescriptor {
+public class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor : org/intellij/plugins/markdown/lang/parser/MarkdownDefaultFlavour {
 	public static final field Companion Ldev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$Companion;
 	public fun <init> ()V
 	public fun getMarkerProcessorFactory ()Lorg/intellij/markdown/parser/MarkerProcessorFactory;
@@ -35,9 +35,14 @@ public class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor : org/
 public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$Companion : dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor {
 }
 
-public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor : org/intellij/markdown/flavours/commonmark/CommonMarkMarkerProcessor {
-	public fun <init> (Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/constraints/CommonMarkdownConstraints;)V
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor : org/intellij/plugins/markdown/lang/parser/MarkdownDefaultMarkerProcessor {
+	public fun <init> (Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)V
 	public fun createNewMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;)Ljava/util/List;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor$Factory : org/intellij/markdown/parser/MarkerProcessorFactory {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor$Factory;
+	public fun createMarkerProcessor (Lorg/intellij/markdown/parser/ProductionHolder;)Lorg/intellij/markdown/parser/MarkerProcessor;
 }
 
 public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider : org/intellij/markdown/parser/markerblocks/MarkerBlockProvider {
@@ -50,9 +55,8 @@ public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider 
 public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider$Companion {
 }
 
-public final class dev/ghostflyby/vitepress/markdown/VitePressMarkdownElementTypes : org/intellij/plugins/markdown/lang/MarkdownElementTypes {
+public final class dev/ghostflyby/vitepress/markdown/VitePressMarkdownElementTypes {
 	public static final field CUSTOM_FENCE Lorg/intellij/markdown/IElementType;
-	public static final field FILE_ELEMENT_TYPE Lcom/intellij/psi/tree/IFileElementType;
 	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressMarkdownElementTypes;
 }
 
@@ -61,5 +65,18 @@ public final class dev/ghostflyby/vitepress/markdown/VitePressMarkdownTokenTypes
 	public static final field CUSTOM_FENCE_INFO Lorg/intellij/markdown/IElementType;
 	public static final field CUSTOM_FENCE_START Lorg/intellij/markdown/IElementType;
 	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressMarkdownTokenTypes;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownElementTypes : org/intellij/plugins/markdown/lang/MarkdownElementTypes {
+	public static final field CUSTOM_FENCE Lcom/intellij/psi/tree/IElementType;
+	public static final field FILE_ELEMENT_TYPE Lcom/intellij/psi/tree/IFileElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownElementTypes;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownTokenTypes : org/intellij/plugins/markdown/lang/MarkdownTokenTypes {
+	public static final field CUSTOM_FENCE_END Lcom/intellij/psi/tree/IElementType;
+	public static final field CUSTOM_FENCE_INFO Lcom/intellij/psi/tree/IElementType;
+	public static final field CUSTOM_FENCE_START Lcom/intellij/psi/tree/IElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownTokenTypes;
 }
 

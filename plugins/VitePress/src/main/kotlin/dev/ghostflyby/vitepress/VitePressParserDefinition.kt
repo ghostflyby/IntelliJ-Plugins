@@ -29,7 +29,7 @@ import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IFileElementType
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
-import dev.ghostflyby.vitepress.markdown.VitePressMarkdownElementTypes
+import dev.ghostflyby.vitepress.markdown.lang.VitePressMarkdownElementTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserAdapter
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserDefinition
