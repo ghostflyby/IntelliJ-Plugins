@@ -37,6 +37,7 @@ import org.intellij.markdown.parser.constraints.MarkdownConstraints
 import org.intellij.markdown.parser.constraints.getCharsEaten
 import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockProvider
+import org.intellij.markdown.parser.markerblocks.providers.HtmlBlockProvider
 import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 import kotlin.math.min
 
@@ -47,7 +48,7 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
                 VitePressMarkerProcessor(productionHolder, GFMConstraints.BASE)
         }
 
-    internal class VitePressMarkerProcessor(
+    public class VitePressMarkerProcessor(
         productionHolder: ProductionHolder,
         constraintsBase: CommonMarkdownConstraints,
     ) : CommonMarkMarkerProcessor(
@@ -59,7 +60,10 @@ public open class VitePressFlavourDescriptor : GFMFlavourDescriptor() {
 
         private val providers =
             listOf(VitePressCustomFenceProvider { skipParagraphOffset = it }) +
-                    super.getMarkerBlockProviders() + GitHubTableMarkerProvider()
+                    super.getMarkerBlockProviders().map {
+                        if (it is HtmlBlockProvider) VitePressHtmlBlockProvider()
+                        else it
+                    } + GitHubTableMarkerProvider()
 
         override fun getMarkerBlockProviders(): List<MarkerBlockProvider<StateInfo>> {
             return providers

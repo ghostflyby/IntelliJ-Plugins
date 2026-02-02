@@ -35,6 +35,11 @@ public class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor : org/
 public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$Companion : dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor {
 }
 
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor : org/intellij/markdown/flavours/commonmark/CommonMarkMarkerProcessor {
+	public fun <init> (Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/constraints/CommonMarkdownConstraints;)V
+	public fun createNewMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;)Ljava/util/List;
+}
+
 public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider : org/intellij/markdown/parser/markerblocks/MarkerBlockProvider {
 	public static final field Companion Ldev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider$Companion;
 	public fun <init> ()V
