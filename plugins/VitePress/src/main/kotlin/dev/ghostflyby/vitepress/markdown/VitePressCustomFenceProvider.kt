@@ -28,55 +28,77 @@ import org.intellij.markdown.parser.ProductionHolder
 import org.intellij.markdown.parser.constraints.MarkdownConstraints
 import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockProvider
+import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 
-internal class VitePressCustomFenceProvider : MarkerBlockProvider<MarkerProcessor.StateInfo> {
+internal class VitePressCustomFenceProvider(
+    private val markSkipParagraph: (Int) -> Unit,
+) : MarkerBlockProvider<MarkerProcessor.StateInfo> {
     override fun createMarkerBlocks(
         pos: LookaheadText.Position,
         productionHolder: ProductionHolder,
         stateInfo: MarkerProcessor.StateInfo,
     ): List<MarkerBlock> {
-        val openingInfo = obtainFenceOpeningInfo(pos, stateInfo.currentConstraints) ?: return emptyList()
+        val infoString = obtainFenceOpeningInfo(pos, stateInfo.currentConstraints) ?: return emptyList()
+        createNodesForFenceStart(pos, infoString, productionHolder)
         return listOf(
             VitePressCustomFenceMarkerBlock(
                 stateInfo.currentConstraints,
                 productionHolder,
-                openingInfo.delimiter,
-                pos,
+                markSkipParagraph,
             ),
         )
     }
 
     override fun interruptsParagraph(pos: LookaheadText.Position, constraints: MarkdownConstraints): Boolean {
-        if (!MarkerBlockProvider.isStartOfLineWithConstraints(pos, constraints)) return false
-        val line = pos.currentLineFromPosition
-        return OPENING_REGEX.matches(line) || CLOSING_REGEX.matches(line)
+        // Any ::: line should break paragraphs/lists so closing delimiters aren't swallowed.
+        return REGEX.find(pos.currentLineFromPosition) != null
     }
 
-    private fun obtainFenceOpeningInfo(
+    private fun createNodesForFenceStart(
         pos: LookaheadText.Position,
-        constraints: MarkdownConstraints,
-    ): OpeningInfo? {
-        if (!MarkerBlockProvider.isStartOfLineWithConstraints(pos, constraints)) return null
-        val matchResult = OPENING_REGEX.find(pos.currentLineFromPosition) ?: return null
-        val delimiterGroup = matchResult.groups[1] ?: return null
-        val infoGroup = matchResult.groups[2]
-        val delimiter = delimiterGroup.value
-        val info = infoGroup?.value ?: ""
-        val type = info.trimStart().split(WHITESPACE_REGEX, limit = 2).firstOrNull().orEmpty()
-        if (type.isEmpty() || type !in SUPPORTED_TYPES) return null
-
-        return OpeningInfo(delimiter, info)
+        info: String,
+        productionHolder: ProductionHolder,
+    ) {
+        // Remember where this fence starts so the MarkerBlock can wrap start..end.
+        productionHolder.updatePosition(pos.offset)
+        val infoStartPosition = pos.nextLineOrEofOffset - info.length
+        productionHolder.addProduction(
+            listOf(
+                SequentialParser.Node(
+                    pos.offset..infoStartPosition,
+                    VitePressMarkdownTokenTypes.CUSTOM_FENCE_START,
+                ),
+            ),
+        )
+        if (info.isNotEmpty()) {
+            productionHolder.addProduction(
+                listOf(
+                    SequentialParser.Node(
+                        infoStartPosition..pos.nextLineOrEofOffset,
+                        VitePressMarkdownTokenTypes.CUSTOM_FENCE_INFO,
+                    ),
+                ),
+            )
+        }
     }
 
-    private data class OpeningInfo(
-        val delimiter: String,
-        val info: String,
-    )
+    /**
+     * Can be used for customizing conditions for the fence opening.
+     *
+     * This API is a subject to change in the future.
+     */
+    private fun obtainFenceOpeningInfo(pos: LookaheadText.Position, constraints: MarkdownConstraints): String? {
+        if (!MarkerBlockProvider.isStartOfLineWithConstraints(pos, constraints)) {
+            return null
+        }
+        val matchResult = REGEX.find(pos.currentLineFromPosition) ?: return null
+        val infoString = matchResult.groups[1]?.value ?: ""
+        // Treat bare delimiters (like closing lines) as non-openers to avoid nested fences.
+        if (infoString.isBlank()) return null
+        return infoString
+    }
 
-    internal companion object {
-        private val SUPPORTED_TYPES = setOf("info", "tip", "warning", "danger", "details", "raw")
-        private val WHITESPACE_REGEX = Regex("\\s+")
-        internal val OPENING_REGEX = Regex("^ {0,3}(:::+)\\s*(.*)?$")
-        internal val CLOSING_REGEX = Regex("^ {0,3}(:::+)\\s*$")
+    companion object {
+        private val REGEX: Regex = Regex("^ {0,3}:::([^`]*)$")
     }
 }

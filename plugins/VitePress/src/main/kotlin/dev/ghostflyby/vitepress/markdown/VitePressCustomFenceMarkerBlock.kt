@@ -23,6 +23,7 @@
 package dev.ghostflyby.vitepress.markdown
 
 import org.intellij.markdown.IElementType
+import org.intellij.markdown.lexer.Compat
 import org.intellij.markdown.parser.LookaheadText
 import org.intellij.markdown.parser.ProductionHolder
 import org.intellij.markdown.parser.constraints.MarkdownConstraints
@@ -36,25 +37,25 @@ import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 internal class VitePressCustomFenceMarkerBlock(
     myConstraints: MarkdownConstraints,
     private val productionHolder: ProductionHolder,
-    private val fenceStart: String,
-    startPosition: LookaheadText.Position,
+    private val markSkipParagraph: (Int) -> Unit,
 ) : MarkerBlockImpl(myConstraints, productionHolder.mark()) {
-    private val endLineRegex = Regex("^ {0,3}${Regex.escape(fenceStart)}+ *$")
-    private var realInterestingOffset: Int = -1
+    private var allowSubBlocks: Boolean = true
 
-    init {
-        addFenceStart(startPosition)
-    }
-
-    override fun allowsSubBlocks(): Boolean = true
+    override fun allowsSubBlocks(): Boolean = allowSubBlocks
 
     override fun isInterestingOffset(pos: LookaheadText.Position): Boolean = true
 
-    override fun calcNextInterestingOffset(pos: LookaheadText.Position): Int = pos.nextLineOrEofOffset
+    private val endLineRegex = Regex("^ {0,3}:::+ *$")
 
-    override fun getDefaultAction(): MarkerBlock.ClosingAction = MarkerBlock.ClosingAction.DONE
+    private var realInterestingOffset = -1
 
-    override fun getDefaultNodeType(): IElementType = VitePressMarkdownElementTypes.CUSTOM_FENCE
+    override fun calcNextInterestingOffset(pos: LookaheadText.Position): Int {
+        return pos.nextLineOrEofOffset
+    }
+
+    override fun getDefaultAction(): MarkerBlock.ClosingAction {
+        return MarkerBlock.ClosingAction.DONE
+    }
 
     override fun doProcessToken(
         pos: LookaheadText.Position,
@@ -64,56 +65,52 @@ internal class VitePressCustomFenceMarkerBlock(
             return MarkerBlock.ProcessingResult.CANCEL
         }
 
+        // Reset for the current line; may be turned off when we see the closing delimiter.
+        allowSubBlocks = true
+
         if (pos.offsetInCurrentLine != -1) {
             return MarkerBlock.ProcessingResult.CANCEL
         }
+
+        Compat.assert(pos.offsetInCurrentLine == -1)
 
         val nextLineConstraints = constraints.applyToNextLineAndAddModifiers(pos)
         if (!nextLineConstraints.extendsPrev(constraints)) {
             return MarkerBlock.ProcessingResult.DEFAULT
         }
 
-        val nextOffset = pos.nextLineOrEofOffset
-        realInterestingOffset = nextOffset
+        val nextLineOffset = pos.nextLineOrEofOffset
+        realInterestingOffset = nextLineOffset
 
-        val trimmedCurrent = nextLineConstraints.eatItselfFromString(pos.currentLine)
-        if (endsThisFence(trimmedCurrent)) {
-            addFenceEnd(pos, pos.nextLineOrEofOffset)
-            scheduleProcessingResult(nextOffset, MarkerBlock.ProcessingResult.DEFAULT)
-            return MarkerBlock.ProcessingResult.CANCEL
+        val currentLine = nextLineConstraints.eatItselfFromString(pos.currentLine)
+        if (endsThisFence(currentLine)) {
+            allowSubBlocks = false
+            val nextOffset = pos.nextPosition(1)?.offset ?: (pos.offset + 1)
+            markSkipParagraph(nextOffset)
+            productionHolder.updatePosition(pos.nextLineOrEofOffset)
+            productionHolder.addProduction(
+                listOf(
+                    SequentialParser.Node(
+                        pos.offset + 1..pos.nextLineOrEofOffset,
+                        VitePressMarkdownTokenTypes.CUSTOM_FENCE_END,
+                    ),
+                ),
+            )
+            realInterestingOffset = pos.nextLineOrEofOffset
+            scheduleProcessingResult(pos.nextLineOrEofOffset, MarkerBlock.ProcessingResult.DEFAULT)
+            return MarkerBlock.ProcessingResult.DEFAULT
+        } else {
+            allowSubBlocks = true
         }
 
-        return MarkerBlock.ProcessingResult.PASS
+        return MarkerBlock.ProcessingResult.CANCEL
     }
 
     private fun endsThisFence(line: CharSequence): Boolean {
-        if (line.isEmpty()) return false
         return endLineRegex.matches(line)
     }
 
-    private fun addFenceStart(startPosition: LookaheadText.Position) {
-        val lineLength = startPosition.currentLineFromPosition.length
-        if (lineLength <= 0) return
-        val lineEnd = startPosition.offset + lineLength
-        productionHolder.addProduction(
-            listOf(
-                SequentialParser.Node(
-                    startPosition.offset..lineEnd,
-                    VitePressMarkdownTokenTypes.CUSTOM_FENCE_START,
-                ),
-            ),
-        )
-    }
-
-    private fun addFenceEnd(pos: LookaheadText.Position, lineEnd: Int) {
-        val lineStart = pos.offset + 1
-        productionHolder.addProduction(
-            listOf(
-                SequentialParser.Node(
-                    lineStart..lineEnd,
-                    VitePressMarkdownTokenTypes.CUSTOM_FENCE_END,
-                ),
-            ),
-        )
+    override fun getDefaultNodeType(): IElementType {
+        return VitePressMarkdownElementTypes.CUSTOM_FENCE
     }
 }
