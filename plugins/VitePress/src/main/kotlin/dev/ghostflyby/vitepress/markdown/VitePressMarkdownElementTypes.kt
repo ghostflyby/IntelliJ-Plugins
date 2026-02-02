@@ -22,6 +22,11 @@
 
 package dev.ghostflyby.vitepress.markdown
 
+import com.intellij.psi.PsiFile
+import com.intellij.psi.stubs.PsiFileStub
+import com.intellij.psi.tree.IFileElementType
+import com.intellij.psi.tree.IStubFileElementType
+import dev.ghostflyby.vitepress.VitePressLanguage
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementType
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes
@@ -29,4 +34,10 @@ import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 public object VitePressMarkdownElementTypes : MarkdownElementTypes {
     @JvmField
     public val CUSTOM_FENCE: IElementType = MarkdownElementType("VITE_PRESS_CUSTOM_FENCE")
+
+    @JvmField
+    public val FILE_ELEMENT_TYPE: IFileElementType = IStubFileElementType<PsiFileStub<PsiFile>>(
+        "VITE_PRESS_FILE",
+        VitePressLanguage,
+    )
 }

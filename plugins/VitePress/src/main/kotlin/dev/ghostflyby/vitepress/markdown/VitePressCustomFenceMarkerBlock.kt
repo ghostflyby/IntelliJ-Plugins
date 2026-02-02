@@ -34,7 +34,7 @@ import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockImpl
 import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 
-internal class VitePressCustomFenceMarkerBlock(
+public class VitePressCustomFenceMarkerBlock(
     myConstraints: MarkdownConstraints,
     private val productionHolder: ProductionHolder,
     private val markSkipParagraph: (Int) -> Unit,

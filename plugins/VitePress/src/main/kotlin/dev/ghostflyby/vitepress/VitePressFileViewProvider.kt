@@ -31,7 +31,7 @@ import com.intellij.psi.templateLanguages.TemplateLanguageFileViewProvider
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes.MARKDOWN_TEMPLATE_DATA
 import org.jetbrains.vuejs.lang.html.VueLanguage
 
-public class VitePressFileViewProvider(manager: PsiManager, virtualFile: VirtualFile, eventSystemEnabled: Boolean) :
+internal class VitePressFileViewProvider(manager: PsiManager, virtualFile: VirtualFile, eventSystemEnabled: Boolean) :
     MultiplePsiFilesPerDocumentFileViewProvider(
         manager,
         virtualFile, eventSystemEnabled,
@@ -65,7 +65,7 @@ public class VitePressFileViewProvider(manager: PsiManager, virtualFile: Virtual
         return file
     }
 
-    public class Factory : FileViewProviderFactory {
+    class Factory : FileViewProviderFactory {
         override fun createFileViewProvider(
             file: VirtualFile,
             language: Language,

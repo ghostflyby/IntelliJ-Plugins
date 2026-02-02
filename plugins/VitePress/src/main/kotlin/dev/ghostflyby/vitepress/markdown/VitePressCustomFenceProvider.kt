@@ -30,7 +30,7 @@ import org.intellij.markdown.parser.markerblocks.MarkerBlock
 import org.intellij.markdown.parser.markerblocks.MarkerBlockProvider
 import org.intellij.markdown.parser.sequentialparsers.SequentialParser
 
-internal class VitePressCustomFenceProvider(
+public class VitePressCustomFenceProvider(
     private val markSkipParagraph: (Int) -> Unit,
 ) : MarkerBlockProvider<MarkerProcessor.StateInfo> {
     override fun createMarkerBlocks(
@@ -98,7 +98,7 @@ internal class VitePressCustomFenceProvider(
         return infoString
     }
 
-    companion object {
+    private companion object {
         private val REGEX: Regex = Regex("^ {0,3}:::([^`]*)$")
     }
 }
