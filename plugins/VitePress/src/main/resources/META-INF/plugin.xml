@@ -24,6 +24,7 @@
         <multiLangCommenter implementation="dev.ghostflyby.vitepress.VitePressCommentProvider"/>
         <editorHighlighterProvider filetype="VitePress"
                                    implementationClass="dev.ghostflyby.vitepress.VitePressHighlighterFactory"/>
+        <spellchecker.bundledDictionaryProvider implementation="dev.ghostflyby.vitepress.spellcheck.Dict"/>
     </extensions>
 
 </idea-plugin>
