@@ -32,14 +32,15 @@ import kotlin.math.min
 /**
  * Wraps the upstream Markdown lexer and further splits tokens to isolate inline HTML fragments.
  *
- * Any fragment that forms a balanced HTML inline element (using the same rules the plugin uses in the parser)
- * is emitted as a single `HTML_BLOCK_CONTENT` token; surrounding text keeps the original token type.
+ * Uses the same permissive HTML start rules as [VitePressHtmlBlockProvider] so partially typed/custom tags
+ * still get emitted as `HTML_BLOCK_CONTENT`, which allows Vue/HTML completion and highlighting to kick in early.
  */
 internal class InlineHtmlAwareToplevelLexer(
     flavourDescriptor: MarkdownFlavourDescriptor,
 ) : LexerBase() {
 
     private val delegate = MarkdownToplevelLexer(flavourDescriptor)
+    private val patterns = VitePressHtmlPatterns
 
     private var buffer: CharSequence = ""
     private var startOffset: Int = 0
@@ -105,8 +106,15 @@ internal class InlineHtmlAwareToplevelLexer(
 
             val htmlRange = findHtmlRange(nextLt, tokenEnd)
             if (htmlRange != null) {
-                segments += Segment(htmlRange.start, htmlRange.end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
-                pos = htmlRange.end
+                val end = htmlRange.end.coerceAtMost(tokenEnd)
+                if (end > htmlRange.start) {
+                    segments += Segment(htmlRange.start, end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
+                    pos = end
+                } else {
+                    // Fallback: avoid infinite loop on malformed ranges.
+                    segments += Segment(nextLt, nextLt + 1, type)
+                    pos = nextLt + 1
+                }
             } else {
                 // Not a valid HTML start; emit the '<' as part of the original token.
                 val single = min(nextLt + 1, tokenEnd)
@@ -116,93 +124,39 @@ internal class InlineHtmlAwareToplevelLexer(
         }
     }
 
-    private fun findHtmlRange(start: Int, limit: Int): Range? {
-        val firstClose = buffer.indexOf('>', start + 1).takeIf { it in (start + 1) until limit } ?: return null
-        val openingText = buffer.subSequence(start, firstClose + 1).toString()
-        val opening = parseTag(openingText) ?: return null
-        if (opening.isClosing) return null
-        if (opening.closesImmediately) return Range(start, firstClose + 1)
+    private fun findHtmlRange(start: Int, tokenEnd: Int): Range? {
+        if (start + 1 >= tokenEnd) return null
 
-        var depth = 1
-        var searchPos = firstClose + 1
-        while (searchPos < limit) {
-            val lt = buffer.indexOf('<', searchPos)
-            if (lt == -1 || lt >= limit) break
-            val gt = buffer.indexOf('>', lt + 1).takeIf { it in (lt + 1) until limit } ?: break
-            val tagText = buffer.subSequence(lt, gt + 1).toString()
-            val tag = parseTag(tagText)
-            if (tag != null && !tag.closesImmediately && opening.nameEquals(tag.name)) {
-                if (tag.isClosing) {
-                    depth--
-                    if (depth == 0) {
-                        return Range(start, gt + 1)
-                    }
-                } else {
-                    depth++
-                }
-            }
-            searchPos = gt + 1
+        // Match using the same permissive start patterns as VitePressHtmlBlockProvider (line-based).
+        val lineEndExclusive = buffer.indexOf('\n', start).let { newlineIndex ->
+            if (newlineIndex == -1 || newlineIndex > tokenEnd) tokenEnd else newlineIndex
         }
-        return null
-    }
+        val lineSlice = buffer.subSequence(start, lineEndExclusive).toString()
 
-    private fun parseTag(text: String): TagData? {
-        if (!text.startsWith("<")) return null
+        val match = patterns.FIND_START_REGEX.find(lineSlice) ?: return null
+        val matchedGroupIndex = match.groups.drop(2).indexOfFirst { it != null }
+        if (matchedGroupIndex == -1) return null
 
-        if (text.startsWith("<!--") || text.startsWith("<![CDATA[", ignoreCase = true) ||
-            text.startsWith("<?") || (text.startsWith("<!", ignoreCase = true) && !text.startsWith("</"))
-        ) {
-            return TagData(name = null, isClosing = false, closesImmediately = true)
+        val afterStart = start + match.range.last + 1
+
+        // Immediate tags (e.g., "<tag", "<tag />") are considered complete at the end of the line.
+        if (matchedGroupIndex == patterns.IMMEDIATE_TAG_GROUP_INDEX) {
+            return Range(start, lineEndExclusive)
         }
 
-        val isClosing = text.startsWith("</")
-        val nameMatch = TAG_NAME_REGEX.find(text) ?: return TagData(null, isClosing, closesImmediately = true)
-        val name = nameMatch.groupValues[1]
+        val closeRegex = patterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return Range(start, afterStart)
 
-        val trimmedEnd = text.trimEnd()
-        val explicitlySelfClosing = trimmedEnd.endsWith("/>")
-        val isVoid = name.lowercase() in VOID_TAGS
+        val searchSlice = buffer.subSequence(afterStart, tokenEnd).toString()
+        val closeMatch = closeRegex.find(searchSlice)
+        val end = if (closeMatch != null) {
+            afterStart + closeMatch.range.last + 1
+        } else {
+            tokenEnd
+        }
 
-        return TagData(
-            name = name,
-            isClosing = isClosing,
-            closesImmediately = explicitlySelfClosing || isVoid,
-        )
+        return Range(start, end)
     }
 
     private data class Segment(val start: Int, val end: Int, val type: IElementType)
     private data class Range(val start: Int, val end: Int)
-
-    private data class TagData(
-        val name: String?,
-        val isClosing: Boolean,
-        val closesImmediately: Boolean,
-    ) {
-        fun nameEquals(other: String?): Boolean {
-            if (name == null || other == null) return false
-            return name.equals(other, ignoreCase = true)
-        }
-    }
-
-    companion object {
-        internal val VOID_TAGS: Set<String> = setOf(
-            "area",
-            "base",
-            "br",
-            "col",
-            "embed",
-            "hr",
-            "img",
-            "input",
-            "keygen",
-            "link",
-            "meta",
-            "param",
-            "source",
-            "track",
-            "wbr",
-        )
-
-        internal val TAG_NAME_REGEX = Regex("^</?\\s*([A-Za-z][\\w:-]*)")
-    }
 }

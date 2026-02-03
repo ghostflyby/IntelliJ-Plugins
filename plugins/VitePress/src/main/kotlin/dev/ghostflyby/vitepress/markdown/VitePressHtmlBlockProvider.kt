@@ -22,7 +22,6 @@
 
 package dev.ghostflyby.vitepress.markdown
 
-import org.intellij.lang.annotations.Language
 import org.intellij.markdown.MarkdownParsingException
 import org.intellij.markdown.parser.LookaheadText
 import org.intellij.markdown.parser.MarkerProcessor
@@ -82,54 +81,13 @@ public class VitePressHtmlBlockProvider : MarkerBlockProvider<MarkerProcessor.St
 
     public companion object {
         /**
-         * Single-line tag start without closing `>` OR self-closing `/>`; ends immediately.
-         * Examples: `<tag`, `<tag whatever`, `<tag/>`, `<tag />`
-         */
-        @Suppress("RegExpUnnecessaryNonCapturingGroup")
-        @Language("RegExp")
-        private const val IMMEDIATE_TAG = "(?:</?[^\\s>/][^\\n>]*$|</?[^\\s>/][^\\n>]*?/\\s*>\\s*$)"
-
-        /**
-         * Open tag with a required `>` (not self-closing) that should continue until a closing tag.
-         * Allows trailing content on the same line.
-         * Examples: `<tag>`, `<tag whatever>`, `<tag>text`.
-         */
-        @Language("RegExp")
-        private const val OPEN_TAG_BLOCK = "</?[^\\s>/][^\\n>]*[^/]>.*"
-
-
-        /**
          * CommonMark HTML blocks:
          * 0..4: same as upstream
          * 5: immediate tag (no `>` or self-closing `/>`)
          * 6: open tag with `>` continues until a closing tag
          */
-        private val OPEN_CLOSE_REGEXES: List<Pair<Regex, Regex?>> = listOf(
-            // 0
-            Regex("<(?:script|pre|style)(?: |>|$)", RegexOption.IGNORE_CASE) to
-                    Regex("</(?:script|style|pre)>", RegexOption.IGNORE_CASE),
+        private val OPEN_CLOSE_REGEXES = VitePressHtmlPatterns.OPEN_CLOSE_REGEXES
 
-            // 1
-            Regex("<!--") to Regex("-->"),
-
-            // 2
-            Regex("<\\?") to Regex("\\?>"),
-
-            // 3
-            Regex("<![A-Z]") to Regex(">"),
-
-            // 4
-            Regex("<!\\[CDATA\\[") to Regex("]]>"),
-
-            // 5 (immediate tag)
-            Regex(IMMEDIATE_TAG, RegexOption.IGNORE_CASE) to Regex("$"),
-
-            // 6 (open tag -> end at next closing tag)
-            Regex(OPEN_TAG_BLOCK, RegexOption.IGNORE_CASE) to Regex("</[^>]+>", RegexOption.IGNORE_CASE),
-        )
-
-        private val FIND_START_REGEX = Regex(
-            "^(${OPEN_CLOSE_REGEXES.joinToString(separator = "|") { "(${it.first.pattern})" }})",
-        )
+        private val FIND_START_REGEX = VitePressHtmlPatterns.FIND_START_REGEX
     }
 }
