@@ -30,6 +30,8 @@ import org.intellij.lang.annotations.Language
  */
 internal object VitePressHtmlPatterns {
     internal const val IMMEDIATE_TAG_GROUP_INDEX = 5
+    internal const val OPEN_TAG_BLOCK_GROUP_INDEX = 6
+    internal const val ENTITY_GROUP_INDEX = 7
 
     /**
      * Single-line tag start without closing `>` OR self-closing `/>`; ends immediately.
@@ -39,10 +41,23 @@ internal object VitePressHtmlPatterns {
     private const val IMMEDIATE_TAG = "(?:</?[^\\s>/][^\\n>]*$|</?[^\\s>/][^\\n>]*?/\\s*>\\s*$)"
 
     /**
+     * Inline self-closing tag (e.g. "<br/>") that may appear in the middle of a line.
+     */
+    @Language("RegExp")
+    internal const val INLINE_SELF_CLOSING_TAG = "</?[^\\s>/][^\\n>]*?/\\s*>"
+    internal val INLINE_SELF_CLOSING_REGEX = Regex(INLINE_SELF_CLOSING_TAG, RegexOption.IGNORE_CASE)
+
+    /**
      * Open tag with a required `>` (not self-closing) that should continue until a closing tag.
      */
     @Language("RegExp")
     private const val OPEN_TAG_BLOCK = "</?[^\\s>/][^\\n>]*[^/]>.*"
+
+    /**
+     * Standard HTML entity references terminated with ';'.
+     */
+    @Language("RegExp")
+    internal const val ENTITY = "&(?:#\\d+|#x[0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]+);"
 
     internal val OPEN_CLOSE_REGEXES: List<Pair<Regex, Regex?>> = listOf(
         // 0
@@ -66,6 +81,9 @@ internal object VitePressHtmlPatterns {
 
         // 6 (open tag -> end at next closing tag)
         Regex(OPEN_TAG_BLOCK, RegexOption.IGNORE_CASE) to Regex("</[^>]+>", RegexOption.IGNORE_CASE),
+
+        // 7 (entity)
+        Regex(ENTITY) to Regex("$"),
     )
 
     internal val FIND_START_REGEX = Regex(

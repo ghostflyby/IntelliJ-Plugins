@@ -133,15 +133,30 @@ internal class InlineHtmlAwareToplevelLexer(
         }
         val lineSlice = buffer.subSequence(start, lineEndExclusive).toString()
 
+        val inlineSelfClosing = patterns.INLINE_SELF_CLOSING_REGEX.find(lineSlice)
+            ?.takeIf { it.range.first == 0 }
+        if (inlineSelfClosing != null) {
+            return Range(start, start + inlineSelfClosing.range.last + 1)
+        }
+
         val match = patterns.FIND_START_REGEX.find(lineSlice) ?: return null
         val matchedGroupIndex = match.groups.drop(2).indexOfFirst { it != null }
         if (matchedGroupIndex == -1) return null
 
-        val afterStart = start + match.range.last + 1
+        val afterStart = if (matchedGroupIndex == patterns.OPEN_TAG_BLOCK_GROUP_INDEX) {
+            val gtIndex = lineSlice.indexOf('>')
+            if (gtIndex >= 0) start + gtIndex + 1 else start + match.range.last + 1
+        } else {
+            start + match.range.last + 1
+        }
 
         // Immediate tags (e.g., "<tag", "<tag />") are considered complete at the end of the line.
         if (matchedGroupIndex == patterns.IMMEDIATE_TAG_GROUP_INDEX) {
             return Range(start, lineEndExclusive)
+        }
+
+        if (matchedGroupIndex == patterns.ENTITY_GROUP_INDEX) {
+            return Range(start, afterStart)
         }
 
         val closeRegex = patterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return Range(start, afterStart)
