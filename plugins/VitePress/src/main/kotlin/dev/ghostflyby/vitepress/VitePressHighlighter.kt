@@ -34,12 +34,12 @@ import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.vitepress.markdown.InlineHtmlAwareToplevelLexer
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import org.intellij.plugins.markdown.highlighting.MarkdownSyntaxHighlighter
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypeSets
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownMergingLexer
-import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import org.jetbrains.vuejs.lang.html.VueLanguage
 
 
@@ -49,7 +49,8 @@ private object VPMarkdownHighlighter : MarkdownSyntaxHighlighter() {
     }
 }
 
-internal class VitePressSyntaxHighlighterLexer : LayeredLexer(MarkdownToplevelLexer(VitePressFlavourDescriptor)) {
+internal class VitePressSyntaxHighlighterLexer :
+    LayeredLexer(InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor)) {
     init {
         registerSelfStoppingLayer(
             MarkdownMergingLexer(), MarkdownTokenTypeSets.INLINE_HOLDING_ELEMENT_TYPES.getTypes(),

@@ -28,9 +28,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IFileElementType
+import dev.ghostflyby.vitepress.markdown.InlineHtmlAwareToplevelLexer
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import dev.ghostflyby.vitepress.markdown.lang.VitePressMarkdownElementTypes
-import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserAdapter
 import org.intellij.plugins.markdown.lang.parser.MarkdownParserDefinition
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
@@ -42,7 +42,7 @@ internal class VitePressParserDefinition : MarkdownParserDefinition() {
     }
 
     override fun createLexer(project: Project?): Lexer {
-        return MarkdownToplevelLexer(VitePressFlavourDescriptor)
+        return InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor)
     }
 
     override fun createFile(viewProvider: FileViewProvider): PsiFile {
