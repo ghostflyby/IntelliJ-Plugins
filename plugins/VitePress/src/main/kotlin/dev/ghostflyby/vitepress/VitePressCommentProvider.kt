@@ -21,9 +21,9 @@
  */
 package dev.ghostflyby.vitepress
 
-import com.intellij.codeInsight.generation.CommentByBlockCommentHandler
 import com.intellij.lang.Commenter
 import com.intellij.lang.Language
+import com.intellij.lang.LanguageCommenters
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.FileViewProvider
 import com.intellij.psi.PsiFile
@@ -37,18 +37,13 @@ internal class VitePressCommentProvider : MultipleLangCommentProvider {
         lineStartLanguage: Language,
         lineEndLanguage: Language,
     ): Commenter? {
-        return CommentByBlockCommentHandler.getCommenter(
-            file.viewProvider.getPsi(VueLanguage),
-            editor,
-            lineEndLanguage,
-            lineEndLanguage,
-        )
+        return LanguageCommenters.INSTANCE.forLanguage(VueLanguage)
     }
 
     override fun canProcess(
         file: PsiFile,
         viewProvider: FileViewProvider,
     ): Boolean {
-        return file.language.`is`(VitePressLanguage)
+        return viewProvider.languages.contains(VitePressLanguage)
     }
 }
