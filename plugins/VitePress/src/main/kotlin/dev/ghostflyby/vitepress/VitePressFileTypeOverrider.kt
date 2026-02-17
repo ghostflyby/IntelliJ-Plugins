@@ -22,21 +22,19 @@
 
 package dev.ghostflyby.vitepress
 
-import com.intellij.openapi.fileTypes.LanguageFileType
-import com.intellij.openapi.fileTypes.TemplateLanguageFileType
-import com.intellij.openapi.util.NlsContexts
-import com.intellij.openapi.util.NlsSafe
-import org.jetbrains.vuejs.VuejsIcons
-import javax.swing.Icon
+import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.fileTypes.impl.FileTypeOverrider
+import com.intellij.openapi.vfs.VirtualFile
 
-public object VitePressFiletype : LanguageFileType(VitePressLanguage),
-    TemplateLanguageFileType {
-    override fun getName(): String = "VitePress"
-
-    override fun getDescription(): @NlsContexts.Label String = name
-
-    override fun getDefaultExtension(): @NlsSafe String = ""
-
-    override fun getIcon(): Icon = VuejsIcons.Vue
+internal class VitePressFileTypeOverrider : FileTypeOverrider {
+    override fun getOverriddenFileType(file: VirtualFile): FileType? {
+        if (!file.extension.equals("md", ignoreCase = true)) {
+            return null
+        }
+        if (file.isUnderVitePressRoot()) {
+            return VitePressFiletype
+        }
+        return null
+    }
 
 }

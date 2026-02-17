@@ -1,16 +1,18 @@
-public abstract class dev/ghostflyby/vitepress/VitePressFiletype : com/intellij/openapi/fileTypes/LanguageFileType, com/intellij/openapi/fileTypes/TemplateLanguageFileType {
-	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressFiletype$INSTANCE;
+public final class dev/ghostflyby/vitepress/VitePressFiletype : com/intellij/openapi/fileTypes/LanguageFileType, com/intellij/openapi/fileTypes/TemplateLanguageFileType {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressFiletype;
 	public fun getDefaultExtension ()Ljava/lang/String;
 	public fun getDescription ()Ljava/lang/String;
 	public fun getIcon ()Ljavax/swing/Icon;
 	public fun getName ()Ljava/lang/String;
 }
 
-public final class dev/ghostflyby/vitepress/VitePressFiletype$INSTANCE : dev/ghostflyby/vitepress/VitePressFiletype {
-}
-
 public final class dev/ghostflyby/vitepress/VitePressLanguage : com/intellij/lang/Language, com/intellij/psi/templateLanguages/TemplateLanguage {
 	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressLanguage;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressRootTrackerKt {
+	public static final fun isUnderVitePressRoot (Lcom/intellij/openapi/vfs/VirtualFile;)Z
+	public static final fun isVitePressRoot (Lcom/intellij/openapi/vfs/VirtualFile;)Z
 }
 
 public final class dev/ghostflyby/vitepress/markdown/VitePressCustomFenceMarkerBlock : org/intellij/markdown/parser/markerblocks/MarkerBlockImpl {
