@@ -22,12 +22,20 @@
 
 package dev.ghostflyby.vitepress
 
-import com.intellij.lang.Language
-import com.intellij.psi.templateLanguages.TemplateLanguage
-import org.intellij.plugins.markdown.lang.MarkdownLanguage
+import com.intellij.openapi.fileTypes.LanguageFileType
+import com.intellij.openapi.fileTypes.TemplateLanguageFileType
+import com.intellij.openapi.util.NlsContexts
+import com.intellij.openapi.util.NlsSafe
+import javax.swing.Icon
 
-public object VitePressLanguage : Language(MarkdownLanguage.INSTANCE, "VitePress"), TemplateLanguage {
-    @Suppress("unused")
-    private fun readResolve(): Any = VitePressLanguage
+public object VitePressFiletype : LanguageFileType(VitePressLanguage),
+    TemplateLanguageFileType {
+    override fun getName(): String = "VitePress"
+
+    override fun getDescription(): @NlsContexts.Label String = name
+
+    override fun getDefaultExtension(): @NlsSafe String = "mdv"
+
+    override fun getIcon(): Icon? = null
+
 }
-
