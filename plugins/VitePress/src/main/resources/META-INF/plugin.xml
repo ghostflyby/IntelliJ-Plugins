@@ -27,10 +27,7 @@
         <spellchecker.bundledDictionaryProvider implementation="dev.ghostflyby.vitepress.spellcheck.Dict"/>
         <fileTypeOverrider implementation="dev.ghostflyby.vitepress.VitePressFileTypeOverrider"/>
         <postStartupActivity implementation="dev.ghostflyby.vitepress.VitePressRootTrackerActivity"/>
+        <vfs.asyncListenerBackgroundable implementation="dev.ghostflyby.vitepress.VitePressRootTrackerFileListener"/>
     </extensions>
-    <applicationListeners>
-        <listener class="dev.ghostflyby.vitepress.VitePressRootTrackerFileListener"
-                  topic="com.intellij.openapi.vfs.VirtualFileManager$VFS_CHANGES_BG"/>
-    </applicationListeners>
 
 </idea-plugin>
