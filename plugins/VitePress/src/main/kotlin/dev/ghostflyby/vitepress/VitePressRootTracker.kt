@@ -26,14 +26,18 @@ package dev.ghostflyby.vitepress
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.module.ModuleUtilCore
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.AsyncFileListener
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.events.*
 import com.intellij.psi.search.FileTypeIndex
@@ -184,19 +188,56 @@ internal class VitePressRootTracker(
         toAdd: Set<VirtualFile>,
         toRemove: Set<VirtualFile>,
     ) {
-        val (addFiles, removeFiles) =
+        val (addFiles, removeFiles, cacheDirsToExclude) =
             smartReadAction(project) {
                 val fileIndex = ProjectFileIndex.getInstance(project)
                 val addRootsInProject = filterRootsInProject(toAdd, fileIndex)
                 val removeRootsInProject = filterRootsInProject(toRemove, fileIndex)
                 val markdownFiles = filesInRoots(project, addRootsInProject, MarkdownFileType.INSTANCE)
                 val vitePressFiles = filesInRoots(project, removeRootsInProject, VitePressFiletype)
-                markdownFiles to vitePressFiles
+                val cacheDirs =
+                    addRootsInProject.mapNotNull { root ->
+                        root.findChild(VITEPRESS_CONFIG_DIRECTORY)
+                            ?.takeIf { it.isDirectory }
+                            ?.findChild(VITEPRESS_CACHE_DIRECTORY)
+                            ?.takeIf { it.isDirectory }
+                    }
+                Triple(markdownFiles, vitePressFiles, cacheDirs)
             }
 
+        excludeCacheDirs(project, cacheDirsToExclude)
         if (addFiles.isEmpty() && removeFiles.isEmpty()) return
         reparseFiles(project, addFiles)
         reparseFiles(project, removeFiles)
+    }
+
+    private fun excludeCacheDirs(project: Project, dirs: Collection<VirtualFile>) {
+        if (dirs.isEmpty() || project.isDisposed) return
+        dirs.forEach { dir ->
+            if (!dir.isValid) return@forEach
+            val module = ModuleUtilCore.findModuleForFile(dir, project) ?: return@forEach
+            WriteCommandAction.runWriteCommandAction(project) {
+                val model = ModuleRootManager.getInstance(module).modifiableModel
+                var committed = false
+                try {
+                    val contentEntry =
+                        model.contentEntries.firstOrNull { entry ->
+                            val contentRoot = entry.file ?: return@firstOrNull false
+                            VfsUtilCore.isAncestor(contentRoot, dir, false)
+                        } ?: return@runWriteCommandAction
+
+                    if (dir.url !in contentEntry.excludeFolderUrls) {
+                        contentEntry.addExcludeFolder(dir.url)
+                        model.commit()
+                        committed = true
+                    }
+                } finally {
+                    if (!committed) {
+                        model.dispose()
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun reparseFiles(project: Project, files: Collection<VirtualFile>) {
@@ -241,6 +282,7 @@ internal class VitePressRootTrackerActivity : ProjectActivity {
 }
 
 private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
+private const val VITEPRESS_CACHE_DIRECTORY: String = "cache"
 private val ROOT_REPARSE_DEBOUNCE = 250.milliseconds
 private const val REPARSE_CHUNK_SIZE: Int = 100
 
