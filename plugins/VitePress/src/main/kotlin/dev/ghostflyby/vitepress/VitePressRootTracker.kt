@@ -20,9 +20,9 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+
 package dev.ghostflyby.vitepress
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
@@ -30,6 +30,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.AsyncFileListener
@@ -38,21 +39,56 @@ import com.intellij.openapi.vfs.newvfs.events.*
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.util.FileContentUtil
-import com.intellij.util.messages.Topic
+import kotlinx.collections.immutable.PersistentSet
+import kotlinx.collections.immutable.persistentHashSetOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
-import java.util.concurrent.ConcurrentHashMap
+import org.intellij.plugins.markdown.lang.MarkdownFileType
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
-internal class VitePressRootTracker {
-    companion object {
-        @JvmField
-        @Topic.AppLevel
-        // TODO: fire events in batch if multiple roots added/removed together, maybe with a delay to coalesce multiple events together
-        val TOPIC: Topic<RootChangeListener> = Topic.create("VitePressRootTracker", RootChangeListener::class.java)
+internal class VitePressRootTracker(
+    scope: CoroutineScope,
+) {
+    private data class State(
+        val current: PersistentSet<VirtualFile> = persistentHashSetOf(),
+        val old: PersistentSet<VirtualFile> = persistentHashSetOf(),
+    )
+
+    private val stateRef: AtomicReference<State> =
+        AtomicReference(State())
+    private val flushSignals =
+        MutableSharedFlow<Unit>(
+            extraBufferCapacity = 1,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
+
+    init {
+        scope.launch {
+            @OptIn(FlowPreview::class)
+            flushSignals
+                .debounce(ROOT_REPARSE_DEBOUNCE)
+                .collect {
+                    try {
+                        flushPendingReparseUntilSettled()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Throwable) {
+                        // Keep worker alive; next signal will retry diff-based reparse.
+                        scheduleReparseFlush()
+                    }
+                }
+        }
     }
 
     internal fun isUnderVitePressRoot(file: VirtualFile): Boolean {
+        val roots = stateRef.get().current
         var d: VirtualFile? = if (file.isDirectory) file else file.parent
         while (d != null) {
             if (d in roots) return true
@@ -62,26 +98,118 @@ internal class VitePressRootTracker {
     }
 
     internal fun isVitePressRoot(file: VirtualFile): Boolean {
-        return file in roots
+        return file in stateRef.get().current
     }
 
-    private val roots: MutableSet<VirtualFile> = ConcurrentHashMap.newKeySet<VirtualFile>()
-
     internal fun add(root: VirtualFile) {
-        if (!roots.add(root)) return
-        val bus = ApplicationManager.getApplication().messageBus.syncPublisher(TOPIC)
-        bus.onRootAdded(root)
+        addAll(setOf(root))
     }
 
     internal fun remove(root: VirtualFile) {
-        if (!roots.remove(root)) return
-        val bus = ApplicationManager.getApplication().messageBus.syncPublisher(TOPIC)
-        bus.onRootRemoved(root)
+        removeAll(setOf(root))
     }
 
-    interface RootChangeListener {
-        fun onRootAdded(root: VirtualFile)
-        fun onRootRemoved(root: VirtualFile)
+    internal fun addAll(roots: Collection<VirtualFile>) {
+        if (updateCurrent(roots, isAdd = true)) {
+            scheduleReparseFlush()
+        }
+    }
+
+    internal fun removeAll(roots: Collection<VirtualFile>) {
+        if (updateCurrent(roots, isAdd = false)) {
+            scheduleReparseFlush()
+        }
+    }
+
+    private fun updateCurrent(roots: Collection<VirtualFile>, isAdd: Boolean): Boolean {
+        if (roots.isEmpty()) return false
+        val update: (PersistentSet<VirtualFile>) -> PersistentSet<VirtualFile> =
+            if (isAdd) {
+                { current -> current.addAll(roots) }
+            } else {
+                { current -> current.removeAll(roots) }
+            }
+
+        val previous =
+            stateRef.getAndUpdate { state ->
+                val nextCurrent = update(state.current)
+                if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
+            }
+        return update(previous.current) != previous.current
+    }
+
+    private fun filesInRoots(project: Project, roots: List<VirtualFile>, fileType: FileType): Collection<VirtualFile> {
+        if (roots.isEmpty()) return emptySet()
+        val scope = GlobalSearchScopesCore.directoriesScope(project, true, *roots.toTypedArray())
+        return FileTypeIndex.getFiles(fileType, scope)
+    }
+
+    private fun filterRootsInProject(
+        roots: Set<VirtualFile>,
+        fileIndex: ProjectFileIndex,
+    ): List<VirtualFile> {
+        return roots.filter { root ->
+            root.isValid && fileIndex.isInContent(root)
+        }
+    }
+
+    private fun scheduleReparseFlush() {
+        flushSignals.tryEmit(Unit)
+    }
+
+    private suspend fun flushPendingReparseUntilSettled() {
+        while (true) {
+            val snapshot = stateRef.get()
+            val toAdd = snapshot.current.subtract(snapshot.old)
+            val toRemove = snapshot.old.subtract(snapshot.current)
+            if (toAdd.isEmpty() && toRemove.isEmpty()) return
+
+            ProjectManager.getInstance().openProjects.forEach { project ->
+                if (project.isDisposed) return@forEach
+                reparseInProject(project, toAdd, toRemove)
+            }
+
+            // Advance old only for the snapshot that was reparsed.
+            stateRef.updateAndGet { state ->
+                if (state.old == snapshot.old) state.copy(old = snapshot.current) else state
+            }
+
+            val latest = stateRef.get()
+            if (latest.current == latest.old) return
+        }
+    }
+
+    private suspend fun reparseInProject(
+        project: Project,
+        toAdd: Set<VirtualFile>,
+        toRemove: Set<VirtualFile>,
+    ) {
+        val (addFiles, removeFiles) =
+            smartReadAction(project) {
+                val fileIndex = ProjectFileIndex.getInstance(project)
+                val addRootsInProject = filterRootsInProject(toAdd, fileIndex)
+                val removeRootsInProject = filterRootsInProject(toRemove, fileIndex)
+                val markdownFiles = filesInRoots(project, addRootsInProject, MarkdownFileType.INSTANCE)
+                val vitePressFiles = filesInRoots(project, removeRootsInProject, VitePressFiletype)
+                markdownFiles to vitePressFiles
+            }
+
+        if (addFiles.isEmpty() && removeFiles.isEmpty()) return
+        reparseFiles(project, addFiles)
+        reparseFiles(project, removeFiles)
+    }
+
+    private suspend fun reparseFiles(project: Project, files: Collection<VirtualFile>) {
+        if (project.isDisposed) return
+        if (files.isEmpty()) return
+        files.asSequence().chunked(REPARSE_CHUNK_SIZE).forEach {
+            if (project.isDisposed) return
+            backgroundWriteAction {
+                if (!project.isDisposed) {
+                    FileContentUtil.reparseFiles(project, it, /* includeOpenFiles = */ true)
+                }
+            }
+        }
     }
 }
 
@@ -95,93 +223,65 @@ public fun VirtualFile.isVitePressRoot(): Boolean {
 
 internal class VitePressRootTrackerActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
-        project.messageBus.connect(PluginDisposable).subscribe(
-            VitePressRootTracker.TOPIC,
-            object : VitePressRootTracker.RootChangeListener {
-                override fun onRootAdded(root: VirtualFile) {
-                    project.service<VitePressReparseScheduler>().reparseUnder(root, VitePressFiletype)
-                }
-
-                override fun onRootRemoved(root: VirtualFile) {
-                    project.service<VitePressReparseScheduler>().reparseUnder(root, VitePressFiletype)
-                }
-            },
-        )
+        val tracker = service<VitePressRootTracker>()
         val fileIndex = ProjectFileIndex.getInstance(project)
-        readAction {
-            fileIndex.iterateContent { f ->
-                if (f.isDirectory && f.findChild(VITEPRESS_CONFIG_DIRECTORY)?.isDirectory == true) {
-                    service<VitePressRootTracker>().add(f)
+        val initialRoots =
+            readAction {
+                buildSet {
+                    fileIndex.iterateContent { f ->
+                        if (f.isDirectory && f.findChild(VITEPRESS_CONFIG_DIRECTORY)?.isDirectory == true) {
+                            add(f)
+                        }
+                        true
+                    }
                 }
-                true
             }
-        }
-    }
-}
-
-@Service(Service.Level.PROJECT)
-internal class VitePressReparseScheduler(
-    private val project: Project,
-    private val scope: CoroutineScope,
-) {
-    // TODO: chunked reparse if too many files
-    fun reparseUnder(root: VirtualFile, fileType: FileType) {
-        scope.launch {
-            val files: List<VirtualFile> =
-                smartReadAction(project) {
-                    val dirScope = GlobalSearchScopesCore.directoryScope(project, root, true)
-                    FileTypeIndex.getFiles(fileType, dirScope).toList()
-                }
-
-            if (files.isEmpty()) return@launch
-
-            backgroundWriteAction {
-                FileContentUtil.reparseFiles(project, files, /*includeOpenFiles=*/true)
-            }
-        }
+        tracker.addAll(initialRoots)
     }
 }
 
 private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
+private val ROOT_REPARSE_DEBOUNCE = 250.milliseconds
+private const val REPARSE_CHUNK_SIZE: Int = 100
 
-
-private fun removeIfVitePressDir(pathParent: VirtualFile?) {
-    val roots = service<VitePressRootTracker>()
-    if (pathParent != null) roots.remove(pathParent)
-}
 
 internal class VitePressRootTrackerFileListener : AsyncFileListener {
 
     override fun prepareChange(events: List<VFileEvent>): AsyncFileListener.ChangeApplier? {
-        val roots = service<VitePressRootTracker>()
-        val list = events.map {
+        val toAdd = mutableSetOf<VirtualFile>()
+        val toRemove = mutableSetOf<VirtualFile>()
+        fun add(file: VirtualFile) {
+            toAdd.add(file)
+            toRemove.remove(file)
+        }
+
+        fun remove(file: VirtualFile) {
+            toRemove.add(file)
+            toAdd.remove(file)
+        }
+
+        events.forEach {
             when (it) {
                 is VFileCreateEvent if it.childName == VITEPRESS_CONFIG_DIRECTORY && it.isDirectory -> {
-                    { roots.add(it.parent) }
+                    add(it.parent)
                 }
 
                 is VFileCopyEvent if (it.newChildName == VITEPRESS_CONFIG_DIRECTORY) -> {
-                    { roots.add(it.newParent) }
+                    add(it.newParent)
                 }
 
                 is VFileDeleteEvent -> {
                     val f = it.file
                     if (f.isDirectory && f.name == VITEPRESS_CONFIG_DIRECTORY) {
-                        { removeIfVitePressDir(f.parent) }
-                    } else {
-                        {}
+                        remove(f.parent)
                     }
                 }
 
                 is VFileMoveEvent -> {
                     val f = it.file
                     if (f.isDirectory && f.name == VITEPRESS_CONFIG_DIRECTORY) {
-                        {
-                            removeIfVitePressDir(it.oldParent)
-                            roots.add(it.newParent)
-                        }
-                    } else {
-                        {}
+                        remove(it.oldParent)
+                        add(it.newParent)
                     }
                 }
 
@@ -189,27 +289,21 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
                     if (VirtualFile.PROP_NAME == it.propertyName && it.file.isDirectory) {
                         val oldName = it.oldValue as? String
                         val newName = it.newValue as? String
-                        {
-                            if (oldName == VITEPRESS_CONFIG_DIRECTORY) removeIfVitePressDir(it.file.parent)
-                            if (newName == VITEPRESS_CONFIG_DIRECTORY) it.file.parent?.let { roots.add(it) }
-                        }
-                    } else {
-                        {}
+                        if (oldName == VITEPRESS_CONFIG_DIRECTORY) remove(it.file.parent)
+                        if (newName == VITEPRESS_CONFIG_DIRECTORY) it.file.parent?.let { parent -> add(parent) }
                     }
-                }
-
-                else -> {
-                    {}
                 }
             }
         }
 
-        if (list.isEmpty())
+        if (toAdd.isEmpty() && toRemove.isEmpty())
             return null
 
         return object : AsyncFileListener.ChangeApplier {
             override fun afterVfsChange() {
-                list.forEach { it() }
+                val tracker = service<VitePressRootTracker>()
+                tracker.removeAll(toRemove)
+                tracker.addAll(toAdd)
             }
         }
     }
