@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -29,7 +29,7 @@ plugins {
     kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
-version = "1.3.6"
+version = "1.3.7"
 
 buildLogic {
     pluginVersion = version.toString()
