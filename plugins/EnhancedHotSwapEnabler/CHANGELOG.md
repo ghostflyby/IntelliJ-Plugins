@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.3.7] - 2026-02-24
+
 ### Fixed
 
 - add Java-version-aware HotSwapAgent `--add-opens` JVM args for both RunConfiguration and Gradle
@@ -80,22 +94,14 @@
 - Not editing parameters for non-debug starts
 - Wrong Gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.6...HEAD
-
-[1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.3.5...v1.3.6
-
-[1.3.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.5...v1.3.5
-
-[1.2.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.4...v1.2.5
-
-[1.2.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.3...v1.2.4
-
-[1.2.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.2...v1.2.3
-
-[1.2.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.2.0...v1.2.2
-
-[1.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.1.0...v1.2.0
-
-[1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.0...v1.1.0
-
-[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.0
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...HEAD
+[1.3.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.6...EnhancedHotSwapEnabler-v1.3.7
+[1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.5...EnhancedHotSwapEnabler-v1.3.6
+[1.3.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.5...EnhancedHotSwapEnabler-v1.3.5
+[1.2.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.4...EnhancedHotSwapEnabler-v1.2.5
+[1.2.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.3...EnhancedHotSwapEnabler-v1.2.4
+[1.2.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.2...EnhancedHotSwapEnabler-v1.2.3
+[1.2.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.0...EnhancedHotSwapEnabler-v1.2.2
+[1.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.1.0...EnhancedHotSwapEnabler-v1.2.0
+[1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.0.0...EnhancedHotSwapEnabler-v1.1.0
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/EnhancedHotSwapEnabler-v1.0.0
