@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- add Java-version-aware HotSwapAgent `--add-opens` JVM args for both RunConfiguration and Gradle
+  `JavaExec` [#143](https://github.com/ghostflyby/IntelliJ-Plugins/issues/143)
+
 ## [1.3.6] - 2025-11-22
 
 ### Fixed
