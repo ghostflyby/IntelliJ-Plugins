@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -36,6 +36,17 @@ internal const val DCEVM_JVM_OPTION_NAME = "AllowEnhancedClassRedefinition"
 internal const val JVM_OPTION_DCEVM = "-XX:+AllowEnhancedClassRedefinition"
 internal const val JVM_OPTION_DCEVM_ALT = "-XXaltjvm=dcevm"
 internal const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT = "-XX:HotswapAgent=external"
+private const val JVM_OPTION_ADD_OPENS = "--add-opens"
+
+private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
+    "java.base/java.lang=ALL-UNNAMED",
+    "java.base/jdk.internal.loader=ALL-UNNAMED",
+    "java.base/java.io=ALL-UNNAMED",
+    "java.desktop/java.beans=ALL-UNNAMED",
+    "java.desktop/com.sun.beans=ALL-UNNAMED",
+    "java.desktop/com.sun.beans.introspect=ALL-UNNAMED",
+    "java.desktop/com.sun.beans.util=ALL-UNNAMED",
+)
 
 internal sealed interface DCEVMSupport {
 
@@ -52,6 +63,27 @@ internal sealed interface DCEVMSupport {
     object AltJvm : NeedsArgs {
         override val args = listOf(JVM_OPTION_DCEVM_ALT)
     }
+}
+
+internal fun missingHotswapAgentAddOpensJvmArgs(
+    existingArgs: Collection<String>,
+    isJava9OrHigher: Boolean,
+): List<String> {
+    if (!isJava9OrHigher) return emptyList()
+    val args = existingArgs.toList()
+    return HOTSWAP_AGENT_ADD_OPENS_TARGETS
+        .filterNot { target -> hasAddOpensJvmArg(args, target) }
+        .map { target -> "$JVM_OPTION_ADD_OPENS=$target" }
+}
+
+private fun hasAddOpensJvmArg(existingArgs: List<String>, target: String): Boolean {
+    if ("$JVM_OPTION_ADD_OPENS=$target" in existingArgs) return true
+    for (index in 0 until existingArgs.lastIndex) {
+        if (existingArgs[index] == JVM_OPTION_ADD_OPENS && existingArgs[index + 1] == target) {
+            return true
+        }
+    }
+    return false
 }
 
 private val dcevmCheckCache = ConcurrentHashMap<Path, DCEVMSupport>()
