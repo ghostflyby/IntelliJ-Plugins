@@ -36,12 +36,18 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.startup.ProjectActivity
+import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.ModificationTracker
+import com.intellij.openapi.util.getOrCreateUserData
 import com.intellij.openapi.vfs.AsyncFileListener
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.events.*
 import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.GlobalSearchScopesCore
+import com.intellij.psi.util.CachedValue
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.util.CachedValueImpl
 import com.intellij.util.FileContentUtil
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentHashSetOf
@@ -53,13 +59,14 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import org.intellij.plugins.markdown.lang.MarkdownFileType
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
 internal class VitePressRootTracker(
     scope: CoroutineScope,
-) {
+) : ModificationTracker {
     private data class State(
         val current: PersistentSet<VirtualFile> = persistentHashSetOf(),
         val old: PersistentSet<VirtualFile> = persistentHashSetOf(),
@@ -67,6 +74,7 @@ internal class VitePressRootTracker(
 
     private val stateRef: AtomicReference<State> =
         AtomicReference(State())
+    private val modificationCount = AtomicLong(0)
     private val flushSignals =
         MutableSharedFlow<Unit>(
             extraBufferCapacity = 1,
@@ -139,8 +147,13 @@ internal class VitePressRootTracker(
                 val nextCurrent = update(state.current)
                 if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
             }
-        return update(previous.current) != previous.current
+        val changed = update(previous.current) != previous.current
+        if (changed) {
+            modificationCount.getAndIncrement()
+        }
+        return changed
     }
+
 
     private fun filesInRoots(project: Project, roots: List<VirtualFile>, fileType: FileType): Collection<VirtualFile> {
         if (roots.isEmpty()) return emptySet()
@@ -252,14 +265,35 @@ internal class VitePressRootTracker(
             }
         }
     }
+
+    override fun getModificationCount(): Long {
+        return modificationCount.get()
+    }
 }
 
+private val IS_ROOT_CACHE_KEY: Key<CachedValue<Boolean>> =
+    Key.create("dev.ghostflyby.vitepress.isRootCache")
+private val IS_UNDER_ROOT_CACHE_KEY: Key<CachedValue<Boolean>> =
+    Key.create("dev.ghostflyby.vitepress.isUnderRootCache")
+
 public fun VirtualFile.isUnderVitePressRoot(): Boolean {
-    return service<VitePressRootTracker>().isUnderVitePressRoot(this)
+    return getOrCreateUserData(IS_UNDER_ROOT_CACHE_KEY) {
+        CachedValueImpl {
+            val tracker = service<VitePressRootTracker>()
+            val value = tracker.isUnderVitePressRoot(this)
+            CachedValueProvider.Result.create(value, tracker)
+        }
+    }.value
 }
 
 public fun VirtualFile.isVitePressRoot(): Boolean {
-    return service<VitePressRootTracker>().isVitePressRoot(this)
+    return getOrCreateUserData(IS_ROOT_CACHE_KEY) {
+        CachedValueImpl {
+            val tracker = service<VitePressRootTracker>()
+            val value = tracker.isVitePressRoot(this)
+            CachedValueProvider.Result.create(value, tracker)
+        }
+    }.value
 }
 
 internal class VitePressRootTrackerActivity : ProjectActivity {
