@@ -630,13 +630,12 @@ public class GradleMcpTools : McpToolset {
         project: Project,
         processingManager: ExternalSystemProcessingManager,
     ): List<ExternalSystemTask> {
-        return findActiveGradleTasks(project, processingManager, ExternalSystemTaskType.EXECUTE_TASK)
+        return findActiveGradleTasks(project, processingManager)
     }
 
     private fun findActiveGradleTasks(
         project: Project,
         processingManager: ExternalSystemProcessingManager,
-        taskType: ExternalSystemTaskType,
     ): List<ExternalSystemTask> {
         return processingManager.findTasksOfState(
             GradleConstants.SYSTEM_ID,
@@ -646,7 +645,7 @@ public class GradleMcpTools : McpToolset {
         )
             .asSequence()
             .filter {
-                it.id.type == taskType &&
+                it.id.type == ExternalSystemTaskType.EXECUTE_TASK &&
                         !it.state.isStopped &&
                         it.id.findProject() == project
             }
