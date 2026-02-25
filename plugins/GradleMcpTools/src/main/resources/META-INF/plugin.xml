@@ -2,7 +2,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
-    <id>dev.ghostflyby.gradle.mcp</id>
+    <id>dev.ghostflyby.mcp.gradle</id>
     <name>Gradle MCP</name>
     <vendor>ghostflyby</vendor>
 
@@ -11,6 +11,6 @@
     <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <mcpToolset implementation="dev.ghostflyby.gradlemcp.GradleMcpTools"/>
+        <mcpToolset implementation="dev.ghostflyby.mcp.gradle.GradleMcpTools"/>
     </extensions>
 </idea-plugin>

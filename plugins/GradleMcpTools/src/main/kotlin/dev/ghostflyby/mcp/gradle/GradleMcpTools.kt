@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.gradlemcp
+package dev.ghostflyby.mcp.gradle
 
 import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.execution.process.ProcessOutputType
@@ -55,19 +55,62 @@ import kotlin.coroutines.resume
 
 @Suppress("FunctionName")
 public class GradleMcpTools : McpToolset {
-    @Serializable
     private data class LinkedGradleProject(
         val path: Path,
         val gradleJvm: String?,
     )
 
+    @Serializable
+    public data class GradleProjectDetail(
+        val path: String,
+        val name: String,
+        val isRoot: Boolean,
+        val buildFile: String?,
+        val gradleJvm: String?,
+    )
+
+    @Serializable
+    public data class GradleTaskDetail(
+        val name: String,
+        val projectPath: String,
+        val group: String?,
+        val description: String?,
+        val inherited: Boolean,
+        val type: String?,
+        val isJvm: Boolean,
+        val isTest: Boolean,
+        val isJvmTest: Boolean,
+    )
+
+    @Serializable
+    public data class LinkedGradleProjectsResult(
+        val projects: List<String>,
+    )
+
+    @Serializable
+    public data class GradleProjectDetailsResult(
+        val projects: List<GradleProjectDetail>,
+    )
+
+    @Serializable
+    public data class GradleTaskDetailsResult(
+        val taskDetails: List<GradleTaskDetail>,
+    )
+
+    @Serializable
+    public data class GradleTasksResult(
+        val tasks: List<String>,
+    )
+
     @McpTool
     @McpDescription("List all linked Gradle projects in the current IDE project.")
-    public suspend fun list_linked_gradle_projects(): List<String> {
+    public suspend fun list_linked_gradle_projects(): LinkedGradleProjectsResult {
         val project = currentCoroutineContext().project
-        return getLinkedGradleProjectPaths(project)
+        return LinkedGradleProjectsResult(
+            getLinkedGradleProjectPaths(project)
             .map { it.toString() }
-            .sorted()
+                .sorted(),
+        )
     }
 
     @McpTool
@@ -140,25 +183,27 @@ public class GradleMcpTools : McpToolset {
     public suspend fun list_gradle_projects_detail(
         @McpDescription("Optional linked Gradle project path. If omitted, details for all linked projects are returned.")
         externalProjectPath: String? = null,
-    ): List<Map<String, String>> {
+    ): GradleProjectDetailsResult {
         val project = currentCoroutineContext().project
         val linkedProjects = getLinkedGradleProjects(project)
         val selectedPaths = selectTargetPaths(linkedProjects.map { it.path }, externalProjectPath).toSet()
         val allLinkedPaths = linkedProjects.map { it.path.normalize() }.toSet()
 
-        return linkedProjects
+        return GradleProjectDetailsResult(
+            linkedProjects
             .filter { it.path in selectedPaths }
             .sortedBy { it.path }
             .map { linkedProject ->
                 val path = linkedProject.path
-                mapOf(
-                    "path" to path.toString(),
-                    "name" to (path.fileName?.toString() ?: path.toString()),
-                    "isRoot" to isRootGradleProject(path, allLinkedPaths).toString(),
-                    "buildFile" to (detectBuildFile(path)?.toString() ?: ""),
-                    "gradleJvm" to (linkedProject.gradleJvm ?: ""),
+                GradleProjectDetail(
+                    path = path.toString(),
+                    name = path.fileName?.toString() ?: path.toString(),
+                    isRoot = isRootGradleProject(path, allLinkedPaths),
+                    buildFile = detectBuildFile(path)?.toString(),
+                    gradleJvm = linkedProject.gradleJvm,
                 )
-            }
+            },
+        )
     }
 
     @McpTool
@@ -168,7 +213,7 @@ public class GradleMcpTools : McpToolset {
         taskName: String,
         @McpDescription("Optional linked Gradle project path. If omitted, all linked projects are searched.")
         externalProjectPath: String? = null,
-    ): List<Map<String, String>> {
+    ): GradleTaskDetailsResult {
         val query = taskName.trim()
         if (query.isEmpty()) {
             throw McpExpectedError("taskName must not be blank.")
@@ -185,27 +230,27 @@ public class GradleMcpTools : McpToolset {
                     .asSequence()
                     .filter { task -> task.name == query || task.name == simpleName }
                     .map { task ->
-                        mapOf(
-                            "name" to task.name,
-                            "projectPath" to path.toString(),
-                            "group" to (task.group ?: ""),
-                            "description" to (task.description ?: ""),
-                            "inherited" to task.isInherited.toString(),
-                            "type" to (task.type ?: ""),
-                            "isJvm" to task.isJvm.toString(),
-                            "isTest" to task.isTest.toString(),
-                            "isJvmTest" to task.isJvmTest.toString(),
+                        GradleTaskDetail(
+                            name = task.name,
+                            projectPath = path.toString(),
+                            group = task.group,
+                            description = task.description,
+                            inherited = task.isInherited,
+                            type = task.type,
+                            isJvm = task.isJvm,
+                            isTest = task.isTest,
+                            isJvmTest = task.isJvmTest,
                         )
                     }
             }
             .distinct()
-            .sortedBy { "${it["projectPath"]}:${it["name"]}" }
+            .sortedBy { "${it.projectPath}:${it.name}" }
             .toList()
 
         if (matchedTasks.isEmpty()) {
             throw McpExpectedError("No Gradle task matched '$taskName'.")
         }
-        return matchedTasks
+        return GradleTaskDetailsResult(matchedTasks)
     }
 
     @McpTool
@@ -215,7 +260,7 @@ public class GradleMcpTools : McpToolset {
             "Optional linked Gradle project path. If omitted, tasks from all linked Gradle projects are returned.",
         )
         externalProjectPath: String? = null,
-    ): List<String> {
+    ): GradleTasksResult {
         val project = currentCoroutineContext().project
         val linkedProjectPaths = getLinkedGradleProjectPaths(project)
         val targetPaths = selectTargetPaths(linkedProjectPaths, externalProjectPath)
@@ -244,7 +289,7 @@ public class GradleMcpTools : McpToolset {
         if (tasks.isEmpty()) {
             throw McpExpectedError("No Gradle tasks found. Sync the Gradle project in IDE first.")
         }
-        return tasks
+        return GradleTasksResult(tasks)
     }
 
     @McpTool
