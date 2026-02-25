@@ -28,6 +28,8 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.mcpserver.util.resolveInProject
+import com.intellij.openapi.application.backgroundWriteAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
@@ -78,20 +80,27 @@ internal class VfsMcpTools : McpToolset {
     ): String? {
         val project = currentCoroutineContext().project
         val path = project.resolveInProject(pathInProject)
-        return VfsUtil.findFile(path, refreshIfNeeded)?.url
+        val file = if (refreshIfNeeded) {
+            backgroundWriteAction { VfsUtil.findFile(path, true) }
+        } else {
+            readAction { VfsUtil.findFile(path, false) }
+        }
+        return file?.url
     }
 
     @McpTool
     @McpDescription("Resolve a VFS URL to a local file-system path.")
-    fun vfs_get_local_path_from_url(
+    suspend fun vfs_get_local_path_from_url(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): String {
-        val file = vfsManager.findFileByUrl(url) ?: mcpFail("File $url doesn't exist or can't be opened")
-        if (file.fileSystem.protocol != "file") {
-            mcpFail("File $url is not a local file")
+        return readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File $url doesn't exist or can't be opened")
+            if (file.fileSystem.protocol != "file") {
+                mcpFail("File $url is not a local file")
+            }
+            file.toNioPath().toString()
         }
-        return file.toNioPath().toString()
     }
 
     @McpTool
@@ -104,22 +113,29 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Refresh children recursively (effective for directories).")
         recursive: Boolean = false,
     ) {
+        val file = readAction { vfsManager.findFileByUrl(url) }
+            ?: mcpFail("File not found for URL: $url")
+        if (!async) {
+            backgroundWriteAction {
+                file.refresh(false, recursive) { }
+            }
+            return
+        }
+
         val deferred = CompletableDeferred<Unit>()
-        vfsManager
-            .findFileByUrl(url)?.refresh(async, recursive) {
+        backgroundWriteAction {
+            file.refresh(true, recursive) {
                 deferred.complete(Unit)
             }
-        if (!async) return
-        return deferred.await()
+        }
+        deferred.await()
     }
 
-    fun vfs_exists(
+    suspend fun vfs_exists(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Boolean {
-        val f = vfsManager
-            .findFileByUrl(url)
-        return f?.exists() ?: false
+        return readAction { vfsManager.findFileByUrl(url)?.exists() ?: false }
     }
 
     @Serializable
@@ -141,24 +157,26 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription("Return file metadata for a VFS URL.")
-    fun vfs_file_stat(
+    suspend fun vfs_file_stat(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
         @McpDescription("Optional property names to include. Null or empty means all properties.")
         properties: VirtualFileStat.PropertyList?,
     ): VirtualFileStat {
-        val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
-        val stat = VirtualFileStat(
-            name = file.name,
-            path = file.path,
-            isDirectory = file.isDirectory,
-            length = file.length,
-            lastModified = file.timeStamp,
-            isToolLargeForIntellijSense = file.isTooLargeForIntellijSense(),
-            isValid = file.isValid,
-            isWritable = file.isWritable,
-            fileType = file.fileType.name,
-        )
+        val stat = readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
+            VirtualFileStat(
+                name = file.name,
+                path = file.path,
+                isDirectory = file.isDirectory,
+                length = file.length,
+                lastModified = file.timeStamp,
+                isToolLargeForIntellijSense = file.isTooLargeForIntellijSense(),
+                isValid = file.isValid,
+                isWritable = file.isWritable,
+                fileType = file.fileType.name,
+            )
+        }
         if (properties?.names.isNullOrEmpty())
             return stat
         val empty = VirtualFileStat()
@@ -173,18 +191,20 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription("List direct child file names of a VFS directory.")
-    fun vfs_list_files(
+    suspend fun vfs_list_files(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): List<String> {
-        val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
-        if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
-        return file.children.map { it.name }
+        return readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
+            if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
+            file.children.map { it.name }
+        }
     }
 
     @McpTool
     @McpDescription("Read file content from VFS using full content, character range, or line range strategy.")
-    fun vfs_read_file(
+    suspend fun vfs_read_file(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
         @McpDescription("Read strategy: FULL, CHAR_RANGE, or LINE_RANGE.")
@@ -265,7 +285,7 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription("Read the whole file content.")
-    fun vfs_read_file_full(
+    suspend fun vfs_read_file_full(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
         @McpDescription("Prefer unsaved editor document text when available.")
@@ -280,7 +300,7 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription("Read file content by character range [startChar, endCharExclusive).")
-    fun vfs_read_file_by_char_range(
+    suspend fun vfs_read_file_by_char_range(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
         @McpDescription("Character range start offset (inclusive).")
@@ -302,7 +322,7 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription("Read file content by line range [startLine, endLineInclusive] with 1-based line numbers.")
-    fun vfs_read_file_by_line_range(
+    suspend fun vfs_read_file_by_line_range(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
         @McpDescription("Line range start (1-based, inclusive).")
@@ -321,16 +341,18 @@ internal class VfsMcpTools : McpToolset {
         )
     }
 
-    private fun getRegularFile(url: String) = vfsManager.findFileByUrl(url)?.takeUnless { it.isDirectory }
-        ?: mcpFail("File not found or not a regular file for URL: $url")
+    private suspend fun getRegularFile(url: String): VirtualFile = readAction {
+        vfsManager.findFileByUrl(url)?.takeUnless { it.isDirectory }
+            ?: mcpFail("File not found or not a regular file for URL: $url")
+    }
 
-    private fun loadText(file: VirtualFile, includeUnsavedDocument: Boolean): CharSequence {
+    private suspend fun loadText(file: VirtualFile, includeUnsavedDocument: Boolean): CharSequence {
         if (includeUnsavedDocument) {
-            FileDocumentManager.getInstance().getDocument(file)?.let {
-                return it.immutableCharSequence
+            readAction { FileDocumentManager.getInstance().getDocument(file)?.immutableCharSequence }?.let {
+                return it
             }
         }
-        return VfsUtil.loadText(file)
+        return readAction { VfsUtil.loadText(file) }
     }
 
     private fun computeLineStarts(text: CharSequence): List<Int> {
