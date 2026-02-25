@@ -3,7 +3,7 @@
 
 <idea-plugin>
     <id>dev.ghostflyby.mcp.vfs</id>
-    <name>VFS MCP</name>
+    <name>File MCP</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -11,5 +11,6 @@
 
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="dev.ghostflyby.mcp.vfs.VfsMcpTools"/>
+        <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
     </extensions>
 </idea-plugin>
