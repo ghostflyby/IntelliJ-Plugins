@@ -21,7 +21,7 @@ VFS tools:
 - `CHAR_RANGE`: read `[startChar, endCharExclusive)`
 - `LINE_RANGE`: read `[startLine, endLineInclusive]` (1-based)
 
-`includeUnsavedDocument=true` reads from open editor document when available, so unsaved changes are visible.
+VFS read tools only return persisted VFS content. If you need unsaved editor content, call `document_*` tools.
 
 Document tools:
 

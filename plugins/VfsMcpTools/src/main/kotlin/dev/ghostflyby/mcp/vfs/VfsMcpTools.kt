@@ -31,7 +31,6 @@ import com.intellij.mcpserver.util.resolveInProject
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -203,7 +202,7 @@ internal class VfsMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Read file content from VFS using full content, character range, or line range strategy.")
+    @McpDescription("Read file content from VFS using full content, character range, or line range strategy. This only reads persisted VFS content; for unsaved editor text, use document_* tools.")
     suspend fun vfs_read_file(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
@@ -217,11 +216,9 @@ internal class VfsMcpTools : McpToolset {
         startLine: Int = 1,
         @McpDescription("Line range end (1-based, inclusive) for LINE_RANGE mode. Null means last line.")
         endLineInclusive: Int? = null,
-        @McpDescription("Prefer unsaved editor document text when available.")
-        includeUnsavedDocument: Boolean = true,
     ): VfsReadResult {
         val file = getRegularFile(url)
-        val text = loadText(file, includeUnsavedDocument)
+        val text = loadText(file)
         val lineStarts = computeLineStarts(text)
 
         return when (mode) {
@@ -284,22 +281,19 @@ internal class VfsMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Read the whole file content.")
+    @McpDescription("Read the whole file content from VFS. For unsaved editor text, use document_* tools.")
     suspend fun vfs_read_file_full(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
-        @McpDescription("Prefer unsaved editor document text when available.")
-        includeUnsavedDocument: Boolean = true,
     ): VfsReadResult {
         return vfs_read_file(
             url = url,
             mode = ReadMode.FULL,
-            includeUnsavedDocument = includeUnsavedDocument,
         )
     }
 
     @McpTool
-    @McpDescription("Read file content by character range [startChar, endCharExclusive).")
+    @McpDescription("Read file content from VFS by character range [startChar, endCharExclusive). For unsaved editor text, use document_* tools.")
     suspend fun vfs_read_file_by_char_range(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
@@ -307,8 +301,6 @@ internal class VfsMcpTools : McpToolset {
         startChar: Int,
         @McpDescription("Character range end offset (exclusive). Null means end of file.")
         endCharExclusive: Int? = null,
-        @McpDescription("Prefer unsaved editor document text when available.")
-        includeUnsavedDocument: Boolean = true,
     ): VfsReadResult {
 
         return vfs_read_file(
@@ -316,12 +308,11 @@ internal class VfsMcpTools : McpToolset {
             mode = ReadMode.CHAR_RANGE,
             startChar = startChar,
             endCharExclusive = endCharExclusive,
-            includeUnsavedDocument = includeUnsavedDocument,
         )
     }
 
     @McpTool
-    @McpDescription("Read file content by line range [startLine, endLineInclusive] with 1-based line numbers.")
+    @McpDescription("Read file content from VFS by line range [startLine, endLineInclusive] with 1-based line numbers. For unsaved editor text, use document_* tools.")
     suspend fun vfs_read_file_by_line_range(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
@@ -329,15 +320,12 @@ internal class VfsMcpTools : McpToolset {
         startLine: Int,
         @McpDescription("Line range end (1-based, inclusive). Null means last line.")
         endLineInclusive: Int? = null,
-        @McpDescription("Prefer unsaved editor document text when available.")
-        includeUnsavedDocument: Boolean = true,
     ): VfsReadResult {
         return vfs_read_file(
             url = url,
             mode = ReadMode.LINE_RANGE,
             startLine = startLine,
             endLineInclusive = endLineInclusive,
-            includeUnsavedDocument = includeUnsavedDocument,
         )
     }
 
@@ -346,12 +334,7 @@ internal class VfsMcpTools : McpToolset {
             ?: mcpFail("File not found or not a regular file for URL: $url")
     }
 
-    private suspend fun loadText(file: VirtualFile, includeUnsavedDocument: Boolean): CharSequence {
-        if (includeUnsavedDocument) {
-            readAction { FileDocumentManager.getInstance().getDocument(file)?.immutableCharSequence }?.let {
-                return it
-            }
-        }
+    private suspend fun loadText(file: VirtualFile): CharSequence {
         return readAction { VfsUtil.loadText(file) }
     }
 
