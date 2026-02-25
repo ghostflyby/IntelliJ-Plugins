@@ -103,7 +103,7 @@ public class GradleMcpTools : McpToolset {
     )
 
     @McpTool
-    @McpDescription("List all linked Gradle projects in the current IDE project.")
+    @McpDescription("List linked Gradle project paths in current IDE project. Returns { projects: [...] }.")
     public suspend fun list_linked_gradle_projects(): LinkedGradleProjectsResult {
         val project = currentCoroutineContext().project
         return LinkedGradleProjectsResult(
@@ -114,11 +114,13 @@ public class GradleMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Sync linked Gradle projects in the current IDE project and wait until finished.")
+    @McpDescription(
+        "Sync linked Gradle projects and wait until finished. Returns run-style result with exitCode/timedOut/output.",
+    )
     public suspend fun sync_gradle_projects(
-        @McpDescription("Optional linked Gradle project path. If omitted, all linked Gradle projects are synced.")
+        @McpDescription("Optional linked Gradle project path. If omitted, sync all linked projects.")
         externalProjectPath: String? = null,
-        @McpDescription("Timeout in milliseconds for each project sync.")
+        @McpDescription("Timeout in milliseconds for each target project sync.")
         timeoutMillis: Int = DEFAULT_TIMEOUT_MS,
     ): ExecutionToolset.RunConfigurationResult {
         if (timeoutMillis <= 0) {
@@ -179,9 +181,9 @@ public class GradleMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("List detailed info for linked Gradle projects in the current IDE project.")
+    @McpDescription("List linked Gradle projects detail. Returns { projects: [{path,name,isRoot,buildFile,gradleJvm}] }.")
     public suspend fun list_gradle_projects_detail(
-        @McpDescription("Optional linked Gradle project path. If omitted, details for all linked projects are returned.")
+        @McpDescription("Optional linked Gradle project path. If omitted, return details for all linked projects.")
         externalProjectPath: String? = null,
     ): GradleProjectDetailsResult {
         val project = currentCoroutineContext().project
@@ -207,11 +209,13 @@ public class GradleMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Get detailed information for matching Gradle tasks.")
+    @McpDescription(
+        "Get detail for matching Gradle tasks. Returns { taskDetails: [{name,projectPath,group,description,...}] }.",
+    )
     public suspend fun get_gradle_task_detail(
-        @McpDescription("Task name or task path, e.g. \"build\" or \":app:build\".")
+        @McpDescription("Task name or task path, e.g. \"build\" or \":plugins:GradleMcpTools:compileKotlin\".")
         taskName: String,
-        @McpDescription("Optional linked Gradle project path. If omitted, all linked projects are searched.")
+        @McpDescription("Optional linked Gradle project path. If omitted, search all linked projects.")
         externalProjectPath: String? = null,
     ): GradleTaskDetailsResult {
         val query = taskName.trim()
@@ -254,10 +258,10 @@ public class GradleMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("List Gradle tasks from linked Gradle projects in the current IDE project.")
+    @McpDescription("List visible Gradle tasks. Returns { tasks: [...] }.")
     public suspend fun list_gradle_tasks(
         @McpDescription(
-            "Optional linked Gradle project path. If omitted, tasks from all linked Gradle projects are returned.",
+            "Optional linked Gradle project path. If omitted, list tasks from all linked projects.",
         )
         externalProjectPath: String? = null,
     ): GradleTasksResult {
@@ -294,7 +298,7 @@ public class GradleMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Run arbitrary Gradle tasks through IntelliJ Gradle external system (same backend as Gradle tool window).",
+        "Run arbitrary Gradle tasks via IntelliJ Gradle external system (same backend as Gradle tool window).",
     )
     public suspend fun run_gradle_tasks(
         @McpDescription("Gradle task names, for example [\":app:build\"] or [\"clean\", \"test\"].")
@@ -305,7 +309,7 @@ public class GradleMcpTools : McpToolset {
         externalProjectPath: String? = null,
         @McpDescription("Additional Gradle script parameters, e.g. \"--info --stacktrace\".")
         scriptParameters: String = "",
-        @McpDescription("Timeout in milliseconds to wait for task completion.")
+        @McpDescription("Timeout in milliseconds to wait for completion. Timeout triggers cancellation request.")
         timeoutMillis: Int = DEFAULT_TIMEOUT_MS,
     ): ExecutionToolset.RunConfigurationResult {
         val cleanedTaskNames = taskNames
@@ -460,9 +464,9 @@ public class GradleMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Cancel an active Gradle execute task.")
+    @McpDescription("Cancel active Gradle execute task. Returns run-style result with cancellation status in output.")
     public suspend fun cancel_gradle_task(
-        @McpDescription("Optional external system task id. If omitted and only one Gradle task is active, that task is canceled.")
+        @McpDescription("Optional external system task id. If omitted, exactly one active task must exist.")
         taskId: Long? = null,
         @McpDescription("Optional linked Gradle project path used when taskId is omitted.")
         externalProjectPath: String? = null,
