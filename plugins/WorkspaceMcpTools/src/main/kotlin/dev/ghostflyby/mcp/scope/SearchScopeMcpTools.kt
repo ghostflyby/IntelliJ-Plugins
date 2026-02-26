@@ -68,6 +68,7 @@ internal class SearchScopeMcpTools : McpToolset {
                 request.tokens.size,
                 request.strict,
                 request.allowUiInteractiveScopes,
+                request.nonStrictDefaultFailureMode.name,
             ),
         )
         val project = currentCoroutineContext().project
@@ -89,6 +90,7 @@ internal class SearchScopeMcpTools : McpToolset {
                 request.tokens.size,
                 request.strict,
                 request.allowUiInteractiveScopes,
+                request.nonStrictDefaultFailureMode.name,
             ),
         )
         val project = currentCoroutineContext().project

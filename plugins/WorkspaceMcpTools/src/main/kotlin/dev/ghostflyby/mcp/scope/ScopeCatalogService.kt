@@ -51,16 +51,21 @@ internal class ScopeCatalogService {
         val scope: SearchScope,
     )
 
+    data class ScopeCatalogSnapshot(
+        val records: Map<String, ScopeCatalogRecord>,
+        val diagnostics: List<String>,
+    )
+
     suspend fun listCatalog(project: Project, includeInteractiveScopes: Boolean): ScopeCatalogResultDto {
-        val records = collectRecords(project)
-        val items = records.values
+        val snapshot = collectRecords(project)
+        val items = snapshot.records.values
             .map { it.item }
             .filter { includeInteractiveScopes || !it.requiresUserInput }
-        return ScopeCatalogResultDto(items = items)
+        return ScopeCatalogResultDto(items = items, diagnostics = snapshot.diagnostics)
     }
 
     suspend fun resolveByRef(project: Project, scopeRefId: String, allowUiInteractiveScopes: Boolean): SearchScope? {
-        val records = collectRecords(project)
+        val records = collectRecords(project).records
         val record = records[scopeRefId] ?: return null
         if (record.item.requiresUserInput && !allowUiInteractiveScopes) {
             return null
@@ -73,7 +78,7 @@ internal class ScopeCatalogService {
         scopeRefId: String,
         includeInteractiveScopes: Boolean,
     ): ScopeCatalogItemDto? {
-        val record = collectRecords(project)[scopeRefId] ?: return null
+        val record = collectRecords(project).records[scopeRefId] ?: return null
         if (record.item.requiresUserInput && !includeInteractiveScopes) {
             return null
         }
@@ -96,13 +101,14 @@ internal class ScopeCatalogService {
         )
     }
 
-    private suspend fun collectRecords(project: Project): Map<String, ScopeCatalogRecord> {
+    private suspend fun collectRecords(project: Project): ScopeCatalogSnapshot {
         val records = linkedMapOf<String, ScopeCatalogRecord>()
+        val diagnostics = mutableListOf<String>()
         addPredefinedScopes(project, records)
-        addProviderScopes(project, records)
+        addProviderScopes(project, records, diagnostics)
         addNamedScopes(project, records)
         addModuleScopes(project, records)
-        return records
+        return ScopeCatalogSnapshot(records = records, diagnostics = diagnostics.distinct())
     }
 
     private suspend fun addPredefinedScopes(
@@ -150,6 +156,7 @@ internal class ScopeCatalogService {
     private suspend fun addProviderScopes(
         project: Project,
         out: MutableMap<String, ScopeCatalogRecord>,
+        diagnostics: MutableList<String>,
     ) {
         val dataContext = SimpleDataContext.getProjectContext(project)
         val providers: List<SearchScopeProvider> = readAction {
@@ -157,9 +164,9 @@ internal class ScopeCatalogService {
         }
         for (provider in providers) {
             val providerId = provider.javaClass.name
-            val scopes = linkedSetOf<SearchScope>()
-            scopes += collectProviderScopesFromMethod(provider, "getGeneralSearchScopes", project, dataContext)
-            scopes += collectProviderScopesFromMethod(provider, "getSearchScopes", project, dataContext)
+            val collection = collectProviderScopes(provider, project, dataContext)
+            diagnostics += collection.diagnostics
+            val scopes = collection.scopes
             for (scope in scopes) {
                 val displayName = scope.displayName
                 val refId = providerRefId(providerId, displayName, scope.javaClass.name)
@@ -273,20 +280,76 @@ internal class ScopeCatalogService {
     }
 
     private fun collectProviderScopesFromMethod(
+        providerId: String,
         provider: SearchScopeProvider,
         methodName: String,
         project: Project,
         dataContext: DataContext,
+        diagnostics: MutableList<String>,
     ): List<SearchScope> {
         val method = provider.javaClass.methods.firstOrNull {
             it.name == methodName && it.parameterCount == 2
         } ?: return emptyList()
         val result = runCatching {
             method.invoke(provider, project, dataContext)
-        }.getOrNull() ?: return emptyList()
-        val iterable = result as? Iterable<*> ?: return emptyList()
-        return iterable.filterIsInstance<SearchScope>()
+        }.getOrElse { error ->
+            diagnostics += "Provider '$providerId' method '$methodName' invocation failed: ${error.message ?: error.javaClass.name}."
+            return emptyList()
+        } ?: return emptyList()
+        val values = (result as? Iterable<*>)?.toList()
+        if (values == null) {
+            diagnostics += "Provider '$providerId' method '$methodName' returned non-iterable type '${result.javaClass.name}'."
+            return emptyList()
+        }
+        val scopes = values.filterIsInstance<SearchScope>()
+        if (scopes.size != values.size) {
+            diagnostics += "Provider '$providerId' method '$methodName' returned non-SearchScope elements; ignored invalid entries."
+        }
+        return scopes
     }
+
+    private fun collectProviderScopes(
+        provider: SearchScopeProvider,
+        project: Project,
+        dataContext: DataContext,
+    ): ProviderScopeCollectionResult {
+        val providerId = provider.javaClass.name
+        val diagnostics = mutableListOf<String>()
+        val scopes = linkedSetOf<SearchScope>()
+        val methods = provider.javaClass.methods
+        val methodNames = listOf("getGeneralSearchScopes", "getSearchScopes")
+        var foundCompatibleMethod = false
+
+        for (methodName in methodNames) {
+            val methodExists = methods.any { it.name == methodName && it.parameterCount == 2 }
+            if (methodExists) {
+                foundCompatibleMethod = true
+            }
+            scopes += collectProviderScopesFromMethod(
+                providerId = providerId,
+                provider = provider,
+                methodName = methodName,
+                project = project,
+                dataContext = dataContext,
+                diagnostics = diagnostics,
+            )
+        }
+
+        if (!foundCompatibleMethod) {
+            diagnostics += "Provider '$providerId' has no compatible scope method. " +
+                "Expected getGeneralSearchScopes(Project, DataContext) or getSearchScopes(Project, DataContext)."
+        }
+
+        return ProviderScopeCollectionResult(
+            scopes = scopes.toList(),
+            diagnostics = diagnostics,
+        )
+    }
+
+    private data class ProviderScopeCollectionResult(
+        val scopes: List<SearchScope>,
+        val diagnostics: List<String>,
+    )
 
     private fun standardScopeDisplayNameToId(): Map<String, String> {
         return mapOf(

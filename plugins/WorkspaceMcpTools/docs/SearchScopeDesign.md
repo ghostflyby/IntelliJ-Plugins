@@ -40,6 +40,13 @@ enum class ScopeAtomKind {
 }
 
 @Serializable
+enum class ScopeAtomFailureMode {
+  FAIL,
+  EMPTY_SCOPE,
+  SKIP,
+}
+
+@Serializable
 enum class ModuleScopeFlavor {
   MODULE,
   MODULE_WITH_DEPENDENCIES,
@@ -61,6 +68,7 @@ data class ScopeAtomDto(
   val directoryUrl: String? = null,
   val fileUrls: List<String> = emptyList(),
   val providerScopeId: String? = null,
+  val onResolveFailure: ScopeAtomFailureMode? = null,
 )
 
 @Serializable
@@ -78,6 +86,7 @@ data class ScopeResolveRequestDto(
   val tokens: List<ScopeProgramTokenDto>,
   val strict: Boolean = true,
   val allowUiInteractiveScopes: Boolean = false,
+  val nonStrictDefaultFailureMode: ScopeAtomFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
 )
 ```
 
@@ -95,6 +104,12 @@ data class ScopeCatalogItemDto(
   val serializationId: String? = null,  // ScopeIdMapper ID（若可用）
   val requiresUserInput: Boolean = false,
   val unstable: Boolean = false,        // 如“Current File”等上下文依赖项
+)
+
+@Serializable
+data class ScopeCatalogResultDto(
+  val items: List<ScopeCatalogItemDto>,
+  val diagnostics: List<String> = emptyList(),
 )
 
 @Serializable
@@ -134,7 +149,10 @@ RPN 栈机求值：
 错误策略：
 - 栈下溢、末尾栈深度不为 1、未知 atom、形态不匹配都返回明确诊断。
 - `strict=true`：任一原子失败即失败。
-- `strict=false`：可降级跳过失败原子，并返回 warning（仅当还能构造有效结果）。
+- `strict=false`：按失败策略降级并返回 warning：
+  - `ScopeAtomDto.onResolveFailure` 优先。
+  - 未指定时使用 `nonStrictDefaultFailureMode`。
+  - 支持 `FAIL` / `EMPTY_SCOPE` / `SKIP`（`SKIP` 后若程序无法形成有效表达式则失败）。
 
 ## Find 界面对齐策略
 Catalog 构建顺序按 IDE 行为：

@@ -20,8 +20,9 @@
 
 ## SearchScope Phase 1 Gaps and Future Work
 - Provider scopes:
-  - `SearchScopeProvider` APIs differ by platform build; current implementation uses reflective invocation for compatibility.
-  - Future: introduce an adapter layer with per-build capability detection and explicit diagnostics.
+  - `SearchScopeProvider` APIs differ by platform build; implementation uses reflective invocation for compatibility.
+  - Improved: catalog output now includes provider reflection diagnostics (missing compatible methods / invoke failures / invalid return shapes).
+  - Future: introduce a dedicated adapter layer with per-build test matrix.
 - Stable scope IDs:
   - To avoid `@ApiStatus.Internal` dependency on `ScopeIdMapper`, current mapping is based on known standard English IDs + localized display-name matching.
   - Future: add a dedicated compatibility mapping utility and regression tests across locales.
@@ -30,8 +31,11 @@
   - Tool outputs now return `ScopeProgramDescriptorDto`, which can be fed directly into future search tools as scope input.
   - Future: if performance becomes an issue, consider optional client-side memoization (not plugin-side registry/state).
 - Program diagnostics:
-  - `strict=false` currently degrades failed atom resolution to `EMPTY_SCOPE`.
-  - Future: expose configurable fallback semantics (`skip`, `empty`, `fail`) per atom kind.
+  - Improved: `strict=false` now supports configurable fallback semantics:
+    - request-level `nonStrictDefaultFailureMode`
+    - atom-level override `ScopeAtomDto.onResolveFailure`
+    - supported modes: `SKIP` / `EMPTY_SCOPE` / `FAIL`.
+  - Future: extend fallback control from atom granularity to kind-level policy templates.
 - Catalog completeness:
   - Current catalog includes predefined scopes, reflective provider scopes, named scopes, and module variants.
   - Future: add optional UI-context data binding for richer "Current File / Selection / Usage View" resolution.

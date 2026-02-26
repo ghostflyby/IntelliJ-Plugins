@@ -48,6 +48,10 @@ internal class ScopeResolverService {
         val diagnostics: List<String>,
     )
 
+    private data class StackScope(
+        val scope: SearchScope?,
+    )
+
     suspend fun validatePattern(patternText: String): ScopePatternValidationResultDto {
         val normalized = runCatching {
             val set = readAction { PackageSetFactory.getInstance().compile(patternText) }
@@ -98,7 +102,7 @@ internal class ScopeResolverService {
         }
 
         val diagnostics = mutableListOf<String>()
-        val stack = mutableListOf<SearchScope>()
+        val stack = mutableListOf<StackScope>()
         for ((index, token) in request.tokens.withIndex()) {
             when (token.op) {
                 ScopeProgramOp.PUSH_ATOM -> {
@@ -107,41 +111,69 @@ internal class ScopeResolverService {
                     val scope = runCatching {
                         resolveAtom(project, atom, request.allowUiInteractiveScopes)
                     }.getOrElse { error ->
-                        if (request.strict) {
-                            val message = error.message ?: "Failed to resolve atom '$atomId'."
-                            mcpFail(message)
+                        val message = error.message ?: "Failed to resolve atom '$atomId'."
+                        val nonStrictFallbackMode = atom.onResolveFailure ?: request.nonStrictDefaultFailureMode
+                        when {
+                            request.strict -> mcpFail(message)
+                            nonStrictFallbackMode == ScopeAtomFailureMode.FAIL -> mcpFail(message)
+                            nonStrictFallbackMode == ScopeAtomFailureMode.SKIP -> {
+                                diagnostics += "$message Fallback mode=SKIP."
+                                null
+                            }
+
+                            else -> {
+                                diagnostics += "$message Fallback mode=EMPTY_SCOPE."
+                                GlobalSearchScope.EMPTY_SCOPE
+                            }
                         }
-                        diagnostics += (error.message ?: "Failed to resolve atom '$atomId'.")
-                        GlobalSearchScope.EMPTY_SCOPE
                     }
-                    stack += scope
+                    stack += StackScope(scope)
                 }
 
                 ScopeProgramOp.AND -> {
                     ensureStackSize(stack, index, token.op, 2)
                     val right = stack.removeLast()
                     val left = stack.removeLast()
-                    stack += left.intersectWith(right)
+                    stack += when {
+                        left.scope == null && right.scope == null -> StackScope(null)
+                        left.scope == null -> right
+                        right.scope == null -> left
+                        else -> StackScope(left.scope.intersectWith(right.scope))
+                    }
                 }
 
                 ScopeProgramOp.OR -> {
                     ensureStackSize(stack, index, token.op, 2)
                     val right = stack.removeLast()
                     val left = stack.removeLast()
-                    stack += left.union(right)
+                    stack += when {
+                        left.scope == null && right.scope == null -> StackScope(null)
+                        left.scope == null -> right
+                        right.scope == null -> left
+                        else -> StackScope(left.scope.union(right.scope))
+                    }
                 }
 
                 ScopeProgramOp.NOT -> {
                     ensureStackSize(stack, index, token.op, 1)
                     val operand = stack.removeLast()
-                    if (operand !is GlobalSearchScope) {
-                        if (request.strict) {
-                            mcpFail("Token[$index] NOT requires a GlobalSearchScope operand.")
+                    when (val operandScope = operand.scope) {
+                        null -> {
+                            diagnostics += "Token[$index] NOT operand skipped; result remains unresolved."
+                            stack += StackScope(null)
                         }
-                        diagnostics += "Token[$index] NOT operand is not global scope; replaced with EMPTY scope."
-                        stack += GlobalSearchScope.EMPTY_SCOPE
-                    } else {
-                        stack += GlobalSearchScope.notScope(operand)
+
+                        !is GlobalSearchScope -> {
+                            if (request.strict || request.nonStrictDefaultFailureMode == ScopeAtomFailureMode.FAIL) {
+                                mcpFail("Token[$index] NOT requires a GlobalSearchScope operand.")
+                            }
+                            diagnostics += "Token[$index] NOT operand is not global scope; replaced with EMPTY scope."
+                            stack += StackScope(GlobalSearchScope.EMPTY_SCOPE)
+                        }
+
+                        else -> {
+                            stack += StackScope(GlobalSearchScope.notScope(operandScope))
+                        }
                     }
                 }
             }
@@ -150,7 +182,10 @@ internal class ScopeResolverService {
         if (stack.size != 1) {
             mcpFail("Scope program is invalid: final stack size must be 1, but was ${stack.size}.")
         }
-        val resolved = stack.single()
+        val resolved = stack.single().scope ?: mcpFail(
+            "Scope program resolved to empty expression after fallback processing. " +
+                "Provide at least one resolvable atom or use EMPTY_SCOPE fallback.",
+        )
         return ResolvedScope(
             scope = resolved,
             displayName = readAction { resolved.displayName },
@@ -395,7 +430,7 @@ internal class ScopeResolverService {
     }
 
     private fun ensureStackSize(
-        stack: MutableList<SearchScope>,
+        stack: MutableList<StackScope>,
         tokenIndex: Int,
         op: ScopeProgramOp,
         expected: Int,

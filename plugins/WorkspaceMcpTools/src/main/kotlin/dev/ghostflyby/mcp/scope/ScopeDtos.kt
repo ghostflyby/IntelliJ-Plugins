@@ -59,6 +59,13 @@ internal enum class ScopeShape {
 }
 
 @Serializable
+internal enum class ScopeAtomFailureMode {
+    FAIL,
+    EMPTY_SCOPE,
+    SKIP,
+}
+
+@Serializable
 internal data class ScopeAtomDto(
     val atomId: String,
     val kind: ScopeAtomKind,
@@ -73,6 +80,7 @@ internal data class ScopeAtomDto(
     val directoryWithSubdirectories: Boolean = true,
     val fileUrls: List<String> = emptyList(),
     val providerScopeId: String? = null,
+    val onResolveFailure: ScopeAtomFailureMode? = null,
 )
 
 @Serializable
@@ -87,6 +95,7 @@ internal data class ScopeResolveRequestDto(
     val tokens: List<ScopeProgramTokenDto>,
     val strict: Boolean = true,
     val allowUiInteractiveScopes: Boolean = false,
+    val nonStrictDefaultFailureMode: ScopeAtomFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
 )
 
 @Serializable
@@ -108,6 +117,7 @@ internal data class ScopeCatalogItemDto(
 @Serializable
 internal data class ScopeCatalogResultDto(
     val items: List<ScopeCatalogItemDto>,
+    val diagnostics: List<String> = emptyList(),
 )
 
 @Serializable
@@ -129,7 +139,7 @@ internal data class ScopeDescribeProgramResultDto(
 
 @Serializable
 internal data class ScopeProgramDescriptorDto(
-    val version: Int = 1,
+    val version: Int = 2,
     val atoms: List<ScopeAtomDto>,
     val tokens: List<ScopeProgramTokenDto>,
     val displayName: String,
