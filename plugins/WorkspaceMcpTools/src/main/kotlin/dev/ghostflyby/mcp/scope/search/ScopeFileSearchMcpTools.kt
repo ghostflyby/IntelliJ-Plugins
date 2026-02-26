@@ -56,7 +56,10 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     @McpTool
     @McpDescription(
         "Search files by name/path text or glob within a scope descriptor. " +
-            "Returns matching file URLs and search diagnostics.",
+            "Returns matching file URLs and search diagnostics. " +
+            "When directoryUrl is provided, this tool traverses that VFS subtree directly " +
+            "(including jar:// ZIP/JAR roots such as Gradle cache source archives). " +
+            "Prefer this over shell commands in most cases.",
     )
     suspend fun scope_search_files(
         @McpDescription("Search text or glob pattern depending on matchMode. For text modes, whitespace splits ordered keywords.")
@@ -68,7 +71,10 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
         @McpDescription("Whether matching is case-sensitive.")
         caseSensitive: Boolean = false,
-        @McpDescription("Optional VFS directory URL to limit scan range.")
+        @McpDescription(
+            "Optional VFS directory URL to limit scan range. " +
+                "Example: jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/com/intellij/navigation",
+        )
         directoryUrl: String? = null,
         @McpDescription("Maximum number of matched files to return.")
         maxResults: Int = 1000,
@@ -118,7 +124,8 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         var timedOut = false
         var probablyHasMoreMatchingFiles = false
         val indexSearchScope = resolved.scope as? GlobalSearchScope
-        val useFilenameIndexForName = matchMode == ScopeFileSearchMode.NAME &&
+        val useFilenameIndexForName = rootDirectory == null &&
+            matchMode == ScopeFileSearchMode.NAME &&
             resolved.scopeShape == ScopeShape.GLOBAL &&
             indexSearchScope != null
 
@@ -215,43 +222,112 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     ): Boolean {
         var hasMore = false
         readAction {
-            val fileIndex = ProjectRootManager.getInstance(project).fileIndex
-            val iterator = ContentIterator { file ->
-                ProgressManager.checkCanceled()
-                if (file.isDirectory) return@ContentIterator true
-
-                scannedCounter.incrementAndGet()
-                if (!resolvedScope.contains(file)) return@ContentIterator true
-
-                val relativePath = projectRelativePath(projectRootPath, file)
-                val absolutePath = file.path
-                val matchedCurrent = matchesQuery(
+            if (rootDirectory != null) {
+                hasMore = scanByVfsDirectoryTraversal(
+                    rootDirectory = rootDirectory,
+                    resolvedScope = resolvedScope,
                     mode = mode,
-                    keywords = normalizedKeywords,
+                    normalizedKeywords = normalizedKeywords,
                     caseSensitive = caseSensitive,
-                    file = file,
-                    relativePath = relativePath,
-                    absolutePath = absolutePath,
                     globMatcher = globMatcher,
                     lowerCaseGlobMatcher = lowerCaseGlobMatcher,
+                    maxResults = maxResults,
+                    scannedCounter = scannedCounter,
+                    matchedCounter = matchedCounter,
+                    matched = matched,
                 )
-                if (!matchedCurrent) return@ContentIterator true
-
-                matched += file.url
-                matchedCounter.incrementAndGet()
-                if (matched.size >= maxResults) {
-                    hasMore = true
-                    return@ContentIterator false
-                }
-                true
-            }
-            if (rootDirectory != null) {
-                fileIndex.iterateContentUnderDirectory(rootDirectory, iterator)
             } else {
+                val fileIndex = ProjectRootManager.getInstance(project).fileIndex
+                val iterator = ContentIterator { file ->
+                    ProgressManager.checkCanceled()
+                    if (file.isDirectory) return@ContentIterator true
+
+                    scannedCounter.incrementAndGet()
+                    if (!resolvedScope.contains(file)) return@ContentIterator true
+
+                    val relativePath = projectRelativePath(projectRootPath, file)
+                    val absolutePath = file.path
+                    val matchedCurrent = matchesQuery(
+                        mode = mode,
+                        keywords = normalizedKeywords,
+                        caseSensitive = caseSensitive,
+                        file = file,
+                        relativePath = relativePath,
+                        absolutePath = absolutePath,
+                        globMatcher = globMatcher,
+                        lowerCaseGlobMatcher = lowerCaseGlobMatcher,
+                    )
+                    if (!matchedCurrent) return@ContentIterator true
+
+                    matched += file.url
+                    matchedCounter.incrementAndGet()
+                    if (matched.size >= maxResults) {
+                        hasMore = true
+                        return@ContentIterator false
+                    }
+                    true
+                }
                 fileIndex.iterateContent(iterator)
             }
         }
         return hasMore
+    }
+
+    private fun scanByVfsDirectoryTraversal(
+        rootDirectory: VirtualFile,
+        resolvedScope: com.intellij.psi.search.SearchScope,
+        mode: ScopeFileSearchMode,
+        normalizedKeywords: List<String>,
+        caseSensitive: Boolean,
+        globMatcher: PathMatcher?,
+        lowerCaseGlobMatcher: PathMatcher?,
+        maxResults: Int,
+        scannedCounter: AtomicInteger,
+        matchedCounter: AtomicInteger,
+        matched: MutableList<String>,
+    ): Boolean {
+        val stack = ArrayDeque<VirtualFile>()
+        stack.add(rootDirectory)
+
+        while (stack.isNotEmpty()) {
+            ProgressManager.checkCanceled()
+            val file = stack.removeLast()
+            if (file.isDirectory) {
+                val children = file.children
+                for (index in children.indices.reversed()) {
+                    stack.add(children[index])
+                }
+                continue
+            }
+
+            scannedCounter.incrementAndGet()
+            if (!resolvedScope.contains(file)) {
+                continue
+            }
+
+            val relativePath = relativePathFromAncestor(rootDirectory, file)
+            val absolutePath = file.path
+            val matchedCurrent = matchesQuery(
+                mode = mode,
+                keywords = normalizedKeywords,
+                caseSensitive = caseSensitive,
+                file = file,
+                relativePath = relativePath,
+                absolutePath = absolutePath,
+                globMatcher = globMatcher,
+                lowerCaseGlobMatcher = lowerCaseGlobMatcher,
+            )
+            if (!matchedCurrent) {
+                continue
+            }
+
+            matched += file.url
+            matchedCounter.incrementAndGet()
+            if (matched.size >= maxResults) {
+                return true
+            }
+        }
+        return false
     }
 
     private suspend fun scanByFilenameIndex(
@@ -293,7 +369,10 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Shortcut: search files by filename keyword within a scope.")
+    @McpDescription(
+        "Shortcut: search files by filename keyword within a scope. " +
+            "For GLOBAL scopes without directoryUrl, this uses indexed name lookup where possible.",
+    )
     suspend fun scope_find_files_by_name_keyword(
         @McpDescription("Filename keyword text. Whitespace splits ordered keywords when keywords is empty.")
         nameKeyword: String = "",
@@ -324,7 +403,10 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Shortcut: search files by path keyword within a scope.")
+    @McpDescription(
+        "Shortcut: search files by path keyword within a scope. " +
+            "When directoryUrl points to jar:// roots, path keywords match archive-internal paths.",
+    )
     suspend fun scope_find_files_by_path_keyword(
         @McpDescription("Path keyword text. Whitespace splits ordered keywords when keywords is empty.")
         pathKeyword: String = "",
@@ -355,7 +437,12 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Shortcut: find files in a directory by glob pattern and scope.")
+    @McpDescription(
+        "Shortcut: find files in a directory by glob pattern and scope. " +
+            "Works with arbitrary VFS directories, including jar:// URLs in Gradle caches. " +
+            "Example: directoryUrl='jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/', " +
+            "globPattern='**/FindSymbolParameters.java'.",
+    )
     suspend fun find_in_directory_using_glob(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         directoryUrl: String,
@@ -383,7 +470,9 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     }
 
     private suspend fun resolveDirectory(directoryUrl: String): VirtualFile {
-        val file = readAction { VirtualFileManager.getInstance().findFileByUrl(directoryUrl) }
+        val manager = VirtualFileManager.getInstance()
+        val file = readAction { manager.findFileByUrl(directoryUrl) }
+            ?: manager.refreshAndFindFileByUrl(directoryUrl)
             ?: mcpFail("Directory URL '$directoryUrl' not found.")
         if (!file.isDirectory) mcpFail("URL '$directoryUrl' is not a directory.")
         return file
@@ -477,6 +566,18 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         return runCatching {
             rootPath.relativize(Path.of(filePath)).toString().replace('\\', '/')
         }.getOrNull()
+    }
+
+    private fun relativePathFromAncestor(ancestor: VirtualFile, file: VirtualFile): String? {
+        if (ancestor == file) return ""
+        val names = mutableListOf<String>()
+        var current: VirtualFile? = file
+        while (current != null && current != ancestor) {
+            names += current.name
+            current = current.parent
+        }
+        if (current != ancestor) return null
+        return names.asReversed().joinToString("/")
     }
 
     private fun isInsideDirectory(file: VirtualFile, directory: VirtualFile): Boolean {

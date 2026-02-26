@@ -30,7 +30,9 @@ import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import kotlinx.coroutines.currentCoroutineContext
 
@@ -125,7 +127,7 @@ internal class SearchScopeMcpTools : McpToolset {
             descriptor = scope,
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-        val file = readAction { VirtualFileManager.getInstance().findFileByUrl(fileUrl) }
+        val file = findFileByUrl(fileUrl)
             ?: mcpFail("File URL '$fileUrl' not found.")
         if (file.isDirectory) {
             mcpFail("URL '$fileUrl' points to a directory, not a file.")
@@ -168,24 +170,21 @@ internal class SearchScopeMcpTools : McpToolset {
         val excluded = mutableListOf<String>()
         val missing = mutableListOf<String>()
 
-        readAction {
-            val vfsManager = VirtualFileManager.getInstance()
-            fileUrls.forEach { url ->
-                val file = vfsManager.findFileByUrl(url)
-                when {
-                    file == null -> {
-                        missing += url
-                        diagnostics += "File URL '$url' not found."
-                    }
-
-                    file.isDirectory -> {
-                        missing += url
-                        diagnostics += "URL '$url' points to a directory and was skipped."
-                    }
-
-                    resolved.scope.contains(file) -> matched += url
-                    else -> excluded += url
+        fileUrls.forEach { url ->
+            val file = findFileByUrl(url)
+            when {
+                file == null -> {
+                    missing += url
+                    diagnostics += "File URL '$url' not found."
                 }
+
+                file.isDirectory -> {
+                    missing += url
+                    diagnostics += "URL '$url' points to a directory and was skipped."
+                }
+
+                readAction { resolved.scope.contains(file) } -> matched += url
+                else -> excluded += url
             }
         }
 
@@ -197,5 +196,12 @@ internal class SearchScopeMcpTools : McpToolset {
             missingFileUrls = missing,
             diagnostics = (scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
+    }
+
+    private suspend fun findFileByUrl(url: String): VirtualFile? {
+        val manager = VirtualFileManager.getInstance()
+        val direct = readAction { manager.findFileByUrl(url) }
+        if (direct != null) return direct
+        return backgroundWriteAction { manager.refreshAndFindFileByUrl(url) }
     }
 }
