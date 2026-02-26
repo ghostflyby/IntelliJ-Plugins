@@ -22,7 +22,9 @@
 
 package dev.ghostflyby.mcp.scope
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 @Serializable
 internal enum class ScopeAtomKind {
@@ -45,6 +47,8 @@ internal enum class ModuleScopeFlavor {
 
 @Serializable
 internal enum class ScopeProgramOp {
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("ATOM")
     PUSH_ATOM,
     AND,
     OR,

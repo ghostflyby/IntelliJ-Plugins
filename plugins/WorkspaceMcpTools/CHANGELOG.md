@@ -32,6 +32,12 @@
 - Added batch Navigation tools: `navigation_to_reference_batch` and `navigation_find_references_batch`.
 - Added IDE documentation lookup tools for VFS URL positions:
   `navigation_get_symbol_info` and `navigation_get_symbol_info_batch`.
+- Added code quality toolset `CodeQualityMcpTools` with:
+  `quality_get_file_problems`, `quality_get_scope_problems`, `quality_reformat_file`,
+  `quality_optimize_imports_file`, `quality_reformat_scope_files`, and `quality_optimize_imports_scope_files`.
+- Extended `CodeQualityMcpTools` with:
+  `quality_get_scope_problems_by_severity`, `quality_fix_file_quick`, `quality_fix_scope_quick`,
+  `quality_list_inspection_profiles`, `quality_code_cleanup_file`, and `quality_code_cleanup_scope_files`.
 
 ### Changed
 
@@ -46,3 +52,5 @@
   whitespace-split `query`), aligning behavior with IDE-like file matcher semantics.
 - `scope_search_files` now uses `FilenameIndex` for `NAME` mode on `GLOBAL` scopes, and falls back to
   `ProjectFileIndex` traversal for non-global or non-indexable scopes.
+- `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
+  backward compatibility for previously serialized scope programs.

@@ -79,6 +79,24 @@ Some navigation tools are best-effort (notably caller/type/inheritor/override qu
 depending on language PSI shape. You can set `fallbackToReferencesWhenEmpty=true` to auto-fallback to
 `navigation_find_references` semantics inside the same call.
 
+Code Quality tools:
+
+- `quality_get_file_problems`
+- `quality_get_scope_problems`
+- `quality_get_scope_problems_by_severity`
+- `quality_reformat_file`
+- `quality_optimize_imports_file`
+- `quality_reformat_scope_files`
+- `quality_optimize_imports_scope_files`
+- `quality_fix_file_quick`
+- `quality_fix_scope_quick`
+- `quality_list_inspection_profiles`
+- `quality_code_cleanup_file`
+- `quality_code_cleanup_scope_files`
+
+These tools wrap IDE-native quality actions: daemon highlighting (problem collection), reformat code,
+and optimize imports. Scope variants resolve scope descriptors first and then process matched project-content files.
+
 SearchScope tools:
 
 - `scope_list_catalog`
