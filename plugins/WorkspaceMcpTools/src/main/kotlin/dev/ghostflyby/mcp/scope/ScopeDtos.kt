@@ -197,6 +197,42 @@ internal enum class ScopeTextQueryMode {
 }
 
 @Serializable
+internal enum class ScopeSymbolKind {
+    CLASS,
+    METHOD,
+    FIELD,
+    SYMBOL,
+    UNKNOWN,
+}
+
+@Serializable
+internal data class ScopeSymbolSearchItemDto(
+    val name: String,
+    val qualifiedName: String? = null,
+    val fileUrl: String? = null,
+    val filePath: String? = null,
+    val line: Int? = null,
+    val column: Int? = null,
+    val kind: ScopeSymbolKind = ScopeSymbolKind.UNKNOWN,
+    val language: String? = null,
+    val score: Int? = null,
+)
+
+@Serializable
+internal data class ScopeSymbolSearchResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val query: String,
+    val includeNonProjectItems: Boolean,
+    val requirePhysicalLocation: Boolean,
+    val items: List<ScopeSymbolSearchItemDto>,
+    val probablyHasMoreMatchingEntries: Boolean = false,
+    val timedOut: Boolean = false,
+    val canceled: Boolean = false,
+    val diagnostics: List<String> = emptyList(),
+)
+
+@Serializable
 internal enum class ScopeTextSearchContextDto {
     ANY,
     IN_STRING_LITERALS,
