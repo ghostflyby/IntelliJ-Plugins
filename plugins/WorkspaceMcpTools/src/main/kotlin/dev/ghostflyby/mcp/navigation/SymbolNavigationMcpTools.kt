@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.mcp.navigation
 
+import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -40,9 +41,6 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.Processor
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
-
-private const val VFS_URL_PARAM_DESCRIPTION =
-    "Target VFS URL. Example: file:///absolute/path/to/file.txt"
 
 @Suppress("FunctionName")
 internal class SymbolNavigationMcpTools : McpToolset {

@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.mcp.document
 
+import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
@@ -35,9 +36,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import kotlinx.serialization.Serializable
-
-private const val VFS_URL_PARAM_DESCRIPTION =
-    "Target VFS URL. Example: file:///absolute/path/to/file.txt"
 
 @Suppress("FunctionName")
 internal class DocumentMcpTools : McpToolset {
