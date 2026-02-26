@@ -35,9 +35,37 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
 internal class SearchScopeMcpTools : McpToolset {
+
+    @Serializable
+    enum class ScopeDefaultPreset {
+        PROJECT_FILES,
+        ALL_PLACES,
+        OPEN_FILES,
+        PROJECT_AND_LIBRARIES,
+        PROJECT_PRODUCTION_FILES,
+        PROJECT_TEST_FILES,
+    }
+
+    @Serializable
+    enum class ScopeCatalogIntent {
+        PROJECT_ONLY,
+        WITH_LIBRARIES,
+        CHANGED_FILES,
+        OPEN_FILES,
+        CURRENT_FILE,
+    }
+
+    @Serializable
+    data class ScopeCatalogIntentResultDto(
+        val intent: ScopeCatalogIntent,
+        val recommendedScopeRefId: String? = null,
+        val items: List<ScopeCatalogItemDto>,
+        val diagnostics: List<String> = emptyList(),
+    )
 
     @McpTool
     @McpDescription("List available search scopes (Find-like catalog) with stable scopeRefId and metadata.")
@@ -48,6 +76,114 @@ internal class SearchScopeMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.scope.list.catalog", includeInteractiveScopes))
         val project = currentCoroutineContext().project
         return ScopeCatalogService.getInstance(project).listCatalog(project, includeInteractiveScopes)
+    }
+
+    @McpTool
+    @McpDescription(
+        "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
+    )
+    suspend fun scope_get_default_descriptor(
+        @McpDescription("Preset scope to use.")
+        preset: ScopeDefaultPreset = ScopeDefaultPreset.PROJECT_FILES,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeResolveResultDto {
+        reportActivity(Bundle.message("tool.activity.scope.get.default.descriptor", preset.name, allowUiInteractiveScopes))
+        val standardScopeId = when (preset) {
+            ScopeDefaultPreset.PROJECT_FILES -> "Project Files"
+            ScopeDefaultPreset.ALL_PLACES -> "All Places"
+            ScopeDefaultPreset.OPEN_FILES -> "Open Files"
+            ScopeDefaultPreset.PROJECT_AND_LIBRARIES -> "Project and Libraries"
+            ScopeDefaultPreset.PROJECT_PRODUCTION_FILES -> "Project Production Files"
+            ScopeDefaultPreset.PROJECT_TEST_FILES -> "Project Test Files"
+        }
+        return scope_resolve_standard_descriptor(
+            standardScopeId = standardScopeId,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+    }
+
+    @McpTool
+    @McpDescription("Resolve a standard IDE scope id directly to a normalized reusable descriptor.")
+    suspend fun scope_resolve_standard_descriptor(
+        @McpDescription("Standard scope id, for example 'Project Files' or 'All Places'.")
+        standardScopeId: String,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeResolveResultDto {
+        if (standardScopeId.isBlank()) {
+            mcpFail("standardScopeId must not be blank.")
+        }
+        reportActivity(Bundle.message("tool.activity.scope.resolve.standard.descriptor", standardScopeId, allowUiInteractiveScopes))
+        val project = currentCoroutineContext().project
+        val descriptor = buildStandardScopeDescriptor(
+            project = project,
+            standardScopeId = standardScopeId,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        return ScopeResolveResultDto(descriptor = descriptor)
+    }
+
+    @McpTool
+    @McpDescription(
+        "Find a compact scope catalog subset by intent (project-only, with-libraries, changed/open/current file) " +
+            "to reduce first-call catalog payload.",
+    )
+    suspend fun scope_catalog_find_by_intent(
+        @McpDescription("Selection intent for reducing catalog candidates.")
+        intent: ScopeCatalogIntent,
+        @McpDescription("Maximum number of catalog items to return.")
+        maxResults: Int = 20,
+        @McpDescription("Whether to include scopes that depend on current UI context.")
+        includeInteractiveScopes: Boolean = false,
+    ): ScopeCatalogIntentResultDto {
+        if (maxResults < 1) mcpFail("maxResults must be >= 1.")
+        reportActivity(Bundle.message("tool.activity.scope.catalog.find.by.intent", intent.name, maxResults, includeInteractiveScopes))
+        val project = currentCoroutineContext().project
+        val catalog = ScopeCatalogService.getInstance(project).listCatalog(project, includeInteractiveScopes)
+        val candidates = catalog.items.filter { item ->
+            val serializationId = item.serializationId
+            when (intent) {
+                ScopeCatalogIntent.PROJECT_ONLY -> serializationId == "Project Files" ||
+                    serializationId == "Project Production Files" ||
+                    serializationId == "Project Test Files" ||
+                    item.kind == ScopeAtomKind.MODULE
+
+                ScopeCatalogIntent.WITH_LIBRARIES -> serializationId == "All Places" ||
+                    serializationId == "Project and Libraries" ||
+                    item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_LIBRARIES ||
+                    item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES
+
+                ScopeCatalogIntent.CHANGED_FILES -> serializationId == "Recently Changed Files"
+                ScopeCatalogIntent.OPEN_FILES -> serializationId == "Open Files"
+                ScopeCatalogIntent.CURRENT_FILE -> serializationId == "Current File"
+            }
+        }
+        val sorted = candidates.sortedWith(
+            compareBy(
+                { it.requiresUserInput },
+                { it.unstable },
+                { it.displayName.lowercase() },
+            ),
+        )
+        val truncated = sorted.size > maxResults
+        val selected = sorted.take(maxResults)
+        val recommended = selected.firstOrNull()?.scopeRefId
+        val diagnostics = buildList {
+            addAll(catalog.diagnostics)
+            if (selected.isEmpty()) {
+                add("No catalog items matched intent=${intent.name}. Consider includeInteractiveScopes=true or a different intent.")
+            }
+            if (truncated) {
+                add("Matched catalog items exceed maxResults=$maxResults; result was truncated.")
+            }
+        }.distinct()
+        return ScopeCatalogIntentResultDto(
+            intent = intent,
+            recommendedScopeRefId = recommended,
+            items = selected,
+            diagnostics = diagnostics,
+        )
     }
 
     @McpTool
@@ -102,6 +238,32 @@ internal class SearchScopeMcpTools : McpToolset {
         val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
         return ScopeDescribeProgramResultDto(
             descriptor = descriptor,
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Normalize and recompile an existing scope descriptor, useful for migration and compatibility upgrades.",
+    )
+    suspend fun scope_normalize_program_descriptor(
+        descriptor: ScopeProgramDescriptorDto,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeDescribeProgramResultDto {
+        reportActivity(Bundle.message("tool.activity.scope.normalize.program.descriptor", descriptor.atoms.size, descriptor.tokens.size))
+        val project = currentCoroutineContext().project
+        val request = ScopeResolveRequestDto(
+            atoms = descriptor.atoms,
+            tokens = descriptor.tokens,
+            strict = true,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            nonStrictDefaultFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
+        )
+        val normalized = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
+        return ScopeDescribeProgramResultDto(
+            descriptor = normalized.copy(
+                diagnostics = (descriptor.diagnostics + normalized.diagnostics).distinct(),
+            ),
         )
     }
 

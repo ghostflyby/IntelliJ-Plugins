@@ -38,6 +38,16 @@
 - Extended `CodeQualityMcpTools` with:
   `quality_get_scope_problems_by_severity`, `quality_fix_file_quick`, `quality_fix_scope_quick`,
   `quality_list_inspection_profiles`, `quality_code_cleanup_file`, and `quality_code_cleanup_scope_files`.
+- Added first-call optimization shortcuts across toolsets:
+  `scope_get_default_descriptor`, `scope_resolve_standard_descriptor`, `scope_catalog_find_by_intent`,
+  `scope_normalize_program_descriptor`, `scope_find_source_file_by_class_name`,
+  `scope_search_symbols_quick`, `scope_search_symbols_with_stage_progress`, `scope_search_symbols_healthcheck`,
+  `navigation_get_symbol_info_by_offset`, `navigation_get_symbol_info_auto_position`,
+  `navigation_get_symbol_info_quick`, and `vfs_read_api_signature`.
+- Added broader preset-based quick shortcuts to reduce first-call scope assembly:
+  `scope_search_files_quick`, `scope_search_text_quick`,
+  `quality_get_scope_problems_quick`, `quality_get_scope_problems_by_severity_quick`,
+  and `quality_fix_scope_quick_by_preset`.
 
 ### Changed
 

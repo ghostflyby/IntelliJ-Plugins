@@ -1,5 +1,8 @@
 # Symbol Search 设计稿（Stub/Index First）
 
+> 状态：已实现（主链路）
+> 最后核对：2026-02-26
+
 ## 背景
 `SearchScope` Phase 1 已完成 scope 描述与解析能力。下一步是实现 scope 内符号搜索，要求：
 - 尽量对齐 IDE 的 `Go to Symbol / Search Everywhere` 行为。

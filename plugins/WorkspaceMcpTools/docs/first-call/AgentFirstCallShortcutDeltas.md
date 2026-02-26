@@ -1,5 +1,8 @@
 # Agent First-Call Shortcut Deltas
 
+> 状态：部分实现（持续跟踪）
+> 最后核对：2026-02-26
+
 ## 记录规则
 - 本文档按阶段追加，目标是提升「agent 无先验知识」场景下的首次调用有效概率，并减少回归次数。
 - 每个阶段只记录“新增发现”和“新增建议”，不重复历史内容。
@@ -186,3 +189,68 @@
 ### 降回归实现建议
 - 对枚举演进场景统一使用别名反序列化（例如 `@JsonNames`）并在 changelog 标注兼容窗口。
 - 增加兼容回归样例：输入 `op=ATOM`、`op=PUSH_ATOM` 都应成功，并且输出统一为新规范值。
+
+## Phase: ToolsetFirstCallOptimization-P1 (2026-02-26)
+
+### 新增发现
+- 首次调用中最常见的失败点仍集中在“scope 构造前置步骤过多”和“位置参数（row/column/offset）转换成本高”。
+- 符号搜索在 provider 回退路径下可用，但 agent 往往缺少“是否需要重试/扩 scope”的即时判断信号。
+- 库源码阅读场景中，`vfs_read_file_by_line_range` 仍经常被当作探测工具，导致重复调用轮次偏多。
+
+### 新增快捷入口建议
+- `scope_get_default_descriptor` / `scope_resolve_standard_descriptor`
+  - 一跳得到可用 descriptor，减少 catalog + token 组装失败。
+
+- `scope_catalog_find_by_intent`
+  - 按意图返回精简目录和推荐项，降低 catalog 大响应带来的首轮失败。
+
+- `scope_search_symbols_quick` / `scope_search_symbols_with_stage_progress` / `scope_search_symbols_healthcheck`
+  - 统一“快速搜索 + 阶段计数 + 预检”链路，减少盲目重试。
+
+- `navigation_get_symbol_info_by_offset` / `navigation_get_symbol_info_auto_position` / `navigation_get_symbol_info_quick`
+  - 降低位置参数转换错误，统一返回归一化位置。
+
+- `vfs_read_api_signature`
+  - 直接返回结构化签名快照，减少多次行区间试探。
+
+### 降回归实现建议
+- 对 quick 类入口统一固定默认策略：`allowUiInteractiveScopes=false`、`PROJECT_FILES` 优先。
+- 对 healthcheck/with_stage 类接口统一返回 provider 模式和诊断，避免 agent 从日志文本反推状态。
+- 增加最小回归链路样例：
+  - `scope_get_default_descriptor -> scope_search_symbols_quick`
+  - `navigation_get_symbol_info_by_offset -> navigation_to_reference`
+  - `scope_find_source_file_by_class_name -> vfs_read_api_signature`
+
+## Phase: ToolsetFirstCallOptimization-P2 (2026-02-26)
+
+### 新增发现
+- `scope_search_files` 与 `scope_search_text` 虽然能力完整，但首次调用仍要求显式 `ScopeProgramDescriptorDto`，在“无先验 agent”场景下容易回退到多轮 scope 组装。
+- 代码质量侧 `quality_get_scope_problems*` / `quality_fix_scope_quick` 仍存在同类前置成本：先构造 scope，再进入分析或修复。
+- 多个 toolset 内部曾重复实现 “standard scope -> descriptor” 构造逻辑，后续演进时容易出现兼容行为分叉。
+
+### 新增快捷入口建议
+- `scope_search_files_quick`
+  - 目的：提供 preset 驱动的文件搜索首调入口，避免先手工构建 descriptor。
+  - 输入：`query/keywords + scopePreset + matchMode`。
+  - 价值：把“scope 构造 + 文件搜索”压缩为 1 次调用。
+
+- `scope_search_text_quick`
+  - 目的：提供 preset 驱动的文本搜索首调入口，统一 plain/regex 首调路径。
+  - 输入：`query + mode + scopePreset`。
+  - 价值：降低文本检索链路首次失败概率（尤其 regex 模式）。
+
+- `quality_get_scope_problems_quick` / `quality_get_scope_problems_by_severity_quick`
+  - 目的：在代码质量分析场景直接使用 preset scope 进入扫描与聚合。
+  - 价值：减少“先 scope 后分析”的编排回归。
+
+- `quality_fix_scope_quick_by_preset`
+  - 目的：对 scope 快速修复（optimize imports + reformat）提供 preset 首调入口。
+  - 价值：减少 agent 自行补全 descriptor 的失败面。
+
+### 降回归实现建议
+- 统一跨 toolset 的 preset-to-scope 构建逻辑，避免重复实现导致的兼容差异。
+- 对 quick 入口继续保持 `allowUiInteractiveScopes=false` 的固定默认，减少 UI 上下文依赖导致的不稳定。
+- 增加黄金链路回归样例：
+  - `scope_search_files_quick -> vfs_read_file_by_line_range`
+  - `scope_search_text_quick -> scope_replace_text_preview`
+  - `quality_get_scope_problems_quick -> quality_fix_scope_quick_by_preset`

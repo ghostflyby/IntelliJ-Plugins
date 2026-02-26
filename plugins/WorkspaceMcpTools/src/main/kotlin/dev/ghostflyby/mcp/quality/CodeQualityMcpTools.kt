@@ -63,8 +63,10 @@ import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.batchTry
 import dev.ghostflyby.mcp.reportActivity
 import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
+import dev.ghostflyby.mcp.scope.ScopeQuickPreset
 import dev.ghostflyby.mcp.scope.ScopeResolverService
 import dev.ghostflyby.mcp.scope.ScopeShape
+import dev.ghostflyby.mcp.scope.buildPresetScopeDescriptor
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
@@ -277,6 +279,50 @@ internal class CodeQualityMcpTools : McpToolset {
     }
 
     @McpTool
+    @McpDescription(
+        "First-call friendly scope problem analysis shortcut with preset scope and default non-interactive resolution.",
+    )
+    suspend fun quality_get_scope_problems_quick(
+        @McpDescription("Preset scope for quick analysis.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription("Whether to include only errors or include both errors and warnings.")
+        errorsOnly: Boolean = true,
+        @McpDescription("Maximum number of files to analyze from the matched scope.")
+        maxFileCount: Int = 200,
+        @McpDescription("Maximum number of problems to return across all files.")
+        maxProblemCount: Int = 5000,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @McpDescription("Whether to continue when a single file analysis fails.")
+        continueOnError: Boolean = true,
+    ): QualityScopeProblemsResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.quality.scope.problems.quick",
+                scopePreset.name,
+                maxFileCount,
+                maxProblemCount,
+                timeoutMillis,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val descriptor = buildPresetScopeDescriptor(
+            project = project,
+            preset = scopePreset,
+            allowUiInteractiveScopes = false,
+        )
+        return quality_get_scope_problems(
+            scope = descriptor,
+            errorsOnly = errorsOnly,
+            maxFileCount = maxFileCount,
+            maxProblemCount = maxProblemCount,
+            timeoutMillis = timeoutMillis,
+            continueOnError = continueOnError,
+            allowUiInteractiveScopes = false,
+        )
+    }
+
+    @McpTool
     @McpDescription("Run IDE reformat action for a single file by VFS URL.")
     suspend fun quality_reformat_file(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
@@ -460,6 +506,54 @@ internal class CodeQualityMcpTools : McpToolset {
     }
 
     @McpTool
+    @McpDescription(
+        "First-call friendly severity-filtered scope problem analysis shortcut with preset scope.",
+    )
+    suspend fun quality_get_scope_problems_by_severity_quick(
+        @McpDescription("Preset scope for quick analysis.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription("Minimum severity threshold for returned problems.")
+        minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
+        @McpDescription("Maximum number of files to analyze from the matched scope.")
+        maxFileCount: Int = 200,
+        @McpDescription("Maximum number of problems to collect before severity filtering.")
+        maxProblemCount: Int = 5000,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @McpDescription("Whether to continue when a single file analysis fails.")
+        continueOnError: Boolean = true,
+        @McpDescription("Whether to keep files that have no problems after severity filtering.")
+        includeFilesWithoutMatchingProblems: Boolean = false,
+    ): QualityScopeProblemsBySeverityResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.quality.scope.problems.by.severity.quick",
+                scopePreset.name,
+                minSeverity.name,
+                maxFileCount,
+                maxProblemCount,
+                timeoutMillis,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val descriptor = buildPresetScopeDescriptor(
+            project = project,
+            preset = scopePreset,
+            allowUiInteractiveScopes = false,
+        )
+        return quality_get_scope_problems_by_severity(
+            scope = descriptor,
+            minSeverity = minSeverity,
+            maxFileCount = maxFileCount,
+            maxProblemCount = maxProblemCount,
+            timeoutMillis = timeoutMillis,
+            continueOnError = continueOnError,
+            allowUiInteractiveScopes = false,
+            includeFilesWithoutMatchingProblems = includeFilesWithoutMatchingProblems,
+        )
+    }
+
+    @McpTool
     @McpDescription("Run quick file fix pipeline (optimize imports + reformat) by VFS URL.")
     suspend fun quality_fix_file_quick(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
@@ -632,6 +726,44 @@ internal class CodeQualityMcpTools : McpToolset {
             timedOut = timedOut,
             canceled = false,
             diagnostics = (scope.diagnostics + resolvedScope.diagnostics + diagnostics).distinct(),
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "First-call friendly quick scope fix shortcut (optimize imports + reformat) with preset scope.",
+    )
+    suspend fun quality_fix_scope_quick_by_preset(
+        @McpDescription("Preset scope for quick fix.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription("Maximum number of files to process from matched scope.")
+        maxFileCount: Int = 200,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 180000,
+        @McpDescription("Whether to continue when a single file processing fails.")
+        continueOnError: Boolean = true,
+    ): QualityScopeQuickFixResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.quality.scope.quick.fix.by.preset",
+                scopePreset.name,
+                maxFileCount,
+                continueOnError,
+                timeoutMillis,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val descriptor = buildPresetScopeDescriptor(
+            project = project,
+            preset = scopePreset,
+            allowUiInteractiveScopes = false,
+        )
+        return quality_fix_scope_quick(
+            scope = descriptor,
+            maxFileCount = maxFileCount,
+            timeoutMillis = timeoutMillis,
+            continueOnError = continueOnError,
+            allowUiInteractiveScopes = false,
         )
     }
 

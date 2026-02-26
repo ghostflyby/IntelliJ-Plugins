@@ -57,6 +57,7 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.serialization.Serializable
 
 private const val GLOBAL_AND_LOCAL_UNION_SCOPE_CLASS = "com.intellij.psi.search.GlobalAndLocalUnionScope"
 private const val GLOBAL_AND_LOCAL_UNION_GLOBAL_FIELD = "myMyGlobalScope"
@@ -64,6 +65,37 @@ private const val GLOBAL_AND_LOCAL_UNION_LOCAL_FIELD = "myLocalScope"
 
 @Suppress("FunctionName")
 internal class ScopeSymbolSearchMcpTools : McpToolset {
+
+    @Serializable
+    enum class ScopeSymbolQuickPreset {
+        PROJECT_FILES,
+        ALL_PLACES,
+    }
+
+    @Serializable
+    data class ScopeSymbolSearchStageStatsDto(
+        val recallObserved: Int,
+        val convertedProcessed: Int,
+        val rawCandidates: Int,
+        val returnedItems: Int,
+        val timedOut: Boolean,
+        val providerMode: String,
+    )
+
+    @Serializable
+    data class ScopeSymbolSearchWithStageResultDto(
+        val result: ScopeSymbolSearchResultDto,
+        val stageStats: ScopeSymbolSearchStageStatsDto,
+    )
+
+    @Serializable
+    data class ScopeSymbolSearchHealthcheckResultDto(
+        val indexReady: Boolean,
+        val providerMode: String,
+        val scopeDisplayName: String? = null,
+        val scopeShape: ScopeShape? = null,
+        val diagnostics: List<String> = emptyList(),
+    )
 
     @McpTool
     @McpDescription(
@@ -254,6 +286,137 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             return result
         } catch (_: IndexNotReadyException) {
             mcpFail("Symbol search is temporarily unavailable while indexes are updating. Please retry.")
+        } finally {
+            Disposer.dispose(modelDisposable)
+        }
+    }
+
+    @McpTool
+    @McpDescription(
+        "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope.",
+    )
+    suspend fun scope_search_symbols_quick(
+        @McpDescription("Symbol query string.")
+        query: String,
+        @McpDescription("Preset scope for quick search.")
+        scopePreset: ScopeSymbolQuickPreset = ScopeSymbolQuickPreset.PROJECT_FILES,
+        @McpDescription("Maximum number of symbol items to return.")
+        maxResultCount: Int = 50,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 20000,
+        @McpDescription("Whether returned items must have physical file+position location.")
+        requirePhysicalLocation: Boolean = true,
+    ): ScopeSymbolSearchResultDto {
+        val allowUiInteractiveScopes = false
+        val standardScopeId = when (scopePreset) {
+            ScopeSymbolQuickPreset.PROJECT_FILES -> "Project Files"
+            ScopeSymbolQuickPreset.ALL_PLACES -> "All Places"
+        }
+        val descriptor = buildStandardScopeDescriptor(
+            project = currentCoroutineContext().project,
+            standardScopeId = standardScopeId,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val includeNonProjectItems = scopePreset == ScopeSymbolQuickPreset.ALL_PLACES
+        return scope_search_symbols(
+            query = query,
+            scope = descriptor,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxResultCount = maxResultCount,
+            timeoutMillis = timeoutMillis,
+            includeNonProjectItems = includeNonProjectItems,
+            requirePhysicalLocation = requirePhysicalLocation,
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Search symbols and return stage counters for agent-side retry/expand decisions.",
+    )
+    suspend fun scope_search_symbols_with_stage_progress(
+        @McpDescription("Symbol query string (for example class/method/field name pattern).")
+        query: String,
+        scope: ScopeProgramDescriptorDto,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+        @McpDescription("Maximum number of symbol items to return.")
+        maxResultCount: Int = 200,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @McpDescription("Whether to include non-project symbols (libraries/dependencies) when scope allows.")
+        includeNonProjectItems: Boolean = true,
+        @McpDescription("Whether returned items must have physical file+position location.")
+        requirePhysicalLocation: Boolean = true,
+    ): ScopeSymbolSearchWithStageResultDto {
+        val health = scope_search_symbols_healthcheck(
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val result = scope_search_symbols(
+            query = query,
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxResultCount = maxResultCount,
+            timeoutMillis = timeoutMillis,
+            includeNonProjectItems = includeNonProjectItems,
+            requirePhysicalLocation = requirePhysicalLocation,
+        )
+        val estimatedProcessed = result.items.size + result.diagnostics.count { it.startsWith("Skipped ") }
+        return ScopeSymbolSearchWithStageResultDto(
+            result = result,
+            stageStats = ScopeSymbolSearchStageStatsDto(
+                recallObserved = estimatedProcessed,
+                convertedProcessed = estimatedProcessed,
+                rawCandidates = estimatedProcessed,
+                returnedItems = result.items.size,
+                timedOut = result.timedOut,
+                providerMode = health.providerMode,
+            ),
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Quickly check symbol search readiness (index state + provider mode) before a full search.",
+    )
+    suspend fun scope_search_symbols_healthcheck(
+        scope: ScopeProgramDescriptorDto,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeSymbolSearchHealthcheckResultDto {
+        reportActivity(Bundle.message("tool.activity.scope.symbol.search.healthcheck", allowUiInteractiveScopes))
+        val project = currentCoroutineContext().project
+        if (DumbService.isDumb(project)) {
+            return ScopeSymbolSearchHealthcheckResultDto(
+                indexReady = false,
+                providerMode = "unknown",
+                diagnostics = listOf("Indexing is in progress; retry symbol search after indexing completes."),
+            )
+        }
+        val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+            project = project,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val modelDisposable = Disposer.newDisposable("ScopeSymbolSearchMcpTools.scope_search_symbols_healthcheck")
+        return try {
+            val model = GotoSymbolModel2(project, modelDisposable)
+            val provider = ChooseByNameModelEx.getItemProvider(model, null)
+            val providerMode = if (provider is ChooseByNameInScopeItemProvider) "inScope" else "fallback"
+            val diagnostics = buildList {
+                addAll(scope.diagnostics)
+                addAll(resolved.diagnostics)
+                if (providerMode == "fallback") {
+                    add("Provider '${provider.javaClass.name}' is not ChooseByNameInScopeItemProvider; contributor fallback path will be used.")
+                }
+            }.distinct()
+            ScopeSymbolSearchHealthcheckResultDto(
+                indexReady = true,
+                providerMode = providerMode,
+                scopeDisplayName = resolved.displayName,
+                scopeShape = resolved.scopeShape,
+                diagnostics = diagnostics,
+            )
         } finally {
             Disposer.dispose(modelDisposable)
         }
@@ -465,7 +628,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                 ?: (effectiveElement as? PsiNamedElement)?.name
                 ?: presentation?.presentableText
                 ?: source.toString()
-            val name = if (rawName.isNotBlank()) rawName else "<anonymous>"
+            val name = rawName.ifBlank { "<anonymous>" }
             val qualifiedName = runCatching { model.getFullName(navigationItem ?: source) }
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() }

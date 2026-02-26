@@ -69,6 +69,26 @@ internal class VfsMcpTools : McpToolset {
         val clamped: Boolean = false,
     )
 
+    @Serializable
+    class VfsApiSignatureMatch(
+        val line: Int,
+        val text: String,
+    )
+
+    @Serializable
+    class VfsApiSignatureResult(
+        val url: String,
+        val fileType: String,
+        val totalLines: Int,
+        val imports: List<String>,
+        val typeDeclaration: String? = null,
+        val matchedMembers: List<VfsApiSignatureMatch> = emptyList(),
+        val previewStartLine: Int,
+        val previewEndLineInclusive: Int,
+        val preview: String,
+        val diagnostics: List<String> = emptyList(),
+    )
+
     @McpTool
     @McpDescription(
         "Resolve a project-relative local path to a VFS URL. " +
@@ -655,6 +675,92 @@ internal class VfsMcpTools : McpToolset {
             startLine = startLine,
             endLineInclusive = endLineInclusive,
             clampOutOfBounds = clampOutOfBounds,
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Read a structured API signature snapshot from a source file, including imports, main type declaration, and matched members.",
+    )
+    suspend fun vfs_read_api_signature(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        fileUrl: String,
+        @McpDescription("Optional symbol/member name to focus on.")
+        symbolName: String? = null,
+        @McpDescription("Maximum number of preview lines to return.")
+        maxLines: Int = 120,
+    ): VfsApiSignatureResult {
+        if (maxLines < 1) {
+            mcpFail("maxLines must be >= 1")
+        }
+        reportActivity(
+            Bundle.message(
+                "tool.activity.vfs.read.api.signature",
+                fileUrl,
+                symbolName ?: "<none>",
+                maxLines,
+            ),
+        )
+        val file = getRegularFile(fileUrl)
+        val fileType = readAction { file.fileType.name }
+        val full = readFile(
+            url = fileUrl,
+            mode = ReadMode.FULL,
+        )
+        val lines = full.content.split('\n')
+        val totalLines = lines.size
+        val importRegex = Regex("^\\s*import\\s+.+")
+        val typeRegex = Regex("\\b(class|interface|enum|record|object|trait|struct)\\b")
+        val memberRegex = Regex(
+            "^\\s*(public|private|protected|internal|static|final|abstract|suspend|fun|def|func|val|var)\\b.*",
+        )
+        val normalizedSymbol = symbolName?.trim()?.takeIf { it.isNotEmpty() }
+        val symbolRegex = normalizedSymbol?.let { Regex("\\b${Regex.escape(it)}\\b") }
+
+        val imports = mutableListOf<String>()
+        var typeDeclaration: String? = null
+        val memberMatches = mutableListOf<VfsApiSignatureMatch>()
+        lines.forEachIndexed { index, rawLine ->
+            val line = rawLine.trimEnd()
+            if (imports.size < 200 && importRegex.containsMatchIn(line)) {
+                imports += line
+            }
+            if (typeDeclaration == null && typeRegex.containsMatchIn(line)) {
+                typeDeclaration = line
+            }
+            if (normalizedSymbol != null) {
+                if (symbolRegex?.containsMatchIn(line) == true && memberRegex.containsMatchIn(line)) {
+                    memberMatches += VfsApiSignatureMatch(line = index + 1, text = line)
+                }
+            } else if (memberMatches.size < 20 && memberRegex.containsMatchIn(line)) {
+                memberMatches += VfsApiSignatureMatch(line = index + 1, text = line)
+            }
+        }
+
+        val previewStart = when {
+            memberMatches.isNotEmpty() -> maxOf(1, memberMatches.first().line - 10)
+            else -> 1
+        }
+        val previewEnd = minOf(totalLines, previewStart + maxLines - 1)
+        val preview = lines.subList(previewStart - 1, previewEnd).joinToString("\n")
+        val diagnostics = buildList {
+            if (imports.isEmpty()) add("No import statements found in previewed content.")
+            if (typeDeclaration == null) add("No primary type declaration detected by heuristic parser.")
+            if (normalizedSymbol != null && memberMatches.isEmpty()) {
+                add("No member signature matched symbolName='$normalizedSymbol'.")
+            }
+        }
+        return VfsApiSignatureResult(
+            url = fileUrl,
+            fileType = fileType,
+            totalLines = totalLines,
+            imports = imports,
+            typeDeclaration = typeDeclaration,
+            matchedMembers = memberMatches,
+            previewStartLine = previewStart,
+            previewEndLineInclusive = previewEnd,
+            preview = preview,
+            diagnostics = diagnostics,
         )
     }
 

@@ -128,6 +128,25 @@ internal class SymbolNavigationMcpTools : McpToolset {
     )
 
     @Serializable
+    class NavigationSymbolInfoAutoPositionInput(
+        val row: Int? = null,
+        val column: Int? = null,
+        val offset: Int? = null,
+    )
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Serializable
+    class NavigationSymbolInfoResolvedResult(
+        @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
+        val symbolInfo: SymbolInfo? = null,
+        val documentation: String,
+        val row: Int,
+        val column: Int,
+        val offset: Int,
+        val recommendedNextCalls: List<String> = emptyList(),
+    )
+
+    @Serializable
     class NavigationBatchSymbolInfoItem(
         val input: NavigationSymbolInfoPosition,
         val result: NavigationSymbolInfoResult? = null,
@@ -157,6 +176,92 @@ internal class SymbolNavigationMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.navigation.get.symbol.info", uri, row, column))
         val project = currentCoroutineContext().project
         return resolveSymbolInfo(project, uri, row, column)
+    }
+
+    @McpTool
+    @McpDescription(
+        "Retrieves symbol declaration and IDE quick documentation markdown by source offset (0-based) in the specified VFS URL.",
+    )
+    suspend fun navigation_get_symbol_info_by_offset(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        uri: String,
+        @McpDescription("Source offset (0-based).")
+        offset: Int,
+    ): NavigationSymbolInfoResolvedResult {
+        reportActivity(Bundle.message("tool.activity.navigation.get.symbol.info.by.offset", uri, offset))
+        val project = currentCoroutineContext().project
+        val position = runNavigationRead(project) {
+            resolvePositionFromOffset(uri, offset)
+        }
+        val info = resolveSymbolInfo(project, uri, position.row, position.column)
+        return NavigationSymbolInfoResolvedResult(
+            symbolInfo = info.symbolInfo,
+            documentation = info.documentation,
+            row = position.row,
+            column = position.column,
+            offset = position.offset,
+            recommendedNextCalls = listOf(
+                "navigation_get_symbol_info(uri='${uri}', row=${position.row}, column=${position.column})",
+            ),
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Retrieves symbol info by either row/column or offset. Exactly one positioning mode must be provided.",
+    )
+    suspend fun navigation_get_symbol_info_auto_position(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        uri: String,
+        input: NavigationSymbolInfoAutoPositionInput,
+    ): NavigationSymbolInfoResolvedResult {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.navigation.get.symbol.info.auto.position",
+                uri,
+                input.row?.toString() ?: "null",
+                input.column?.toString() ?: "null",
+                input.offset?.toString() ?: "null",
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val position = runNavigationRead(project) {
+            resolveAutoPosition(uri, input)
+        }
+        val info = resolveSymbolInfo(project, uri, position.row, position.column)
+        return NavigationSymbolInfoResolvedResult(
+            symbolInfo = info.symbolInfo,
+            documentation = info.documentation,
+            row = position.row,
+            column = position.column,
+            offset = position.offset,
+            recommendedNextCalls = listOf(
+                "navigation_get_symbol_info(uri='${uri}', row=${position.row}, column=${position.column})",
+                "navigation_get_symbol_info_by_offset(uri='${uri}', offset=${position.offset})",
+            ),
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "First-call friendly symbol info lookup by URI + row/column with normalized position in response.",
+    )
+    suspend fun navigation_get_symbol_info_quick(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        uri: String,
+        @McpDescription("Source line number (1-based).")
+        row: Int,
+        @McpDescription("Source column number (1-based).")
+        column: Int,
+    ): NavigationSymbolInfoResolvedResult {
+        return navigation_get_symbol_info_auto_position(
+            uri = uri,
+            input = NavigationSymbolInfoAutoPositionInput(
+                row = row,
+                column = column,
+                offset = null,
+            ),
+        )
     }
 
     @McpTool
@@ -558,6 +663,12 @@ internal class SymbolNavigationMcpTools : McpToolset {
         val documentationHtml: String,
     )
 
+    private class ResolvedSourcePosition(
+        val row: Int,
+        val column: Int,
+        val offset: Int,
+    )
+
     private suspend fun resolveSymbolInfo(
         project: Project,
         uri: String,
@@ -574,6 +685,71 @@ internal class SymbolNavigationMcpTools : McpToolset {
             } else {
                 convertHtmlToMarkdown(context.documentationHtml)
             },
+        )
+    }
+
+    private fun resolveAutoPosition(
+        uri: String,
+        input: NavigationSymbolInfoAutoPositionInput,
+    ): ResolvedSourcePosition {
+        val hasOffset = input.offset != null
+        val hasRowColumn = input.row != null || input.column != null
+        if (hasOffset && hasRowColumn) {
+            mcpFail("Provide either offset or row+column, not both.")
+        }
+        if (!hasOffset && !hasRowColumn) {
+            mcpFail("Provide either offset or row+column.")
+        }
+        if (hasOffset) {
+            val sourceOffset = input.offset
+            return resolvePositionFromOffset(uri, sourceOffset)
+        }
+        val row = input.row ?: mcpFail("row is required when offset is not provided.")
+        val column = input.column ?: mcpFail("column is required when offset is not provided.")
+        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
+        if (sourceFile.isDirectory) {
+            mcpFail("URL points to a directory, not a file: $uri")
+        }
+        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
+            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+        val offset = resolveSourceOffset(sourceDocument, row, column)
+        return ResolvedSourcePosition(
+            row = row,
+            column = column,
+            offset = offset,
+        )
+    }
+
+    private fun resolvePositionFromOffset(
+        uri: String,
+        offset: Int,
+    ): ResolvedSourcePosition {
+        if (offset < 0) {
+            mcpFail("offset must be >= 0")
+        }
+        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
+        if (sourceFile.isDirectory) {
+            mcpFail("URL points to a directory, not a file: $uri")
+        }
+        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
+            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+        if (sourceDocument.textLength == 0) {
+            return ResolvedSourcePosition(
+                row = 1,
+                column = 1,
+                offset = 0,
+            )
+        }
+        if (offset >= sourceDocument.textLength) {
+            mcpFail("offset must be in [0, ${sourceDocument.textLength - 1}] for URL: $uri")
+        }
+        val row = sourceDocument.getLineNumber(offset) + 1
+        val lineStart = sourceDocument.getLineStartOffset(row - 1)
+        val column = (offset - lineStart) + 1
+        return ResolvedSourcePosition(
+            row = row,
+            column = column,
+            offset = offset,
         )
     }
 

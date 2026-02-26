@@ -1,5 +1,8 @@
 # Code Quality Toolset Design (Phase 1)
 
+> 状态：已实现（主链路）
+> 最后核对：2026-02-26
+
 ## Goals
 - Add MCP tools for code-quality workflows using IDE-native behavior.
 - Keep inputs centered on `vfs url` and optionally `scope` descriptors.

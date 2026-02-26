@@ -1,5 +1,8 @@
 # Symbol Search Phase 1 Notes
 
+> 状态：部分实现（含待办项）
+> 最后核对：2026-02-26
+
 ## Tool Usage Record
 - Scope bootstrap:
   - Used `scope_list_catalog` + `scope_resolve_program` to build a stable `All Places` descriptor and validate cross-project/library search inputs.

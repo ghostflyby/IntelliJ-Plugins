@@ -21,6 +21,7 @@ VFS tools:
 - `vfs_read_file_full`
 - `vfs_read_file_by_char_range`
 - `vfs_read_file_by_line_range`
+- `vfs_read_api_signature`
 
 `vfs_read_file` supports multiple read strategies via `mode`:
 
@@ -61,6 +62,9 @@ Navigation tools:
 - `navigation_to_reference`
 - `navigation_to_reference_batch`
 - `navigation_get_symbol_info`
+- `navigation_get_symbol_info_by_offset`
+- `navigation_get_symbol_info_auto_position`
+- `navigation_get_symbol_info_quick`
 - `navigation_get_symbol_info_batch`
 - `navigation_to_type_definition`
 - `navigation_to_implementation`
@@ -83,13 +87,16 @@ Code Quality tools:
 
 - `quality_get_file_problems`
 - `quality_get_scope_problems`
+- `quality_get_scope_problems_quick`
 - `quality_get_scope_problems_by_severity`
+- `quality_get_scope_problems_by_severity_quick`
 - `quality_reformat_file`
 - `quality_optimize_imports_file`
 - `quality_reformat_scope_files`
 - `quality_optimize_imports_scope_files`
 - `quality_fix_file_quick`
 - `quality_fix_scope_quick`
+- `quality_fix_scope_quick_by_preset`
 - `quality_list_inspection_profiles`
 - `quality_code_cleanup_file`
 - `quality_code_cleanup_scope_files`
@@ -100,15 +107,26 @@ and optimize imports. Scope variants resolve scope descriptors first and then pr
 SearchScope tools:
 
 - `scope_list_catalog`
+- `scope_get_default_descriptor`
+- `scope_resolve_standard_descriptor`
+- `scope_catalog_find_by_intent`
 - `scope_validate_pattern`
 - `scope_resolve_program`
 - `scope_describe_program`
+- `scope_normalize_program_descriptor`
 - `scope_contains_file`
 - `scope_filter_files`
 - `scope_search_files`
+- `scope_search_files_quick`
 - `scope_find_files_by_name_keyword`
 - `scope_find_files_by_path_keyword`
+- `scope_find_source_file_by_class_name`
 - `find_in_directory_using_glob`
+- `scope_search_text_quick`
+- `scope_search_symbols`
+- `scope_search_symbols_quick`
+- `scope_search_symbols_with_stage_progress`
+- `scope_search_symbols_healthcheck`
 
 `scope_contains_file` checks membership of one VFS file URL against a scope descriptor.
 `scope_filter_files` filters multiple VFS file URLs and returns matched/excluded/missing lists.

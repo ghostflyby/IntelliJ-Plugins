@@ -1,5 +1,8 @@
 # SearchScope Phase 1 Notes
 
+> 状态：部分实现（含待办项）
+> 最后核对：2026-02-26
+
 ## Tool Usage Record
 - `vfs` tools:
   - Used `vfs_list_files` + `vfs_read_file_by_line_range` to inspect IntelliJ source JAR APIs (`SearchScope`, `GlobalSearchScope`, `PackageSetFactory`, `NamedScope`, `NamedScopesHolder`, `PredefinedSearchScopeProvider`).

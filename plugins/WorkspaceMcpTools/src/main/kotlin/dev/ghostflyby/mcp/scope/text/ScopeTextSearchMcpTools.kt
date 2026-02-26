@@ -44,6 +44,7 @@ import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.reportActivity
 import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
+import dev.ghostflyby.mcp.scope.ScopeQuickPreset
 import dev.ghostflyby.mcp.scope.ScopeResolverService
 import dev.ghostflyby.mcp.scope.ScopeShape
 import dev.ghostflyby.mcp.scope.ScopeTextOccurrenceDto
@@ -55,6 +56,7 @@ import dev.ghostflyby.mcp.scope.ScopeTextReplacementPreviewEntryDto
 import dev.ghostflyby.mcp.scope.ScopeTextSearchContextDto
 import dev.ghostflyby.mcp.scope.ScopeTextSearchRequestDto
 import dev.ghostflyby.mcp.scope.ScopeTextSearchResultDto
+import dev.ghostflyby.mcp.scope.buildPresetScopeDescriptor
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -105,6 +107,63 @@ internal class ScopeTextSearchMcpTools : McpToolset {
             timedOut = execution.timedOut,
             canceled = execution.canceled,
             diagnostics = execution.diagnostics,
+        )
+    }
+
+    @McpTool
+    @McpDescription("First-call friendly text search shortcut with preset scope.")
+    suspend fun scope_search_text_quick(
+        @McpDescription("Text or regex pattern to search.")
+        query: String,
+        @McpDescription("Search mode.")
+        mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+        @McpDescription("Preset scope for quick text search.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription("Whether to search in a case-sensitive manner.")
+        caseSensitive: Boolean = true,
+        @McpDescription("Whether to match whole words only.")
+        wholeWordsOnly: Boolean = false,
+        @McpDescription("Search context filter.")
+        searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+        @McpDescription("Optional file mask filter, e.g. '*.kt, !*Test.kt'.")
+        fileMask: String? = null,
+        @McpDescription("Maximum number of occurrences to return.")
+        maxUsageCount: Int = 1000,
+        @McpDescription("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @McpDescription("Whether to allow patterns that may match empty string in REGEX mode.")
+        allowEmptyMatches: Boolean = false,
+    ): ScopeTextSearchResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.text.search.quick",
+                scopePreset.name,
+                mode.name,
+                query.length,
+                maxUsageCount,
+                timeoutMillis,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val descriptor = buildPresetScopeDescriptor(
+            project = project,
+            preset = scopePreset,
+            allowUiInteractiveScopes = false,
+        )
+        return scope_search_text(
+            ScopeTextSearchRequestDto(
+                query = query,
+                mode = mode,
+                caseSensitive = caseSensitive,
+                wholeWordsOnly = wholeWordsOnly,
+                searchContext = searchContext,
+                fileMask = fileMask,
+                scope = descriptor,
+                allowUiInteractiveScopes = false,
+                maxUsageCount = maxUsageCount,
+                timeoutMillis = timeoutMillis,
+                allowEmptyMatches = allowEmptyMatches,
+            ),
         )
     }
 

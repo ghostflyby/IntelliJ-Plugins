@@ -205,6 +205,59 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         )
     }
 
+    @McpTool
+    @McpDescription(
+        "First-call friendly file search shortcut with preset scope and low-parameter defaults.",
+    )
+    suspend fun scope_search_files_quick(
+        @McpDescription("Search text or glob pattern depending on matchMode. For text modes, whitespace splits ordered keywords.")
+        query: String = "",
+        @McpDescription("Optional explicit ordered keywords for text modes; all keywords must match in order.")
+        keywords: List<String> = emptyList(),
+        @McpDescription("Preset scope for quick file search.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
+        matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
+        @McpDescription("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @McpDescription(
+            "Optional VFS directory URL to limit scan range. " +
+                "Example: jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/com/intellij/navigation",
+        )
+        directoryUrl: String? = null,
+        @McpDescription("Maximum number of matched files to return.")
+        maxResults: Int = 500,
+        @McpDescription("Timeout in milliseconds for this search.")
+        timeoutMillis: Int = 30000,
+    ): ScopeFileSearchResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.quick",
+                scopePreset.name,
+                matchMode.name,
+                maxResults,
+                timeoutMillis,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val descriptor = buildPresetScopeDescriptor(
+            project = project,
+            preset = scopePreset,
+            allowUiInteractiveScopes = false,
+        )
+        return scope_search_files(
+            query = query,
+            keywords = keywords,
+            scope = descriptor,
+            matchMode = matchMode,
+            caseSensitive = caseSensitive,
+            directoryUrl = directoryUrl,
+            maxResults = maxResults,
+            timeoutMillis = timeoutMillis,
+            allowUiInteractiveScopes = false,
+        )
+    }
+
     private suspend fun scanByTraversal(
         project: com.intellij.openapi.project.Project,
         resolvedScope: com.intellij.psi.search.SearchScope,
@@ -469,6 +522,74 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         )
     }
 
+    @McpTool
+    @McpDescription(
+        "Find likely source files by class name across project and libraries, with source-preferred ranking.",
+    )
+    suspend fun scope_find_source_file_by_class_name(
+        @McpDescription("Class name, simple or qualified.")
+        className: String,
+        @McpDescription("Optional scope descriptor; defaults to 'All Places' when omitted.")
+        scope: ScopeProgramDescriptorDto? = null,
+        @McpDescription("Whether to prioritize source-like paths over binary/artifact paths.")
+        preferSources: Boolean = true,
+        @McpDescription("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @McpDescription("Maximum number of matched files to return.")
+        maxResults: Int = 100,
+        @McpDescription("Timeout in milliseconds for this search.")
+        timeoutMillis: Int = 30000,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeFileSearchResultDto {
+        if (className.isBlank()) mcpFail("className must not be blank.")
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.by.class.name",
+                className,
+                preferSources,
+                maxResults,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val effectiveScope = scope ?: buildStandardScopeDescriptor(
+            project = project,
+            standardScopeId = "All Places",
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val simpleName = className.substringAfterLast('.').substringAfterLast('$').trim()
+        if (simpleName.isEmpty()) mcpFail("className '$className' does not contain a usable simple name.")
+        val search = scope_search_files(
+            query = simpleName,
+            keywords = listOf(simpleName),
+            scope = effectiveScope,
+            matchMode = ScopeFileSearchMode.NAME,
+            caseSensitive = caseSensitive,
+            directoryUrl = null,
+            maxResults = maxResults,
+            timeoutMillis = timeoutMillis,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val ranked = if (preferSources) {
+            search.matchedFileUrls.sortedWith(
+                compareBy(
+                    { sourceRank(it) },
+                    { it.lowercase() },
+                ),
+            )
+        } else {
+            search.matchedFileUrls
+        }
+        return search.copy(
+            query = className,
+            matchedFileUrls = ranked,
+            diagnostics = (search.diagnostics + buildList {
+                add("Heuristic class-name lookup used simpleName='$simpleName'.")
+                if (preferSources) add("Results were ranked to prefer source-like paths.")
+            }).distinct(),
+        )
+    }
+
     private suspend fun resolveDirectory(directoryUrl: String): VirtualFile {
         val manager = VirtualFileManager.getInstance()
         val file = readAction { manager.findFileByUrl(directoryUrl) }
@@ -632,4 +753,17 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         val queryForDisplay: String,
         val textKeywords: List<String>,
     )
+
+    private fun sourceRank(url: String): Int {
+        val lower = url.lowercase()
+        return when {
+            lower.contains("/src/") -> 0
+            lower.contains("/sources/") -> 1
+            lower.contains("-sources.jar!/") -> 2
+            lower.endsWith(".kt") || lower.endsWith(".java") || lower.endsWith(".groovy") || lower.endsWith(".scala") -> 3
+            lower.endsWith(".class") -> 8
+            lower.contains("/build/") || lower.contains("/out/") -> 9
+            else -> 5
+        }
+    }
 }

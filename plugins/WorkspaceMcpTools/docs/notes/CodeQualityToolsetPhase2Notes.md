@@ -1,5 +1,8 @@
 # CodeQuality Toolset Phase 2 Notes
 
+> 状态：部分实现（含待办项）
+> 最后核对：2026-02-26
+
 ## 本阶段新增能力
 - `quality_fix_file_quick`
 - `quality_fix_scope_quick`
