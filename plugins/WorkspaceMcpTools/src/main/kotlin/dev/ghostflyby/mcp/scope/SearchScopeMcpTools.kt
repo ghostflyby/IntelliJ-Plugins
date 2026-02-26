@@ -23,12 +23,11 @@
 package dev.ghostflyby.mcp.scope
 
 import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.project
-import com.intellij.mcpserver.reportToolActivity
-import com.intellij.openapi.util.NlsContexts
 import kotlinx.coroutines.currentCoroutineContext
 
 @Suppress("FunctionName")
@@ -40,7 +39,7 @@ internal class SearchScopeMcpTools : McpToolset {
         @McpDescription("Whether to include scopes that depend on current UI context (for example Current File).")
         includeInteractiveScopes: Boolean = true,
     ): ScopeCatalogResultDto {
-        this.reportActivity(Bundle.message("tool.activity.scope.list.catalog", includeInteractiveScopes))
+        reportActivity(Bundle.message("tool.activity.scope.list.catalog", includeInteractiveScopes))
         val project = currentCoroutineContext().project
         return ScopeCatalogService.getInstance(project).listCatalog(project, includeInteractiveScopes)
     }
@@ -51,7 +50,7 @@ internal class SearchScopeMcpTools : McpToolset {
         @McpDescription("Scope pattern text in IntelliJ PackageSet syntax.")
         patternText: String,
     ): ScopePatternValidationResultDto {
-        this.reportActivity(Bundle.message("tool.activity.scope.validate.pattern", patternText.length))
+        reportActivity(Bundle.message("tool.activity.scope.validate.pattern", patternText.length))
         val project = currentCoroutineContext().project
         return ScopeResolverService.getInstance(project).validatePattern(patternText)
     }
@@ -61,7 +60,7 @@ internal class SearchScopeMcpTools : McpToolset {
     suspend fun scope_resolve_program(
         request: ScopeResolveRequestDto,
     ): ScopeResolveResultDto {
-        this.reportActivity(
+        reportActivity(
             Bundle.message(
                 "tool.activity.scope.resolve.program",
                 request.atoms.size,
@@ -83,7 +82,7 @@ internal class SearchScopeMcpTools : McpToolset {
     suspend fun scope_describe_program(
         request: ScopeResolveRequestDto,
     ): ScopeDescribeProgramResultDto {
-        this.reportActivity(
+        reportActivity(
             Bundle.message(
                 "tool.activity.scope.describe.program",
                 request.atoms.size,
@@ -98,9 +97,5 @@ internal class SearchScopeMcpTools : McpToolset {
         return ScopeDescribeProgramResultDto(
             descriptor = descriptor,
         )
-    }
-
-    private suspend fun reportActivity(@NlsContexts.Label description: String) {
-        currentCoroutineContext().reportToolActivity(description)
     }
 }

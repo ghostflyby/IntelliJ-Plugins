@@ -26,19 +26,17 @@ import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
-import com.intellij.mcpserver.reportToolActivity
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import kotlinx.coroutines.currentCoroutineContext
+import dev.ghostflyby.mcp.reportActivity
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
@@ -379,7 +377,4 @@ internal class DocumentMcpTools : McpToolset {
         )
     }
 
-    private suspend fun reportActivity(@NlsContexts.Label description: String) {
-        currentCoroutineContext().reportToolActivity(description)
-    }
 }

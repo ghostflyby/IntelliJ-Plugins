@@ -24,17 +24,16 @@ package dev.ghostflyby.mcp.vfs
 
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
-import com.intellij.mcpserver.reportToolActivity
 import com.intellij.mcpserver.util.resolveInProject
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -443,9 +442,5 @@ internal class VfsMcpTools : McpToolset {
             }
         }
         return starts
-    }
-
-    private suspend fun reportActivity(@NlsContexts.Label description: String) {
-        currentCoroutineContext().reportToolActivity(description)
     }
 }
