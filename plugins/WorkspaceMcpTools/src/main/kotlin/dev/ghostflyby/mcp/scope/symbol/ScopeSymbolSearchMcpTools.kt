@@ -31,7 +31,7 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
-import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -188,20 +188,18 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                                 if (!completed) {
                                     probablyHasMore.set(true)
                                 }
+                                converted = convertCandidates(
+                                    project = project,
+                                    model = model,
+                                    candidates = rawCandidates.toList(),
+                                    postFilterPolicy = effectiveScope.postFilterPolicy,
+                                    requirePhysicalLocation = requirePhysicalLocation,
+                                    processedCandidateCount = processedCandidateCount,
+                                )
                             }
                         }
                         false
                     } ?: true
-                    if (!timedOut) {
-                        converted = convertCandidates(
-                            project = project,
-                            model = model,
-                            candidates = rawCandidates.toList(),
-                            postFilterPolicy = effectiveScope.postFilterPolicy,
-                            requirePhysicalLocation = requirePhysicalLocation,
-                            processedCandidateCount = processedCandidateCount,
-                        )
-                    }
                 } finally {
                     finished.set(true)
                     progressJob.cancel()
@@ -331,7 +329,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         return true
     }
 
-    private suspend fun convertCandidates(
+    private fun convertCandidates(
         project: Project,
         model: GotoSymbolModel2,
         candidates: List<RawCandidate>,
@@ -403,14 +401,14 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         )
     }
 
-    private suspend fun convertCandidate(
+    private fun convertCandidate(
         project: Project,
         model: GotoSymbolModel2,
         candidate: RawCandidate,
         postFilterPolicy: PostFilterPolicy,
         requirePhysicalLocation: Boolean,
     ): CandidateConversionResult {
-        return readAction {
+        return runReadAction {
             val source = candidate.item
             val navigationItem = source as? NavigationItem
             val psiElement = when (source) {
@@ -420,7 +418,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             }
 
             if (navigationItem == null && psiElement == null) {
-                return@readAction CandidateConversionResult(skipReason = SkipReason.UNSUPPORTED_ITEM)
+                return@runReadAction CandidateConversionResult(skipReason = SkipReason.UNSUPPORTED_ITEM)
             }
 
             val effectiveElement = psiElement?.navigationElement ?: psiElement
@@ -428,7 +426,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             val virtualFile = effectiveFile?.virtualFile
 
             if (!passesPostFilter(postFilterPolicy, effectiveElement, virtualFile)) {
-                return@readAction CandidateConversionResult(skipReason = SkipReason.POST_FILTER_REJECTED)
+                return@runReadAction CandidateConversionResult(skipReason = SkipReason.POST_FILTER_REJECTED)
             }
 
             var fileUrl: String? = null
@@ -459,7 +457,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             }
 
             if (requirePhysicalLocation && (fileUrl == null || line == null)) {
-                return@readAction CandidateConversionResult(skipReason = SkipReason.LOCATION_UNAVAILABLE)
+                return@runReadAction CandidateConversionResult(skipReason = SkipReason.LOCATION_UNAVAILABLE)
             }
 
             val presentation = navigationItem?.presentation
