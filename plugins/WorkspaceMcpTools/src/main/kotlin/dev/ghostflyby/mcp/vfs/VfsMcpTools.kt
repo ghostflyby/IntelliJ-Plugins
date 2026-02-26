@@ -70,9 +70,13 @@ internal class VfsMcpTools : McpToolset {
     )
 
     @McpTool
-    @McpDescription("Resolve a project-relative local path to a VFS URL.")
+    @McpDescription(
+        "Resolve a project-relative local path to a VFS URL. " +
+            "This is a convenience helper: for local files, you can directly pass " +
+            "a file:///absolute/path URL to tools that accept VFS URLs.",
+    )
     suspend fun vfs_get_url_from_local_path(
-        @McpDescription("Project-relative local path to resolve.")
+        @McpDescription("Project-relative local path to resolve (convenience input).")
         pathInProject: String,
         @McpDescription("Refresh the file system before resolving the path.")
         refreshIfNeeded: Boolean = false,
@@ -82,9 +86,13 @@ internal class VfsMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Resolve multiple project-relative local paths to VFS URLs.")
+    @McpDescription(
+        "Resolve multiple project-relative local paths to VFS URLs. " +
+            "This is a convenience helper: for local files, you can directly pass " +
+            "file:///absolute/path URLs to tools that accept VFS URLs.",
+    )
     suspend fun vfs_get_url_from_local_paths(
-        @McpDescription("Project-relative local paths to resolve.")
+        @McpDescription("Project-relative local paths to resolve (convenience input).")
         pathsInProject: List<String>,
         @McpDescription("Refresh the file system before resolving each path.")
         refreshIfNeeded: Boolean = false,
