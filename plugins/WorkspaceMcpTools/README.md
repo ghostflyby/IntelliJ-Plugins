@@ -75,7 +75,14 @@ SearchScope tools:
 - `scope_describe_program`
 - `scope_contains_file`
 - `scope_filter_files`
+- `scope_search_files`
+- `scope_find_files_by_name_keyword`
+- `scope_find_files_by_path_keyword`
+- `find_in_directory_using_glob`
 
 `scope_contains_file` checks membership of one VFS file URL against a scope descriptor.
 `scope_filter_files` filters multiple VFS file URLs and returns matched/excluded/missing lists.
+`scope_search_files` supports `NAME` / `PATH` / `NAME_OR_PATH` / `GLOB` matching modes, with timeout and cancellable background progress.
+For text modes, input is matched as ordered keywords (whitespace-split by default): every keyword must exist and appear in the same order.
+`NAME` mode prefers `FilenameIndex` when scope resolves to `GLOBAL`; non-global scopes use traversal with `scope.contains(file)` filtering.
 <!-- Plugin description end -->

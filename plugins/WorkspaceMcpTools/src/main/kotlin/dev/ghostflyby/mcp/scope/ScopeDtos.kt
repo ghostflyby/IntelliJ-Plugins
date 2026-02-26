@@ -165,3 +165,27 @@ internal data class ScopeFilterFilesResultDto(
     val missingFileUrls: List<String> = emptyList(),
     val diagnostics: List<String> = emptyList(),
 )
+
+@Serializable
+internal enum class ScopeFileSearchMode {
+    NAME,
+    PATH,
+    NAME_OR_PATH,
+    GLOB,
+}
+
+@Serializable
+internal data class ScopeFileSearchResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val mode: ScopeFileSearchMode,
+    val query: String,
+    val keywords: List<String> = emptyList(),
+    val directoryUrl: String? = null,
+    val matchedFileUrls: List<String>,
+    val scannedFileCount: Int,
+    val probablyHasMoreMatchingFiles: Boolean = false,
+    val timedOut: Boolean = false,
+    val canceled: Boolean = false,
+    val diagnostics: List<String> = emptyList(),
+)

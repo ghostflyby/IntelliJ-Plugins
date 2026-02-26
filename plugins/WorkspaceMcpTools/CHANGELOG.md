@@ -20,6 +20,9 @@
   `navigation_find_overrides`, `navigation_find_inheritors`, `navigation_find_references`, and
   `navigation_get_callers`.
 - Added SearchScope file-membership tools: `scope_contains_file` and `scope_filter_files`.
+- Added scoped file search toolset `ScopeFileSearchMcpTools` with:
+  `scope_search_files`, `scope_find_files_by_name_keyword`, `scope_find_files_by_path_keyword`,
+  and `find_in_directory_using_glob`.
 - Replaced generic MCP boundary list returns with serializable wrapper DTOs (`VfsFileNamesResult`,
   `NavigationResults`) for stronger boundary typing.
 
@@ -32,3 +35,7 @@
   return fallback diagnostics in `NavigationResults.diagnostics`.
 - Navigation errors for `jar://` inputs now explicitly suggest using `vfs_read_file*` when PSI/doc navigation
   is unavailable.
+- `scope_search_files` text modes now support ordered multi-keyword matching (either explicit `keywords` or
+  whitespace-split `query`), aligning behavior with IDE-like file matcher semantics.
+- `scope_search_files` now uses `FilenameIndex` for `NAME` mode on `GLOBAL` scopes, and falls back to
+  `ProjectFileIndex` traversal for non-global or non-indexable scopes.
