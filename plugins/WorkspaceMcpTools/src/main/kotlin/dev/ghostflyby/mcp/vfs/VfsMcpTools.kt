@@ -42,8 +42,6 @@ import com.intellij.openapi.vfs.isTooLargeForIntellijSense
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
-import kotlin.reflect.KMutableProperty1
-import kotlin.reflect.full.memberProperties
 
 @Suppress("FunctionName")
 internal class VfsMcpTools : McpToolset {
@@ -231,10 +229,7 @@ internal class VfsMcpTools : McpToolset {
         val isValid: Boolean? = null,
         val isWritable: Boolean? = null,
         val fileType: String? = null,
-    ) {
-        @Serializable
-        class PropertyList(val names: List<String>)
-    }
+    )
 
     @Serializable
     class VfsFileNamesResult(
@@ -326,12 +321,9 @@ internal class VfsMcpTools : McpToolset {
     suspend fun vfs_file_stat(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
-        @McpDescription("Optional property names to include. Null or empty means all properties.")
-        properties: VirtualFileStat.PropertyList?,
     ): VirtualFileStat {
-        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties.names.joinToString(",")
-        reportActivity(Bundle.message("tool.activity.vfs.file.stat", url, propertyInfo))
-        return readFileStat(url, properties)
+        reportActivity(Bundle.message("tool.activity.vfs.file.stat", url))
+        return readFileStat(url)
     }
 
     @McpTool
@@ -339,19 +331,16 @@ internal class VfsMcpTools : McpToolset {
     suspend fun vfs_file_stats(
         @McpDescription("VFS URLs to read metadata from.")
         urls: List<String>,
-        @McpDescription("Optional property names to include. Null or empty means all properties.")
-        properties: VirtualFileStat.PropertyList? = null,
         @McpDescription("Whether to continue collecting results after a single URL fails.")
         continueOnError: Boolean = true,
     ): VfsBatchFileStatResult {
-        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties.names.joinToString(",")
-        reportActivity(Bundle.message("tool.activity.vfs.file.stats", urls.size, propertyInfo, continueOnError))
+        reportActivity(Bundle.message("tool.activity.vfs.file.stats", urls.size, continueOnError))
         val items = mutableListOf<VfsBatchFileStatResultItem>()
         var successCount = 0
         var failureCount = 0
         for (url in urls) {
             val output = batchTry(continueOnError) {
-                readFileStat(url = url, properties = properties)
+                readFileStat(url)
             }
             if (output.error == null) {
                 successCount++
@@ -687,11 +676,8 @@ internal class VfsMcpTools : McpToolset {
         }
     }
 
-    private suspend fun readFileStat(
-        url: String,
-        properties: VirtualFileStat.PropertyList?,
-    ): VirtualFileStat {
-        val stat = readAction {
+    private suspend fun readFileStat(url: String): VirtualFileStat {
+        return readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
             VirtualFileStat(
                 name = file.name,
@@ -705,17 +691,6 @@ internal class VfsMcpTools : McpToolset {
                 fileType = file.fileType.name,
             )
         }
-        if (properties?.names.isNullOrEmpty()) {
-            return stat
-        }
-        val filtered = VirtualFileStat()
-        VirtualFileStat::class.memberProperties.forEach {
-            if (it.name in properties.names && it is KMutableProperty1<VirtualFileStat, *>) {
-                @Suppress("UNCHECKED_CAST")
-                (it as KMutableProperty1<VirtualFileStat, Any?>).set(filtered, it.get(stat))
-            }
-        }
-        return filtered
     }
 
     private suspend fun listFileNames(url: String): List<String> {
