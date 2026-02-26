@@ -42,7 +42,6 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -52,16 +51,19 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.ProperTextRange
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.profile.codeInspection.InspectionProfileManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.batchTry
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.batchTry
+import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
+import dev.ghostflyby.mcp.common.relativizePathOrNull
+import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
 import dev.ghostflyby.mcp.scope.ScopeQuickPreset
 import dev.ghostflyby.mcp.scope.ScopeResolverService
@@ -79,7 +81,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
@@ -144,7 +145,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 120000,
         @McpDescription("Whether to continue when a single file analysis fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): QualityScopeProblemsResultDto {
         if (maxFileCount < 1) mcpFail("maxFileCount must be >= 1.")
@@ -280,7 +281,8 @@ internal class CodeQualityMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly scope problem analysis shortcut with preset scope and default non-interactive resolution.",
+        "First-call friendly scope problem analysis shortcut with preset scope and default non-interactive resolution." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_get_scope_problems_quick(
         @McpDescription("Preset scope for quick analysis.")
@@ -385,7 +387,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 180000,
         @McpDescription("Whether to continue when a single file processing fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): QualityScopeOperationResultDto {
         return processScopeFilesWithOperation(
@@ -411,7 +413,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 180000,
         @McpDescription("Whether to continue when a single file processing fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): QualityScopeOperationResultDto {
         return processScopeFilesWithOperation(
@@ -441,7 +443,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 120000,
         @McpDescription("Whether to continue when a single file analysis fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
         @McpDescription("Whether to keep files that have no problems after severity filtering.")
         includeFilesWithoutMatchingProblems: Boolean = false,
@@ -507,7 +509,8 @@ internal class CodeQualityMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly severity-filtered scope problem analysis shortcut with preset scope.",
+        "First-call friendly severity-filtered scope problem analysis shortcut with preset scope." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_get_scope_problems_by_severity_quick(
         @McpDescription("Preset scope for quick analysis.")
@@ -554,7 +557,10 @@ internal class CodeQualityMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Run quick file fix pipeline (optimize imports + reformat) by VFS URL.")
+    @McpDescription(
+        "Run quick file fix pipeline (optimize imports + reformat) by VFS URL." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
+    )
     suspend fun quality_fix_file_quick(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         fileUrl: String,
@@ -593,7 +599,8 @@ internal class CodeQualityMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Run quick scope fix pipeline (optimize imports + reformat) for project-content files matched by a scope descriptor.",
+        "Run quick scope fix pipeline (optimize imports + reformat) for project-content files matched by a scope descriptor." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_fix_scope_quick(
         scope: ScopeProgramDescriptorDto,
@@ -603,7 +610,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 180000,
         @McpDescription("Whether to continue when a single file processing fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): QualityScopeQuickFixResultDto {
         if (maxFileCount < 1) mcpFail("maxFileCount must be >= 1.")
@@ -731,7 +738,8 @@ internal class CodeQualityMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly quick scope fix shortcut (optimize imports + reformat) with preset scope.",
+        "First-call friendly quick scope fix shortcut (optimize imports + reformat) with preset scope." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_fix_scope_quick_by_preset(
         @McpDescription("Preset scope for quick fix.")
@@ -855,7 +863,7 @@ internal class CodeQualityMcpTools : McpToolset {
         timeoutMillis: Int = 300000,
         @McpDescription("Whether to continue when a single file processing fails.")
         continueOnError: Boolean = true,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): QualityScopeCleanupResultDto {
         if (maxFileCount < 1) mcpFail("maxFileCount must be >= 1.")
@@ -1229,7 +1237,7 @@ internal class CodeQualityMcpTools : McpToolset {
     }
 
     private suspend fun resolveFileByUrl(fileUrl: String): VirtualFile {
-        val file = findFileByUrl(fileUrl) ?: mcpFail("File not found for URL: $fileUrl")
+        val file = findFileByUrlWithRefresh(fileUrl) ?: mcpFail("File not found for URL: $fileUrl")
         if (file.isDirectory) {
             mcpFail("URL points to a directory, not a file: $fileUrl")
         }
@@ -1325,13 +1333,6 @@ internal class CodeQualityMcpTools : McpToolset {
             .replace(' ', '_')
     }
 
-    private suspend fun findFileByUrl(url: String): VirtualFile? {
-        val manager = VirtualFileManager.getInstance()
-        val direct = readAction { manager.findFileByUrl(url) }
-        if (direct != null) return direct
-        return backgroundWriteAction { manager.refreshAndFindFileByUrl(url) }
-    }
-
     private fun validateTimeout(timeoutMillis: Int) {
         if (timeoutMillis < 1) {
             mcpFail("timeoutMillis must be >= 1.")
@@ -1339,10 +1340,7 @@ internal class CodeQualityMcpTools : McpToolset {
     }
 
     private fun relativizePath(projectBasePath: String?, filePath: String): String? {
-        if (projectBasePath.isNullOrBlank()) return null
-        return runCatching {
-            Path.of(projectBasePath).relativize(Path.of(filePath)).toString().replace('\\', '/')
-        }.getOrNull()
+        return relativizePathOrNull(projectBasePath, filePath)
     }
 
     private data class ScopeFileCollection(

@@ -112,7 +112,6 @@ SearchScope tools:
 - `scope_catalog_find_by_intent`
 - `scope_validate_pattern`
 - `scope_resolve_program`
-- `scope_describe_program`
 - `scope_normalize_program_descriptor`
 - `scope_contains_file`
 - `scope_filter_files`

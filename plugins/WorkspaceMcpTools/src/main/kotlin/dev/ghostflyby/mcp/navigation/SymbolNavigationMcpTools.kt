@@ -23,9 +23,10 @@
 package dev.ghostflyby.mcp.navigation
 
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.batchTry
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.batchTry
+import dev.ghostflyby.mcp.common.reportActivity
 import com.intellij.lang.LanguageDocumentation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -244,7 +245,8 @@ internal class SymbolNavigationMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly symbol info lookup by URI + row/column with normalized position in response.",
+        "First-call friendly symbol info lookup by URI + row/column with normalized position in response." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun navigation_get_symbol_info_quick(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)

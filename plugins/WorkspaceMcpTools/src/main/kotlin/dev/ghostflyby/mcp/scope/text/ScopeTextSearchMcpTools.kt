@@ -42,7 +42,10 @@ import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.relativizePathOrOriginal
+import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
 import dev.ghostflyby.mcp.scope.ScopeQuickPreset
 import dev.ghostflyby.mcp.scope.ScopeResolverService
@@ -63,7 +66,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.nio.file.Path
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -111,7 +113,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("First-call friendly text search shortcut with preset scope.")
+    @McpDescription("First-call friendly text search shortcut with preset scope." + AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX)
     suspend fun scope_search_text_quick(
         @McpDescription("Text or regex pattern to search.")
         query: String,
@@ -185,7 +187,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         maxUsageCount: Int = 1000,
         @McpDescription("Timeout in milliseconds.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeTextSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.text.search.by.plain", query.length))
@@ -225,7 +227,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         timeoutMillis: Int = 30000,
         @McpDescription("Whether to allow patterns that may match empty string.")
         allowEmptyMatches: Boolean = false,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeTextSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.text.search.by.regex", query.length))
@@ -574,7 +576,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
             val after = document.getText(TextRange(navigationRange.endOffset, endLineOffset))
                 .take(MAX_LINE_TEXT_CONTEXT_CHARS)
             val lineText = "$before||$matchedText||$after"
-            val filePath = relativizePath(projectBasePath, file.path)
+            val filePath = relativizePathOrOriginal(projectBasePath, file.path)
 
             OccurrenceSnapshot(
                 filePath = filePath,
@@ -690,15 +692,6 @@ internal class ScopeTextSearchMcpTools : McpToolset {
                     "(textLength=${document.textLength}).",
             )
         }
-    }
-
-    private fun relativizePath(projectBasePath: String?, filePath: String): String {
-        if (projectBasePath.isNullOrBlank()) {
-            return filePath
-        }
-        return runCatching {
-            Path.of(projectBasePath).relativize(Path.of(filePath)).toString().replace('\\', '/')
-        }.getOrDefault(filePath)
     }
 
     private fun shortHash(text: String): String {

@@ -23,9 +23,9 @@
 package dev.ghostflyby.mcp.vfs
 
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.batchTry
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.batchTry
+import dev.ghostflyby.mcp.common.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool

@@ -174,14 +174,13 @@ Phase 1（本次实现目标）
 - `scope_list_catalog`
 - `scope_validate_pattern`
 - `scope_resolve_program`
-- `scope_describe_program`
 
 Phase 2（消费层）
 - `scope_search_text`
 - `scope_search_symbols`
 
 ## 对应代码结构建议
-- `dev.ghostflyby.mcp.scope.SearchScopeMcpTools`
+- `dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorMcpTools`
 - `dev.ghostflyby.mcp.scope.ScopeCatalogService`
 - `dev.ghostflyby.mcp.scope.ScopeResolverService`
 - `dev.ghostflyby.mcp.scope.ScopeDtos.kt`

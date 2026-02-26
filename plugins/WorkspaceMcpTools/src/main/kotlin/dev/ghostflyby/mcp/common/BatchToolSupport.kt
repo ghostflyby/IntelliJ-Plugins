@@ -20,12 +20,27 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp
+package dev.ghostflyby.mcp.common
 
-import com.intellij.mcpserver.reportToolActivity
-import com.intellij.openapi.util.NlsContexts
-import kotlinx.coroutines.currentCoroutineContext
+import com.intellij.mcpserver.mcpFail
 
-internal suspend fun reportActivity(@NlsContexts.Label description: String) {
-    currentCoroutineContext().reportToolActivity(description)
+internal data class BatchAttempt<T>(
+    val value: T?,
+    val error: String?,
+)
+
+internal suspend fun <T> batchTry(
+    continueOnError: Boolean,
+    action: suspend () -> T,
+): BatchAttempt<T> {
+    return try {
+        BatchAttempt(value = action(), error = null)
+    } catch (error: Throwable) {
+        if (error is java.util.concurrent.CancellationException) throw error
+        val message = error.message ?: error::class.java.simpleName
+        if (!continueOnError) {
+            mcpFail(message)
+        }
+        BatchAttempt(value = null, error = message)
+    }
 }

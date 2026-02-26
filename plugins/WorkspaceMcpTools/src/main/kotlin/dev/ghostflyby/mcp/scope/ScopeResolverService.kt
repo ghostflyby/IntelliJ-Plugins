@@ -24,13 +24,10 @@ package dev.ghostflyby.mcp.scope
 
 import com.intellij.mcpserver.mcpFail
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.module.ModuleManager
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.psi.search.LocalSearchScope
@@ -39,6 +36,7 @@ import com.intellij.psi.search.scope.packageSet.NamedScope
 import com.intellij.psi.search.scope.packageSet.NamedScopesHolder
 import com.intellij.psi.search.scope.packageSet.PackageSetFactory
 import com.intellij.psi.search.scope.packageSet.ParsingException
+import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import java.security.MessageDigest
 
 @Service(Service.Level.PROJECT)
@@ -434,7 +432,7 @@ internal class ScopeResolverService {
 
     private suspend fun resolveDirectoryAtom(project: Project, atom: ScopeAtomDto): SearchScope {
         val directoryUrl = atom.directoryUrl ?: mcpFail("Atom '${atom.atomId}' requires directoryUrl.")
-        val directory = findFileByUrl(directoryUrl)
+        val directory = findFileByUrlWithRefresh(directoryUrl)
             ?: mcpFail("Directory URL '$directoryUrl' not found.")
         if (!directory.isDirectory) {
             mcpFail("URL '$directoryUrl' is not a directory.")
@@ -449,16 +447,9 @@ internal class ScopeResolverService {
             mcpFail("Atom '${atom.atomId}' kind FILES requires non-empty fileUrls.")
         }
         val files = atom.fileUrls.map { url ->
-            findFileByUrl(url) ?: mcpFail("File URL '$url' not found.")
+            findFileByUrlWithRefresh(url) ?: mcpFail("File URL '$url' not found.")
         }
         return readAction { GlobalSearchScope.filesScope(project, files) }
-    }
-
-    private suspend fun findFileByUrl(url: String): VirtualFile? {
-        val manager = VirtualFileManager.getInstance()
-        val direct = readAction { manager.findFileByUrl(url) }
-        if (direct != null) return direct
-        return backgroundWriteAction { manager.refreshAndFindFileByUrl(url) }
     }
 
     private fun ensureStackSize(

@@ -16,7 +16,7 @@
         <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.navigation.SymbolNavigationMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.quality.CodeQualityMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.scope.SearchScopeMcpTools"/>
+        <mcpToolset implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.scope.search.ScopeFileSearchMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.scope.symbol.ScopeSymbolSearchMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.scope.text.ScopeTextSearchMcpTools"/>

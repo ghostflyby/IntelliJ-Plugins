@@ -32,13 +32,15 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
+import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
 import java.nio.file.FileSystems
@@ -80,7 +82,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         maxResults: Int = 1000,
         @McpDescription("Timeout in milliseconds for this search.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         if (maxResults < 1) mcpFail("maxResults must be >= 1.")
@@ -207,7 +209,8 @@ internal class ScopeFileSearchMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly file search shortcut with preset scope and low-parameter defaults.",
+        "First-call friendly file search shortcut with preset scope and low-parameter defaults." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_search_files_quick(
         @McpDescription("Search text or glob pattern depending on matchMode. For text modes, whitespace splits ordered keywords.")
@@ -438,7 +441,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         maxResults: Int = 1000,
         @McpDescription("Timeout in milliseconds for this search.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.name", previewKeywordCount(nameKeyword, keywords)))
@@ -472,7 +475,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         maxResults: Int = 1000,
         @McpDescription("Timeout in milliseconds for this search.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.path", previewKeywordCount(pathKeyword, keywords)))
@@ -506,7 +509,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         maxResults: Int = 1000,
         @McpDescription("Timeout in milliseconds for this search.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", globPattern.length))
@@ -539,7 +542,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         maxResults: Int = 100,
         @McpDescription("Timeout in milliseconds for this search.")
         timeoutMillis: Int = 30000,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         if (className.isBlank()) mcpFail("className must not be blank.")
@@ -591,9 +594,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
     }
 
     private suspend fun resolveDirectory(directoryUrl: String): VirtualFile {
-        val manager = VirtualFileManager.getInstance()
-        val file = readAction { manager.findFileByUrl(directoryUrl) }
-            ?: manager.refreshAndFindFileByUrl(directoryUrl)
+        val file = findFileByUrlWithRefresh(directoryUrl)
             ?: mcpFail("Directory URL '$directoryUrl' not found.")
         if (!file.isDirectory) mcpFail("URL '$directoryUrl' is not a directory.")
         return file

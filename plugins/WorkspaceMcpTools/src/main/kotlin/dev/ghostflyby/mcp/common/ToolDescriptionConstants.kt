@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp
+package dev.ghostflyby.mcp.common
 
 internal const val VFS_URL_PARAM_DESCRIPTION =
     """Target VFS URL. returned from other mcp calls, or constructed by the caller. Some known URL formats for manual construction with no need for calling other mcp tools:
@@ -28,3 +28,9 @@ internal const val VFS_URL_PARAM_DESCRIPTION =
         |specifically for a jar or other zip filetree content, a jar url with `<local path>!<path in zip>` jar:///absolute/path/archive.zip!/path/in/archive. jar:// URLs can operate on ZIP/JAR internal trees.
         |example for Gradle cache sources: jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/com/intellij/navigation/ChooseByNameContributorEx.java
         |Most file discovery and reading should use MCP VFS/scope tools rather than shell commands."""
+
+internal const val AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX =
+    " First-call friendly shortcut for agents with no prior context; uses non-interactive defaults and stable parameters."
+
+internal const val ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION =
+    "Whether UI-interactive scopes are allowed during descriptor resolution."

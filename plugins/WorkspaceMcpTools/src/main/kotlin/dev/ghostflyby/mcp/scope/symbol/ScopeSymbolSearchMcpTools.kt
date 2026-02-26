@@ -49,10 +49,12 @@ import com.intellij.psi.search.*
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.relativizePathOrOriginal
+import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
-import java.nio.file.Path
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -106,7 +108,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         @McpDescription("Symbol query string (for example class/method/field name pattern).")
         query: String,
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
         @McpDescription("Maximum number of symbol items to return.")
         maxResultCount: Int = 200,
@@ -293,7 +295,8 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope.",
+        "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_search_symbols_quick(
         @McpDescription("Symbol query string.")
@@ -337,7 +340,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         @McpDescription("Symbol query string (for example class/method/field name pattern).")
         query: String,
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
         @McpDescription("Maximum number of symbol items to return.")
         maxResultCount: Int = 200,
@@ -381,7 +384,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     )
     suspend fun scope_search_symbols_healthcheck(
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeSymbolSearchHealthcheckResultDto {
         reportActivity(Bundle.message("tool.activity.scope.symbol.search.healthcheck", allowUiInteractiveScopes))
@@ -599,7 +602,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
 
             if (effectiveFile != null && virtualFile != null) {
                 fileUrl = virtualFile.url
-                filePath = relativizePath(project.basePath, virtualFile.path)
+                filePath = relativizePathOrOriginal(project.basePath, virtualFile.path)
 
                 val document = PsiDocumentManager.getInstance(project).getLastCommittedDocument(effectiveFile)
                     ?: FileDocumentManager.getInstance().getDocument(virtualFile)
@@ -804,15 +807,6 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             cursor = cursor.superclass
         }
         return null
-    }
-
-    private fun relativizePath(projectBasePath: String?, rawPath: String): String {
-        if (projectBasePath.isNullOrBlank()) {
-            return rawPath
-        }
-        return runCatching {
-            Path.of(projectBasePath).relativize(Path.of(rawPath)).toString().replace('\\', '/')
-        }.getOrDefault(rawPath)
     }
 
     private data class RawCandidate(

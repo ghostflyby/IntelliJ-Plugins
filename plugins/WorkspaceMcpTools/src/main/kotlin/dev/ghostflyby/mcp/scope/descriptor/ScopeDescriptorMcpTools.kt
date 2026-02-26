@@ -20,35 +20,26 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp.scope
+package dev.ghostflyby.mcp.scope.descriptor
 
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
+import dev.ghostflyby.mcp.common.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
-import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
+import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
-internal class SearchScopeMcpTools : McpToolset {
-
-    @Serializable
-    enum class ScopeDefaultPreset {
-        PROJECT_FILES,
-        ALL_PLACES,
-        OPEN_FILES,
-        PROJECT_AND_LIBRARIES,
-        PROJECT_PRODUCTION_FILES,
-        PROJECT_TEST_FILES,
-    }
+internal class ScopeDescriptorMcpTools : McpToolset {
 
     @Serializable
     enum class ScopeCatalogIntent {
@@ -80,35 +71,31 @@ internal class SearchScopeMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
+        "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_get_default_descriptor(
         @McpDescription("Preset scope to use.")
-        preset: ScopeDefaultPreset = ScopeDefaultPreset.PROJECT_FILES,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeResolveResultDto {
         reportActivity(Bundle.message("tool.activity.scope.get.default.descriptor", preset.name, allowUiInteractiveScopes))
-        val standardScopeId = when (preset) {
-            ScopeDefaultPreset.PROJECT_FILES -> "Project Files"
-            ScopeDefaultPreset.ALL_PLACES -> "All Places"
-            ScopeDefaultPreset.OPEN_FILES -> "Open Files"
-            ScopeDefaultPreset.PROJECT_AND_LIBRARIES -> "Project and Libraries"
-            ScopeDefaultPreset.PROJECT_PRODUCTION_FILES -> "Project Production Files"
-            ScopeDefaultPreset.PROJECT_TEST_FILES -> "Project Test Files"
-        }
         return scope_resolve_standard_descriptor(
-            standardScopeId = standardScopeId,
+            standardScopeId = preset.toStandardScopeId(),
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
     }
 
     @McpTool
-    @McpDescription("Resolve a standard IDE scope id directly to a normalized reusable descriptor.")
+    @McpDescription(
+        "Resolve a standard IDE scope id directly to a normalized reusable descriptor." +
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
+    )
     suspend fun scope_resolve_standard_descriptor(
         @McpDescription("Standard scope id, for example 'Project Files' or 'All Places'.")
         standardScopeId: String,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeResolveResultDto {
         if (standardScopeId.isBlank()) {
@@ -220,34 +207,12 @@ internal class SearchScopeMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("Describe (normalize + validate) a scope program and return only structured descriptor data.")
-    suspend fun scope_describe_program(
-        request: ScopeResolveRequestDto,
-    ): ScopeDescribeProgramResultDto {
-        reportActivity(
-            Bundle.message(
-                "tool.activity.scope.describe.program",
-                request.atoms.size,
-                request.tokens.size,
-                request.strict,
-                request.allowUiInteractiveScopes,
-                request.nonStrictDefaultFailureMode.name,
-            ),
-        )
-        val project = currentCoroutineContext().project
-        val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
-        return ScopeDescribeProgramResultDto(
-            descriptor = descriptor,
-        )
-    }
-
-    @McpTool
     @McpDescription(
         "Normalize and recompile an existing scope descriptor, useful for migration and compatibility upgrades.",
     )
     suspend fun scope_normalize_program_descriptor(
         descriptor: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeDescribeProgramResultDto {
         reportActivity(Bundle.message("tool.activity.scope.normalize.program.descriptor", descriptor.atoms.size, descriptor.tokens.size))
@@ -273,7 +238,7 @@ internal class SearchScopeMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         fileUrl: String,
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeContainsFileResultDto {
         reportActivity(
@@ -289,7 +254,7 @@ internal class SearchScopeMcpTools : McpToolset {
             descriptor = scope,
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-        val file = findFileByUrl(fileUrl)
+        val file = findFileByUrlWithRefresh(fileUrl)
             ?: mcpFail("File URL '$fileUrl' not found.")
         if (file.isDirectory) {
             mcpFail("URL '$fileUrl' points to a directory, not a file.")
@@ -310,7 +275,7 @@ internal class SearchScopeMcpTools : McpToolset {
         @McpDescription("Input file URLs to test against the scope.")
         fileUrls: List<String>,
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFilterFilesResultDto {
         reportActivity(
@@ -333,7 +298,7 @@ internal class SearchScopeMcpTools : McpToolset {
         val missing = mutableListOf<String>()
 
         fileUrls.forEach { url ->
-            val file = findFileByUrl(url)
+            val file = findFileByUrlWithRefresh(url)
             when {
                 file == null -> {
                     missing += url
@@ -358,12 +323,5 @@ internal class SearchScopeMcpTools : McpToolset {
             missingFileUrls = missing,
             diagnostics = (scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
-    }
-
-    private suspend fun findFileByUrl(url: String): VirtualFile? {
-        val manager = VirtualFileManager.getInstance()
-        val direct = readAction { manager.findFileByUrl(url) }
-        if (direct != null) return direct
-        return backgroundWriteAction { manager.refreshAndFindFileByUrl(url) }
     }
 }

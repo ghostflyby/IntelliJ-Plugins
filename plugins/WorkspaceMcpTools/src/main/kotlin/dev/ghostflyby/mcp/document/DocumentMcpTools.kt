@@ -35,9 +35,9 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.batchTry
-import dev.ghostflyby.mcp.reportActivity
+import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.batchTry
+import dev.ghostflyby.mcp.common.reportActivity
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
