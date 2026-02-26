@@ -22,19 +22,23 @@
 
 package dev.ghostflyby.mcp.document
 
-import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.reportToolActivity
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
@@ -60,6 +64,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): DocumentTextResult {
+        reportActivity(Bundle.message("tool.activity.document.get.text", url))
         val (_, document) = resolveTextDocument(url)
         val text = readAction { document.text }
         return DocumentTextResult(text = text)
@@ -71,6 +76,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): DocumentTextResult {
+        reportActivity(Bundle.message("tool.activity.document.get.chars.sequence", url))
         val (_, document) = resolveTextDocument(url)
         val chars = readAction { document.charsSequence }
         return DocumentTextResult(text = chars.toString())
@@ -82,6 +88,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): DocumentTextResult {
+        reportActivity(Bundle.message("tool.activity.document.get.immutable.chars.sequence", url))
         val (_, document) = resolveTextDocument(url)
         val chars = readAction { document.immutableCharSequence }
         return DocumentTextResult(text = chars.toString())
@@ -97,6 +104,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Range end offset (exclusive).")
         endOffset: Int,
     ): DocumentTextResult {
+        reportActivity(Bundle.message("tool.activity.document.get.text.range", startOffset, endOffset, url))
         val (_, document) = resolveTextDocument(url)
         validateRange(document, startOffset, endOffset)
         val text = readAction {
@@ -111,6 +119,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.text.length", url))
         val (_, document) = resolveTextDocument(url)
         return readAction { document.textLength }
     }
@@ -121,6 +130,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.line.count", url))
         val (_, document) = resolveTextDocument(url)
         return readAction { document.lineCount }
     }
@@ -133,6 +143,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Offset in [0, textLength].")
         offset: Int,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.line.number", offset, url))
         val (_, document) = resolveTextDocument(url)
         val textLength = readAction { document.textLength }
         validateOffset(offset, 0, textLength, "offset")
@@ -147,6 +158,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Line number in [0, lineCount-1].")
         line: Int,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.line.start.offset", line, url))
         val (_, document) = resolveTextDocument(url)
         validateLine(document, line)
         return readAction { document.getLineStartOffset(line) }
@@ -160,6 +172,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Line number in [0, lineCount-1].")
         line: Int,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.line.end.offset", line, url))
         val (_, document) = resolveTextDocument(url)
         validateLine(document, line)
         return readAction { document.getLineEndOffset(line) }
@@ -173,6 +186,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Line number in [0, lineCount-1].")
         line: Int,
     ): Int {
+        reportActivity(Bundle.message("tool.activity.document.get.line.separator.length", line, url))
         val (_, document) = resolveTextDocument(url)
         validateLine(document, line)
         return readAction { document.getLineSeparatorLength(line) }
@@ -186,6 +200,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Line number in [0, lineCount-1].")
         line: Int,
     ): Boolean {
+        reportActivity(Bundle.message("tool.activity.document.is.line.modified", line, url))
         val (_, document) = resolveTextDocument(url)
         validateLine(document, line)
         return readAction { document.isLineModified(line) }
@@ -197,6 +212,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Boolean {
+        reportActivity(Bundle.message("tool.activity.document.is.writable", url))
         val (_, document) = resolveTextDocument(url)
         return readAction { document.isWritable }
     }
@@ -207,6 +223,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Long {
+        reportActivity(Bundle.message("tool.activity.document.get.modification.stamp", url))
         val (_, document) = resolveTextDocument(url)
         return readAction { document.modificationStamp }
     }
@@ -223,6 +240,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Save document after write.")
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
+        reportActivity(Bundle.message("tool.activity.document.insert.string", text.length, offset, url))
         val (file, document) = resolveTextDocument(url)
         val textLength = readAction { document.textLength }
         validateOffset(offset, 0, textLength, "offset")
@@ -248,6 +266,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Save document after write.")
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
+        reportActivity(Bundle.message("tool.activity.document.delete.string", startOffset, endOffset, url))
         val (file, document) = resolveTextDocument(url)
         validateRange(document, startOffset, endOffset)
         ensureWritable(file, document, url)
@@ -274,6 +293,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Save document after write.")
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
+        reportActivity(Bundle.message("tool.activity.document.replace.string", startOffset, endOffset, text.length, url))
         val (file, document) = resolveTextDocument(url)
         validateRange(document, startOffset, endOffset)
         ensureWritable(file, document, url)
@@ -296,6 +316,7 @@ internal class DocumentMcpTools : McpToolset {
         @McpDescription("Save document after write.")
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
+        reportActivity(Bundle.message("tool.activity.document.set.text", text.length, url))
         val (file, document) = resolveTextDocument(url)
         ensureWritable(file, document, url)
         backgroundWriteAction {
@@ -356,5 +377,9 @@ internal class DocumentMcpTools : McpToolset {
             lineCount = snapshot.second,
             modificationStamp = snapshot.third,
         )
+    }
+
+    private suspend fun reportActivity(@NlsContexts.Label description: String) {
+        currentCoroutineContext().reportToolActivity(description)
     }
 }

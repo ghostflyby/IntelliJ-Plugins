@@ -22,18 +22,21 @@
 
 package dev.ghostflyby.mcp.navigation
 
+import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import com.intellij.mcpserver.reportToolActivity
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.*
 import com.intellij.psi.search.searches.DefinitionsScopedSearch
@@ -75,6 +78,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Source column number (1-based).")
         column: Int,
     ): NavigationResult {
+        reportActivity(Bundle.message("tool.activity.navigation.to.reference", uri, row, column))
         val project = currentCoroutineContext().project
         return runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -97,6 +101,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Source column number (1-based).")
         column: Int,
     ): NavigationResult {
+        reportActivity(Bundle.message("tool.activity.navigation.to.type.definition", uri, row, column))
         val project = currentCoroutineContext().project
         return runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -123,6 +128,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
     ): NavigationResults {
+        reportActivity(Bundle.message("tool.activity.navigation.to.implementation", uri, row, column, limit))
         val project = currentCoroutineContext().project
         val items = runNavigationRead(project) {
             validateLimit(limit)
@@ -155,6 +161,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
     ): NavigationResults {
+        reportActivity(Bundle.message("tool.activity.navigation.find.overrides", uri, row, column, limit))
         val project = currentCoroutineContext().project
         val items = runNavigationRead(project) {
             validateLimit(limit)
@@ -187,6 +194,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
     ): NavigationResults {
+        reportActivity(Bundle.message("tool.activity.navigation.find.inheritors", uri, row, column, limit))
         val project = currentCoroutineContext().project
         val items = runNavigationRead(project) {
             validateLimit(limit)
@@ -216,6 +224,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_REFERENCE_LIMIT,
     ): NavigationResults {
+        reportActivity(Bundle.message("tool.activity.navigation.find.references", uri, row, column, limit))
         val project = currentCoroutineContext().project
         val items = runNavigationRead(project) {
             validateLimit(limit)
@@ -242,6 +251,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_REFERENCE_LIMIT,
     ): NavigationResults {
+        reportActivity(Bundle.message("tool.activity.navigation.get.callers", uri, row, column, limit))
         val project = currentCoroutineContext().project
         val items = runNavigationRead(project) {
             validateLimit(limit)
@@ -467,5 +477,9 @@ internal class SymbolNavigationMcpTools : McpToolset {
 
     private fun validateLimit(limit: Int) {
         if (limit < 1) mcpFail("limit must be >= 1")
+    }
+
+    private suspend fun reportActivity(@NlsContexts.Label description: String) {
+        currentCoroutineContext().reportToolActivity(description)
     }
 }

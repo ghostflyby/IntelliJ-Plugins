@@ -22,16 +22,19 @@
 
 package dev.ghostflyby.mcp.vfs
 
+import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import com.intellij.mcpserver.reportToolActivity
 import com.intellij.mcpserver.util.resolveInProject
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -75,6 +78,7 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Refresh the file system before resolving the path.")
         refreshIfNeeded: Boolean = false,
     ): String {
+        reportActivity(Bundle.message("tool.activity.vfs.get.url.from.local.path", pathInProject, refreshIfNeeded))
         val project = currentCoroutineContext().project
         val path = project.resolveInProject(pathInProject)
         val file = if (refreshIfNeeded) {
@@ -91,6 +95,7 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): String {
+        reportActivity(Bundle.message("tool.activity.vfs.get.local.path.from.url", url))
         return readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File $url doesn't exist or can't be opened")
             if (file.fileSystem.protocol != "file") {
@@ -110,6 +115,7 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Refresh children recursively (effective for directories).")
         recursive: Boolean = false,
     ) {
+        reportActivity(Bundle.message("tool.activity.vfs.refresh", url, async, recursive))
         val file = readAction { vfsManager.findFileByUrl(url) }
             ?: mcpFail("File not found for URL: $url")
         if (!async) {
@@ -165,6 +171,8 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Optional property names to include. Null or empty means all properties.")
         properties: VirtualFileStat.PropertyList?,
     ): VirtualFileStat {
+        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties?.names?.joinToString(",")
+        reportActivity(Bundle.message("tool.activity.vfs.file.stat", url, propertyInfo ?: "all"))
         val stat = readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
             VirtualFileStat(
@@ -197,6 +205,7 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): VfsFileNamesResult {
+        reportActivity(Bundle.message("tool.activity.vfs.list.files", url))
         val names = readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
             if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
@@ -219,6 +228,35 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Line range start (1-based, inclusive) for LINE_RANGE mode.")
         startLine: Int = 1,
         @McpDescription("Line range end (1-based, inclusive) for LINE_RANGE mode. Null means last line.")
+        endLineInclusive: Int? = null,
+    ): VfsReadResult {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.vfs.read.file",
+                mode.name,
+                url,
+                startChar,
+                endCharExclusive?.toString() ?: "null",
+                startLine,
+                endLineInclusive?.toString() ?: "null",
+            ),
+        )
+        return readFile(
+            url = url,
+            mode = mode,
+            startChar = startChar,
+            endCharExclusive = endCharExclusive,
+            startLine = startLine,
+            endLineInclusive = endLineInclusive,
+        )
+    }
+
+    private suspend fun readFile(
+        url: String,
+        mode: ReadMode,
+        startChar: Int = 0,
+        endCharExclusive: Int? = null,
+        startLine: Int = 1,
         endLineInclusive: Int? = null,
     ): VfsReadResult {
         val file = getRegularFile(url)
@@ -290,7 +328,8 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): VfsReadResult {
-        return vfs_read_file(
+        reportActivity(Bundle.message("tool.activity.vfs.read.file.full", url))
+        return readFile(
             url = url,
             mode = ReadMode.FULL,
         )
@@ -306,8 +345,15 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Character range end offset (exclusive). Null means end of file.")
         endCharExclusive: Int? = null,
     ): VfsReadResult {
-
-        return vfs_read_file(
+        reportActivity(
+            Bundle.message(
+                "tool.activity.vfs.read.file.char.range",
+                startChar,
+                endCharExclusive?.toString() ?: "null",
+                url,
+            ),
+        )
+        return readFile(
             url = url,
             mode = ReadMode.CHAR_RANGE,
             startChar = startChar,
@@ -325,7 +371,15 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Line range end (1-based, inclusive). Null means last line.")
         endLineInclusive: Int? = null,
     ): VfsReadResult {
-        return vfs_read_file(
+        reportActivity(
+            Bundle.message(
+                "tool.activity.vfs.read.file.line.range",
+                startLine,
+                endLineInclusive?.toString() ?: "null",
+                url,
+            ),
+        )
+        return readFile(
             url = url,
             mode = ReadMode.LINE_RANGE,
             startLine = startLine,
@@ -350,5 +404,9 @@ internal class VfsMcpTools : McpToolset {
             }
         }
         return starts
+    }
+
+    private suspend fun reportActivity(@NlsContexts.Label description: String) {
+        currentCoroutineContext().reportToolActivity(description)
     }
 }
