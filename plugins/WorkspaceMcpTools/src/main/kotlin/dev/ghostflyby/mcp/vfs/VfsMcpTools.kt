@@ -60,7 +60,7 @@ internal class VfsMcpTools : McpToolset {
     class VfsReadResult(
         val mode: ReadMode,
         val url: String,
-        val content: CharSequence,
+        val content: String,
         val totalChars: Int,
         val totalLines: Int,
         val startChar: Int? = null,
@@ -340,8 +340,8 @@ internal class VfsMcpTools : McpToolset {
             ?: mcpFail("File not found or not a regular file for URL: $url")
     }
 
-    private suspend fun loadText(file: VirtualFile): CharSequence {
-        return readAction { VfsUtil.loadText(file) }
+    private suspend fun loadText(file: VirtualFile): String {
+        return readAction { VfsUtil.loadText(file).toString() }
     }
 
     private fun computeLineStarts(text: CharSequence): List<Int> {
