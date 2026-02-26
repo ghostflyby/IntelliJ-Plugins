@@ -189,3 +189,112 @@ internal data class ScopeFileSearchResultDto(
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
+
+@Serializable
+internal enum class ScopeTextQueryMode {
+    PLAIN,
+    REGEX,
+}
+
+@Serializable
+internal enum class ScopeTextSearchContextDto {
+    ANY,
+    IN_STRING_LITERALS,
+    IN_COMMENTS,
+    EXCEPT_STRING_LITERALS,
+    EXCEPT_COMMENTS,
+    EXCEPT_COMMENTS_AND_STRING_LITERALS,
+}
+
+@Serializable
+internal data class ScopeTextSearchRequestDto(
+    val query: String,
+    val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+    val caseSensitive: Boolean = true,
+    val wholeWordsOnly: Boolean = false,
+    val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+    val fileMask: String? = null,
+    val scope: ScopeProgramDescriptorDto,
+    val allowUiInteractiveScopes: Boolean = false,
+    val maxUsageCount: Int = 1000,
+    val timeoutMillis: Int = 30000,
+    val allowEmptyMatches: Boolean = false,
+)
+
+@Serializable
+internal data class ScopeTextOccurrenceDto(
+    val occurrenceId: String,
+    val fileUrl: String,
+    val filePath: String,
+    val lineNumber: Int,
+    val startOffset: Int,
+    val endOffset: Int,
+    val lineText: String,
+    val matchedText: String,
+)
+
+@Serializable
+internal data class ScopeTextSearchResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val mode: ScopeTextQueryMode,
+    val query: String,
+    val caseSensitive: Boolean,
+    val wholeWordsOnly: Boolean,
+    val searchContext: ScopeTextSearchContextDto,
+    val fileMask: String? = null,
+    val occurrences: List<ScopeTextOccurrenceDto>,
+    val probablyHasMoreMatchingEntries: Boolean = false,
+    val timedOut: Boolean = false,
+    val canceled: Boolean = false,
+    val diagnostics: List<String> = emptyList(),
+)
+
+@Serializable
+internal data class ScopeTextReplaceRequestDto(
+    val search: ScopeTextSearchRequestDto,
+    val replaceWith: String,
+    val preserveCase: Boolean = false,
+    val occurrenceIds: List<String> = emptyList(),
+    val failOnMissingOccurrenceIds: Boolean = true,
+    val saveAfterWrite: Boolean = true,
+    val maxReplaceCount: Int = 10000,
+)
+
+@Serializable
+internal data class ScopeTextReplacementPreviewEntryDto(
+    val occurrence: ScopeTextOccurrenceDto,
+    val replacementText: String,
+)
+
+@Serializable
+internal data class ScopeTextReplacePreviewResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val query: String,
+    val mode: ScopeTextQueryMode,
+    val replaceWith: String,
+    val selectedEntries: List<ScopeTextReplacementPreviewEntryDto>,
+    val missingOccurrenceIds: List<String> = emptyList(),
+    val probablyHasMoreMatchingEntries: Boolean = false,
+    val timedOut: Boolean = false,
+    val canceled: Boolean = false,
+    val diagnostics: List<String> = emptyList(),
+)
+
+@Serializable
+internal data class ScopeTextReplaceApplyResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val query: String,
+    val mode: ScopeTextQueryMode,
+    val replaceWith: String,
+    val requestedOccurrenceCount: Int,
+    val replacedOccurrenceCount: Int,
+    val replacedFileCount: Int,
+    val replacedOccurrenceIds: List<String>,
+    val missingOccurrenceIds: List<String> = emptyList(),
+    val timedOut: Boolean = false,
+    val canceled: Boolean = false,
+    val diagnostics: List<String> = emptyList(),
+)
