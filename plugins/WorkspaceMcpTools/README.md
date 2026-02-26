@@ -60,6 +60,8 @@ Navigation tools:
 
 - `navigation_to_reference`
 - `navigation_to_reference_batch`
+- `navigation_get_symbol_info`
+- `navigation_get_symbol_info_batch`
 - `navigation_to_type_definition`
 - `navigation_to_implementation`
 - `navigation_find_overrides`

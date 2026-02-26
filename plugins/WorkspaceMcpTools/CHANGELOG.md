@@ -30,6 +30,8 @@
   `vfs_file_stats`, `vfs_list_files_many`, and `vfs_read_files`.
 - Added batch Document read tools: `document_get_texts` and `document_get_text_ranges`.
 - Added batch Navigation tools: `navigation_to_reference_batch` and `navigation_find_references_batch`.
+- Added IDE documentation lookup tools for VFS URL positions:
+  `navigation_get_symbol_info` and `navigation_get_symbol_info_batch`.
 
 ### Changed
 

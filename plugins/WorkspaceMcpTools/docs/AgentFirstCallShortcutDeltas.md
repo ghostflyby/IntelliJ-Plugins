@@ -86,3 +86,28 @@
 ### 降回归实现建议
 - 统一三段活动语义：`start` / `progress` / `finish`，并在 `finish` 携带 `timedOut`、`probablyHasMore`、`diagnosticsCount`。
 - 对长链路工具增加“阶段计数器”字段，避免仅通过日志文本解析状态。
+
+## Phase: CodeInsightByVfsUrl-P1 (2026-02-26)
+
+### 新增发现
+- 官方 `get_symbol_info` 以 `project-relative path + line/column` 为入口；在 jar:// 或跨根路径场景下，agent 首次常缺少稳定的相对路径上下文。
+- 现有导航工具统一以 `VFS URL` 为主，调用链里如果先把 URL 反解为相对路径再做文档查询，会增加一次不必要转换并提升失败概率。
+- 仅有单点查询时，agent 在批处理编排上容易过早回退到多轮串行调用，造成回归成本增加。
+
+### 新增快捷入口建议
+- `navigation_get_symbol_info_by_offset`
+  - 目的：直接消费 `offset`（0-based）并返回与 `navigation_get_symbol_info` 同结构，减少 line/column 计算链路。
+  - 价值：压缩“定位 + 文档查询”两步为一步，降低边界校验错误。
+
+- `navigation_get_symbol_info_auto_position`
+  - 目的：支持 `row/column` 与 `offset` 二选一输入，统一返回标准位置归一化结果。
+  - 价值：提升 agent 在无先验参数规范下的首次调用有效概率。
+
+- `navigation_get_symbol_info_quick`
+  - 目的：低参数入口，仅需 `uri + row + column`，内置合理默认并在失败时返回 `recommendedNextCalls`。
+  - 价值：减少首次失败后的策略抖动，降低回归轮次。
+
+### 降回归实现建议
+- 统一 symbol-info 返回结构中的位置归一化字段（`row`/`column`/`offset`），便于后续工具直接复用。
+- 为 batch 接口补充 `partialSuccess=true/false` 语义字段，减少 agent 通过计数器推断状态的歧义。
+- 增加 jar://、普通 file://、空文档和列越界的最小回归样例，覆盖最易触发的首次调用失败模式。

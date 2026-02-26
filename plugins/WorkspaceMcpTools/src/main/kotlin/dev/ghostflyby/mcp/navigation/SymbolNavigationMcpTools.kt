@@ -26,12 +26,17 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.batchTry
 import dev.ghostflyby.mcp.reportActivity
+import com.intellij.lang.LanguageDocumentation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import com.intellij.mcpserver.util.SymbolInfo
+import com.intellij.mcpserver.util.convertHtmlToMarkdown
+import com.intellij.mcpserver.util.getElementSymbolInfo
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
@@ -39,10 +44,13 @@ import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.*
+import com.intellij.util.DocumentUtil
 import com.intellij.psi.search.searches.DefinitionsScopedSearch
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.Processor
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
@@ -103,6 +111,88 @@ internal class SymbolNavigationMcpTools : McpToolset {
         val successCount: Int,
         val failureCount: Int,
     )
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Serializable
+    class NavigationSymbolInfoResult(
+        @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
+        val symbolInfo: SymbolInfo? = null,
+        val documentation: String,
+    )
+
+    @Serializable
+    class NavigationSymbolInfoPosition(
+        val uri: String,
+        val row: Int,
+        val column: Int,
+    )
+
+    @Serializable
+    class NavigationBatchSymbolInfoItem(
+        val input: NavigationSymbolInfoPosition,
+        val result: NavigationSymbolInfoResult? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class NavigationBatchSymbolInfoResult(
+        val items: List<NavigationBatchSymbolInfoItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @McpTool
+    @McpDescription(
+        "Retrieves symbol declaration and IDE quick documentation markdown " +
+            "for the source position (1-based row/column) in the specified VFS URL.",
+    )
+    suspend fun navigation_get_symbol_info(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        uri: String,
+        @McpDescription("Source line number (1-based).")
+        row: Int,
+        @McpDescription("Source column number (1-based).")
+        column: Int,
+    ): NavigationSymbolInfoResult {
+        reportActivity(Bundle.message("tool.activity.navigation.get.symbol.info", uri, row, column))
+        val project = currentCoroutineContext().project
+        return resolveSymbolInfo(project, uri, row, column)
+    }
+
+    @McpTool
+    @McpDescription("Batch retrieve symbol declaration and IDE quick documentation markdown for source positions.")
+    suspend fun navigation_get_symbol_info_batch(
+        @McpDescription("Source positions to resolve symbol info from.")
+        inputs: List<NavigationSymbolInfoPosition>,
+        @McpDescription("Whether to continue collecting results after a single input fails.")
+        continueOnError: Boolean = true,
+    ): NavigationBatchSymbolInfoResult {
+        reportActivity(Bundle.message("tool.activity.navigation.get.symbol.info.batch", inputs.size, continueOnError))
+        val project = currentCoroutineContext().project
+        val items = mutableListOf<NavigationBatchSymbolInfoItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
+                resolveSymbolInfo(project, input.uri, input.row, input.column)
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += NavigationBatchSymbolInfoItem(
+                input = input,
+                result = output.value,
+                error = output.error,
+            )
+        }
+        return NavigationBatchSymbolInfoResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
+    }
 
     @McpTool
     @McpDescription("Resolve a reference at source position (1-based row/column) to its target declaration location.")
@@ -463,6 +553,30 @@ internal class SymbolNavigationMcpTools : McpToolset {
         val psiDocumentManager: PsiDocumentManager,
     )
 
+    private class SymbolInfoContext(
+        val symbolInfo: SymbolInfo?,
+        val documentationHtml: String,
+    )
+
+    private suspend fun resolveSymbolInfo(
+        project: Project,
+        uri: String,
+        row: Int,
+        column: Int,
+    ): NavigationSymbolInfoResult {
+        val context = runNavigationRead(project) {
+            readSymbolInfoContext(project, uri, row, column)
+        }
+        return NavigationSymbolInfoResult(
+            symbolInfo = context.symbolInfo,
+            documentation = if (context.documentationHtml.isBlank()) {
+                ""
+            } else {
+                convertHtmlToMarkdown(context.documentationHtml)
+            },
+        )
+    }
+
     private fun resolveReferenceContext(
         project: Project,
         uri: String,
@@ -502,6 +616,74 @@ internal class SymbolNavigationMcpTools : McpToolset {
         )
     }
 
+    private fun readSymbolInfoContext(
+        project: Project,
+        uri: String,
+        row: Int,
+        column: Int,
+    ): SymbolInfoContext {
+        validatePosition(row, column)
+        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
+        if (sourceFile.isDirectory) {
+            mcpFail("URL points to a directory, not a file: $uri")
+        }
+        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
+            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
+            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourceOffset = resolveSourceOffset(sourceDocument, row, column)
+        val lineStartOffset = sourceDocument.getLineStartOffset(row - 1)
+        val sourceElement = findElementAt(sourcePsiFile, sourceOffset, lineStartOffset)
+        val reference = findReferenceAt(sourcePsiFile, sourceOffset, lineStartOffset)
+        val resolvedReference = reference?.resolve()
+        val symbolInfo = resolvedReference?.let { getElementSymbolInfo(it, extraLines = 1) }
+        val documentationTarget = resolvedReference ?: sourceElement
+        val documentationHtml = generateDocumentationHtml(
+            targetElement = documentationTarget,
+            originalElement = sourceElement,
+        )
+        return SymbolInfoContext(
+            symbolInfo = symbolInfo,
+            documentationHtml = documentationHtml,
+        )
+    }
+
+    private fun resolveSourceOffset(
+        sourceDocument: Document,
+        row: Int,
+        column: Int,
+    ): Int {
+        val lineIndex = row - 1
+        if (!DocumentUtil.isValidLine(lineIndex, sourceDocument)) {
+            mcpFail("row must be in [1, ${sourceDocument.lineCount}], but was $row")
+        }
+        val lineStartOffset = sourceDocument.getLineStartOffset(lineIndex)
+        val lineEndOffset = sourceDocument.getLineEndOffset(lineIndex)
+        val maxColumn = (lineEndOffset - lineStartOffset) + 1
+        if (column > maxColumn) {
+            mcpFail("column must be in [1, $maxColumn] for row $row, but was $column")
+        }
+        val sourceOffset = lineStartOffset + column - 1
+        if (!DocumentUtil.isValidOffset(sourceOffset, sourceDocument)) {
+            mcpFail(
+                "Line and column $row:$column(offset=$sourceOffset) is out of bounds " +
+                    "(file has ${sourceDocument.textLength} characters)",
+            )
+        }
+        return sourceOffset
+    }
+
+    private fun generateDocumentationHtml(
+        targetElement: PsiElement?,
+        originalElement: PsiElement?,
+    ): String {
+        targetElement ?: return ""
+        val provider = LanguageDocumentation.INSTANCE.forLanguage(targetElement.language) ?: return ""
+        return provider.generateDoc(targetElement, originalElement)
+            ?: provider.generateHoverDoc(targetElement, originalElement)
+            ?: ""
+    }
+
     private fun vfsReadHint(sourceFile: com.intellij.openapi.vfs.VirtualFile): String {
         return if (sourceFile.fileSystem.protocol == "jar") {
             ". For JAR/ZIP virtual files, prefer vfs_read_file* tools."
@@ -514,6 +696,12 @@ internal class SymbolNavigationMcpTools : McpToolset {
         val primaryReference = sourcePsiFile.findReferenceAt(sourceOffset)
         if (primaryReference != null) return primaryReference
         return if (sourceOffset > lineStartOffset) sourcePsiFile.findReferenceAt(sourceOffset - 1) else null
+    }
+
+    private fun findElementAt(sourcePsiFile: PsiFile, sourceOffset: Int, lineStartOffset: Int): PsiElement? {
+        val primaryElement = sourcePsiFile.findElementAt(sourceOffset)
+        if (primaryElement != null) return primaryElement
+        return if (sourceOffset > lineStartOffset) sourcePsiFile.findElementAt(sourceOffset - 1) else null
     }
 
     private fun toNavigationResult(element: PsiElement, psiDocumentManager: PsiDocumentManager): NavigationResult? {
