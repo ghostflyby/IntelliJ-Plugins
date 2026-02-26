@@ -32,6 +32,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.psi.search.EverythingGlobalScope
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.GlobalSearchScopes
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.psi.search.LocalSearchScope
 import com.intellij.psi.search.PredefinedSearchScopeProvider
@@ -126,7 +127,7 @@ internal class ScopeCatalogService {
         )
         for (scope in scopes) {
             val displayName = scope.displayName
-            val serializationId = serializationIdOrNull(displayName)
+            val serializationId = serializationIdOrNull(project, displayName)
             val requiresUserInput = requiresUserInputScope(scope, serializationId)
             val unstable = isUnstableScope(serializationId)
             val kind = if (serializationId != null) ScopeAtomKind.STANDARD else ScopeAtomKind.PROVIDER_SCOPE
@@ -241,8 +242,8 @@ internal class ScopeCatalogService {
         }
     }
 
-    private fun serializationIdOrNull(displayName: String): String? {
-        val mapping = standardScopeDisplayNameToId()
+    private fun serializationIdOrNull(project: Project, displayName: String): String? {
+        val mapping = standardScopeDisplayNameToId(project)
         return mapping[displayName]
     }
 
@@ -275,6 +276,7 @@ internal class ScopeCatalogService {
             PROJECT_FILES_SCOPE_ID -> GlobalSearchScope.projectScope(project)
             PROJECT_PRODUCTION_FILES_SCOPE_ID -> GlobalSearchScopesCore.projectProductionScope(project)
             PROJECT_TEST_FILES_SCOPE_ID -> GlobalSearchScopesCore.projectTestScope(project)
+            OPEN_FILES_SCOPE_ID -> GlobalSearchScopes.openFilesScope(project)
             else -> null
         }
     }
@@ -351,7 +353,7 @@ internal class ScopeCatalogService {
         val diagnostics: List<String>,
     )
 
-    private fun standardScopeDisplayNameToId(): Map<String, String> {
+    private fun standardScopeDisplayNameToId(project: Project): Map<String, String> {
         return mapOf(
             EverythingGlobalScope.getNameText() to ALL_PLACES_SCOPE_ID,
             ProjectAndLibrariesScope.getNameText() to PROJECT_AND_LIBRARIES_SCOPE_ID,
@@ -359,6 +361,7 @@ internal class ScopeCatalogService {
             GlobalSearchScopesCore.getProjectProductionFilesScopeName() to PROJECT_PRODUCTION_FILES_SCOPE_ID,
             GlobalSearchScopesCore.getProjectTestFilesScopeName() to PROJECT_TEST_FILES_SCOPE_ID,
             ScratchesNamedScope.scratchesAndConsoles() to SCRATCHES_AND_CONSOLES_SCOPE_ID,
+            GlobalSearchScopes.openFilesScope(project).displayName to OPEN_FILES_SCOPE_ID,
             PredefinedSearchScopeProviderImpl.getRecentlyViewedFilesScopeName() to RECENTLY_VIEWED_FILES_SCOPE_ID,
             PredefinedSearchScopeProviderImpl.getRecentlyChangedFilesScopeName() to RECENTLY_CHANGED_FILES_SCOPE_ID,
             PredefinedSearchScopeProviderImpl.getCurrentFileScopeName() to CURRENT_FILE_SCOPE_ID,

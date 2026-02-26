@@ -156,7 +156,7 @@ internal class ScopeResolverService {
                         left.scope == null && right.scope == null -> StackScope(null)
                         left.scope == null -> right
                         right.scope == null -> left
-                        else -> StackScope(left.scope.intersectWith(right.scope))
+                        else -> StackScope(intersectScopes(left.scope, right.scope, index))
                     }
                 }
 
@@ -168,7 +168,7 @@ internal class ScopeResolverService {
                         left.scope == null && right.scope == null -> StackScope(null)
                         left.scope == null -> right
                         right.scope == null -> left
-                        else -> StackScope(left.scope.union(right.scope))
+                        else -> StackScope(unionScopes(left.scope, right.scope, index))
                     }
                 }
 
@@ -455,6 +455,40 @@ internal class ScopeResolverService {
     ) {
         if (stack.size < expected) {
             mcpFail("Token[$tokenIndex] $op requires $expected stack items, but stack size is ${stack.size}.")
+        }
+    }
+
+    private fun intersectScopes(
+        left: SearchScope,
+        right: SearchScope,
+        tokenIndex: Int,
+    ): SearchScope {
+        return when {
+            left is GlobalSearchScope && right is GlobalSearchScope -> left.intersectWith(right)
+            left is GlobalSearchScope && right is LocalSearchScope -> left.intersectWith(right)
+            left is LocalSearchScope && right is GlobalSearchScope -> right.intersectWith(left)
+            left is LocalSearchScope && right is LocalSearchScope -> left.intersectWith(right)
+            else -> mcpFail(
+                "Token[$tokenIndex] AND is unsupported for scope types " +
+                    "'${left.javaClass.name}' and '${right.javaClass.name}'.",
+            )
+        }
+    }
+
+    private fun unionScopes(
+        left: SearchScope,
+        right: SearchScope,
+        tokenIndex: Int,
+    ): SearchScope {
+        return when {
+            left is GlobalSearchScope && right is GlobalSearchScope -> left.uniteWith(right)
+            left is GlobalSearchScope && right is LocalSearchScope -> left.union(right)
+            left is LocalSearchScope && right is GlobalSearchScope -> right.union(left)
+            left is LocalSearchScope && right is LocalSearchScope -> left.union(right)
+            else -> mcpFail(
+                "Token[$tokenIndex] OR is unsupported for scope types " +
+                    "'${left.javaClass.name}' and '${right.javaClass.name}'.",
+            )
         }
     }
 
