@@ -23,6 +23,7 @@
 package dev.ghostflyby.mcp.vfs
 
 import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.reportActivity
@@ -680,7 +681,8 @@ internal class VfsMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Read a structured API signature snapshot from a source file, including imports, main type declaration, and matched members.",
+        "Read a structured API signature snapshot from a source file, including imports, main type declaration, and matched members." +
+            MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX,
     )
     suspend fun vfs_read_api_signature(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)

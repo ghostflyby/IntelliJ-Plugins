@@ -38,6 +38,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.common.reportActivity
@@ -527,7 +528,8 @@ internal class ScopeFileSearchMcpTools : McpToolset {
 
     @McpTool
     @McpDescription(
-        "Find likely source files by class name across project and libraries, with source-preferred ranking.",
+        "Find likely source files by class name across project and libraries, with source-preferred ranking." +
+            MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_find_source_file_by_class_name(
         @McpDescription("Class name, simple or qualified.")

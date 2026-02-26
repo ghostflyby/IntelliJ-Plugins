@@ -24,6 +24,7 @@ package dev.ghostflyby.mcp.navigation
 
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.reportActivity
@@ -36,10 +37,10 @@ import com.intellij.mcpserver.project
 import com.intellij.mcpserver.util.SymbolInfo
 import com.intellij.mcpserver.util.convertHtmlToMarkdown
 import com.intellij.mcpserver.util.getElementSymbolInfo
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
@@ -164,7 +165,8 @@ internal class SymbolNavigationMcpTools : McpToolset {
     @McpTool
     @McpDescription(
         "Retrieves symbol declaration and IDE quick documentation markdown " +
-            "for the source position (1-based row/column) in the specified VFS URL.",
+            "for the source position (1-based row/column) in the specified VFS URL." +
+            MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX,
     )
     suspend fun navigation_get_symbol_info(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
@@ -192,7 +194,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.navigation.get.symbol.info.by.offset", uri, offset))
         val project = currentCoroutineContext().project
         val position = runNavigationRead(project) {
-            resolvePositionFromOffset(uri, offset)
+            resolvePositionFromOffset(project, uri, offset)
         }
         val info = resolveSymbolInfo(project, uri, position.row, position.column)
         return NavigationSymbolInfoResolvedResult(
@@ -227,7 +229,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         )
         val project = currentCoroutineContext().project
         val position = runNavigationRead(project) {
-            resolveAutoPosition(uri, input)
+            resolveAutoPosition(project, uri, input)
         }
         val info = resolveSymbolInfo(project, uri, position.row, position.column)
         return NavigationSymbolInfoResolvedResult(
@@ -246,7 +248,8 @@ internal class SymbolNavigationMcpTools : McpToolset {
     @McpTool
     @McpDescription(
         "First-call friendly symbol info lookup by URI + row/column with normalized position in response." +
-            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
+            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX +
+            MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX,
     )
     suspend fun navigation_get_symbol_info_quick(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
@@ -691,9 +694,11 @@ internal class SymbolNavigationMcpTools : McpToolset {
     }
 
     private fun resolveAutoPosition(
+        project: Project,
         uri: String,
         input: NavigationSymbolInfoAutoPositionInput,
     ): ResolvedSourcePosition {
+        assertReadAccess()
         val hasOffset = input.offset != null
         val hasRowColumn = input.row != null || input.column != null
         if (hasOffset && hasRowColumn) {
@@ -704,7 +709,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         }
         if (hasOffset) {
             val sourceOffset = input.offset
-            return resolvePositionFromOffset(uri, sourceOffset)
+            return resolvePositionFromOffset(project, uri, sourceOffset)
         }
         val row = input.row ?: mcpFail("row is required when offset is not provided.")
         val column = input.column ?: mcpFail("column is required when offset is not provided.")
@@ -712,8 +717,10 @@ internal class SymbolNavigationMcpTools : McpToolset {
         if (sourceFile.isDirectory) {
             mcpFail("URL points to a directory, not a file: $uri")
         }
-        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
-            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
+            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
+            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
         val offset = resolveSourceOffset(sourceDocument, row, column)
         return ResolvedSourcePosition(
             row = row,
@@ -723,9 +730,11 @@ internal class SymbolNavigationMcpTools : McpToolset {
     }
 
     private fun resolvePositionFromOffset(
+        project: Project,
         uri: String,
         offset: Int,
     ): ResolvedSourcePosition {
+        assertReadAccess()
         if (offset < 0) {
             mcpFail("offset must be >= 0")
         }
@@ -733,8 +742,10 @@ internal class SymbolNavigationMcpTools : McpToolset {
         if (sourceFile.isDirectory) {
             mcpFail("URL points to a directory, not a file: $uri")
         }
-        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
-            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
+            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
+            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
         if (sourceDocument.textLength == 0) {
             return ResolvedSourcePosition(
                 row = 1,
@@ -761,6 +772,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         row: Int,
         column: Int,
     ): ResolvedReferenceContext {
+        assertReadAccess()
         validatePosition(row, column)
         val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
         if (sourceFile.isDirectory) mcpFail("URL points to a directory, not a file: $uri")
@@ -770,8 +782,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
             ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
         val psiDocumentManager = PsiDocumentManager.getInstance(project)
         val sourceDocument = psiDocumentManager.getLastCommittedDocument(sourcePsiFile)
-            ?: FileDocumentManager.getInstance().getDocument(sourceFile)
-            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
+            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
 
         if (row > sourceDocument.lineCount) {
             mcpFail("row must be in [1, ${sourceDocument.lineCount}], but was $row")
@@ -800,15 +811,16 @@ internal class SymbolNavigationMcpTools : McpToolset {
         row: Int,
         column: Int,
     ): SymbolInfoContext {
+        assertReadAccess()
         validatePosition(row, column)
         val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
         if (sourceFile.isDirectory) {
             mcpFail("URL points to a directory, not a file: $uri")
         }
-        val sourceDocument = FileDocumentManager.getInstance().getDocument(sourceFile)
-            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
         val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
             ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
+        val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
+            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
         val sourceOffset = resolveSourceOffset(sourceDocument, row, column)
         val lineStartOffset = sourceDocument.getLineStartOffset(row - 1)
         val sourceElement = findElementAt(sourcePsiFile, sourceOffset, lineStartOffset)
@@ -871,23 +883,25 @@ internal class SymbolNavigationMcpTools : McpToolset {
     }
 
     private fun findReferenceAt(sourcePsiFile: PsiFile, sourceOffset: Int, lineStartOffset: Int): PsiReference? {
+        assertReadAccess()
         val primaryReference = sourcePsiFile.findReferenceAt(sourceOffset)
         if (primaryReference != null) return primaryReference
         return if (sourceOffset > lineStartOffset) sourcePsiFile.findReferenceAt(sourceOffset - 1) else null
     }
 
     private fun findElementAt(sourcePsiFile: PsiFile, sourceOffset: Int, lineStartOffset: Int): PsiElement? {
+        assertReadAccess()
         val primaryElement = sourcePsiFile.findElementAt(sourceOffset)
         if (primaryElement != null) return primaryElement
         return if (sourceOffset > lineStartOffset) sourcePsiFile.findElementAt(sourceOffset - 1) else null
     }
 
     private fun toNavigationResult(element: PsiElement, psiDocumentManager: PsiDocumentManager): NavigationResult? {
+        assertReadAccess()
         val navigationElement = element.navigationElement
         val targetPsiFile = navigationElement.containingFile ?: return null
         val targetFile = targetPsiFile.virtualFile ?: return null
         val targetDocument = psiDocumentManager.getLastCommittedDocument(targetPsiFile)
-            ?: FileDocumentManager.getInstance().getDocument(targetFile)
             ?: return null
         val textLength = targetDocument.textLength
         if (textLength <= 0) {
@@ -1062,6 +1076,12 @@ internal class SymbolNavigationMcpTools : McpToolset {
     private fun ensureIndicesReady(project: Project) {
         if (DumbService.isDumb(project)) {
             mcpFail("Code navigation is unavailable while indexing is in progress. Please retry after indexing completes.")
+        }
+    }
+
+    private fun assertReadAccess() {
+        if (!ApplicationManager.getApplication().isReadAccessAllowed) {
+            mcpFail("Internal error: PSI/VFS read attempted outside read action.")
         }
     }
 

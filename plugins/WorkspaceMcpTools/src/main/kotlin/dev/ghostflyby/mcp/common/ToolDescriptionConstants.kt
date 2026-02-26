@@ -34,3 +34,12 @@ internal const val AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX =
 
 internal const val ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION =
     "Whether UI-interactive scopes are allowed during descriptor resolution."
+
+internal const val MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX =
+    " ## MCP-first Policy\n" +
+        "- Any code/symbol/IDE API lookup should use `functions.mcp__idea__*` tools first.\n" +
+        "- Do not directly parse IDE jars with shell commands such as `javap`, `jar tf`, or `grep`.\n" +
+        "- Shell fallback is allowed only when ALL conditions are met:\n" +
+        "  - already tried `scope_find_source_file_by_class_name`, `navigation_get_symbol_info`, and `vfs_read_api_signature`;\n" +
+        "  - failure reasons are explicitly recorded (for example: class-only artifact, no sources, symbol index miss);\n" +
+        "  - announce the planned fallback in commentary before running shell parsing."

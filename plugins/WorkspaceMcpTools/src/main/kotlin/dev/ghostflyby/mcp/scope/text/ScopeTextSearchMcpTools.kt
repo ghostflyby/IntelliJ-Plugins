@@ -37,6 +37,7 @@ import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.usageView.UsageInfo
 import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
@@ -340,9 +341,11 @@ internal class ScopeTextSearchMcpTools : McpToolset {
 
         val groupedByFile = selectedOccurrences.groupBy { it.file }
         val replacedOccurrenceIds = mutableListOf<String>()
+        val project = currentCoroutineContext().project
 
         backgroundWriteAction {
             val fileDocumentManager = FileDocumentManager.getInstance()
+            val psiDocumentManager = PsiDocumentManager.getInstance(project)
             val modifiedDocuments = linkedSetOf<com.intellij.openapi.editor.Document>()
             groupedByFile.forEach { (file, occurrences) ->
                 val document = fileDocumentManager.getDocument(file)
@@ -367,6 +370,10 @@ internal class ScopeTextSearchMcpTools : McpToolset {
                     replacedOccurrenceIds += dto.occurrenceId
                 }
                 modifiedDocuments += document
+            }
+            modifiedDocuments.forEach { document ->
+                psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
+                psiDocumentManager.commitDocument(document)
             }
             if (request.saveAfterWrite) {
                 modifiedDocuments.forEach(fileDocumentManager::saveDocument)

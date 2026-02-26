@@ -26,6 +26,7 @@ import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
+import com.intellij.mcpserver.project
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
@@ -34,10 +35,12 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.reportActivity
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
 @Suppress("FunctionName")
@@ -340,15 +343,14 @@ internal class DocumentMcpTools : McpToolset {
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
         reportActivity(Bundle.message("tool.activity.document.insert.string", text.length, offset, url))
+        val project = currentCoroutineContext().project
         val (file, document) = resolveTextDocument(url)
         val textLength = readAction { document.textLength }
         validateOffset(offset, textLength, "offset")
         ensureWritable(file, document, url)
         backgroundWriteAction {
             document.insertString(offset, text)
-            if (saveAfterWrite) {
-                FileDocumentManager.getInstance().saveDocument(document)
-            }
+            commitAndMaybeSave(project, document, saveAfterWrite)
         }
         return snapshotWriteResult(document)
     }
@@ -366,14 +368,13 @@ internal class DocumentMcpTools : McpToolset {
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
         reportActivity(Bundle.message("tool.activity.document.delete.string", startOffset, endOffset, url))
+        val project = currentCoroutineContext().project
         val (file, document) = resolveTextDocument(url)
         validateRange(document, startOffset, endOffset)
         ensureWritable(file, document, url)
         backgroundWriteAction {
             document.deleteString(startOffset, endOffset)
-            if (saveAfterWrite) {
-                FileDocumentManager.getInstance().saveDocument(document)
-            }
+            commitAndMaybeSave(project, document, saveAfterWrite)
         }
         return snapshotWriteResult(document)
     }
@@ -393,14 +394,13 @@ internal class DocumentMcpTools : McpToolset {
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
         reportActivity(Bundle.message("tool.activity.document.replace.string", startOffset, endOffset, text.length, url))
+        val project = currentCoroutineContext().project
         val (file, document) = resolveTextDocument(url)
         validateRange(document, startOffset, endOffset)
         ensureWritable(file, document, url)
         backgroundWriteAction {
             document.replaceString(startOffset, endOffset, text)
-            if (saveAfterWrite) {
-                FileDocumentManager.getInstance().saveDocument(document)
-            }
+            commitAndMaybeSave(project, document, saveAfterWrite)
         }
         return snapshotWriteResult(document)
     }
@@ -416,13 +416,12 @@ internal class DocumentMcpTools : McpToolset {
         saveAfterWrite: Boolean = false,
     ): DocumentWriteResult {
         reportActivity(Bundle.message("tool.activity.document.set.text", text.length, url))
+        val project = currentCoroutineContext().project
         val (file, document) = resolveTextDocument(url)
         ensureWritable(file, document, url)
         backgroundWriteAction {
             document.setText(text)
-            if (saveAfterWrite) {
-                FileDocumentManager.getInstance().saveDocument(document)
-            }
+            commitAndMaybeSave(project, document, saveAfterWrite)
         }
         return snapshotWriteResult(document)
     }
@@ -493,6 +492,19 @@ internal class DocumentMcpTools : McpToolset {
             lineCount = snapshot.second,
             modificationStamp = snapshot.third,
         )
+    }
+
+    private fun commitAndMaybeSave(
+        project: com.intellij.openapi.project.Project,
+        document: Document,
+        saveAfterWrite: Boolean,
+    ) {
+        val psiDocumentManager = PsiDocumentManager.getInstance(project)
+        psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
+        psiDocumentManager.commitDocument(document)
+        if (saveAfterWrite) {
+            FileDocumentManager.getInstance().saveDocument(document)
+        }
     }
 
 }

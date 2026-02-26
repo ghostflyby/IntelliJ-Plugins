@@ -23,11 +23,15 @@
 package dev.ghostflyby.mcp.scope
 
 import com.intellij.openapi.project.Project
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 @Serializable
+@OptIn(ExperimentalSerializationApi::class)
 internal enum class ScopeQuickPreset {
     PROJECT_FILES,
+    @JsonNames("ALL")
     ALL_PLACES,
     OPEN_FILES,
     PROJECT_AND_LIBRARIES,

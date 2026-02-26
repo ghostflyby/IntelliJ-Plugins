@@ -31,8 +31,8 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.runReadAction
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.coroutineToIndicator
@@ -55,11 +55,13 @@ import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.ExperimentalSerializationApi
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 
 private const val GLOBAL_AND_LOCAL_UNION_SCOPE_CLASS = "com.intellij.psi.search.GlobalAndLocalUnionScope"
 private const val GLOBAL_AND_LOCAL_UNION_GLOBAL_FIELD = "myMyGlobalScope"
@@ -69,8 +71,10 @@ private const val GLOBAL_AND_LOCAL_UNION_LOCAL_FIELD = "myLocalScope"
 internal class ScopeSymbolSearchMcpTools : McpToolset {
 
     @Serializable
+    @OptIn(ExperimentalSerializationApi::class)
     enum class ScopeSymbolQuickPreset {
         PROJECT_FILES,
+        @JsonNames("ALL")
         ALL_PLACES,
     }
 
@@ -575,6 +579,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         requirePhysicalLocation: Boolean,
     ): CandidateConversionResult {
         return runReadAction {
+            assertReadAccess()
             val source = candidate.item
             val navigationItem = source as? NavigationItem
             val psiElement = when (source) {
@@ -605,7 +610,6 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                 filePath = relativizePathOrOriginal(project.basePath, virtualFile.path)
 
                 val document = PsiDocumentManager.getInstance(project).getLastCommittedDocument(effectiveFile)
-                    ?: FileDocumentManager.getInstance().getDocument(virtualFile)
 
                 if (document != null) {
                     val textLength = document.textLength
@@ -807,6 +811,12 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             cursor = cursor.superclass
         }
         return null
+    }
+
+    private fun assertReadAccess() {
+        if (!ApplicationManager.getApplication().isReadAccessAllowed) {
+            mcpFail("Internal error: symbol read attempted outside read action.")
+        }
     }
 
     private data class RawCandidate(
