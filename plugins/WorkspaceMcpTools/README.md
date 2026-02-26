@@ -66,4 +66,16 @@ Best-effort batch tools also return `diagnostics` when fallback behavior is appl
 Some navigation tools are best-effort (notably caller/type/inheritor/override queries) and may produce false negatives
 depending on language PSI shape. You can set `fallbackToReferencesWhenEmpty=true` to auto-fallback to
 `navigation_find_references` semantics inside the same call.
+
+SearchScope tools:
+
+- `scope_list_catalog`
+- `scope_validate_pattern`
+- `scope_resolve_program`
+- `scope_describe_program`
+- `scope_contains_file`
+- `scope_filter_files`
+
+`scope_contains_file` checks membership of one VFS file URL against a scope descriptor.
+`scope_filter_files` filters multiple VFS file URLs and returns matched/excluded/missing lists.
 <!-- Plugin description end -->

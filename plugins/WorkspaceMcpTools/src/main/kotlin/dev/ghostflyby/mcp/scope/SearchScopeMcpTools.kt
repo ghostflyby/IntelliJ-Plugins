@@ -23,11 +23,15 @@
 package dev.ghostflyby.mcp.scope
 
 import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
+import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.vfs.VirtualFileManager
 import kotlinx.coroutines.currentCoroutineContext
 
 @Suppress("FunctionName")
@@ -96,6 +100,102 @@ internal class SearchScopeMcpTools : McpToolset {
         val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
         return ScopeDescribeProgramResultDto(
             descriptor = descriptor,
+        )
+    }
+
+    @McpTool
+    @McpDescription("Check whether a file URL belongs to a resolved scope descriptor.")
+    suspend fun scope_contains_file(
+        @McpDescription(VFS_URL_PARAM_DESCRIPTION)
+        fileUrl: String,
+        scope: ScopeProgramDescriptorDto,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeContainsFileResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.contains.file",
+                fileUrl,
+                allowUiInteractiveScopes,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+            project = project,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val file = readAction { VirtualFileManager.getInstance().findFileByUrl(fileUrl) }
+            ?: mcpFail("File URL '$fileUrl' not found.")
+        if (file.isDirectory) {
+            mcpFail("URL '$fileUrl' points to a directory, not a file.")
+        }
+        val matches = readAction { resolved.scope.contains(file) }
+        return ScopeContainsFileResultDto(
+            fileUrl = fileUrl,
+            matches = matches,
+            scopeDisplayName = resolved.displayName,
+            scopeShape = resolved.scopeShape,
+            diagnostics = (scope.diagnostics + resolved.diagnostics).distinct(),
+        )
+    }
+
+    @McpTool
+    @McpDescription("Filter file URLs by whether they belong to a resolved scope descriptor.")
+    suspend fun scope_filter_files(
+        @McpDescription("Input file URLs to test against the scope.")
+        fileUrls: List<String>,
+        scope: ScopeProgramDescriptorDto,
+        @McpDescription("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): ScopeFilterFilesResultDto {
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.filter.files",
+                fileUrls.size,
+                allowUiInteractiveScopes,
+            ),
+        )
+        val project = currentCoroutineContext().project
+        val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+            project = project,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+
+        val diagnostics = mutableListOf<String>()
+        val matched = mutableListOf<String>()
+        val excluded = mutableListOf<String>()
+        val missing = mutableListOf<String>()
+
+        readAction {
+            val vfsManager = VirtualFileManager.getInstance()
+            fileUrls.forEach { url ->
+                val file = vfsManager.findFileByUrl(url)
+                when {
+                    file == null -> {
+                        missing += url
+                        diagnostics += "File URL '$url' not found."
+                    }
+
+                    file.isDirectory -> {
+                        missing += url
+                        diagnostics += "URL '$url' points to a directory and was skipped."
+                    }
+
+                    resolved.scope.contains(file) -> matched += url
+                    else -> excluded += url
+                }
+            }
+        }
+
+        return ScopeFilterFilesResultDto(
+            scopeDisplayName = resolved.displayName,
+            scopeShape = resolved.scopeShape,
+            matchedFileUrls = matched,
+            excludedFileUrls = excluded,
+            missingFileUrls = missing,
+            diagnostics = (scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
     }
 }

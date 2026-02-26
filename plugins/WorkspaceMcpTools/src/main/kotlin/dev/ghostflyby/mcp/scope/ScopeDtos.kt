@@ -146,3 +146,22 @@ internal data class ScopeProgramDescriptorDto(
     val scopeShape: ScopeShape,
     val diagnostics: List<String> = emptyList(),
 )
+
+@Serializable
+internal data class ScopeContainsFileResultDto(
+    val fileUrl: String,
+    val matches: Boolean,
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val diagnostics: List<String> = emptyList(),
+)
+
+@Serializable
+internal data class ScopeFilterFilesResultDto(
+    val scopeDisplayName: String,
+    val scopeShape: ScopeShape,
+    val matchedFileUrls: List<String>,
+    val excludedFileUrls: List<String>,
+    val missingFileUrls: List<String> = emptyList(),
+    val diagnostics: List<String> = emptyList(),
+)

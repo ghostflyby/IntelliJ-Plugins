@@ -19,6 +19,7 @@
 - Added navigation tools: `navigation_to_type_definition`, `navigation_to_implementation`,
   `navigation_find_overrides`, `navigation_find_inheritors`, `navigation_find_references`, and
   `navigation_get_callers`.
+- Added SearchScope file-membership tools: `scope_contains_file` and `scope_filter_files`.
 - Replaced generic MCP boundary list returns with serializable wrapper DTOs (`VfsFileNamesResult`,
   `NavigationResults`) for stronger boundary typing.
 

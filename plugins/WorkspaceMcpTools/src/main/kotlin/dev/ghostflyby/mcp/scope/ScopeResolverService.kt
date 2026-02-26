@@ -86,6 +86,24 @@ internal class ScopeResolverService {
         )
     }
 
+    suspend fun resolveDescriptor(
+        project: Project,
+        descriptor: ScopeProgramDescriptorDto,
+        allowUiInteractiveScopes: Boolean,
+    ): ResolvedScope {
+        if (descriptor.version !in 1..2) {
+            mcpFail("Unsupported scope descriptor version ${descriptor.version}.")
+        }
+        val request = ScopeResolveRequestDto(
+            atoms = descriptor.atoms,
+            tokens = descriptor.tokens,
+            strict = true,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            nonStrictDefaultFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
+        )
+        return resolveProgram(project, request)
+    }
+
     suspend fun resolveProgram(
         project: Project,
         request: ScopeResolveRequestDto,
