@@ -239,21 +239,23 @@ internal class ScopeResolverService {
                 scopeRefId = atom.scopeRefId,
                 includeInteractiveScopes = allowUiInteractiveScopes,
             )
-            if (item == null) {
+            if (item != null) {
+                return atom.copy(
+                    kind = item.kind,
+                    scopeRefId = item.scopeRefId,
+                    standardScopeId = item.serializationId ?: atom.standardScopeId,
+                    moduleName = item.moduleName ?: atom.moduleName,
+                    moduleFlavor = item.moduleFlavor ?: atom.moduleFlavor,
+                    namedScopeName = item.namedScopeName ?: atom.namedScopeName,
+                    namedScopeHolderId = item.namedScopeHolderId ?: atom.namedScopeHolderId,
+                    providerScopeId = item.providerScopeId ?: atom.providerScopeId,
+                    fileUrls = atom.fileUrls.distinct().sorted(),
+                )
+            }
+            if (!isSelfResolvedKind(atom.kind)) {
                 failOrDiagnose(strict, diagnostics, "Unknown scopeRefId '${atom.scopeRefId}'.")
                 return atom
             }
-            return atom.copy(
-                kind = item.kind,
-                scopeRefId = item.scopeRefId,
-                standardScopeId = item.serializationId ?: atom.standardScopeId,
-                moduleName = item.moduleName ?: atom.moduleName,
-                moduleFlavor = item.moduleFlavor ?: atom.moduleFlavor,
-                namedScopeName = item.namedScopeName ?: atom.namedScopeName,
-                namedScopeHolderId = item.namedScopeHolderId ?: atom.namedScopeHolderId,
-                providerScopeId = item.providerScopeId ?: atom.providerScopeId,
-                fileUrls = atom.fileUrls.distinct().sorted(),
-            )
         }
 
         return when (atom.kind) {
@@ -351,11 +353,17 @@ internal class ScopeResolverService {
         allowUiInteractiveScopes: Boolean,
     ): SearchScope {
         if (!atom.scopeRefId.isNullOrBlank()) {
-            return ScopeCatalogService.getInstance(project).resolveByRef(
+            val resolvedByRef = ScopeCatalogService.getInstance(project).resolveByRef(
                 project = project,
                 scopeRefId = atom.scopeRefId,
                 allowUiInteractiveScopes = allowUiInteractiveScopes,
-            ) ?: mcpFail("Unknown scopeRefId '${atom.scopeRefId}'.")
+            )
+            if (resolvedByRef != null) {
+                return resolvedByRef
+            }
+            if (!isSelfResolvedKind(atom.kind)) {
+                mcpFail("Unknown scopeRefId '${atom.scopeRefId}'.")
+            }
         }
 
         return when (atom.kind) {
@@ -498,6 +506,12 @@ internal class ScopeResolverService {
             is LocalSearchScope -> ScopeShape.LOCAL
             else -> ScopeShape.MIXED
         }
+    }
+
+    private fun isSelfResolvedKind(kind: ScopeAtomKind): Boolean {
+        return kind == ScopeAtomKind.PATTERN ||
+            kind == ScopeAtomKind.DIRECTORY ||
+            kind == ScopeAtomKind.FILES
     }
 
     private fun failOrDiagnose(strict: Boolean, diagnostics: MutableList<String>, message: String) {
