@@ -6,12 +6,18 @@ MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symb
 VFS tools:
 
 - `vfs_get_url_from_local_path`
+- `vfs_get_url_from_local_paths`
 - `vfs_get_local_path_from_url`
+- `vfs_get_local_paths_from_urls`
 - `vfs_refresh`
 - `vfs_exists`
+- `vfs_exists_many`
 - `vfs_file_stat`
+- `vfs_file_stats`
 - `vfs_list_files`
+- `vfs_list_files_many`
 - `vfs_read_file`
+- `vfs_read_files`
 - `vfs_read_file_full`
 - `vfs_read_file_by_char_range`
 - `vfs_read_file_by_line_range`
@@ -29,9 +35,11 @@ VFS read tools only return persisted VFS content. If you need unsaved editor con
 Document tools:
 
 - `document_get_text`
+- `document_get_texts`
 - `document_get_chars_sequence`
 - `document_get_immutable_char_sequence`
 - `document_get_text_range`
+- `document_get_text_ranges`
 - `document_get_text_length`
 - `document_get_line_count`
 - `document_get_line_number`
@@ -51,11 +59,13 @@ These methods are designed to map directly to `com.intellij.openapi.editor.Docum
 Navigation tools:
 
 - `navigation_to_reference`
+- `navigation_to_reference_batch`
 - `navigation_to_type_definition`
 - `navigation_to_implementation`
 - `navigation_find_overrides`
 - `navigation_find_inheritors`
 - `navigation_find_references`
+- `navigation_find_references_batch`
 - `navigation_get_callers`
 
 Navigation tools resolve source `(row, column)` to target file URI and target `(row, column)`.  

@@ -24,6 +24,7 @@ package dev.ghostflyby.mcp.vfs
 
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.batchTry
 import dev.ghostflyby.mcp.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -79,19 +80,43 @@ internal class VfsMcpTools : McpToolset {
         refreshIfNeeded: Boolean = false,
     ): String {
         reportActivity(Bundle.message("tool.activity.vfs.get.url.from.local.path", pathInProject, refreshIfNeeded))
-        val project = currentCoroutineContext().project
-        val path = project.resolveInProject(pathInProject)
-        val directFile = if (refreshIfNeeded) {
-            backgroundWriteAction { VfsUtil.findFile(path, true) }
-        } else {
-            readAction { VfsUtil.findFile(path, false) }
+        return resolveUrlFromLocalPath(pathInProject, refreshIfNeeded)
+    }
+
+    @McpTool
+    @McpDescription("Resolve multiple project-relative local paths to VFS URLs.")
+    suspend fun vfs_get_url_from_local_paths(
+        @McpDescription("Project-relative local paths to resolve.")
+        pathsInProject: List<String>,
+        @McpDescription("Refresh the file system before resolving each path.")
+        refreshIfNeeded: Boolean = false,
+        @McpDescription("Whether to continue collecting results after a single path fails.")
+        continueOnError: Boolean = true,
+    ): VfsBatchUrlResult {
+        reportActivity(Bundle.message("tool.activity.vfs.get.url.from.local.paths", pathsInProject.size, refreshIfNeeded, continueOnError))
+        val items = mutableListOf<VfsBatchUrlResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (pathInProject in pathsInProject) {
+            val output = batchTry(continueOnError) {
+                resolveUrlFromLocalPath(pathInProject, refreshIfNeeded)
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += VfsBatchUrlResultItem(
+                input = pathInProject,
+                output = output.value,
+                error = output.error,
+            )
         }
-        val file = directFile ?: if (!refreshIfNeeded) {
-            backgroundWriteAction { VfsUtil.findFile(path, true) }
-        } else {
-            null
-        }
-        return file?.url ?: mcpFail("File '$pathInProject' cannot be found in project")
+        return VfsBatchUrlResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -101,13 +126,41 @@ internal class VfsMcpTools : McpToolset {
         url: String,
     ): String {
         reportActivity(Bundle.message("tool.activity.vfs.get.local.path.from.url", url))
-        return readAction {
-            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File $url doesn't exist or can't be opened")
-            if (file.fileSystem.protocol != "file") {
-                mcpFail("File $url is not a local file")
+        return resolveLocalPathFromUrl(url)
+    }
+
+    @McpTool
+    @McpDescription("Resolve multiple VFS URLs to local file-system paths.")
+    suspend fun vfs_get_local_paths_from_urls(
+        @McpDescription("VFS URLs to resolve.")
+        urls: List<String>,
+        @McpDescription("Whether to continue collecting results after a single URL fails.")
+        continueOnError: Boolean = true,
+    ): VfsBatchUrlResult {
+        reportActivity(Bundle.message("tool.activity.vfs.get.local.path.from.urls", urls.size, continueOnError))
+        val items = mutableListOf<VfsBatchUrlResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (url in urls) {
+            val output = batchTry(continueOnError) {
+                resolveLocalPathFromUrl(url)
             }
-            file.toNioPath().toString()
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += VfsBatchUrlResultItem(
+                input = url,
+                output = output.value,
+                error = output.error,
+            )
         }
+        return VfsBatchUrlResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -149,6 +202,24 @@ internal class VfsMcpTools : McpToolset {
         return readAction { vfsManager.findFileByUrl(url)?.exists() ?: false }
     }
 
+    @McpTool
+    @McpDescription("Check whether multiple VFS URLs currently resolve to existing files or directories.")
+    suspend fun vfs_exists_many(
+        @McpDescription("VFS URLs to check.")
+        urls: List<String>,
+    ): VfsBatchExistsResult {
+        reportActivity(Bundle.message("tool.activity.vfs.exists.many", urls.size))
+        val items = readAction {
+            urls.map { url ->
+                VfsBatchExistsResultItem(
+                    url = url,
+                    exists = vfsManager.findFileByUrl(url)?.exists() ?: false,
+                )
+            }
+        }
+        return VfsBatchExistsResult(items = items)
+    }
+
     @Serializable
     class VirtualFileStat(
         val name: String? = null,
@@ -170,6 +241,85 @@ internal class VfsMcpTools : McpToolset {
         val names: List<String>,
     )
 
+    @Serializable
+    class VfsReadRequest(
+        val url: String,
+        val mode: ReadMode = ReadMode.FULL,
+        val startChar: Int = 0,
+        val endCharExclusive: Int? = null,
+        val startLine: Int = 1,
+        val endLineInclusive: Int? = null,
+        val clampOutOfBounds: Boolean = false,
+    )
+
+    @Serializable
+    class VfsBatchUrlResultItem(
+        val input: String,
+        val output: String? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class VfsBatchExistsResultItem(
+        val url: String,
+        val exists: Boolean,
+    )
+
+    @Serializable
+    class VfsBatchFileStatResultItem(
+        val url: String,
+        val stat: VirtualFileStat? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class VfsBatchListFilesResultItem(
+        val url: String,
+        val names: List<String> = emptyList(),
+        val error: String? = null,
+    )
+
+    @Serializable
+    class VfsBatchReadResultItem(
+        val index: Int,
+        val request: VfsReadRequest,
+        val result: VfsReadResult? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class VfsBatchUrlResult(
+        val items: List<VfsBatchUrlResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @Serializable
+    class VfsBatchExistsResult(
+        val items: List<VfsBatchExistsResultItem>,
+    )
+
+    @Serializable
+    class VfsBatchFileStatResult(
+        val items: List<VfsBatchFileStatResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @Serializable
+    class VfsBatchListFilesResult(
+        val items: List<VfsBatchListFilesResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @Serializable
+    class VfsBatchReadResult(
+        val items: List<VfsBatchReadResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
 
     @McpTool
     @McpDescription("Return file metadata for a VFS URL.")
@@ -181,30 +331,44 @@ internal class VfsMcpTools : McpToolset {
     ): VirtualFileStat {
         val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties.names.joinToString(",")
         reportActivity(Bundle.message("tool.activity.vfs.file.stat", url, propertyInfo))
-        val stat = readAction {
-            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
-            VirtualFileStat(
-                name = file.name,
-                path = file.path,
-                isDirectory = file.isDirectory,
-                length = file.length,
-                lastModified = file.timeStamp,
-                isToolLargeForIntellijSense = file.isTooLargeForIntellijSense(),
-                isValid = file.isValid,
-                isWritable = file.isWritable,
-                fileType = file.fileType.name,
+        return readFileStat(url, properties)
+    }
+
+    @McpTool
+    @McpDescription("Return file metadata for multiple VFS URLs.")
+    suspend fun vfs_file_stats(
+        @McpDescription("VFS URLs to read metadata from.")
+        urls: List<String>,
+        @McpDescription("Optional property names to include. Null or empty means all properties.")
+        properties: VirtualFileStat.PropertyList? = null,
+        @McpDescription("Whether to continue collecting results after a single URL fails.")
+        continueOnError: Boolean = true,
+    ): VfsBatchFileStatResult {
+        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties.names.joinToString(",")
+        reportActivity(Bundle.message("tool.activity.vfs.file.stats", urls.size, propertyInfo, continueOnError))
+        val items = mutableListOf<VfsBatchFileStatResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (url in urls) {
+            val output = batchTry(continueOnError) {
+                readFileStat(url = url, properties = properties)
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += VfsBatchFileStatResultItem(
+                url = url,
+                stat = output.value,
+                error = output.error,
             )
         }
-        if (properties?.names.isNullOrEmpty())
-            return stat
-        val empty = VirtualFileStat()
-        VirtualFileStat::class.memberProperties.forEach {
-            if (it.name in properties.names && it is KMutableProperty1<VirtualFileStat, *>) {
-                @Suppress("UNCHECKED_CAST")
-                (it as KMutableProperty1<VirtualFileStat, Any?>).set(empty, it.get(stat))
-            }
-        }
-        return empty
+        return VfsBatchFileStatResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -214,12 +378,41 @@ internal class VfsMcpTools : McpToolset {
         url: String,
     ): VfsFileNamesResult {
         reportActivity(Bundle.message("tool.activity.vfs.list.files", url))
-        val names = readAction {
-            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
-            if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
-            file.children.map { it.name }
+        return VfsFileNamesResult(names = listFileNames(url))
+    }
+
+    @McpTool
+    @McpDescription("List direct child file names for multiple VFS directory URLs.")
+    suspend fun vfs_list_files_many(
+        @McpDescription("VFS directory URLs to list.")
+        urls: List<String>,
+        @McpDescription("Whether to continue collecting results after a single URL fails.")
+        continueOnError: Boolean = true,
+    ): VfsBatchListFilesResult {
+        reportActivity(Bundle.message("tool.activity.vfs.list.files.many", urls.size, continueOnError))
+        val items = mutableListOf<VfsBatchListFilesResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (url in urls) {
+            val output = batchTry(continueOnError) {
+                listFileNames(url)
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += VfsBatchListFilesResultItem(
+                url = url,
+                names = output.value ?: emptyList(),
+                error = output.error,
+            )
         }
-        return VfsFileNamesResult(names = names)
+        return VfsBatchListFilesResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -260,6 +453,49 @@ internal class VfsMcpTools : McpToolset {
             startLine = startLine,
             endLineInclusive = endLineInclusive,
             clampOutOfBounds = clampOutOfBounds,
+        )
+    }
+
+    @McpTool
+    @McpDescription("Read multiple files from VFS with per-item mode/range settings.")
+    suspend fun vfs_read_files(
+        @McpDescription("Read requests; each request maps to vfs_read_file parameters.")
+        requests: List<VfsReadRequest>,
+        @McpDescription("Whether to continue collecting results after a single request fails.")
+        continueOnError: Boolean = true,
+    ): VfsBatchReadResult {
+        reportActivity(Bundle.message("tool.activity.vfs.read.files", requests.size, continueOnError))
+        val items = mutableListOf<VfsBatchReadResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        requests.forEachIndexed { index, request ->
+            val output = batchTry(continueOnError) {
+                readFile(
+                    url = request.url,
+                    mode = request.mode,
+                    startChar = request.startChar,
+                    endCharExclusive = request.endCharExclusive,
+                    startLine = request.startLine,
+                    endLineInclusive = request.endLineInclusive,
+                    clampOutOfBounds = request.clampOutOfBounds,
+                )
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += VfsBatchReadResultItem(
+                index = index,
+                request = request,
+                result = output.value,
+                error = output.error,
+            )
+        }
+        return VfsBatchReadResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
         )
     }
 
@@ -423,6 +659,71 @@ internal class VfsMcpTools : McpToolset {
             endLineInclusive = endLineInclusive,
             clampOutOfBounds = clampOutOfBounds,
         )
+    }
+
+    private suspend fun resolveUrlFromLocalPath(pathInProject: String, refreshIfNeeded: Boolean): String {
+        val project = currentCoroutineContext().project
+        val path = project.resolveInProject(pathInProject)
+        val directFile = if (refreshIfNeeded) {
+            backgroundWriteAction { VfsUtil.findFile(path, true) }
+        } else {
+            readAction { VfsUtil.findFile(path, false) }
+        }
+        val file = directFile ?: if (!refreshIfNeeded) {
+            backgroundWriteAction { VfsUtil.findFile(path, true) }
+        } else {
+            null
+        }
+        return file?.url ?: mcpFail("File '$pathInProject' cannot be found in project")
+    }
+
+    private suspend fun resolveLocalPathFromUrl(url: String): String {
+        return readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File $url doesn't exist or can't be opened")
+            if (file.fileSystem.protocol != "file") {
+                mcpFail("File $url is not a local file")
+            }
+            file.toNioPath().toString()
+        }
+    }
+
+    private suspend fun readFileStat(
+        url: String,
+        properties: VirtualFileStat.PropertyList?,
+    ): VirtualFileStat {
+        val stat = readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
+            VirtualFileStat(
+                name = file.name,
+                path = file.path,
+                isDirectory = file.isDirectory,
+                length = file.length,
+                lastModified = file.timeStamp,
+                isToolLargeForIntellijSense = file.isTooLargeForIntellijSense(),
+                isValid = file.isValid,
+                isWritable = file.isWritable,
+                fileType = file.fileType.name,
+            )
+        }
+        if (properties?.names.isNullOrEmpty()) {
+            return stat
+        }
+        val filtered = VirtualFileStat()
+        VirtualFileStat::class.memberProperties.forEach {
+            if (it.name in properties.names && it is KMutableProperty1<VirtualFileStat, *>) {
+                @Suppress("UNCHECKED_CAST")
+                (it as KMutableProperty1<VirtualFileStat, Any?>).set(filtered, it.get(stat))
+            }
+        }
+        return filtered
+    }
+
+    private suspend fun listFileNames(url: String): List<String> {
+        return readAction {
+            val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
+            if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
+            file.children.map { it.name }
+        }
     }
 
     private suspend fun getRegularFile(url: String): VirtualFile = readAction {

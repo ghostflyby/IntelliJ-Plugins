@@ -25,6 +25,11 @@
   and `find_in_directory_using_glob`.
 - Replaced generic MCP boundary list returns with serializable wrapper DTOs (`VfsFileNamesResult`,
   `NavigationResults`) for stronger boundary typing.
+- Added batch VFS tools for higher-throughput agent calls:
+  `vfs_get_url_from_local_paths`, `vfs_get_local_paths_from_urls`, `vfs_exists_many`,
+  `vfs_file_stats`, `vfs_list_files_many`, and `vfs_read_files`.
+- Added batch Document read tools: `document_get_texts` and `document_get_text_ranges`.
+- Added batch Navigation tools: `navigation_to_reference_batch` and `navigation_find_references_batch`.
 
 ### Changed
 

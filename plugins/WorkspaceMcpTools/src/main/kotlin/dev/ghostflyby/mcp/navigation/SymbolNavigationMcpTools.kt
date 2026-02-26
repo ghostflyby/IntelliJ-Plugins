@@ -24,6 +24,7 @@ package dev.ghostflyby.mcp.navigation
 
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.batchTry
 import dev.ghostflyby.mcp.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -66,6 +67,41 @@ internal class SymbolNavigationMcpTools : McpToolset {
     class NavigationResults(
         val items: List<NavigationResult>,
         val diagnostics: List<String> = emptyList(),
+    )
+
+    @Serializable
+    class NavigationSourcePosition(
+        val uri: String,
+        val row: Int,
+        val column: Int,
+    )
+
+    @Serializable
+    class NavigationBatchSingleItem(
+        val input: NavigationSourcePosition,
+        val result: NavigationResult? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class NavigationBatchMultiItem(
+        val input: NavigationSourcePosition,
+        val result: NavigationResults? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    class NavigationBatchSingleResult(
+        val items: List<NavigationBatchSingleItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @Serializable
+    class NavigationBatchMultiResult(
+        val items: List<NavigationBatchMultiItem>,
+        val successCount: Int,
+        val failureCount: Int,
     )
 
     @McpTool
@@ -337,6 +373,89 @@ internal class SymbolNavigationMcpTools : McpToolset {
                 limit = limit,
             )
         }
+    }
+
+    @McpTool
+    @McpDescription("Batch resolve references for multiple source positions.")
+    suspend fun navigation_to_reference_batch(
+        @McpDescription("Source positions to resolve.")
+        inputs: List<NavigationSourcePosition>,
+        @McpDescription("Whether to continue collecting results after a single input fails.")
+        continueOnError: Boolean = true,
+    ): NavigationBatchSingleResult {
+        reportActivity(Bundle.message("tool.activity.navigation.to.reference.batch", inputs.size, continueOnError))
+        val project = currentCoroutineContext().project
+        val items = mutableListOf<NavigationBatchSingleItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
+                runNavigationRead(project) {
+                    val context = resolveReferenceContext(project, input.uri, input.row, input.column)
+                    toNavigationResult(context.resolvedTarget, context.psiDocumentManager)
+                        ?: mcpFail("Resolved target has no physical text location")
+                }
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += NavigationBatchSingleItem(
+                input = input,
+                result = output.value,
+                error = output.error,
+            )
+        }
+        return NavigationBatchSingleResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
+    }
+
+    @McpTool
+    @McpDescription("Batch find references for multiple source positions.")
+    suspend fun navigation_find_references_batch(
+        @McpDescription("Source positions to search references from.")
+        inputs: List<NavigationSourcePosition>,
+        @McpDescription("Maximum number of results to return for each input.")
+        limit: Int = DEFAULT_REFERENCE_LIMIT,
+        @McpDescription("Whether to continue collecting results after a single input fails.")
+        continueOnError: Boolean = true,
+    ): NavigationBatchMultiResult {
+        reportActivity(Bundle.message("tool.activity.navigation.find.references.batch", inputs.size, limit, continueOnError))
+        val project = currentCoroutineContext().project
+        val items = mutableListOf<NavigationBatchMultiItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
+                runNavigationRead(project) {
+                    validateLimit(limit)
+                    val context = resolveReferenceContext(project, input.uri, input.row, input.column)
+                    val searchTarget = context.resolvedTarget.navigationElement
+                    NavigationResults(
+                        items = collectReferences(searchTarget, context.psiDocumentManager, limit),
+                    )
+                }
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += NavigationBatchMultiItem(
+                input = input,
+                result = output.value,
+                error = output.error,
+            )
+        }
+        return NavigationBatchMultiResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     private class ResolvedReferenceContext(

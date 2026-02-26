@@ -20,22 +20,27 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+package dev.ghostflyby.mcp
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+import com.intellij.mcpserver.mcpFail
 
-version = "0.0.4"
+internal data class BatchAttempt<T>(
+    val value: T?,
+    val error: String?,
+)
 
-buildLogic {
-    pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaUltimate
-    platformVersion = "2025.3"
-    pluginSinceBuild = "253"
-}
-
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
+internal suspend fun <T> batchTry(
+    continueOnError: Boolean,
+    action: suspend () -> T,
+): BatchAttempt<T> {
+    return try {
+        BatchAttempt(value = action(), error = null)
+    } catch (error: Throwable) {
+        if (error is java.util.concurrent.CancellationException) throw error
+        val message = error.message ?: error::class.java.simpleName
+        if (!continueOnError) {
+            mcpFail(message)
+        }
+        BatchAttempt(value = null, error = message)
+    }
 }

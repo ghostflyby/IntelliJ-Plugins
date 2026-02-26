@@ -36,6 +36,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.VFS_URL_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.batchTry
 import dev.ghostflyby.mcp.reportActivity
 import kotlinx.serialization.Serializable
 
@@ -56,6 +57,41 @@ internal class DocumentMcpTools : McpToolset {
         val modificationStamp: Long,
     )
 
+    @Serializable
+    data class DocumentTextRangeRequest(
+        val url: String,
+        val startOffset: Int,
+        val endOffset: Int,
+    )
+
+    @Serializable
+    data class DocumentBatchTextResultItem(
+        val input: String,
+        val text: String? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    data class DocumentBatchTextRangeResultItem(
+        val request: DocumentTextRangeRequest,
+        val text: String? = null,
+        val error: String? = null,
+    )
+
+    @Serializable
+    data class DocumentBatchTextResult(
+        val items: List<DocumentBatchTextResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
+    @Serializable
+    data class DocumentBatchTextRangeResult(
+        val items: List<DocumentBatchTextRangeResultItem>,
+        val successCount: Int,
+        val failureCount: Int,
+    )
+
     @McpTool
     @McpDescription("Document.getText(): return a copy of whole document text.")
     suspend fun document_get_text(
@@ -63,9 +99,41 @@ internal class DocumentMcpTools : McpToolset {
         url: String,
     ): DocumentTextResult {
         reportActivity(Bundle.message("tool.activity.document.get.text", url))
-        val (_, document) = resolveTextDocument(url)
-        val text = readAction { document.text }
-        return DocumentTextResult(text = text)
+        return DocumentTextResult(text = readDocumentText(url))
+    }
+
+    @McpTool
+    @McpDescription("Batch Document.getText(): return copies of whole document text.")
+    suspend fun document_get_texts(
+        @McpDescription("Text document URLs to read.")
+        urls: List<String>,
+        @McpDescription("Whether to continue collecting results after a single URL fails.")
+        continueOnError: Boolean = true,
+    ): DocumentBatchTextResult {
+        reportActivity(Bundle.message("tool.activity.document.get.texts", urls.size, continueOnError))
+        val items = mutableListOf<DocumentBatchTextResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (url in urls) {
+            val output = batchTry(continueOnError) {
+                readDocumentText(url)
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += DocumentBatchTextResultItem(
+                input = url,
+                text = output.value,
+                error = output.error,
+            )
+        }
+        return DocumentBatchTextResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -103,12 +171,45 @@ internal class DocumentMcpTools : McpToolset {
         endOffset: Int,
     ): DocumentTextResult {
         reportActivity(Bundle.message("tool.activity.document.get.text.range", startOffset, endOffset, url))
-        val (_, document) = resolveTextDocument(url)
-        validateRange(document, startOffset, endOffset)
-        val text = readAction {
-            document.getText(TextRange(startOffset, endOffset))
+        return DocumentTextResult(text = readDocumentTextRange(url, startOffset, endOffset))
+    }
+
+    @McpTool
+    @McpDescription("Batch Document.getText(TextRange): return texts in [startOffset, endOffset).")
+    suspend fun document_get_text_ranges(
+        @McpDescription("Text range requests.")
+        requests: List<DocumentTextRangeRequest>,
+        @McpDescription("Whether to continue collecting results after a single request fails.")
+        continueOnError: Boolean = true,
+    ): DocumentBatchTextRangeResult {
+        reportActivity(Bundle.message("tool.activity.document.get.text.ranges", requests.size, continueOnError))
+        val items = mutableListOf<DocumentBatchTextRangeResultItem>()
+        var successCount = 0
+        var failureCount = 0
+        for (request in requests) {
+            val output = batchTry(continueOnError) {
+                readDocumentTextRange(
+                    url = request.url,
+                    startOffset = request.startOffset,
+                    endOffset = request.endOffset,
+                )
+            }
+            if (output.error == null) {
+                successCount++
+            } else {
+                failureCount++
+            }
+            items += DocumentBatchTextRangeResultItem(
+                request = request,
+                text = output.value,
+                error = output.error,
+            )
         }
-        return DocumentTextResult(text = text)
+        return DocumentBatchTextRangeResult(
+            items = items,
+            successCount = successCount,
+            failureCount = failureCount,
+        )
     }
 
     @McpTool
@@ -144,7 +245,7 @@ internal class DocumentMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.document.get.line.number", offset, url))
         val (_, document) = resolveTextDocument(url)
         val textLength = readAction { document.textLength }
-        validateOffset(offset, 0, textLength, "offset")
+        validateOffset(offset, textLength, "offset")
         return readAction { document.getLineNumber(offset) }
     }
 
@@ -241,7 +342,7 @@ internal class DocumentMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.document.insert.string", text.length, offset, url))
         val (file, document) = resolveTextDocument(url)
         val textLength = readAction { document.textLength }
-        validateOffset(offset, 0, textLength, "offset")
+        validateOffset(offset, textLength, "offset")
         ensureWritable(file, document, url)
         backgroundWriteAction {
             document.insertString(offset, text)
@@ -326,6 +427,23 @@ internal class DocumentMcpTools : McpToolset {
         return snapshotWriteResult(document)
     }
 
+    private suspend fun readDocumentText(url: String): String {
+        val (_, document) = resolveTextDocument(url)
+        return readAction { document.text }
+    }
+
+    private suspend fun readDocumentTextRange(
+        url: String,
+        startOffset: Int,
+        endOffset: Int,
+    ): String {
+        val (_, document) = resolveTextDocument(url)
+        validateRange(document, startOffset, endOffset)
+        return readAction {
+            document.getText(TextRange(startOffset, endOffset))
+        }
+    }
+
     private suspend fun resolveTextDocument(url: String): Pair<VirtualFile, Document> = readAction {
         val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
         if (file.isDirectory) {
@@ -341,8 +459,8 @@ internal class DocumentMcpTools : McpToolset {
         if (startOffset > endOffset) {
             mcpFail("startOffset must be <= endOffset.")
         }
-        validateOffset(startOffset, 0, textLength, "startOffset")
-        validateOffset(endOffset, 0, textLength, "endOffset")
+        validateOffset(startOffset, textLength, "startOffset")
+        validateOffset(endOffset, textLength, "endOffset")
     }
 
     private suspend fun validateLine(document: Document, line: Int) {
@@ -350,12 +468,12 @@ internal class DocumentMcpTools : McpToolset {
         if (lineCount <= 0) {
             mcpFail("Document has no lines.")
         }
-        validateOffset(line, 0, lineCount - 1, "line")
+        validateOffset(line, lineCount - 1, "line")
     }
 
-    private fun validateOffset(value: Int, min: Int, max: Int, name: String) {
-        if (value !in min..max) {
-            mcpFail("$name must be in [$min, $max], but was $value.")
+    private fun validateOffset(value: Int, max: Int, name: String) {
+        if (value !in 0..max) {
+            mcpFail("$name must be in [0, $max], but was $value.")
         }
     }
 
