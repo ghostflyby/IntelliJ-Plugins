@@ -27,7 +27,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "1.0.0"
+version = "0.0.1"
 
 buildLogic {
     pluginVersion = version.toString()

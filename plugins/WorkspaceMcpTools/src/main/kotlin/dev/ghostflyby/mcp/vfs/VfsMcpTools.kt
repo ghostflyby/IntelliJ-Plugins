@@ -70,13 +70,13 @@ internal class VfsMcpTools : McpToolset {
     )
 
     @McpTool
-    @McpDescription("Resolve a project-relative local path to a VFS URL. Returns null when the file cannot be found.")
+    @McpDescription("Resolve a project-relative local path to a VFS URL.")
     suspend fun vfs_get_url_from_local_path(
         @McpDescription("Project-relative local path to resolve.")
         pathInProject: String,
         @McpDescription("Refresh the file system before resolving the path.")
         refreshIfNeeded: Boolean = false,
-    ): String? {
+    ): String {
         val project = currentCoroutineContext().project
         val path = project.resolveInProject(pathInProject)
         val file = if (refreshIfNeeded) {
@@ -84,7 +84,7 @@ internal class VfsMcpTools : McpToolset {
         } else {
             readAction { VfsUtil.findFile(path, false) }
         }
-        return file?.url
+        return file?.url ?: mcpFail("File '$pathInProject' cannot be found in project")
     }
 
     @McpTool
