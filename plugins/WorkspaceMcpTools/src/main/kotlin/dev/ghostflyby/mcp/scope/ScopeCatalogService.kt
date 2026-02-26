@@ -1,0 +1,333 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
+ */
+
+package dev.ghostflyby.mcp.scope
+
+import com.intellij.ide.scratch.ScratchesNamedScope
+import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.module.ModuleManager
+import com.intellij.psi.search.EverythingGlobalScope
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.GlobalSearchScopesCore
+import com.intellij.psi.search.LocalSearchScope
+import com.intellij.psi.search.PredefinedSearchScopeProvider
+import com.intellij.psi.search.PredefinedSearchScopeProviderImpl
+import com.intellij.psi.search.ProjectAndLibrariesScope
+import com.intellij.psi.search.ProjectScope
+import com.intellij.psi.search.SearchScope
+import com.intellij.psi.search.SearchScopeProvider
+import com.intellij.psi.search.scope.packageSet.NamedScopesHolder
+import java.security.MessageDigest
+import java.util.Locale
+
+@Service(Service.Level.PROJECT)
+internal class ScopeCatalogService {
+    data class ScopeCatalogRecord(
+        val item: ScopeCatalogItemDto,
+        val scope: SearchScope,
+    )
+
+    suspend fun listCatalog(project: Project, includeInteractiveScopes: Boolean): ScopeCatalogResultDto {
+        val records = collectRecords(project)
+        val items = records.values
+            .map { it.item }
+            .filter { includeInteractiveScopes || !it.requiresUserInput }
+        return ScopeCatalogResultDto(items = items)
+    }
+
+    suspend fun resolveByRef(project: Project, scopeRefId: String, allowUiInteractiveScopes: Boolean): SearchScope? {
+        val records = collectRecords(project)
+        val record = records[scopeRefId] ?: return null
+        if (record.item.requiresUserInput && !allowUiInteractiveScopes) {
+            return null
+        }
+        return record.scope
+    }
+
+    suspend fun findCatalogItem(
+        project: Project,
+        scopeRefId: String,
+        includeInteractiveScopes: Boolean,
+    ): ScopeCatalogItemDto? {
+        val record = collectRecords(project)[scopeRefId] ?: return null
+        if (record.item.requiresUserInput && !includeInteractiveScopes) {
+            return null
+        }
+        return record.item
+    }
+
+    suspend fun findStandardScope(
+        project: Project,
+        standardScopeId: String,
+        allowUiInteractiveScopes: Boolean,
+    ): SearchScope? {
+        val direct = directStandardScope(project, standardScopeId)
+        if (direct != null) {
+            return direct
+        }
+        return resolveByRef(
+            project = project,
+            scopeRefId = standardRefId(standardScopeId),
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+    }
+
+    private suspend fun collectRecords(project: Project): Map<String, ScopeCatalogRecord> {
+        val records = linkedMapOf<String, ScopeCatalogRecord>()
+        addPredefinedScopes(project, records)
+        addProviderScopes(project, records)
+        addNamedScopes(project, records)
+        addModuleScopes(project, records)
+        return records
+    }
+
+    private suspend fun addPredefinedScopes(
+        project: Project,
+        out: MutableMap<String, ScopeCatalogRecord>,
+    ) {
+        val scopes = PredefinedSearchScopeProvider.getInstance().getPredefinedScopesSuspend(
+            project = project,
+            dataContext = null,
+            suggestSearchInLibs = true,
+            prevSearchFiles = false,
+            currentSelection = false,
+            usageView = false,
+            showEmptyScopes = true,
+        )
+        for (scope in scopes) {
+            val displayName = scope.displayName
+            val serializationId = serializationIdOrNull(displayName)
+            val requiresUserInput = requiresUserInputScope(scope, serializationId)
+            val unstable = isUnstableScope(serializationId)
+            val kind = if (serializationId != null) ScopeAtomKind.STANDARD else ScopeAtomKind.PROVIDER_SCOPE
+            val refId = if (serializationId != null) {
+                standardRefId(serializationId)
+            } else {
+                providerRefId(
+                    providerId = PREDEFINED_PROVIDER_ID,
+                    displayName = displayName,
+                    scopeClassName = scope.javaClass.name,
+                )
+            }
+            val item = ScopeCatalogItemDto(
+                scopeRefId = refId,
+                displayName = displayName,
+                kind = kind,
+                scopeShape = scopeShapeOf(scope),
+                serializationId = serializationId,
+                requiresUserInput = requiresUserInput,
+                unstable = unstable,
+                providerScopeId = if (kind == ScopeAtomKind.PROVIDER_SCOPE) PREDEFINED_PROVIDER_ID else null,
+            )
+            out.putIfAbsent(refId, ScopeCatalogRecord(item = item, scope = scope))
+        }
+    }
+
+    private suspend fun addProviderScopes(
+        project: Project,
+        out: MutableMap<String, ScopeCatalogRecord>,
+    ) {
+        val dataContext = SimpleDataContext.getProjectContext(project)
+        val providers: List<SearchScopeProvider> = readAction {
+            SearchScopeProvider.EP_NAME.extensionList.map { it as SearchScopeProvider }
+        }
+        for (provider in providers) {
+            val providerId = provider.javaClass.name
+            val scopes = linkedSetOf<SearchScope>()
+            scopes += collectProviderScopesFromMethod(provider, "getGeneralSearchScopes", project, dataContext)
+            scopes += collectProviderScopesFromMethod(provider, "getSearchScopes", project, dataContext)
+            for (scope in scopes) {
+                val displayName = scope.displayName
+                val refId = providerRefId(providerId, displayName, scope.javaClass.name)
+                val item = ScopeCatalogItemDto(
+                    scopeRefId = refId,
+                    displayName = displayName,
+                    kind = ScopeAtomKind.PROVIDER_SCOPE,
+                    scopeShape = scopeShapeOf(scope),
+                    requiresUserInput = scope is LocalSearchScope,
+                    unstable = true,
+                    providerScopeId = providerId,
+                )
+                out.putIfAbsent(refId, ScopeCatalogRecord(item = item, scope = scope))
+            }
+        }
+    }
+
+    private suspend fun addNamedScopes(
+        project: Project,
+        out: MutableMap<String, ScopeCatalogRecord>,
+    ) {
+        val holders = readAction { NamedScopesHolder.getAllNamedScopeHolders(project) }
+        for (holder in holders) {
+            val holderId = holder.javaClass.name
+            val namedScopes = readAction { holder.scopes }
+            for (namedScope in namedScopes) {
+                if (namedScope.value == null) {
+                    continue
+                }
+                val scope = readAction { GlobalSearchScopesCore.filterScope(project, namedScope) }
+                val refId = namedRefId(holderId, namedScope.scopeId)
+                val item = ScopeCatalogItemDto(
+                    scopeRefId = refId,
+                    displayName = namedScope.presentableName,
+                    kind = ScopeAtomKind.NAMED_SCOPE,
+                    scopeShape = ScopeShape.GLOBAL,
+                    namedScopeName = namedScope.scopeId,
+                    namedScopeHolderId = holderId,
+                )
+                out.putIfAbsent(refId, ScopeCatalogRecord(item = item, scope = scope))
+            }
+        }
+    }
+
+    private suspend fun addModuleScopes(
+        project: Project,
+        out: MutableMap<String, ScopeCatalogRecord>,
+    ) {
+        val modules = readAction { ModuleManager.getInstance(project).modules.toList() }
+            .sortedBy { it.name.lowercase(Locale.US) }
+        for (module in modules) {
+            for (flavor in ModuleScopeFlavor.entries) {
+                val scope = readAction {
+                    when (flavor) {
+                        ModuleScopeFlavor.MODULE -> module.moduleScope
+                        ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES -> module.moduleWithDependenciesScope
+                        ModuleScopeFlavor.MODULE_WITH_LIBRARIES -> module.moduleWithLibrariesScope
+                        ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES -> module.getModuleWithDependenciesAndLibrariesScope(true)
+                    }
+                }
+                val refId = moduleRefId(module.name, flavor)
+                val item = ScopeCatalogItemDto(
+                    scopeRefId = refId,
+                    displayName = "${module.name} (${flavor.name})",
+                    kind = ScopeAtomKind.MODULE,
+                    scopeShape = ScopeShape.GLOBAL,
+                    moduleName = module.name,
+                    moduleFlavor = flavor,
+                )
+                out.putIfAbsent(refId, ScopeCatalogRecord(item = item, scope = scope))
+            }
+        }
+    }
+
+    private fun serializationIdOrNull(displayName: String): String? {
+        val mapping = standardScopeDisplayNameToId()
+        return mapping[displayName]
+    }
+
+    private fun requiresUserInputScope(scope: SearchScope, serializationId: String?): Boolean {
+        if (serializationId == CURRENT_FILE_SCOPE_ID) {
+            return true
+        }
+        return scope is LocalSearchScope
+    }
+
+    private fun isUnstableScope(serializationId: String?): Boolean {
+        return serializationId == CURRENT_FILE_SCOPE_ID ||
+            serializationId == OPEN_FILES_SCOPE_ID ||
+            serializationId == RECENTLY_CHANGED_FILES_SCOPE_ID ||
+            serializationId == RECENTLY_VIEWED_FILES_SCOPE_ID
+    }
+
+    private fun scopeShapeOf(scope: SearchScope): ScopeShape {
+        return when (scope) {
+            is GlobalSearchScope -> ScopeShape.GLOBAL
+            is LocalSearchScope -> ScopeShape.LOCAL
+            else -> ScopeShape.MIXED
+        }
+    }
+
+    private fun directStandardScope(project: Project, standardScopeId: String): SearchScope? {
+        return when (standardScopeId) {
+            ALL_PLACES_SCOPE_ID -> GlobalSearchScope.everythingScope(project)
+            PROJECT_AND_LIBRARIES_SCOPE_ID -> GlobalSearchScope.allScope(project)
+            PROJECT_FILES_SCOPE_ID -> GlobalSearchScope.projectScope(project)
+            PROJECT_PRODUCTION_FILES_SCOPE_ID -> GlobalSearchScopesCore.projectProductionScope(project)
+            PROJECT_TEST_FILES_SCOPE_ID -> GlobalSearchScopesCore.projectTestScope(project)
+            else -> null
+        }
+    }
+
+    private fun collectProviderScopesFromMethod(
+        provider: SearchScopeProvider,
+        methodName: String,
+        project: Project,
+        dataContext: DataContext,
+    ): List<SearchScope> {
+        val method = provider.javaClass.methods.firstOrNull {
+            it.name == methodName && it.parameterCount == 2
+        } ?: return emptyList()
+        val result = runCatching {
+            method.invoke(provider, project, dataContext)
+        }.getOrNull() ?: return emptyList()
+        val iterable = result as? Iterable<*> ?: return emptyList()
+        return iterable.filterIsInstance<SearchScope>()
+    }
+
+    private fun standardScopeDisplayNameToId(): Map<String, String> {
+        return mapOf(
+            EverythingGlobalScope.getNameText() to ALL_PLACES_SCOPE_ID,
+            ProjectAndLibrariesScope.getNameText() to PROJECT_AND_LIBRARIES_SCOPE_ID,
+            ProjectScope.getProjectFilesScopeName() to PROJECT_FILES_SCOPE_ID,
+            GlobalSearchScopesCore.getProjectProductionFilesScopeName() to PROJECT_PRODUCTION_FILES_SCOPE_ID,
+            GlobalSearchScopesCore.getProjectTestFilesScopeName() to PROJECT_TEST_FILES_SCOPE_ID,
+            ScratchesNamedScope.scratchesAndConsoles() to SCRATCHES_AND_CONSOLES_SCOPE_ID,
+            PredefinedSearchScopeProviderImpl.getRecentlyViewedFilesScopeName() to RECENTLY_VIEWED_FILES_SCOPE_ID,
+            PredefinedSearchScopeProviderImpl.getRecentlyChangedFilesScopeName() to RECENTLY_CHANGED_FILES_SCOPE_ID,
+            PredefinedSearchScopeProviderImpl.getCurrentFileScopeName() to CURRENT_FILE_SCOPE_ID,
+        )
+    }
+
+    companion object {
+        private const val PREDEFINED_PROVIDER_ID = "predefined"
+        private const val ALL_PLACES_SCOPE_ID = "All Places"
+        private const val PROJECT_AND_LIBRARIES_SCOPE_ID = "Project and Libraries"
+        private const val PROJECT_FILES_SCOPE_ID = "Project Files"
+        private const val PROJECT_PRODUCTION_FILES_SCOPE_ID = "Project Production Files"
+        private const val PROJECT_TEST_FILES_SCOPE_ID = "Project Test Files"
+        private const val SCRATCHES_AND_CONSOLES_SCOPE_ID = "Scratches and Consoles"
+        private const val RECENTLY_VIEWED_FILES_SCOPE_ID = "Recently Viewed Files"
+        private const val RECENTLY_CHANGED_FILES_SCOPE_ID = "Recently Changed Files"
+        private const val OPEN_FILES_SCOPE_ID = "Open Files"
+        private const val CURRENT_FILE_SCOPE_ID = "Current File"
+
+        fun standardRefId(scopeId: String): String = "standard:$scopeId"
+        fun moduleRefId(moduleName: String, flavor: ModuleScopeFlavor): String = "module:$moduleName:${flavor.name}"
+        fun namedRefId(holderId: String, scopeId: String): String = "named:$holderId:$scopeId"
+        fun providerRefId(providerId: String, displayName: String, scopeClassName: String): String {
+            val digest = shortHash("$providerId|$displayName|$scopeClassName")
+            return "provider:$providerId:$digest"
+        }
+
+        private fun shortHash(text: String): String {
+            val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
+            return bytes.joinToString("") { b -> "%02x".format(b) }.take(12)
+        }
+
+        fun getInstance(project: Project): ScopeCatalogService = project.service<ScopeCatalogService>()
+    }
+}

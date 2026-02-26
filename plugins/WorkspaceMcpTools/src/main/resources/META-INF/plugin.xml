@@ -15,5 +15,6 @@
         <mcpToolset implementation="dev.ghostflyby.mcp.vfs.VfsMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.navigation.SymbolNavigationMcpTools"/>
+        <mcpToolset implementation="dev.ghostflyby.mcp.scope.SearchScopeMcpTools"/>
     </extensions>
 </idea-plugin>
