@@ -1,7 +1,7 @@
-# File MCP Tools
+# Workspace MCP Tools
 
 <!-- Plugin description -->
-MCP toolset for IntelliJ file operations, including VFS and Document integrations.
+MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symbol Navigation integrations.
 
 VFS tools:
 
@@ -22,6 +22,7 @@ VFS tools:
 - `LINE_RANGE`: read `[startLine, endLineInclusive]` (1-based)
 
 VFS read tools only return persisted VFS content. If you need unsaved editor content, call `document_*` tools.
+`vfs_list_files` returns an object wrapper with `names`.
 
 Document tools:
 
@@ -44,4 +45,21 @@ Document tools:
 - `document_set_text`
 
 These methods are designed to map directly to `com.intellij.openapi.editor.Document` APIs.
+
+Navigation tools:
+
+- `navigation_to_reference`
+- `navigation_to_type_definition`
+- `navigation_to_implementation`
+- `navigation_find_overrides`
+- `navigation_find_inheritors`
+- `navigation_find_references`
+- `navigation_get_callers`
+
+Navigation tools resolve source `(row, column)` to target file URI and target `(row, column)`.  
+Both source and target line/column are 1-based.
+Batch navigation tools return an object wrapper with `items`.
+
+Some navigation tools are best-effort (notably caller/type/inheritor/override queries) and may produce false negatives
+depending on language PSI shape. When a specific query returns empty, fallback to `navigation_find_references`.
 <!-- Plugin description end -->

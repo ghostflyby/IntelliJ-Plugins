@@ -2,15 +2,18 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
-    <id>dev.ghostflyby.mcp.vfs</id>
-    <name>File MCP</name>
+    <id>dev.ghostflyby.mcp.workspace</id>
+    <name>Workspace MCP</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <depends>com.intellij.modules.vcs</depends>
     <depends>com.intellij.mcpServer</depends>
 
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="dev.ghostflyby.mcp.vfs.VfsMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
+        <mcpToolset implementation="dev.ghostflyby.mcp.navigation.SymbolNavigationMcpTools"/>
     </extensions>
 </idea-plugin>

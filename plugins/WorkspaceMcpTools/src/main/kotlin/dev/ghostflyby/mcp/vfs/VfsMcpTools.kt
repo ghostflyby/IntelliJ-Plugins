@@ -153,6 +153,11 @@ internal class VfsMcpTools : McpToolset {
         class PropertyList(val names: List<String>)
     }
 
+    @Serializable
+    class VfsFileNamesResult(
+        val names: List<String>,
+    )
+
 
     @McpTool
     @McpDescription("Return file metadata for a VFS URL.")
@@ -193,12 +198,13 @@ internal class VfsMcpTools : McpToolset {
     suspend fun vfs_list_files(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
-    ): List<String> {
-        return readAction {
+    ): VfsFileNamesResult {
+        val names = readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
             if (!file.isDirectory) mcpFail("File at URL: $url is not a directory")
             file.children.map { it.name }
         }
+        return VfsFileNamesResult(names = names)
     }
 
     @McpTool
