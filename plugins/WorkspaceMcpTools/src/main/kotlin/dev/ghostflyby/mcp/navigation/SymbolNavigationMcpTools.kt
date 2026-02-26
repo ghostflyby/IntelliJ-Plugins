@@ -66,6 +66,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
     @Serializable
     class NavigationResults(
         val items: List<NavigationResult>,
+        val diagnostics: List<String> = emptyList(),
     )
 
     @McpTool
@@ -127,22 +128,40 @@ internal class SymbolNavigationMcpTools : McpToolset {
         column: Int,
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
+        @McpDescription("If true and no implementation is found, fallback to navigation_find_references semantics.")
+        fallbackToReferencesWhenEmpty: Boolean = false,
     ): NavigationResults {
-        reportActivity(Bundle.message("tool.activity.navigation.to.implementation", uri, row, column, limit))
+        reportActivity(
+            Bundle.message(
+                "tool.activity.navigation.to.implementation",
+                uri,
+                row,
+                column,
+                limit,
+                fallbackToReferencesWhenEmpty,
+            ),
+        )
         val project = currentCoroutineContext().project
-        val items = runNavigationRead(project) {
+        return runNavigationRead(project) {
             validateLimit(limit)
             val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
-            collectDefinitions(
+            val primaryItems = collectDefinitions(
                 searchTarget = searchTarget,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = limit,
                 includeTargetWhenEmpty = true,
                 excludeOriginalTarget = false,
             )
+            fallbackToReferences(
+                primaryItems = primaryItems,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
+                reason = "Implementation search returned no results.",
+                searchTarget = searchTarget,
+                psiDocumentManager = context.psiDocumentManager,
+                limit = limit,
+            )
         }
-        return NavigationResults(items = items)
     }
 
     @McpTool
@@ -160,22 +179,40 @@ internal class SymbolNavigationMcpTools : McpToolset {
         column: Int,
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
+        @McpDescription("If true and no override is found, fallback to navigation_find_references semantics.")
+        fallbackToReferencesWhenEmpty: Boolean = false,
     ): NavigationResults {
-        reportActivity(Bundle.message("tool.activity.navigation.find.overrides", uri, row, column, limit))
+        reportActivity(
+            Bundle.message(
+                "tool.activity.navigation.find.overrides",
+                uri,
+                row,
+                column,
+                limit,
+                fallbackToReferencesWhenEmpty,
+            ),
+        )
         val project = currentCoroutineContext().project
-        val items = runNavigationRead(project) {
+        return runNavigationRead(project) {
             validateLimit(limit)
             val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
-            collectDefinitions(
+            val primaryItems = collectDefinitions(
                 searchTarget = searchTarget,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = limit,
                 includeTargetWhenEmpty = false,
                 excludeOriginalTarget = true,
             )
+            fallbackToReferences(
+                primaryItems = primaryItems,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
+                reason = "Override search returned no results.",
+                searchTarget = searchTarget,
+                psiDocumentManager = context.psiDocumentManager,
+                limit = limit,
+            )
         }
-        return NavigationResults(items = items)
     }
 
     @McpTool
@@ -193,23 +230,41 @@ internal class SymbolNavigationMcpTools : McpToolset {
         column: Int,
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_IMPLEMENTATION_LIMIT,
+        @McpDescription("If true and no inheritor is found, fallback to navigation_find_references semantics.")
+        fallbackToReferencesWhenEmpty: Boolean = false,
     ): NavigationResults {
-        reportActivity(Bundle.message("tool.activity.navigation.find.inheritors", uri, row, column, limit))
+        reportActivity(
+            Bundle.message(
+                "tool.activity.navigation.find.inheritors",
+                uri,
+                row,
+                column,
+                limit,
+                fallbackToReferencesWhenEmpty,
+            ),
+        )
         val project = currentCoroutineContext().project
-        val items = runNavigationRead(project) {
+        return runNavigationRead(project) {
             validateLimit(limit)
             val context = resolveReferenceContext(project, uri, row, column)
             val typeTarget = findTypeDefinitionTarget(context.resolvedTarget)
                 ?: mcpFail("Type declaration not found at $uri:$row:$column")
-            collectDefinitions(
+            val primaryItems = collectDefinitions(
                 searchTarget = typeTarget.navigationElement,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = limit,
                 includeTargetWhenEmpty = false,
                 excludeOriginalTarget = true,
             )
+            fallbackToReferences(
+                primaryItems = primaryItems,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
+                reason = "Inheritor search returned no results.",
+                searchTarget = typeTarget.navigationElement,
+                psiDocumentManager = context.psiDocumentManager,
+                limit = limit,
+            )
         }
-        return NavigationResults(items = items)
     }
 
     @McpTool
@@ -250,21 +305,39 @@ internal class SymbolNavigationMcpTools : McpToolset {
         column: Int,
         @McpDescription("Maximum number of results to return.")
         limit: Int = DEFAULT_REFERENCE_LIMIT,
+        @McpDescription("If true and no caller is found by heuristic filtering, fallback to generic references.")
+        fallbackToReferencesWhenEmpty: Boolean = false,
     ): NavigationResults {
-        reportActivity(Bundle.message("tool.activity.navigation.get.callers", uri, row, column, limit))
+        reportActivity(
+            Bundle.message(
+                "tool.activity.navigation.get.callers",
+                uri,
+                row,
+                column,
+                limit,
+                fallbackToReferencesWhenEmpty,
+            ),
+        )
         val project = currentCoroutineContext().project
-        val items = runNavigationRead(project) {
+        return runNavigationRead(project) {
             validateLimit(limit)
             val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
-            collectReferences(
+            val primaryItems = collectReferences(
                 searchTarget = searchTarget,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = limit,
                 referenceFilter = ::isLikelyCallReference,
             )
+            fallbackToReferences(
+                primaryItems = primaryItems,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
+                reason = "Caller heuristic returned no results.",
+                searchTarget = searchTarget,
+                psiDocumentManager = context.psiDocumentManager,
+                limit = limit,
+            )
         }
-        return NavigationResults(items = items)
     }
 
     private class ResolvedReferenceContext(
@@ -284,11 +357,11 @@ internal class SymbolNavigationMcpTools : McpToolset {
 
         val psiManager = PsiManager.getInstance(project)
         val sourcePsiFile = psiManager.findFile(sourceFile)
-            ?: mcpFail("No PSI file available for URL: $uri")
+            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
         val psiDocumentManager = PsiDocumentManager.getInstance(project)
         val sourceDocument = psiDocumentManager.getLastCommittedDocument(sourcePsiFile)
             ?: FileDocumentManager.getInstance().getDocument(sourceFile)
-            ?: mcpFail("No text document available for URL: $uri")
+            ?: mcpFail("No text document available for URL: $uri${vfsReadHint(sourceFile)}")
 
         if (row > sourceDocument.lineCount) {
             mcpFail("row must be in [1, ${sourceDocument.lineCount}], but was $row")
@@ -302,13 +375,21 @@ internal class SymbolNavigationMcpTools : McpToolset {
         val sourceOffset = lineStartOffset + column - 1
 
         val reference = findReferenceAt(sourcePsiFile, sourceOffset, lineStartOffset)
-            ?: mcpFail("No reference found at $uri:$row:$column")
+            ?: mcpFail("No reference found at $uri:$row:$column${vfsReadHint(sourceFile)}")
         val resolvedTarget = reference.resolve()
             ?: mcpFail("Reference at $uri:$row:$column cannot be resolved")
         return ResolvedReferenceContext(
             resolvedTarget = resolvedTarget,
             psiDocumentManager = psiDocumentManager,
         )
+    }
+
+    private fun vfsReadHint(sourceFile: com.intellij.openapi.vfs.VirtualFile): String {
+        return if (sourceFile.fileSystem.protocol == "jar") {
+            ". For JAR/ZIP virtual files, prefer vfs_read_file* tools."
+        } else {
+            ""
+        }
     }
 
     private fun findReferenceAt(sourcePsiFile: PsiFile, sourceOffset: Int, lineStartOffset: Int): PsiReference? {
@@ -444,6 +525,36 @@ internal class SymbolNavigationMcpTools : McpToolset {
             unique.size < limit
         })
         return unique.values.toList()
+    }
+
+    private fun fallbackToReferences(
+        primaryItems: List<NavigationResult>,
+        fallbackToReferencesWhenEmpty: Boolean,
+        reason: String,
+        searchTarget: PsiElement,
+        psiDocumentManager: PsiDocumentManager,
+        limit: Int,
+    ): NavigationResults {
+        if (primaryItems.isNotEmpty()) {
+            return NavigationResults(items = primaryItems)
+        }
+        if (!fallbackToReferencesWhenEmpty) {
+            return NavigationResults(items = emptyList())
+        }
+        val fallbackItems = collectReferences(
+            searchTarget = searchTarget,
+            psiDocumentManager = psiDocumentManager,
+            limit = limit,
+        )
+        val diagnostics = if (fallbackItems.isEmpty()) {
+            listOf("$reason Fallback to references also returned no results.")
+        } else {
+            listOf("$reason Fallback to references was applied.")
+        }
+        return NavigationResults(
+            items = fallbackItems,
+            diagnostics = diagnostics,
+        )
     }
 
     private fun addUniqueResult(unique: LinkedHashMap<String, NavigationResult>, result: NavigationResult) {

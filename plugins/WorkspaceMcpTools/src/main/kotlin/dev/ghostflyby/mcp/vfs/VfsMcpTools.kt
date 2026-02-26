@@ -68,6 +68,7 @@ internal class VfsMcpTools : McpToolset {
         val endCharExclusive: Int? = null,
         val startLine: Int? = null,
         val endLineInclusive: Int? = null,
+        val clamped: Boolean = false,
     )
 
     @McpTool
@@ -81,10 +82,15 @@ internal class VfsMcpTools : McpToolset {
         reportActivity(Bundle.message("tool.activity.vfs.get.url.from.local.path", pathInProject, refreshIfNeeded))
         val project = currentCoroutineContext().project
         val path = project.resolveInProject(pathInProject)
-        val file = if (refreshIfNeeded) {
+        val directFile = if (refreshIfNeeded) {
             backgroundWriteAction { VfsUtil.findFile(path, true) }
         } else {
             readAction { VfsUtil.findFile(path, false) }
+        }
+        val file = directFile ?: if (!refreshIfNeeded) {
+            backgroundWriteAction { VfsUtil.findFile(path, true) }
+        } else {
+            null
         }
         return file?.url ?: mcpFail("File '$pathInProject' cannot be found in project")
     }
@@ -134,10 +140,13 @@ internal class VfsMcpTools : McpToolset {
         deferred.await()
     }
 
+    @McpTool
+    @McpDescription("Check whether a VFS URL currently resolves to an existing file or directory.")
     suspend fun vfs_exists(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
     ): Boolean {
+        reportActivity(Bundle.message("tool.activity.vfs.exists", url))
         return readAction { vfsManager.findFileByUrl(url)?.exists() ?: false }
     }
 
@@ -171,8 +180,8 @@ internal class VfsMcpTools : McpToolset {
         @McpDescription("Optional property names to include. Null or empty means all properties.")
         properties: VirtualFileStat.PropertyList?,
     ): VirtualFileStat {
-        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties?.names?.joinToString(",")
-        reportActivity(Bundle.message("tool.activity.vfs.file.stat", url, propertyInfo ?: "all"))
+        val propertyInfo = if (properties?.names.isNullOrEmpty()) "all" else properties.names.joinToString(",")
+        reportActivity(Bundle.message("tool.activity.vfs.file.stat", url, propertyInfo))
         val stat = readAction {
             val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
             VirtualFileStat(
@@ -229,6 +238,8 @@ internal class VfsMcpTools : McpToolset {
         startLine: Int = 1,
         @McpDescription("Line range end (1-based, inclusive) for LINE_RANGE mode. Null means last line.")
         endLineInclusive: Int? = null,
+        @McpDescription("Clamp out-of-bounds char/line range inputs to valid file bounds instead of failing.")
+        clampOutOfBounds: Boolean = false,
     ): VfsReadResult {
         reportActivity(
             Bundle.message(
@@ -239,6 +250,7 @@ internal class VfsMcpTools : McpToolset {
                 endCharExclusive?.toString() ?: "null",
                 startLine,
                 endLineInclusive?.toString() ?: "null",
+                clampOutOfBounds,
             ),
         )
         return readFile(
@@ -248,6 +260,7 @@ internal class VfsMcpTools : McpToolset {
             endCharExclusive = endCharExclusive,
             startLine = startLine,
             endLineInclusive = endLineInclusive,
+            clampOutOfBounds = clampOutOfBounds,
         )
     }
 
@@ -258,6 +271,7 @@ internal class VfsMcpTools : McpToolset {
         endCharExclusive: Int? = null,
         startLine: Int = 1,
         endLineInclusive: Int? = null,
+        clampOutOfBounds: Boolean = false,
     ): VfsReadResult {
         val file = getRegularFile(url)
         val text = loadText(file)
@@ -274,49 +288,66 @@ internal class VfsMcpTools : McpToolset {
                 endCharExclusive = text.length,
                 startLine = 1,
                 endLineInclusive = lineStarts.size,
+                clamped = false,
             )
 
             ReadMode.CHAR_RANGE -> {
-                if (startChar < 0) mcpFail("startChar must be >= 0")
-                val effectiveEnd = endCharExclusive ?: text.length
-                if (effectiveEnd < startChar) {
-                    mcpFail("endCharExclusive must be >= startChar")
-                }
-                if (startChar > text.length || effectiveEnd > text.length) {
-                    mcpFail("Character range [$startChar, $effectiveEnd) is out of bounds for file length ${text.length}")
+                val requestedEnd = endCharExclusive ?: text.length
+                val clampedStart = if (clampOutOfBounds) startChar.coerceIn(0, text.length) else startChar
+                val rawEnd = if (clampOutOfBounds) requestedEnd.coerceIn(0, text.length) else requestedEnd
+                val clampedEnd = if (clampOutOfBounds) maxOf(clampedStart, rawEnd) else rawEnd
+                val wasClamped = clampedStart != startChar || clampedEnd != requestedEnd
+
+                if (!clampOutOfBounds) {
+                    if (startChar < 0) mcpFail("startChar must be >= 0")
+                    if (requestedEnd < startChar) {
+                        mcpFail("endCharExclusive must be >= startChar")
+                    }
+                    if (startChar > text.length || requestedEnd > text.length) {
+                        mcpFail("Character range [$startChar, $requestedEnd) is out of bounds for file length ${text.length}")
+                    }
                 }
                 VfsReadResult(
                     mode = ReadMode.CHAR_RANGE,
                     url = url,
-                    content = text.substring(startChar, effectiveEnd),
+                    content = text.substring(clampedStart, clampedEnd),
                     totalChars = text.length,
                     totalLines = lineStarts.size,
-                    startChar = startChar,
-                    endCharExclusive = effectiveEnd,
+                    startChar = clampedStart,
+                    endCharExclusive = clampedEnd,
+                    clamped = wasClamped,
                 )
             }
 
             ReadMode.LINE_RANGE -> {
-                if (startLine < 1) mcpFail("startLine must be >= 1")
                 val totalLines = lineStarts.size
-                val effectiveEndLine = endLineInclusive ?: totalLines
-                if (effectiveEndLine < startLine) {
-                    mcpFail("endLineInclusive must be >= startLine")
-                }
-                if (startLine > totalLines || effectiveEndLine > totalLines) {
-                    mcpFail("Line range [$startLine, $effectiveEndLine] is out of bounds for total lines $totalLines")
+                val requestedEndLine = endLineInclusive ?: totalLines
+                val clampedStartLine = if (clampOutOfBounds) startLine.coerceIn(1, totalLines) else startLine
+                val rawEndLine = if (clampOutOfBounds) requestedEndLine.coerceIn(1, totalLines) else requestedEndLine
+                val clampedEndLine = if (clampOutOfBounds) maxOf(clampedStartLine, rawEndLine) else rawEndLine
+                val wasClamped = clampedStartLine != startLine || clampedEndLine != requestedEndLine
+
+                if (!clampOutOfBounds) {
+                    if (startLine < 1) mcpFail("startLine must be >= 1")
+                    if (requestedEndLine < startLine) {
+                        mcpFail("endLineInclusive must be >= startLine")
+                    }
+                    if (startLine > totalLines || requestedEndLine > totalLines) {
+                        mcpFail("Line range [$startLine, $requestedEndLine] is out of bounds for total lines $totalLines")
+                    }
                 }
 
-                val startOffset = lineStarts[startLine - 1]
-                val endOffset = if (effectiveEndLine == totalLines) text.length else lineStarts[effectiveEndLine]
+                val startOffset = lineStarts[clampedStartLine - 1]
+                val endOffset = if (clampedEndLine == totalLines) text.length else lineStarts[clampedEndLine]
                 VfsReadResult(
                     mode = ReadMode.LINE_RANGE,
                     url = url,
                     content = text.substring(startOffset, endOffset),
                     totalChars = text.length,
                     totalLines = totalLines,
-                    startLine = startLine,
-                    endLineInclusive = effectiveEndLine,
+                    startLine = clampedStartLine,
+                    endLineInclusive = clampedEndLine,
+                    clamped = wasClamped,
                 )
             }
         }
@@ -344,6 +375,8 @@ internal class VfsMcpTools : McpToolset {
         startChar: Int,
         @McpDescription("Character range end offset (exclusive). Null means end of file.")
         endCharExclusive: Int? = null,
+        @McpDescription("Clamp out-of-bounds range to file bounds instead of failing.")
+        clampOutOfBounds: Boolean = false,
     ): VfsReadResult {
         reportActivity(
             Bundle.message(
@@ -351,6 +384,7 @@ internal class VfsMcpTools : McpToolset {
                 startChar,
                 endCharExclusive?.toString() ?: "null",
                 url,
+                clampOutOfBounds,
             ),
         )
         return readFile(
@@ -358,6 +392,7 @@ internal class VfsMcpTools : McpToolset {
             mode = ReadMode.CHAR_RANGE,
             startChar = startChar,
             endCharExclusive = endCharExclusive,
+            clampOutOfBounds = clampOutOfBounds,
         )
     }
 
@@ -370,6 +405,8 @@ internal class VfsMcpTools : McpToolset {
         startLine: Int,
         @McpDescription("Line range end (1-based, inclusive). Null means last line.")
         endLineInclusive: Int? = null,
+        @McpDescription("Clamp out-of-bounds range to file bounds instead of failing.")
+        clampOutOfBounds: Boolean = false,
     ): VfsReadResult {
         reportActivity(
             Bundle.message(
@@ -377,6 +414,7 @@ internal class VfsMcpTools : McpToolset {
                 startLine,
                 endLineInclusive?.toString() ?: "null",
                 url,
+                clampOutOfBounds,
             ),
         )
         return readFile(
@@ -384,6 +422,7 @@ internal class VfsMcpTools : McpToolset {
             mode = ReadMode.LINE_RANGE,
             startLine = startLine,
             endLineInclusive = endLineInclusive,
+            clampOutOfBounds = clampOutOfBounds,
         )
     }
 
@@ -393,7 +432,7 @@ internal class VfsMcpTools : McpToolset {
     }
 
     private suspend fun loadText(file: VirtualFile): String {
-        return readAction { VfsUtil.loadText(file).toString() }
+        return readAction { VfsUtil.loadText(file) }
     }
 
     private fun computeLineStarts(text: CharSequence): List<Int> {

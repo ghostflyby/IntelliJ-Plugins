@@ -8,6 +8,7 @@ VFS tools:
 - `vfs_get_url_from_local_path`
 - `vfs_get_local_path_from_url`
 - `vfs_refresh`
+- `vfs_exists`
 - `vfs_file_stat`
 - `vfs_list_files`
 - `vfs_read_file`
@@ -20,6 +21,7 @@ VFS tools:
 - `FULL`: read the whole file
 - `CHAR_RANGE`: read `[startChar, endCharExclusive)`
 - `LINE_RANGE`: read `[startLine, endLineInclusive]` (1-based)
+- optional `clampOutOfBounds=true`: clamp invalid char/line ranges to file bounds instead of failing
 
 VFS read tools only return persisted VFS content. If you need unsaved editor content, call `document_*` tools.
 `vfs_list_files` returns an object wrapper with `names`.
@@ -59,7 +61,9 @@ Navigation tools:
 Navigation tools resolve source `(row, column)` to target file URI and target `(row, column)`.  
 Both source and target line/column are 1-based.
 Batch navigation tools return an object wrapper with `items`.
+Best-effort batch tools also return `diagnostics` when fallback behavior is applied.
 
 Some navigation tools are best-effort (notably caller/type/inheritor/override queries) and may produce false negatives
-depending on language PSI shape. When a specific query returns empty, fallback to `navigation_find_references`.
+depending on language PSI shape. You can set `fallbackToReferencesWhenEmpty=true` to auto-fallback to
+`navigation_find_references` semantics inside the same call.
 <!-- Plugin description end -->
