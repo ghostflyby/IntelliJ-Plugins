@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025-2026 ghostflyby
- * SPDX-FileCopyrightText: 2025-2026 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,43 +20,32 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
-    id("repo.intellij-plugin")
-}
-
-version = "1.4.7"
-
-buildLogic {
-    pluginVersion = version.toString()
-}
-
-val hotswapAgentDistribution by configurations.creating {
-    isCanBeResolved = true
-    isCanBeConsumed = false
-    isTransitive = false
+    kotlin("jvm")
+    kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
+    `java-library`
 }
 
 dependencies {
-    hotswapAgentDistribution(libs.hotswap.agent)
-
     implementation(project(":plugins:EnhancedHotSwapEnabler:common"))
-    implementation(project(":plugins:EnhancedHotSwapEnabler:gradle"))
-
-    intellijPlatform {
-        bundledPlugin("com.intellij.java")
-        bundledPlugin("com.intellij.gradle")
-    }
+    compileOnly(gradleKotlinDsl())
+    compileOnly(gradleApi())
 }
 
-tasks {
-    prepareSandbox {
-        from(hotswapAgentDistribution) {
-            into("${project.name}/lib")
-        }
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_1_8
     }
-    prepareTestSandbox {
-        from(hotswapAgentDistribution) {
-            into("${project.name}/lib")
-        }
-    }
+    explicitApi()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+samWithReceiver {
+    annotation("org.gradle.api.HasImplicitReceiver")
 }

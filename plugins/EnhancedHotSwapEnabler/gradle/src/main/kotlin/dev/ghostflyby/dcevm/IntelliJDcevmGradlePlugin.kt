@@ -29,9 +29,8 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.kotlin.dsl.withType
 
 
-@Suppress("unused")
-internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
-    override fun apply(target: Gradle) = target.allprojects {
+public class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
+    override fun apply(target: Gradle): Unit = target.allprojects {
         val manualTasks = providers.environmentVariable(DCEVM_MANUAL_TASKS_KEY)
             .map { JsonSlurper().parse(it.toCharArray()) as Collection<*> }
 
