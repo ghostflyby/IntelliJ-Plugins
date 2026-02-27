@@ -7,21 +7,35 @@
    read/write actions, progress reporting,
    background tasks, and some cancelable registrations. Avoid blocking the UI thread.
 3. you should declare `CoroutineScope` in Service as primary constructor property when needed,
-   ensuring proper lifecycle, .e.g cancellation on plugin unload.
+   ensuring proper lifecycle, e.g. cancellation on plugin unload.
 4. make dynamic plugins, registering should pass a `Disposable`
    or `CoroutineScope` to ensure proper cleanup on unload.
-5. clean data in `UserDataHolder` in with `Disposable` or `CoroutineScope` to prevent memory leaks.
+5. clean data in `UserDataHolder` with `Disposable` or `CoroutineScope` to prevent memory leaks.
 6. DO NOT run blocking operations on UI Thread.
 7. use explicit visibility modifiers, mostly should use `internal`
 8. DO NOT use `@ApiStatus.Internal` APIs, which will be prevented on marketplace, check before writing
 9. Use `@ApiStatus.Experimental` APIs with caution, as they may change without deprecation.
-   If you must use them, `Supress` the `UnstableApiUsage` warning and document the usage clearly in code comments,
+   If you must use them, `Suppress` the `UnstableApiUsage` warning and document the usage clearly in code comments,
    so future maintainers understand the risks and can track API changes in IntelliJ releases.
 
 ## Project Structure
 
-under `plugins`, each plugin in its own subdirectory, with a `CHANGELOG.md`
-and `README.md` for documentation and changelog.
+1. this repository is a Gradle monorepo; `settings.gradle.kts` auto-includes each
+   directory under `plugins/` as `:plugins:<pluginName>`.
+2. current plugin directories:
+   `EnhancedHotSwapEnabler`, `GradleMcpTools`, `IdeaVimToggleIME`,
+   `LiveTemplatesWithSelection`, `macOSRecents`, `SpotlessIntegration`,
+   `VitePress`, `WorkspaceMcpTools`.
+3. most plugin modules should keep this layout:
+   `build.gradle.kts`, `src/`, `README.md`, `CHANGELOG.md`, and `api/*.api`
+   when the plugin exposes a stable external API.
+4. some plugins can have nested Gradle subprojects via `projects.txt`
+   (current example: `plugins/SpotlessIntegration/projects.txt` includes `ModelBuilderService`).
+   when adding/removing entries, keep directory names and Gradle includes in sync.
+5. `VitePress` currently does not fully follow the common documentation/layout convention.
+   if you touch it, align it with the common plugin layout where practical.
+6. treat generated/local artifacts as non-source: `**/build/`, `**/.gradle/`, `.idea/`,
+   `.intellijPlatform/`, and `**/.DS_Store`.
 
 ## Tooling
 
