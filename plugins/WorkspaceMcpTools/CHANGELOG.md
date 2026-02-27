@@ -6,20 +6,6 @@
 
 ### Added
 
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
-
-## [1.0.0] - 2026-02-27
-
-### Added
-
 - Initial plugin scaffold with MCP Server dependency and VFS tool placeholders.
 - `vfs_read_file` now supports `FULL`, `CHAR_RANGE`, and `LINE_RANGE` read strategies.
 - Added convenience tools: `vfs_read_file_full`, `vfs_read_file_by_char_range`, `vfs_read_file_by_line_range`.
@@ -79,5 +65,3 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.0...HEAD
-[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/WorkspaceMcpTools-v1.0.0

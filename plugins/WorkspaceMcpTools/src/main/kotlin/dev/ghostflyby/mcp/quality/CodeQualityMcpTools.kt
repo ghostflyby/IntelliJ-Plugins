@@ -1,5 +1,3 @@
-@file:Suppress("UnstableApiUsage")
-
 /*
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
@@ -27,14 +25,9 @@ package dev.ghostflyby.mcp.quality
 import com.intellij.codeInsight.actions.AbstractLayoutCodeProcessor
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
-import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
-import com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator
-import com.intellij.codeInsight.daemon.impl.HighlightInfo
-import com.intellij.codeInsight.daemon.impl.HighlightingSessionImpl
-import com.intellij.codeInsight.multiverse.defaultContext
-import com.intellij.codeInspection.InspectionProfile
+import com.intellij.codeInspection.*
 import com.intellij.codeInspection.ex.GlobalInspectionContextBase
+import com.intellij.codeInspection.ex.InspectionToolWrapper
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -48,36 +41,19 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
-import com.intellij.openapi.util.ProperTextRange
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
 import com.intellij.profile.codeInspection.InspectionProfileManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
+import com.intellij.psi.PsiErrorElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.util.PsiTreeUtil
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.batchTry
-import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
-import dev.ghostflyby.mcp.common.relativizePathOrNull
-import dev.ghostflyby.mcp.common.reportActivity
-import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
-import dev.ghostflyby.mcp.scope.ScopeQuickPreset
-import dev.ghostflyby.mcp.scope.ScopeResolverService
-import dev.ghostflyby.mcp.scope.ScopeShape
-import dev.ghostflyby.mcp.scope.buildPresetScopeDescriptor
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import dev.ghostflyby.mcp.common.*
+import dev.ghostflyby.mcp.scope.*
+import kotlinx.coroutines.*
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
@@ -1160,48 +1136,158 @@ internal class CodeQualityMcpTools : McpToolset {
         file: VirtualFile,
         errorsOnly: Boolean,
     ): List<QualityProblemDto> {
-        val minSeverity = if (errorsOnly) HighlightSeverity.ERROR else HighlightSeverity.WEAK_WARNING
-        return readAction {
+        val minSeverity = if (errorsOnly) HighlightSeverity.ERROR else HighlightSeverity.WARNING
+        val psiFile = readAction {
             if (file.isDirectory) {
                 mcpFail("URL points to a directory, not a file: ${file.url}")
             }
             if (file.fileType.isBinary) {
                 mcpFail("File at URL '${file.url}' is binary and cannot be analyzed.")
             }
-            val psiFile = PsiManager.getInstance(project).findFile(file)
+            PsiManager.getInstance(project).findFile(file)
                 ?: mcpFail("No PSI file available for URL: ${file.url}")
-            val document = FileDocumentManager.getInstance().getDocument(file)
-                ?: mcpFail("No text document available for URL: ${file.url}")
-            val indicator = DaemonProgressIndicator()
-            val range = ProperTextRange(0, document.textLength)
-            val analyzer = DaemonCodeAnalyzer.getInstance(project) as? DaemonCodeAnalyzerImpl
-                ?: mcpFail("Daemon code analyzer implementation is unavailable for this project.")
-            val problems = mutableListOf<QualityProblemDto>()
-            HighlightingSessionImpl.runInsideHighlightingSession(psiFile, defaultContext(), null, range, false) { session ->
-                (session as HighlightingSessionImpl).setMinimumSeverity(minSeverity)
-                val highlights = analyzer.runMainPasses(psiFile, document, indicator)
-                highlights.forEach { info ->
-                    if (info.severity.myVal >= minSeverity.myVal) {
-                        problems += createQualityProblem(document, info)
-                    }
-                }
-            }
-            problems
         }
+        val document = readAction {
+            FileDocumentManager.getInstance().getDocument(file)
+                ?: mcpFail("No text document available for URL: ${file.url}")
+        }
+        val profile = resolveInspectionProfile(project, null)
+        val inspectionManager = InspectionManager.getInstance(project)
+        val tools = readAction { collectEnabledInspectionTools(profile, psiFile) }
+        val toolSeverityByShortName = readAction {
+            tools.associate { wrapper ->
+                wrapper.shortName to resolveToolSeverity(profile, psiFile, wrapper)
+            }
+        }
+
+        val deduplicated = linkedMapOf<String, QualityProblemDto>()
+
+        tools.forEach { tool ->
+            ProgressManager.checkCanceled()
+            val descriptors = InspectionEngine.runInspectionOnFile(
+                psiFile,
+                tool,
+                inspectionManager.createNewGlobalContext(),
+            )
+            descriptors.forEach { descriptor ->
+                val severity = resolveProblemSeverity(
+                    descriptor,
+                    toolSeverityByShortName[tool.shortName] ?: HighlightSeverity.WARNING,
+                )
+                if (severity.myVal < minSeverity.myVal) return@forEach
+                val problem = buildProblemFromDescriptor(document, descriptor, severity)
+                    ?: return@forEach
+                deduplicated.putIfAbsent(
+                    "${problem.severity}:${problem.line}:${problem.column}:${problem.description}",
+                    problem,
+                )
+            }
+        }
+
+        val syntaxErrors = readAction { PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java) }
+        syntaxErrors.forEach { error ->
+            val severity = HighlightSeverity.ERROR
+            if (severity.myVal < minSeverity.myVal) return@forEach
+            val problem = createQualityProblem(
+                document = document,
+                severity = severity.name,
+                description = error.errorDescription,
+                startOffset = error.textRange.startOffset,
+            )
+            deduplicated.putIfAbsent(
+                "${problem.severity}:${problem.line}:${problem.column}:${problem.description}",
+                problem,
+            )
+        }
+
+        return deduplicated.values.toList()
     }
 
-    private fun createQualityProblem(document: Document, info: HighlightInfo): QualityProblemDto {
-        val startLine = document.getLineNumber(info.startOffset)
+    private fun createQualityProblem(
+        document: Document,
+        severity: String,
+        description: String?,
+        startOffset: Int,
+    ): QualityProblemDto {
+        val boundedOffset = startOffset.coerceIn(0, document.textLength)
+        val startLine = document.getLineNumber(boundedOffset)
         val lineStartOffset = document.getLineStartOffset(startLine)
         val lineEndOffset = document.getLineEndOffset(startLine)
         val lineContent = document.getText(TextRange(lineStartOffset, lineEndOffset))
-        val column = info.startOffset - lineStartOffset
+        val column = boundedOffset - lineStartOffset
         return QualityProblemDto(
-            severity = info.severity.name,
-            description = info.description,
+            severity = severity,
+            description = description,
             lineContent = lineContent,
             line = startLine + 1,
             column = column + 1,
+        )
+    }
+
+    private fun collectEnabledInspectionTools(
+        profile: InspectionProfile,
+        psiFile: PsiFile,
+    ): List<InspectionToolWrapper<*, *>> {
+        return profile.getInspectionTools(psiFile)
+            .asSequence()
+            .filter { tool ->
+                ProgressManager.checkCanceled()
+                val key = tool.displayKey ?: return@filter false
+                profile.isToolEnabled(key, psiFile)
+            }
+            .toList()
+    }
+
+    private fun resolveToolSeverity(
+        profile: InspectionProfile,
+        psiFile: PsiFile,
+        tool: InspectionToolWrapper<*, *>,
+    ): HighlightSeverity {
+        val level = tool.displayKey?.let { key ->
+            profile.getErrorLevel(key, psiFile)
+        } ?: tool.defaultLevel
+        return level.severity
+    }
+
+    private fun resolveProblemSeverity(
+        descriptor: ProblemDescriptor,
+        configuredToolSeverity: HighlightSeverity,
+    ): HighlightSeverity {
+        return when (descriptor.highlightType) {
+            ProblemHighlightType.ERROR,
+            ProblemHighlightType.GENERIC_ERROR,
+                -> HighlightSeverity.ERROR
+
+            ProblemHighlightType.WARNING -> HighlightSeverity.WARNING
+            ProblemHighlightType.WEAK_WARNING -> HighlightSeverity.WEAK_WARNING
+            ProblemHighlightType.INFORMATION,
+                -> HighlightSeverity.INFORMATION
+
+            else -> configuredToolSeverity
+        }
+    }
+
+    private suspend fun buildProblemFromDescriptor(
+        document: Document,
+        descriptor: ProblemDescriptor,
+        severity: HighlightSeverity,
+    ): QualityProblemDto? {
+        val snapshot = readAction {
+            val anchor = descriptor.startElement ?: descriptor.psiElement ?: return@readAction null
+            val anchorRange = anchor.textRange ?: return@readAction null
+            val rangeInElement = descriptor.textRangeInElement
+            val startOffset = anchorRange.startOffset + rangeInElement.startOffset
+            val description = ProblemDescriptorUtil.renderDescriptionMessage(descriptor, anchor)
+            DescriptorProblemSnapshot(
+                startOffset = startOffset,
+                description = description,
+            )
+        } ?: return null
+        return createQualityProblem(
+            document = document,
+            severity = severity.name,
+            description = snapshot.description,
+            startOffset = snapshot.startOffset,
         )
     }
 
@@ -1342,6 +1428,11 @@ internal class CodeQualityMcpTools : McpToolset {
     private fun relativizePath(projectBasePath: String?, filePath: String): String? {
         return relativizePathOrNull(projectBasePath, filePath)
     }
+
+    private data class DescriptorProblemSnapshot(
+        val startOffset: Int,
+        val description: String,
+    )
 
     private data class ScopeFileCollection(
         val files: List<VirtualFile>,
