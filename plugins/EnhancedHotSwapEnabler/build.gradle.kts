@@ -20,7 +20,6 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -33,9 +32,6 @@ version = "1.3.7"
 
 buildLogic {
     pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaCommunity
-    platformVersion = "2025.1"
-    pluginSinceBuild = "251"
 }
 
 

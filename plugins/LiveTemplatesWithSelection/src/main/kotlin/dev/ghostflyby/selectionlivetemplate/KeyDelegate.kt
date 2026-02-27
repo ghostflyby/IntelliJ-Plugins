@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -26,8 +26,14 @@ import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolder
 import kotlin.reflect.KProperty
 
-internal operator fun <T : Any> Key<T>.getValue(thisRef: UserDataHolder, property: KProperty<*>): T? =
-    thisRef.getUserData(this)
+internal operator fun <T : Any> Key<T>.getValue(thisRef: UserDataHolder, property: KProperty<*>): T? {
+    return property.run {
+        thisRef.getUserData(this@getValue)
+    }
+}
 
-internal operator fun <T : Any> Key<T>.setValue(thisRef: UserDataHolder, property: KProperty<*>, value: T?) =
-    thisRef.putUserData(this, value)
+internal operator fun <T : Any> Key<T>.setValue(thisRef: UserDataHolder, property: KProperty<*>, value: T?) {
+    property.run {
+        thisRef.putUserData(this@setValue, value)
+    }
+}

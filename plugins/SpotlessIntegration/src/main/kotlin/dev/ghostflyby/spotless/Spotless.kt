@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -55,12 +55,13 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     public companion object {
         @JvmField
         public val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
-            ExtensionPointName.create<SpotlessDaemonProvider>("dev.ghostflyby.spotless.spotlessDaemonProvider")
+            ExtensionPointName.create("dev.ghostflyby.spotless.spotlessDaemonProvider")
     }
 
     init {
         EP_NAME.forEachExtensionSafe(::addDisposable)
         EP_NAME.addExtensionPointListener(
+            scope,
             object : ExtensionPointListener<SpotlessDaemonProvider> {
                 override fun extensionAdded(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
                     addDisposable(extension)
@@ -70,7 +71,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
                     Disposer.dispose(extension)
                 }
             },
-            this,
         )
     }
 

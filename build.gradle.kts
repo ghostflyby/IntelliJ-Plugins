@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -26,11 +26,6 @@ plugins {
 
 allprojects {
     repositories { mavenCentral() }
-}
-
-tasks {
-    // Keep wrapper version management at the root
-    wrapper { gradleVersion = providers.gradleProperty("gradleVersion").get() }
 }
 
 repositories {
