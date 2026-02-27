@@ -49,10 +49,7 @@ import com.intellij.psi.search.*
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
-import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -315,16 +312,12 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         requirePhysicalLocation: Boolean = true,
     ): ScopeSymbolSearchResultDto {
         val allowUiInteractiveScopes = false
-        val standardScopeId = when (scopePreset) {
-            ScopeSymbolQuickPreset.PROJECT_FILES -> "Project Files"
-            ScopeSymbolQuickPreset.ALL_PLACES -> "All Places"
-        }
-        val descriptor = buildStandardScopeDescriptor(
+        val descriptor = buildPresetScopeDescriptor(
             project = currentCoroutineContext().project,
-            standardScopeId = standardScopeId,
+            preset = scopePreset.toScopeQuickPreset(),
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-        val includeNonProjectItems = scopePreset == ScopeSymbolQuickPreset.ALL_PLACES
+        val includeNonProjectItems = scopePreset.includesNonProjectItems()
         return scope_search_symbols(
             query = query,
             scope = descriptor,
@@ -747,29 +740,9 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         if (element == null) return ScopeSymbolKind.UNKNOWN
         val className = element.javaClass.simpleName
         return when {
-            className.contains("Class", ignoreCase = true) ||
-                className.contains("Interface", ignoreCase = true) ||
-                className.contains("Enum", ignoreCase = true) ||
-                className.contains("Record", ignoreCase = true) ||
-                className.contains("Object", ignoreCase = true) ||
-                className.contains("TypeAlias", ignoreCase = true) ||
-                className.contains("Struct", ignoreCase = true) ||
-                className.contains("Trait", ignoreCase = true) ||
-                className.contains("TypeDef", ignoreCase = true) ->
-                ScopeSymbolKind.CLASS
-
-            className.contains("Method", ignoreCase = true) ||
-                className.contains("Function", ignoreCase = true) ||
-                className.contains("Callable", ignoreCase = true) ||
-                className.contains("Constructor", ignoreCase = true) ||
-                className.contains("Ctor", ignoreCase = true) ->
-                ScopeSymbolKind.METHOD
-
-            className.contains("Field", ignoreCase = true) ||
-                className.contains("Property", ignoreCase = true) ||
-                className.contains("Variable", ignoreCase = true) ->
-                ScopeSymbolKind.FIELD
-
+            isLikelyTypeDeclarationClassName(className) -> ScopeSymbolKind.CLASS
+            isLikelyCallableDeclarationClassName(className) -> ScopeSymbolKind.METHOD
+            isLikelyFieldDeclarationClassName(className) -> ScopeSymbolKind.FIELD
             else -> ScopeSymbolKind.SYMBOL
         }
     }
@@ -885,5 +858,16 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         override fun canShowListForEmptyPattern(): Boolean = false
 
         override fun getMaximumListSizeLimit(): Int = maximumListSizeLimit
+    }
+
+    private fun ScopeSymbolQuickPreset.toScopeQuickPreset(): ScopeQuickPreset {
+        return when (this) {
+            ScopeSymbolQuickPreset.PROJECT_FILES -> ScopeQuickPreset.PROJECT_FILES
+            ScopeSymbolQuickPreset.ALL_PLACES -> ScopeQuickPreset.ALL_PLACES
+        }
+    }
+
+    private fun ScopeSymbolQuickPreset.includesNonProjectItems(): Boolean {
+        return this == ScopeSymbolQuickPreset.ALL_PLACES
     }
 }

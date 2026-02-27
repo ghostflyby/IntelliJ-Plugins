@@ -22,12 +22,6 @@
 
 package dev.ghostflyby.mcp.navigation
 
-import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.batchTry
-import dev.ghostflyby.mcp.common.reportActivity
 import com.intellij.lang.LanguageDocumentation
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
@@ -39,17 +33,19 @@ import com.intellij.mcpserver.util.convertHtmlToMarkdown
 import com.intellij.mcpserver.util.getElementSymbolInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.*
-import com.intellij.util.DocumentUtil
 import com.intellij.psi.search.searches.DefinitionsScopedSearch
 import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.util.DocumentUtil
 import com.intellij.util.Processor
+import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.common.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -713,14 +709,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         }
         val row = input.row ?: mcpFail("row is required when offset is not provided.")
         val column = input.column ?: mcpFail("column is required when offset is not provided.")
-        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
-        if (sourceFile.isDirectory) {
-            mcpFail("URL points to a directory, not a file: $uri")
-        }
-        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
-            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
-        val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
-            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
+        val sourceDocument = resolveCommittedSourceDocument(project, uri)
         val offset = resolveSourceOffset(sourceDocument, row, column)
         return ResolvedSourcePosition(
             row = row,
@@ -738,14 +727,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
         if (offset < 0) {
             mcpFail("offset must be >= 0")
         }
-        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
-        if (sourceFile.isDirectory) {
-            mcpFail("URL points to a directory, not a file: $uri")
-        }
-        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
-            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
-        val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
-            ?: mcpFail("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
+        val sourceDocument = resolveCommittedSourceDocument(project, uri)
         if (sourceDocument.textLength == 0) {
             return ResolvedSourcePosition(
                 row = 1,
@@ -836,6 +818,23 @@ internal class SymbolNavigationMcpTools : McpToolset {
             symbolInfo = symbolInfo,
             documentationHtml = documentationHtml,
         )
+    }
+
+    private fun resolveCommittedSourceDocument(project: Project, uri: String): Document {
+        val sourceFile = vfsManager.findFileByUrl(uri) ?: mcpFail("File not found for URL: $uri")
+        if (sourceFile.isDirectory) {
+            mcpFail("URL points to a directory, not a file: $uri")
+        }
+        val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
+            ?: mcpFail("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
+        return PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
+            ?: mcpFail(
+                "No committed text document available for URL: $uri. Commit pending changes and retry.${
+                    vfsReadHint(
+                        sourceFile,
+                    )
+                }",
+            )
     }
 
     private fun resolveSourceOffset(
@@ -972,15 +971,7 @@ internal class SymbolNavigationMcpTools : McpToolset {
     }
 
     private fun isLikelyTypeDeclaration(element: PsiElement): Boolean {
-        val className = element.javaClass.simpleName
-        return className.contains("Class", ignoreCase = true) ||
-            className.contains("Interface", ignoreCase = true) ||
-            className.contains("Enum", ignoreCase = true) ||
-            className.contains("Record", ignoreCase = true) ||
-            className.contains("Object", ignoreCase = true) ||
-            className.contains("TypeAlias", ignoreCase = true) ||
-            className.contains("Struct", ignoreCase = true) ||
-            className.contains("Trait", ignoreCase = true)
+        return isLikelyTypeDeclarationClassName(element.javaClass.simpleName)
     }
 
     private fun collectDefinitions(

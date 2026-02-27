@@ -37,7 +37,6 @@ import com.intellij.psi.search.scope.packageSet.NamedScopesHolder
 import com.intellij.psi.search.scope.packageSet.PackageSetFactory
 import com.intellij.psi.search.scope.packageSet.ParsingException
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
-import java.security.MessageDigest
 
 @Service(Service.Level.PROJECT)
 internal class ScopeResolverService {
@@ -318,7 +317,7 @@ internal class ScopeResolverService {
                 }
                 atom.copy(
                     patternText = normalizedPattern,
-                    scopeRefId = atom.scopeRefId ?: "pattern:${shortHash(normalizedPattern)}",
+                    scopeRefId = atom.scopeRefId ?: "pattern:${sha256ShortHash(normalizedPattern, length = 12)}",
                 )
             }
 
@@ -334,7 +333,12 @@ internal class ScopeResolverService {
                 }
                 atom.copy(
                     fileUrls = normalizedUrls,
-                    scopeRefId = atom.scopeRefId ?: "files:${shortHash(normalizedUrls.joinToString("\n"))}",
+                    scopeRefId = atom.scopeRefId ?: "files:${
+                        sha256ShortHash(
+                            normalizedUrls.joinToString("\n"),
+                            length = 12,
+                        )
+                    }",
                 )
             }
 
@@ -393,14 +397,7 @@ internal class ScopeResolverService {
         val flavor = atom.moduleFlavor ?: mcpFail("Atom '${atom.atomId}' requires moduleFlavor.")
         val module = readAction { ModuleManager.getInstance(project).findModuleByName(moduleName) }
             ?: mcpFail("Module '$moduleName' not found.")
-        return readAction {
-            when (flavor) {
-                ModuleScopeFlavor.MODULE -> module.moduleScope
-                ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES -> module.moduleWithDependenciesScope
-                ModuleScopeFlavor.MODULE_WITH_LIBRARIES -> module.moduleWithLibrariesScope
-                ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES -> module.getModuleWithDependenciesAndLibrariesScope(true)
-            }
-        }
+        return readAction { flavor.scopeFor(module) }
     }
 
     private suspend fun resolveNamedScopeAtom(project: Project, atom: ScopeAtomDto): SearchScope {
@@ -497,14 +494,6 @@ internal class ScopeResolverService {
         }
     }
 
-    private fun scopeShapeOf(scope: SearchScope): ScopeShape {
-        return when (scope) {
-            is GlobalSearchScope -> ScopeShape.GLOBAL
-            is LocalSearchScope -> ScopeShape.LOCAL
-            else -> ScopeShape.MIXED
-        }
-    }
-
     private fun isSelfResolvedKind(kind: ScopeAtomKind): Boolean {
         return kind == ScopeAtomKind.PATTERN ||
             kind == ScopeAtomKind.DIRECTORY ||
@@ -516,11 +505,6 @@ internal class ScopeResolverService {
             mcpFail(message)
         }
         diagnostics += message
-    }
-
-    private fun shortHash(text: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { b -> "%02x".format(b) }.take(12)
     }
 
     companion object {

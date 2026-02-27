@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,7 +20,6 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.extensions.excludeCoroutines
 import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 
@@ -32,9 +31,6 @@ version = "0.4.0"
 
 buildLogic {
     pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaCommunity
-    platformVersion = "2025.2"
-    pluginSinceBuild = "252"
 }
 
 dependencies {

@@ -49,7 +49,6 @@ import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
-import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -136,14 +135,14 @@ internal class ScopeTextSearchMcpTools : McpToolset {
             allowUiInteractiveScopes = false,
         )
         return scope_search_text(
-            ScopeTextSearchRequestDto(
+            buildSearchRequest(
                 query = query,
                 mode = mode,
+                scope = descriptor,
                 caseSensitive = caseSensitive,
                 wholeWordsOnly = wholeWordsOnly,
                 searchContext = searchContext,
                 fileMask = fileMask,
-                scope = descriptor,
                 allowUiInteractiveScopes = false,
                 maxUsageCount = maxUsageCount,
                 timeoutMillis = timeoutMillis,
@@ -175,14 +174,14 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     ): ScopeTextSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.text.search.by.plain", query.length))
         return scope_search_text(
-            ScopeTextSearchRequestDto(
+            buildSearchRequest(
                 query = query,
                 mode = ScopeTextQueryMode.PLAIN,
+                scope = scope,
                 caseSensitive = caseSensitive,
                 wholeWordsOnly = wholeWordsOnly,
                 searchContext = searchContext,
                 fileMask = fileMask,
-                scope = scope,
                 allowUiInteractiveScopes = allowUiInteractiveScopes,
                 maxUsageCount = maxUsageCount,
                 timeoutMillis = timeoutMillis,
@@ -215,14 +214,14 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     ): ScopeTextSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.text.search.by.regex", query.length))
         return scope_search_text(
-            ScopeTextSearchRequestDto(
+            buildSearchRequest(
                 query = query,
                 mode = ScopeTextQueryMode.REGEX,
+                scope = scope,
                 caseSensitive = caseSensitive,
                 wholeWordsOnly = wholeWordsOnly,
                 searchContext = searchContext,
                 fileMask = fileMask,
-                scope = scope,
                 allowUiInteractiveScopes = allowUiInteractiveScopes,
                 maxUsageCount = maxUsageCount,
                 timeoutMillis = timeoutMillis,
@@ -340,14 +339,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
                     val dto = occurrence.dto
                     val replacement = plan.replacementByOccurrenceId[dto.occurrenceId]
                         ?: mcpFail("Internal error: missing replacement for occurrence '${dto.occurrenceId}'.")
-                    validateRangeInDocument(document, dto.startOffset, dto.endOffset, dto.fileUrl)
-                    val currentMatched = document.getText(TextRange(dto.startOffset, dto.endOffset))
-                    if (currentMatched != dto.matchedText) {
-                        mcpFail(
-                            "Occurrence '${dto.occurrenceId}' no longer matches current content in '${dto.fileUrl}'. " +
-                                "Please rerun preview/search.",
-                        )
-                    }
+                    ensureOccurrenceStillMatches(document, dto)
                     document.replaceString(dto.startOffset, dto.endOffset, replacement)
                     replacedOccurrenceIds += dto.occurrenceId
                 }
@@ -510,6 +502,34 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         }
     }
 
+    private fun buildSearchRequest(
+        query: String,
+        mode: ScopeTextQueryMode,
+        scope: ScopeProgramDescriptorDto,
+        caseSensitive: Boolean,
+        wholeWordsOnly: Boolean,
+        searchContext: ScopeTextSearchContextDto,
+        fileMask: String?,
+        allowUiInteractiveScopes: Boolean,
+        maxUsageCount: Int,
+        timeoutMillis: Int,
+        allowEmptyMatches: Boolean = false,
+    ): ScopeTextSearchRequestDto {
+        return ScopeTextSearchRequestDto(
+            query = query,
+            mode = mode,
+            caseSensitive = caseSensitive,
+            wholeWordsOnly = wholeWordsOnly,
+            searchContext = searchContext,
+            fileMask = fileMask,
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxUsageCount = maxUsageCount,
+            timeoutMillis = timeoutMillis,
+            allowEmptyMatches = allowEmptyMatches,
+        )
+    }
+
     private fun buildFindModel(
         request: ScopeTextSearchRequestDto,
         scope: com.intellij.psi.search.SearchScope,
@@ -645,14 +665,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
             val replacementText = readAction {
                 val document = FileDocumentManager.getInstance().getDocument(occurrence.file)
                     ?: mcpFail("No text document available for file '${dto.fileUrl}'.")
-                validateRangeInDocument(document, dto.startOffset, dto.endOffset, dto.fileUrl)
-                val currentMatched = document.getText(TextRange(dto.startOffset, dto.endOffset))
-                if (currentMatched != dto.matchedText) {
-                    mcpFail(
-                        "Occurrence '${dto.occurrenceId}' no longer matches current content in '${dto.fileUrl}'. " +
-                            "Please rerun preview/search.",
-                    )
-                }
+                val currentMatched = ensureOccurrenceStillMatches(document, dto)
                 try {
                     findManager.getStringToReplace(
                         currentMatched,
@@ -667,6 +680,21 @@ internal class ScopeTextSearchMcpTools : McpToolset {
             result[dto.occurrenceId] = replacementText
         }
         return result
+    }
+
+    private fun ensureOccurrenceStillMatches(
+        document: com.intellij.openapi.editor.Document,
+        occurrence: ScopeTextOccurrenceDto,
+    ): String {
+        validateRangeInDocument(document, occurrence.startOffset, occurrence.endOffset, occurrence.fileUrl)
+        val currentMatched = document.getText(TextRange(occurrence.startOffset, occurrence.endOffset))
+        if (currentMatched != occurrence.matchedText) {
+            mcpFail(
+                "Occurrence '${occurrence.occurrenceId}' no longer matches current content in '${occurrence.fileUrl}'. " +
+                        "Please rerun preview/search.",
+            )
+        }
+        return currentMatched
     }
 
     private fun validateRangeInDocument(
@@ -684,8 +712,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     }
 
     private fun shortHash(text: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { byte -> "%02x".format(byte) }.take(16)
+        return sha256ShortHash(text, length = 16)
     }
 
     private data class OccurrenceSnapshot(
