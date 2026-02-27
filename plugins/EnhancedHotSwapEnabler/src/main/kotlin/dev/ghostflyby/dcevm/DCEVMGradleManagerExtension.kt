@@ -75,9 +75,12 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
             Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
         )
         if (resolved.enableHotswapAgent) {
-            // pass agent jar path to Gradle if we already have it; also kick off download if missing
-            val jar = HotswapAgentManager.getInstance().getLocalAgentJar(project) ?: return false
-            settings.addEnvironmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY, jar.toAbsolutePath().toString())
+            // pass agent jar path to Gradle only when already cached; trigger warm-up download otherwise
+            HotswapAgentManager.getInstance()
+                .getCachedAgentJarOrWarmUp(project)
+                ?.let { jar ->
+                    settings.addEnvironmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY, jar.toAbsolutePath().toString())
+                }
         }
         return false
     }

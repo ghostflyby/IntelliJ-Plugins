@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -28,14 +28,11 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
-import com.intellij.platform.ide.progress.ModalTaskOwner
 import com.intellij.platform.ide.progress.TaskCancellation
 import com.intellij.platform.ide.progress.withBackgroundProgress
-import com.intellij.platform.ide.progress.withModalProgress
 import com.intellij.util.io.HttpRequests
 import dev.ghostflyby.dcevm.Bundle
 import kotlinx.coroutines.*
-import org.jetbrains.annotations.Blocking
 import org.jetbrains.annotations.NonBlocking
 import java.io.IOException
 import java.nio.file.Files
@@ -62,60 +59,73 @@ internal class HotswapAgentManager(private val scope: CoroutineScope) {
     }
 
     private val agentJarPath: Path by lazy { cacheDir.resolve("hotswap-agent.jar") }
+    @Volatile
+    private var downloadJob: Deferred<Path?>? = null
 
     /**
-     * Returns the local agent jar if present.
+     * Returns cached agent jar path if present; otherwise starts a background warm-up download.
      */
-    @Blocking
-    fun getLocalAgentJar(project: Project) = runBlocking {
-        scope.run {
-            withModalProgress(
-                ModalTaskOwner.project(project),
-                Bundle.message("agent.downloading"),
-                TaskCancellation.cancellable()
-            ) {
-                download()
-            }
+    @NonBlocking
+    fun getCachedAgentJarOrWarmUp(project: Project): Path? {
+        val cached = cachedAgentJarPathOrNull()
+        if (cached != null) {
+            return cached
         }
+        getLocalAgentJarAsync(project)
+        return null
+    }
+
+    internal fun cachedAgentJarPathOrNull(): Path? {
+        return if (Files.isRegularFile(agentJarPath)) agentJarPath else null
     }
 
     /**
      * Coroutine-based background download with visible progress indicator.
-     * fire and forget
      */
     @NonBlocking
-    fun getLocalAgentJarAsync(project: Project) =
-        scope.async {
+    fun getLocalAgentJarAsync(project: Project): Job = synchronized(this) {
+        val activeJob = downloadJob
+        if (activeJob != null && activeJob.isActive) {
+            return activeJob
+        }
+        val newJob = scope.async {
             withBackgroundProgress(project, Bundle.message("agent.downloading"), TaskCancellation.cancellable()) {
                 download()
             }
         }
+        downloadJob = newJob
+        newJob.invokeOnCompletion {
+            synchronized(this@HotswapAgentManager) {
+                if (downloadJob === newJob) {
+                    downloadJob = null
+                }
+            }
+        }
+        return newJob
+    }
 
 
     /**
      * Suspending variant using coroutines and optional progress indicator.
      */
-    private suspend fun download(): Path? = scope.run {
-        withContext(Dispatchers.IO) {
-            if (Files.isRegularFile(agentJarPath)) return@withContext agentJarPath
-            try {
-                cacheDir.createDirectories()
-                val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
-                val indicator = ProgressManager.getGlobalProgressIndicator()
-                HttpRequests.request(latestJarUrl)
-                    .productNameAsUserAgent()
-                    .connect { request ->
-                        request.saveToFile(tmp, indicator)
-                    }
-                Files.move(
-                    tmp, agentJarPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE
-                )
-                agentJarPath
-            } catch (e: IOException) {
-                log.warn("Unable to download HotswapAgent", e)
-                cancel("${Bundle.message("agent.download.failed")}\n${e.message}", e)
-                null
-            }
+    private suspend fun download(): Path? = withContext(Dispatchers.IO) {
+        if (Files.isRegularFile(agentJarPath)) return@withContext agentJarPath
+        try {
+            cacheDir.createDirectories()
+            val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
+            val indicator = ProgressManager.getGlobalProgressIndicator()
+            HttpRequests.request(latestJarUrl)
+                .productNameAsUserAgent()
+                .connect { request ->
+                    request.saveToFile(tmp, indicator)
+                }
+            Files.move(
+                tmp, agentJarPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE
+            )
+            agentJarPath
+        } catch (e: IOException) {
+            log.warn("Unable to download HotswapAgent", e)
+            null
         }
     }
 

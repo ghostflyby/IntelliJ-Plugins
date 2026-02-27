@@ -73,9 +73,7 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
         }
         if (effective.enableHotswapAgent) {
             val manager = HotswapAgentManager.getInstance()
-
-
-            val agentJar = manager.getLocalAgentJar(project) ?: return
+            val agentJar = manager.getCachedAgentJarOrWarmUp(project) ?: return
             val isJava9OrHigher = JavaSdk.getInstance()
                 .getVersion(jdk)
                 ?.isAtLeast(JavaSdkVersion.JDK_1_9) == true
