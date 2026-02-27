@@ -6,6 +6,10 @@
 
 ### Added
 
+- bundle `org.hotswapagent:hotswap-agent` into plugin sandbox/package via dedicated
+  distribution configuration and version-catalog managed dependency
+- add third-party notice for bundled HotSwapAgent (GPL-2.0) with source retrieval location
+
 ### Changed
 
 - make HotSwap config resolution explicit via shared `resolveHotSwapConfig(...)` logic and
@@ -14,15 +18,19 @@
   subprojects with minimal dependencies
 - update Gradle init script classpath assembly to include both plugin and shared-common jars
   after subproject split
+- make bundled HotSwapAgent path resolution a direct top-level lazy property lookup
+  (no service/resolver indirection)
 
 ### Deprecated
 
 ### Removed
 
+- remove obsolete HotSwapAgent download/warm-up text entries from localization bundles
+- remove now-unneeded agent resolver/test scaffolding after switching to required bundled artifact
+
 ### Fixed
 
-- avoid blocking Run Configuration and Gradle task startup when HotSwapAgent jar is missing by
-  using cached-path lookup with background warm-up download
+- simplify HotSwapAgent resolution to packaged-jar lookup, removing runtime download path
 - tighten `HotswapRunConfigurationExtension` cleanup by tracking `UserDataHolder`s and clearing
   state on dispose
 

@@ -30,12 +30,33 @@ buildLogic {
     pluginVersion = version.toString()
 }
 
+val hotswapAgentDistribution by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+    isTransitive = false
+}
+
 dependencies {
+    hotswapAgentDistribution(libs.hotswap.agent)
+
     implementation(project(":plugins:EnhancedHotSwapEnabler:common"))
     implementation(project(":plugins:EnhancedHotSwapEnabler:gradle"))
 
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
+    }
+}
+
+tasks {
+    prepareSandbox {
+        from(hotswapAgentDistribution) {
+            into("${project.name}/lib")
+        }
+    }
+    prepareTestSandbox {
+        from(hotswapAgentDistribution) {
+            into("${project.name}/lib")
+        }
     }
 }

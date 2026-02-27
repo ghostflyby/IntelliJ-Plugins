@@ -24,7 +24,7 @@ package dev.ghostflyby.dcevm
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import dev.ghostflyby.dcevm.agent.resolveHotswapAgentJarPath
+import dev.ghostflyby.dcevm.agent.BundledHotSwapAgentJarPath
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -50,7 +50,6 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
 
         settings.addInitScript(
             "ghostflyby.intellij.gradle.dcevm",
-            @Suppress("SpellCheckingInspection")
             """
 initscript{
 dependencies {
@@ -77,9 +76,12 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
             DCEVM_MANUAL_TASKS_KEY,
             Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
         )
-        resolveHotswapAgentJarPath(resolved.enableHotswapAgent, project)?.let { jar ->
-            // pass agent jar path to Gradle only when already cached; trigger warm-up download otherwise
-            settings.addEnvironmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY, jar.toAbsolutePath().toString())
+        if (resolved.enableHotswapAgent) {
+            // pass bundled agent jar path to Gradle when agent feature is enabled
+            settings.addEnvironmentVariable(
+                HOTSWAP_AGENT_JAR_PATH_ENV_KEY,
+                BundledHotSwapAgentJarPath.toAbsolutePath().toString(),
+            )
         }
         return false
     }

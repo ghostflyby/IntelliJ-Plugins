@@ -82,8 +82,9 @@
 1. use Gradle for build
 2. you don't need to run `verifyPlugin`, which can be done on CI
 3. a single Gradle sync takes about 1.5-2 minutes
-4. update the kotlin ABI file when changing public APIs
-5. after MCP tool changes, run project compile and plugin packaging (`buildPlugin`) before commit.
+4. a single `buildPlugin` Gradle task may take about 2 minutes
+5. update the kotlin ABI file when changing public APIs
+6. after MCP tool changes, run project compile and plugin packaging (`buildPlugin`) before commit.
 
 ## Diagnostics and Docs
 
