@@ -27,15 +27,15 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ForkJoinPool
 import kotlin.io.path.isDirectory
 
-public const val DCEVM_MANUAL_TASKS_KEY = "ijDcevmManualTasks"
-public const val ENABLE_DCEVM_ENV_KEY = "ijEnableDcevm"
-public const val ENABLE_HOTSWAP_AGENT_ENV_KEY = "ijEnableHotswapAgent"
-public const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY = "ijHotswapAgentJarPath"
+public const val DCEVM_MANUAL_TASKS_KEY: String = "ijDcevmManualTasks"
+public const val ENABLE_DCEVM_ENV_KEY: String = "ijEnableDcevm"
+public const val ENABLE_HOTSWAP_AGENT_ENV_KEY: String = "ijEnableHotswapAgent"
+public const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY: String = "ijHotswapAgentJarPath"
 
-public const val DCEVM_JVM_OPTION_NAME = "AllowEnhancedClassRedefinition"
-public const val JVM_OPTION_DCEVM = "-XX:+AllowEnhancedClassRedefinition"
-public const val JVM_OPTION_DCEVM_ALT = "-XXaltjvm=dcevm"
-public const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT = "-XX:HotswapAgent=external"
+public const val DCEVM_JVM_OPTION_NAME: String = "AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM: String = "-XX:+AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM_ALT: String = "-XXaltjvm=dcevm"
+public const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT: String = "-XX:HotswapAgent=external"
 private const val JVM_OPTION_ADD_OPENS = "--add-opens"
 
 private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
@@ -50,18 +50,18 @@ private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
 
 public sealed interface DCEVMSupport {
 
-    interface NeedsArgs : DCEVMSupport {
-        val args: List<String>
+    public interface NeedsArgs : DCEVMSupport {
+        public val args: List<String>
     }
 
-    object None : DCEVMSupport
-    object Auto : DCEVMSupport
-    object RequiresArg : NeedsArgs {
-        override val args = listOf(JVM_OPTION_DCEVM)
+    public object None : DCEVMSupport
+    public object Auto : DCEVMSupport
+    public object RequiresArg : NeedsArgs {
+        override val args: List<String> = listOf(JVM_OPTION_DCEVM)
     }
 
-    object AltJvm : NeedsArgs {
-        override val args = listOf(JVM_OPTION_DCEVM_ALT)
+    public object AltJvm : NeedsArgs {
+        override val args: List<String> = listOf(JVM_OPTION_DCEVM_ALT)
     }
 }
 
