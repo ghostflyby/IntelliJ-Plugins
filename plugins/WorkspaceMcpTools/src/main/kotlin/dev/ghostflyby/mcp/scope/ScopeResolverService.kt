@@ -26,8 +26,8 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.module.ModuleManager
+import com.intellij.openapi.project.Project
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.psi.search.LocalSearchScope
@@ -468,14 +468,14 @@ internal class ScopeResolverService {
         right: SearchScope,
         tokenIndex: Int,
     ): SearchScope {
-        return when {
-            left is GlobalSearchScope && right is GlobalSearchScope -> left.intersectWith(right)
-            left is GlobalSearchScope && right is LocalSearchScope -> left.intersectWith(right)
-            left is LocalSearchScope && right is GlobalSearchScope -> right.intersectWith(left)
-            left is LocalSearchScope && right is LocalSearchScope -> left.intersectWith(right)
+        return when (left) {
+            is GlobalSearchScope if right is GlobalSearchScope -> left.intersectWith(right)
+            is GlobalSearchScope if right is LocalSearchScope -> left.intersectWith(right)
+            is LocalSearchScope if right is GlobalSearchScope -> right.intersectWith(left)
+            is LocalSearchScope if right is LocalSearchScope -> left.intersectWith(right)
             else -> mcpFail(
                 "Token[$tokenIndex] AND is unsupported for scope types " +
-                    "'${left.javaClass.name}' and '${right.javaClass.name}'.",
+                        "'${left.javaClass.name}' and '${right.javaClass.name}'.",
             )
         }
     }
@@ -485,14 +485,14 @@ internal class ScopeResolverService {
         right: SearchScope,
         tokenIndex: Int,
     ): SearchScope {
-        return when {
-            left is GlobalSearchScope && right is GlobalSearchScope -> left.uniteWith(right)
-            left is GlobalSearchScope && right is LocalSearchScope -> left.union(right)
-            left is LocalSearchScope && right is GlobalSearchScope -> right.union(left)
-            left is LocalSearchScope && right is LocalSearchScope -> left.union(right)
+        return when (left) {
+            is GlobalSearchScope if right is GlobalSearchScope -> left.uniteWith(right)
+            is GlobalSearchScope if right is LocalSearchScope -> left.union(right)
+            is LocalSearchScope if right is GlobalSearchScope -> right.union(left)
+            is LocalSearchScope if right is LocalSearchScope -> left.union(right)
             else -> mcpFail(
                 "Token[$tokenIndex] OR is unsupported for scope types " +
-                    "'${left.javaClass.name}' and '${right.javaClass.name}'.",
+                        "'${left.javaClass.name}' and '${right.javaClass.name}'.",
             )
         }
     }

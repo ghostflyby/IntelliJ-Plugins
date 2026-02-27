@@ -43,30 +43,12 @@ import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
-import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
-import dev.ghostflyby.mcp.scope.ScopeQuickPreset
-import dev.ghostflyby.mcp.scope.ScopeResolverService
-import dev.ghostflyby.mcp.scope.ScopeShape
-import dev.ghostflyby.mcp.scope.ScopeTextOccurrenceDto
-import dev.ghostflyby.mcp.scope.ScopeTextQueryMode
-import dev.ghostflyby.mcp.scope.ScopeTextReplaceApplyResultDto
-import dev.ghostflyby.mcp.scope.ScopeTextReplacePreviewResultDto
-import dev.ghostflyby.mcp.scope.ScopeTextReplaceRequestDto
-import dev.ghostflyby.mcp.scope.ScopeTextReplacementPreviewEntryDto
-import dev.ghostflyby.mcp.scope.ScopeTextSearchContextDto
-import dev.ghostflyby.mcp.scope.ScopeTextSearchRequestDto
-import dev.ghostflyby.mcp.scope.ScopeTextSearchResultDto
-import dev.ghostflyby.mcp.scope.buildPresetScopeDescriptor
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import dev.ghostflyby.mcp.scope.*
+import kotlinx.coroutines.*
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -114,7 +96,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     }
 
     @McpTool
-    @McpDescription("First-call friendly text search shortcut with preset scope." + AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX)
+    @McpDescription("First-call friendly text search shortcut with preset scope.$AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX")
     suspend fun scope_search_text_quick(
         @McpDescription("Text or regex pattern to search.")
         query: String,
@@ -693,7 +675,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         endOffset: Int,
         fileUrl: String,
     ) {
-        if (startOffset < 0 || endOffset < startOffset || endOffset > document.textLength) {
+        if (startOffset !in 0..endOffset || endOffset > document.textLength) {
             mcpFail(
                 "Occurrence range [$startOffset, $endOffset) is out of bounds for '$fileUrl' " +
                     "(textLength=${document.textLength}).",
