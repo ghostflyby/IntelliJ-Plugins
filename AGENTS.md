@@ -27,7 +27,7 @@
    `LiveTemplatesWithSelection`, `macOSRecents`, `SpotlessIntegration`,
    `VitePress`, `WorkspaceMcpTools`.
 3. most plugin modules should keep this layout:
-   `build.gradle.kts`, `src/`, `README.md`, `CHANGELOG.md`, and `api/*.api`
+   `build.gradle.kts`, `src/`, `README.md`, `CHANGELOG.md`, `TODO.md`, and `api/*.api`
    when the plugin exposes a stable external API.
 4. some plugins can have nested Gradle subprojects via `projects.txt`
    (current example: `plugins/SpotlessIntegration/projects.txt` includes `ModelBuilderService`).
@@ -36,6 +36,11 @@
    if you touch it, align it with the common plugin layout where practical.
 6. treat generated/local artifacts as non-source: `**/build/`, `**/.gradle/`, `.idea/`,
    `.intellijPlatform/`, and `**/.DS_Store`.
+7. every plugin should keep a root `TODO.md` for current planned/refactor work.
+   keep it short, actionable, and written in English.
+8. once a `TODO.md` plan is implemented, move its finalized notes into plugin-local `docs/`
+   using a descriptive filename (for example `<PluginName>-<Topic>.md`), then refresh `TODO.md`
+   with the next active plan items.
 
 ## Tooling
 
@@ -86,6 +91,8 @@
 2. when adding/changing toolsets, update `README.md` and related design docs in `docs/`.
 3. maintain clear separation between implemented and planned items in docs to reduce agent confusion.
 4. record newly discovered first-call shortcuts and failure/retry patterns in docs incrementally.
+5. treat plugin `TODO.md` as a staging document only; completed work must be archived in `docs/`
+   with a topic-specific filename to keep planning and historical records separated.
 
 ## Common Pattern
 
