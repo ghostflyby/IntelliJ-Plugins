@@ -32,7 +32,7 @@ import com.intellij.mcpserver.project
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.coroutineToIndicator
@@ -49,19 +49,19 @@ import com.intellij.psi.search.*
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
 import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonNames
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 
 private const val GLOBAL_AND_LOCAL_UNION_SCOPE_CLASS = "com.intellij.psi.search.GlobalAndLocalUnionScope"
 private const val GLOBAL_AND_LOCAL_UNION_GLOBAL_FIELD = "myMyGlobalScope"
@@ -202,8 +202,8 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                             Bundle.message("progress.title.scope.symbol.search", query),
                             cancellable = true,
                         ) {
-                            coroutineToIndicator { indicator ->
-                                val completed = if (provider is ChooseByNameInScopeItemProvider) {
+                            val completed = coroutineToIndicator { indicator ->
+                                if (provider is ChooseByNameInScopeItemProvider) {
                                     collectRawCandidatesByInScopeProvider(
                                         provider = provider,
                                         baseViewModel = baseViewModel,
@@ -223,18 +223,18 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                                         out = rawCandidates,
                                     )
                                 }
-                                if (!completed) {
-                                    probablyHasMore.set(true)
-                                }
-                                converted = convertCandidates(
-                                    project = project,
-                                    model = model,
-                                    candidates = rawCandidates.toList(),
-                                    postFilterPolicy = effectiveScope.postFilterPolicy,
-                                    requirePhysicalLocation = requirePhysicalLocation,
-                                    processedCandidateCount = processedCandidateCount,
-                                )
                             }
+                            if (!completed) {
+                                probablyHasMore.set(true)
+                            }
+                            converted = convertCandidates(
+                                project = project,
+                                model = model,
+                                candidates = rawCandidates.toList(),
+                                postFilterPolicy = effectiveScope.postFilterPolicy,
+                                requirePhysicalLocation = requirePhysicalLocation,
+                                processedCandidateCount = processedCandidateCount,
+                            )
                         }
                         false
                     } ?: true
@@ -499,7 +499,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         return true
     }
 
-    private fun convertCandidates(
+    private suspend fun convertCandidates(
         project: Project,
         model: GotoSymbolModel2,
         candidates: List<RawCandidate>,
@@ -571,14 +571,14 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         )
     }
 
-    private fun convertCandidate(
+    private suspend fun convertCandidate(
         project: Project,
         model: GotoSymbolModel2,
         candidate: RawCandidate,
         postFilterPolicy: PostFilterPolicy,
         requirePhysicalLocation: Boolean,
     ): CandidateConversionResult {
-        return runReadAction {
+        return readAction {
             assertReadAccess()
             val source = candidate.item
             val navigationItem = source as? NavigationItem
@@ -589,7 +589,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             }
 
             if (navigationItem == null && psiElement == null) {
-                return@runReadAction CandidateConversionResult(skipReason = SkipReason.UNSUPPORTED_ITEM)
+                return@readAction CandidateConversionResult(skipReason = SkipReason.UNSUPPORTED_ITEM)
             }
 
             val effectiveElement = psiElement?.navigationElement ?: psiElement
@@ -597,7 +597,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             val virtualFile = effectiveFile?.virtualFile
 
             if (!passesPostFilter(postFilterPolicy, effectiveElement, virtualFile)) {
-                return@runReadAction CandidateConversionResult(skipReason = SkipReason.POST_FILTER_REJECTED)
+                return@readAction CandidateConversionResult(skipReason = SkipReason.POST_FILTER_REJECTED)
             }
 
             var fileUrl: String? = null
@@ -627,7 +627,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             }
 
             if (requirePhysicalLocation && (fileUrl == null || line == null)) {
-                return@runReadAction CandidateConversionResult(skipReason = SkipReason.LOCATION_UNAVAILABLE)
+                return@readAction CandidateConversionResult(skipReason = SkipReason.LOCATION_UNAVAILABLE)
             }
 
             val presentation = navigationItem?.presentation
