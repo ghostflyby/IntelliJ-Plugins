@@ -8,6 +8,8 @@
 
 ### Changed
 
+- make HotSwap config resolution explicit via shared `resolveHotSwapConfig(...)` logic and
+  add dedicated resolution tests
 - refactor module layout: split `common` and `gradle` source sets into nested Gradle
   subprojects with minimal dependencies
 - update Gradle init script classpath assembly to include both plugin and shared-common jars
@@ -18,6 +20,11 @@
 ### Removed
 
 ### Fixed
+
+- avoid blocking Run Configuration and Gradle task startup when HotSwapAgent jar is missing by
+  using cached-path lookup with background warm-up download
+- tighten `HotswapRunConfigurationExtension` cleanup by tracking `UserDataHolder`s and clearing
+  state on dispose
 
 ### Security
 
