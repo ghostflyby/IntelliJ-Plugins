@@ -30,7 +30,7 @@ import org.gradle.kotlin.dsl.withType
 
 
 @Suppress("unused")
-internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
+public class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
     override fun apply(target: Gradle) = target.allprojects {
         val manualTasks = providers.environmentVariable(DCEVM_MANUAL_TASKS_KEY)
             .map { JsonSlurper().parse(it.toCharArray()) as Collection<*> }

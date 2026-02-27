@@ -41,9 +41,12 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
         settings: GradleExecutionSettings,
         gradleVersion: GradleVersion?,
     ) {
-
-        val path =
-            PathManager.getJarPathForClass(DCEVMGradleManagerExtension::class.java) ?: return
+        val classpathJars = listOfNotNull(
+            PathManager.getJarPathForClass(IntelliJDcevmGradlePlugin::class.java),
+            PathManager.getJarPathForClass(DCEVMSupport::class.java),
+        ).distinct()
+        if (classpathJars.isEmpty()) return
+        val classpathFiles = classpathJars.joinToString(", ") { it.toGroovyStringLiteral() }
 
         settings.addInitScript(
             "ghostflyby.intellij.gradle.dcevm",
@@ -51,7 +54,7 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
             """
 initscript{
 dependencies {
-    classpath files(${path.toGroovyStringLiteral()})
+    classpath files($classpathFiles)
 }
 }
 pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)

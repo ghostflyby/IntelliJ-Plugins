@@ -8,6 +8,11 @@
 
 ### Changed
 
+- refactor module layout: split `common` and `gradle` source sets into nested Gradle
+  subprojects with minimal dependencies
+- update Gradle init script classpath assembly to include both plugin and shared-common jars
+  after subproject split
+
 ### Deprecated
 
 ### Removed

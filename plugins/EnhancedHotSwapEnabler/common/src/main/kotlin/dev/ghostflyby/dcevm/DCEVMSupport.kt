@@ -27,15 +27,15 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ForkJoinPool
 import kotlin.io.path.isDirectory
 
-internal const val DCEVM_MANUAL_TASKS_KEY = "ijDcevmManualTasks"
-internal const val ENABLE_DCEVM_ENV_KEY = "ijEnableDcevm"
-internal const val ENABLE_HOTSWAP_AGENT_ENV_KEY = "ijEnableHotswapAgent"
-internal const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY = "ijHotswapAgentJarPath"
+public const val DCEVM_MANUAL_TASKS_KEY = "ijDcevmManualTasks"
+public const val ENABLE_DCEVM_ENV_KEY = "ijEnableDcevm"
+public const val ENABLE_HOTSWAP_AGENT_ENV_KEY = "ijEnableHotswapAgent"
+public const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY = "ijHotswapAgentJarPath"
 
-internal const val DCEVM_JVM_OPTION_NAME = "AllowEnhancedClassRedefinition"
-internal const val JVM_OPTION_DCEVM = "-XX:+AllowEnhancedClassRedefinition"
-internal const val JVM_OPTION_DCEVM_ALT = "-XXaltjvm=dcevm"
-internal const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT = "-XX:HotswapAgent=external"
+public const val DCEVM_JVM_OPTION_NAME = "AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM = "-XX:+AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM_ALT = "-XXaltjvm=dcevm"
+public const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT = "-XX:HotswapAgent=external"
 private const val JVM_OPTION_ADD_OPENS = "--add-opens"
 
 private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
@@ -48,7 +48,7 @@ private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
     "java.desktop/com.sun.beans.util=ALL-UNNAMED",
 )
 
-internal sealed interface DCEVMSupport {
+public sealed interface DCEVMSupport {
 
     interface NeedsArgs : DCEVMSupport {
         val args: List<String>
@@ -65,7 +65,7 @@ internal sealed interface DCEVMSupport {
     }
 }
 
-internal fun missingHotswapAgentAddOpensJvmArgs(
+public fun missingHotswapAgentAddOpensJvmArgs(
     existingArgs: Collection<String>,
     isJava9OrHigher: Boolean,
 ): List<String> {
@@ -88,7 +88,7 @@ private fun hasAddOpensJvmArg(existingArgs: List<String>, target: String): Boole
 
 private val dcevmCheckCache = ConcurrentHashMap<Path, DCEVMSupport>()
 
-internal fun getDcevmSupport(
+public fun getDcevmSupport(
     javaHome: Path,
     execute: (Runnable) -> Unit = ForkJoinPool.commonPool()::execute,
     optionLinesProvider: (javaExecutable: String) -> Sequence<String>,
