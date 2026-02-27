@@ -22,18 +22,14 @@
 
 package dev.ghostflyby.mcp.scope.descriptor
 
-import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
-import dev.ghostflyby.mcp.common.reportActivity
 import com.intellij.mcpserver.McpToolset
 import com.intellij.mcpserver.annotations.McpDescription
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.readAction
+import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
@@ -249,9 +245,9 @@ internal class ScopeDescriptorMcpTools : McpToolset {
             ),
         )
         val project = currentCoroutineContext().project
-        val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+        val resolved = resolveScopeDescriptor(
             project = project,
-            descriptor = scope,
+            scope = scope,
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
         val file = findFileByUrlWithRefresh(fileUrl)
@@ -286,9 +282,9 @@ internal class ScopeDescriptorMcpTools : McpToolset {
             ),
         )
         val project = currentCoroutineContext().project
-        val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+        val resolved = resolveScopeDescriptor(
             project = project,
-            descriptor = scope,
+            scope = scope,
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
 
@@ -322,6 +318,18 @@ internal class ScopeDescriptorMcpTools : McpToolset {
             excludedFileUrls = excluded,
             missingFileUrls = missing,
             diagnostics = (scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
+        )
+    }
+
+    private suspend fun resolveScopeDescriptor(
+        project: com.intellij.openapi.project.Project,
+        scope: ScopeProgramDescriptorDto,
+        allowUiInteractiveScopes: Boolean,
+    ): ScopeResolverService.ResolvedScope {
+        return ScopeResolverService.getInstance(project).resolveDescriptor(
+            project = project,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
     }
 }

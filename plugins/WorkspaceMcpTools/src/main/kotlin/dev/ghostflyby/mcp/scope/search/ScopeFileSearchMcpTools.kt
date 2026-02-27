@@ -36,12 +36,7 @@ import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
-import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
 import java.nio.file.FileSystems
@@ -446,7 +441,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.name", previewKeywordCount(nameKeyword, keywords)))
-        return scope_search_files(
+        return runFileSearchShortcut(
             query = nameKeyword,
             keywords = keywords,
             scope = scope,
@@ -480,7 +475,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.path", previewKeywordCount(pathKeyword, keywords)))
-        return scope_search_files(
+        return runFileSearchShortcut(
             query = pathKeyword,
             keywords = keywords,
             scope = scope,
@@ -514,11 +509,35 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         allowUiInteractiveScopes: Boolean = false,
     ): ScopeFileSearchResultDto {
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", globPattern.length))
-        return scope_search_files(
+        return runFileSearchShortcut(
             query = globPattern,
             scope = scope,
             matchMode = ScopeFileSearchMode.GLOB,
             caseSensitive = true,
+            directoryUrl = directoryUrl,
+            maxResults = maxResults,
+            timeoutMillis = timeoutMillis,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+    }
+
+    private suspend fun runFileSearchShortcut(
+        query: String,
+        keywords: List<String> = emptyList(),
+        scope: ScopeProgramDescriptorDto,
+        matchMode: ScopeFileSearchMode,
+        caseSensitive: Boolean,
+        directoryUrl: String? = null,
+        maxResults: Int,
+        timeoutMillis: Int,
+        allowUiInteractiveScopes: Boolean,
+    ): ScopeFileSearchResultDto {
+        return scope_search_files(
+            query = query,
+            keywords = keywords,
+            scope = scope,
+            matchMode = matchMode,
+            caseSensitive = caseSensitive,
             directoryUrl = directoryUrl,
             maxResults = maxResults,
             timeoutMillis = timeoutMillis,

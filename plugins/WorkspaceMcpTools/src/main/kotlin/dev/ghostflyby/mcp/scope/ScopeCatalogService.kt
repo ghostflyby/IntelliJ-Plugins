@@ -28,22 +28,11 @@ import com.intellij.openapi.actionSystem.impl.SimpleDataContext
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.module.ModuleManager
-import com.intellij.psi.search.EverythingGlobalScope
-import com.intellij.psi.search.GlobalSearchScope
-import com.intellij.psi.search.GlobalSearchScopes
-import com.intellij.psi.search.GlobalSearchScopesCore
-import com.intellij.psi.search.LocalSearchScope
-import com.intellij.psi.search.PredefinedSearchScopeProvider
-import com.intellij.psi.search.PredefinedSearchScopeProviderImpl
-import com.intellij.psi.search.ProjectAndLibrariesScope
-import com.intellij.psi.search.ProjectScope
-import com.intellij.psi.search.SearchScope
-import com.intellij.psi.search.SearchScopeProvider
+import com.intellij.openapi.project.Project
+import com.intellij.psi.search.*
 import com.intellij.psi.search.scope.packageSet.NamedScopesHolder
-import java.security.MessageDigest
-import java.util.Locale
+import java.util.*
 
 @Service(Service.Level.PROJECT)
 internal class ScopeCatalogService {
@@ -221,12 +210,7 @@ internal class ScopeCatalogService {
         for (module in modules) {
             for (flavor in ModuleScopeFlavor.entries) {
                 val scope = readAction {
-                    when (flavor) {
-                        ModuleScopeFlavor.MODULE -> module.moduleScope
-                        ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES -> module.moduleWithDependenciesScope
-                        ModuleScopeFlavor.MODULE_WITH_LIBRARIES -> module.moduleWithLibrariesScope
-                        ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES -> module.getModuleWithDependenciesAndLibrariesScope(true)
-                    }
+                    flavor.scopeFor(module)
                 }
                 val refId = moduleRefId(module.name, flavor)
                 val item = ScopeCatalogItemDto(
@@ -259,14 +243,6 @@ internal class ScopeCatalogService {
             serializationId == OPEN_FILES_SCOPE_ID ||
             serializationId == RECENTLY_CHANGED_FILES_SCOPE_ID ||
             serializationId == RECENTLY_VIEWED_FILES_SCOPE_ID
-    }
-
-    private fun scopeShapeOf(scope: SearchScope): ScopeShape {
-        return when (scope) {
-            is GlobalSearchScope -> ScopeShape.GLOBAL
-            is LocalSearchScope -> ScopeShape.LOCAL
-            else -> ScopeShape.MIXED
-        }
     }
 
     private fun directStandardScope(project: Project, standardScopeId: String): SearchScope? {
@@ -385,13 +361,8 @@ internal class ScopeCatalogService {
         fun moduleRefId(moduleName: String, flavor: ModuleScopeFlavor): String = "module:$moduleName:${flavor.name}"
         fun namedRefId(holderId: String, scopeId: String): String = "named:$holderId:$scopeId"
         fun providerRefId(providerId: String, displayName: String, scopeClassName: String): String {
-            val digest = shortHash("$providerId|$displayName|$scopeClassName")
+            val digest = sha256ShortHash("$providerId|$displayName|$scopeClassName", length = 12)
             return "provider:$providerId:$digest"
-        }
-
-        private fun shortHash(text: String): String {
-            val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
-            return bytes.joinToString("") { b -> "%02x".format(b) }.take(12)
         }
 
         fun getInstance(project: Project): ScopeCatalogService = project.service<ScopeCatalogService>()
