@@ -6,6 +6,20 @@
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.4.7] - 2026-02-27
+
+### Added
+
 - bundle `org.hotswapagent:hotswap-agent` into plugin sandbox/package via dedicated
   distribution configuration and version-catalog managed dependency
 - add third-party notice for bundled HotSwapAgent (GPL-2.0) with source retrieval location
@@ -21,8 +35,6 @@
 - make bundled HotSwapAgent path resolution a direct top-level lazy property lookup
   (no service/resolver indirection)
 
-### Deprecated
-
 ### Removed
 
 - remove obsolete HotSwapAgent download/warm-up text entries from localization bundles
@@ -33,8 +45,6 @@
 - simplify HotSwapAgent resolution to packaged-jar lookup, removing runtime download path
 - tighten `HotswapRunConfigurationExtension` cleanup by tracking `UserDataHolder`s and clearing
   state on dispose
-
-### Security
 
 ## [1.3.7] - 2026-02-24
 
@@ -114,7 +124,8 @@
 - Not editing parameters for non-debug starts
 - Wrong Gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.4.7...HEAD
+[1.4.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...EnhancedHotSwapEnabler-v1.4.7
 [1.3.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.6...EnhancedHotSwapEnabler-v1.3.7
 [1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.5...EnhancedHotSwapEnabler-v1.3.6
 [1.3.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.2.5...EnhancedHotSwapEnabler-v1.3.5
