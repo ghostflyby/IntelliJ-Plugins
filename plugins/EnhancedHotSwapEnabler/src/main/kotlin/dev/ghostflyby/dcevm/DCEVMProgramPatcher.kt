@@ -31,7 +31,7 @@ import com.intellij.execution.runners.JavaProgramPatcher
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.JavaSdkVersion
 import com.intellij.openapi.util.UserDataHolder
-import dev.ghostflyby.dcevm.agent.HotswapAgentManager
+import dev.ghostflyby.dcevm.agent.resolveHotswapAgentJarPath
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,8 +72,7 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
             javaParameters.vmParametersList.addAll(support.args)
         }
         if (effective.enableHotswapAgent) {
-            val manager = HotswapAgentManager.getInstance()
-            val agentJar = manager.getCachedAgentJarOrWarmUp(project) ?: return
+            val agentJar = resolveHotswapAgentJarPath(true, project) ?: return
             val isJava9OrHigher = JavaSdk.getInstance()
                 .getVersion(jdk)
                 ?.isAtLeast(JavaSdkVersion.JDK_1_9) == true

@@ -41,24 +41,44 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.createDirectories
 import kotlin.io.path.name
 
+private const val HOTSWAP_AGENT_JAR_FILE_NAME = "hotswap-agent.jar"
+internal const val HOTSWAP_AGENT_LATEST_JAR_URL =
+    "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.1/hotswap-agent-2.0.1.jar"
+
 /**
  * Manages locating and downloading HotswapAgent JAR for use in run configs and Gradle.
  */
 @Service
-internal class HotswapAgentManager(private val scope: CoroutineScope) {
+internal class HotswapAgentManager(
+    private val scope: CoroutineScope,
+) {
+    internal data class DownloadHooks(
+        val cacheDirProvider: () -> Path = {
+            Path.of(getSystemPath()).resolve("hotswap-agent")
+        },
+        val latestJarUrl: String = HOTSWAP_AGENT_LATEST_JAR_URL,
+        val progressRunner: suspend (Project, suspend () -> Path?) -> Path? = { project, action ->
+            withBackgroundProgress(project, Bundle.message("agent.downloading"), TaskCancellation.cancellable()) {
+                action()
+            }
+        },
+        val downloadRequest: suspend (String, Path) -> Unit = { url, target ->
+            val indicator = ProgressManager.getGlobalProgressIndicator()
+            HttpRequests.request(url)
+                .productNameAsUserAgent()
+                .connect { request ->
+                    request.saveToFile(target, indicator)
+                }
+        },
+    )
+
+    @Volatile
+    internal var downloadHooks: DownloadHooks = DownloadHooks()
+
     private val log = Logger.getInstance(HotswapAgentManager::class.java)
 
-    // GitHub provides a stable redirect for the latest agent jar
-    private val latestJarUrl =
-        "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.1/hotswap-agent-2.0.1.jar"
-
-    // Cache location inside IDE system path
-    private val cacheDir: Path by lazy {
-        val systemPath = getSystemPath()
-        Path.of(systemPath).resolve("hotswap-agent")
-    }
-
-    private val agentJarPath: Path by lazy { cacheDir.resolve("hotswap-agent.jar") }
+    private val cacheDir: Path by lazy { downloadHooks.cacheDirProvider() }
+    private val agentJarPath: Path by lazy { cacheDir.resolve(HOTSWAP_AGENT_JAR_FILE_NAME) }
     @Volatile
     private var downloadJob: Deferred<Path?>? = null
 
@@ -89,9 +109,7 @@ internal class HotswapAgentManager(private val scope: CoroutineScope) {
             return activeJob
         }
         val newJob = scope.async {
-            withBackgroundProgress(project, Bundle.message("agent.downloading"), TaskCancellation.cancellable()) {
-                download()
-            }
+            downloadHooks.progressRunner(project) { download() }
         }
         downloadJob = newJob
         newJob.invokeOnCompletion {
@@ -113,12 +131,7 @@ internal class HotswapAgentManager(private val scope: CoroutineScope) {
         try {
             cacheDir.createDirectories()
             val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
-            val indicator = ProgressManager.getGlobalProgressIndicator()
-            HttpRequests.request(latestJarUrl)
-                .productNameAsUserAgent()
-                .connect { request ->
-                    request.saveToFile(tmp, indicator)
-                }
+            downloadHooks.downloadRequest(downloadHooks.latestJarUrl, tmp)
             Files.move(
                 tmp, agentJarPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE
             )
