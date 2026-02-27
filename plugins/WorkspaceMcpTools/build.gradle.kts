@@ -20,8 +20,6 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-
 plugins {
     id("repo.intellij-plugin")
     alias(libs.plugins.kotlin.serialization)
@@ -31,9 +29,6 @@ version = "1.0.0"
 
 buildLogic {
     pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaUltimate
-    platformVersion = "2025.3"
-    pluginSinceBuild = "253"
 }
 
 dependencies.intellijPlatform {
