@@ -28,12 +28,13 @@
         <fileTypeOverrider implementation="dev.ghostflyby.vitepress.VitePressFileTypeOverrider"/>
         <webBrowserUrlProvider implementation="dev.ghostflyby.vitepress.preview.VitePressUrlProvider"/>
         <postStartupActivity implementation="dev.ghostflyby.vitepress.VitePressRootTrackerActivity"/>
-        <postStartupActivity implementation="dev.ghostflyby.vitepress.preview.VitePressPackageJsonScriptIndexActivity"/>
         <vfs.asyncListenerBackgroundable implementation="dev.ghostflyby.vitepress.VitePressRootTrackerFileListener"/>
     </extensions>
     <projectListeners>
         <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"
                   topic="com.intellij.execution.ExecutionListener"/>
+        <listener class="dev.ghostflyby.vitepress.preview.VitePressPackageJsonScriptIndexListener"
+                  topic="com.intellij.javascript.nodejs.packageJson.PackageJsonFileManager$CHANGES_TOPIC"/>
     </projectListeners>
 
 </idea-plugin>

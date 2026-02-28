@@ -30,12 +30,10 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.findPsiFile
-import com.intellij.util.messages.Topic
 import dev.ghostflyby.vitepress.isUnderVitePressRoot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.BufferOverflow
@@ -85,19 +83,6 @@ internal class VitePressPackageJsonScriptIndex(
             }
         }
 
-        val changeListener = PackageJsonFileManager.PackageJsonChangesListener { events ->
-            events.forEach { event ->
-                onPackageJsonChanged(event)
-            }
-        }
-
-        @Suppress("CAST_NEVER_SUCCEEDS", "UNCHECKED_CAST")
-        val changesTopic =
-            PackageJsonFileManager.CHANGES_TOPIC as Topic<PackageJsonFileManager.PackageJsonChangesListener>
-        project.messageBus
-            .connect(scope)
-            .subscribe(changesTopic, changeListener)
-        refreshAll()
     }
 
 
@@ -216,9 +201,14 @@ internal class VitePressPackageJsonScriptIndex(
     }
 }
 
-internal class VitePressPackageJsonScriptIndexActivity : ProjectActivity {
-    override suspend fun execute(project: Project) {
-        project.service<VitePressPackageJsonScriptIndex>().refreshAll()
+internal class VitePressPackageJsonScriptIndexListener(private val project: Project) :
+    PackageJsonFileManager.PackageJsonChangesListener {
+    override fun onChange(events: List<PackageJsonFileManager.PackageJsonChangeEvent>) {
+        val index = project.service<VitePressPackageJsonScriptIndex>()
+        events.forEach {
+            index.onPackageJsonChanged(it)
+        }
+        index.refreshAll()
     }
 }
 
@@ -335,34 +325,33 @@ private fun splitCommandSegments(command: String): List<String> {
             continue
         }
 
-        when {
-            ch == '\'' || ch == '"' -> {
+        when (ch) {
+            '\'', '"' -> {
                 quote = ch
                 current.append(ch)
                 index++
             }
 
-            ch == ';' -> {
+            ';' -> {
                 flush()
                 index++
             }
 
-            ch == '&' && index + 1 < command.length && command[index + 1] == '&' -> {
+            '&' if index + 1 < command.length && command[index + 1] == '&' -> {
                 flush()
                 index += 2
             }
 
-            ch == '|' && index + 1 < command.length && command[index + 1] == '|' -> {
+            '|' if index + 1 < command.length && command[index + 1] == '|' -> {
                 flush()
                 index += 2
             }
 
-            ch == '\\' -> {
+            '\\' -> {
                 escaped = true
                 current.append(ch)
                 index++
             }
-
             else -> {
                 current.append(ch)
                 index++
