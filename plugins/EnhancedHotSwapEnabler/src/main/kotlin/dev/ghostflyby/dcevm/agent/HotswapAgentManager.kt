@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -22,104 +22,35 @@
 
 package dev.ghostflyby.dcevm.agent
 
-import com.intellij.openapi.application.PathManager.getSystemPath
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
-import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.project.Project
-import com.intellij.platform.ide.progress.ModalTaskOwner
-import com.intellij.platform.ide.progress.TaskCancellation
-import com.intellij.platform.ide.progress.withBackgroundProgress
-import com.intellij.platform.ide.progress.withModalProgress
-import com.intellij.util.io.HttpRequests
-import dev.ghostflyby.dcevm.Bundle
-import kotlinx.coroutines.*
-import org.jetbrains.annotations.Blocking
-import org.jetbrains.annotations.NonBlocking
-import java.io.IOException
+import com.intellij.openapi.application.PathManager
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
-import kotlin.io.path.createDirectories
 import kotlin.io.path.name
 
+private val HOTSWAP_AGENT_MAIN_JAR_PATTERN =
+    Regex("^hotswap-agent-[0-9][0-9A-Za-z._+-]*\\.jar$")
+
+private object BundledHotSwapAgentJarAnchor
+
 /**
- * Manages locating and downloading HotswapAgent JAR for use in run configs and Gradle.
+ * Bundled HotswapAgent jar path resolved from plugin distribution.
+ * The jar is copied by Gradle into plugin `lib/` during sandbox/package preparation.
  */
-@Service
-internal class HotswapAgentManager(private val scope: CoroutineScope) {
-    private val log = Logger.getInstance(HotswapAgentManager::class.java)
-
-    // GitHub provides a stable redirect for the latest agent jar
-    private val latestJarUrl =
-        "https://github.com/HotswapProjects/HotswapAgent/releases/download/RELEASE-2.0.1/hotswap-agent-2.0.1.jar"
-
-    // Cache location inside IDE system path
-    private val cacheDir: Path by lazy {
-        val systemPath = getSystemPath()
-        Path.of(systemPath).resolve("hotswap-agent")
+internal val BundledHotSwapAgentJarPath: Path by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    val classpathEntry = requireNotNull(PathManager.getJarPathForClass(BundledHotSwapAgentJarAnchor::class.java)) {
+        "Unable to resolve plugin classpath entry for HotSwapAgent"
     }
-
-    private val agentJarPath: Path by lazy { cacheDir.resolve("hotswap-agent.jar") }
-
-    /**
-     * Returns the local agent jar if present.
-     */
-    @Blocking
-    fun getLocalAgentJar(project: Project) = runBlocking {
-        scope.run {
-            withModalProgress(
-                ModalTaskOwner.project(project),
-                Bundle.message("agent.downloading"),
-                TaskCancellation.cancellable()
-            ) {
-                download()
-            }
-        }
+    val libDir = requireNotNull(Path.of(classpathEntry).parent) {
+        "Unable to resolve plugin lib directory for HotSwapAgent"
     }
-
-    /**
-     * Coroutine-based background download with visible progress indicator.
-     * fire and forget
-     */
-    @NonBlocking
-    fun getLocalAgentJarAsync(project: Project) =
-        scope.async {
-            withBackgroundProgress(project, Bundle.message("agent.downloading"), TaskCancellation.cancellable()) {
-                download()
+    Files.list(libDir).use { files ->
+        files
+            .filter { Files.isRegularFile(it) }
+            .filter { path -> HOTSWAP_AGENT_MAIN_JAR_PATTERN.matches(path.name) }
+            .sorted(compareByDescending(Path::toString))
+            .findFirst()
+            .orElseThrow {
+                IllegalStateException("Bundled HotSwapAgent jar is missing in plugin lib directory: $libDir")
             }
-        }
-
-
-    /**
-     * Suspending variant using coroutines and optional progress indicator.
-     */
-    private suspend fun download(): Path? = scope.run {
-        withContext(Dispatchers.IO) {
-            if (Files.isRegularFile(agentJarPath)) return@withContext agentJarPath
-            try {
-                cacheDir.createDirectories()
-                val tmp = Files.createTempFile(cacheDir, agentJarPath.name, ".tmp")
-                val indicator = ProgressManager.getGlobalProgressIndicator()
-                HttpRequests.request(latestJarUrl)
-                    .productNameAsUserAgent()
-                    .connect { request ->
-                        request.saveToFile(tmp, indicator)
-                    }
-                Files.move(
-                    tmp, agentJarPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE
-                )
-                agentJarPath
-            } catch (e: IOException) {
-                log.warn("Unable to download HotswapAgent", e)
-                cancel("${Bundle.message("agent.download.failed")}\n${e.message}", e)
-                null
-            }
-        }
-    }
-
-    companion object {
-        fun getInstance(): HotswapAgentManager = service()
     }
 }

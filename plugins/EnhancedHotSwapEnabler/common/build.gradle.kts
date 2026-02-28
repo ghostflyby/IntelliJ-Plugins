@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025-2026 ghostflyby
- * SPDX-FileCopyrightText: 2025-2026 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,22 +20,25 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.dcevm
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-import com.intellij.DynamicBundle
-import org.jetbrains.annotations.Nls
-import org.jetbrains.annotations.PropertyKey
-import java.util.function.Supplier
+plugins {
+    kotlin("jvm")
+    `java-library`
+}
 
-private const val BUNDLE = "messages.Bundle"
+dependencies {
+    compileOnly(kotlin("stdlib"))
+}
 
-internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
-    @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
-        getMessage(key, *params)
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_1_8
+    }
+    explicitApi()
+}
 
-    @JvmStatic
-    @Nls
-    fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls Supplier<String> =
-        getLazyMessage(key, *params)
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
 }
