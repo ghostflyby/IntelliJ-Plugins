@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -29,7 +29,7 @@ import java.util.function.Supplier
 
 private const val BUNDLE = "messages.Bundle"
 
-internal object Bundle : DynamicBundle(BUNDLE) {
+internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
     @JvmStatic
     fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
         getMessage(key, *params)

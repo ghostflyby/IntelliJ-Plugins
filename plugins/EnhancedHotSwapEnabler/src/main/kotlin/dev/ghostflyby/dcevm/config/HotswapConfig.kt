@@ -63,22 +63,25 @@ internal fun effectiveHotSwapConfig(
     profile: UserDataHolder?,
     project: Project?,
 ): ResolvedHotSwapConfig {
-    val config = sequence {
+    return resolveHotSwapConfig(sequence {
         yield(profile?.getUserData(HotSwapRunConfigurationDataKey.KEY))
         yield(project?.service<ProjectUserSettings>())
         yield(project?.service<ProjectSharedSettings>())
         yield(service<AppSettings>())
     }
-        .filterNotNull().filter {
-            !it.inherit
-        }.map {
+        .filterNotNull())
+}
+
+internal fun resolveHotSwapConfig(configs: Sequence<HotswapConfig>): ResolvedHotSwapConfig {
+    return configs
+        .filterNot { it.inherit }
+        .map {
             ResolvedHotSwapConfig(
                 enable = it.enable,
-                enableHotswapAgent = it.enableHotswapAgent
+                enableHotswapAgent = it.enableHotswapAgent,
             )
-        }.first()
-
-    return config
+        }
+        .first()
 }
 
 internal const val configKey = "HotswapConfig"

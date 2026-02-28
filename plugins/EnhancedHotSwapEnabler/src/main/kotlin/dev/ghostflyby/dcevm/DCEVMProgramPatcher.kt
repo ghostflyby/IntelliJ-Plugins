@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -28,8 +28,10 @@ import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.runners.JavaProgramPatcher
+import com.intellij.openapi.projectRoots.JavaSdk
+import com.intellij.openapi.projectRoots.JavaSdkVersion
 import com.intellij.openapi.util.UserDataHolder
-import dev.ghostflyby.dcevm.agent.HotswapAgentManager
+import dev.ghostflyby.dcevm.agent.BundledHotSwapAgentJarPath
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +52,8 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
             project
         )
         if (!effective.enable) return
-        val javaHome = javaParameters.jdk?.homePath ?: return
+        val jdk = javaParameters.jdk ?: return
+        val javaHome = jdk.homePath ?: return
 
         val support = getDcevmSupport(
             Path(javaHome),
@@ -69,10 +72,16 @@ internal class DCEVMProgramPatcher(private val scope: CoroutineScope) : JavaProg
             javaParameters.vmParametersList.addAll(support.args)
         }
         if (effective.enableHotswapAgent) {
-            val manager = HotswapAgentManager.getInstance()
-
-
-            val agentJar = manager.getLocalAgentJar(project) ?: return
+            val agentJar = BundledHotSwapAgentJarPath
+            val isJava9OrHigher = JavaSdk.getInstance()
+                .getVersion(jdk)
+                ?.isAtLeast(JavaSdkVersion.JDK_1_9) == true
+            javaParameters.vmParametersList.addAll(
+                missingHotswapAgentAddOpensJvmArgs(
+                    javaParameters.vmParametersList.parameters,
+                    isJava9OrHigher,
+                ),
+            )
             val arg = "-javaagent:${agentJar.toAbsolutePath()}"
             if (support !is DCEVMSupport.NeedsArgs) {
                 javaParameters.vmParametersList.add(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)

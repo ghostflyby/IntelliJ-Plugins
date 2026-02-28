@@ -24,7 +24,7 @@ package dev.ghostflyby.dcevm
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import dev.ghostflyby.dcevm.agent.HotswapAgentManager
+import dev.ghostflyby.dcevm.agent.BundledHotSwapAgentJarPath
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -41,17 +41,19 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
         settings: GradleExecutionSettings,
         gradleVersion: GradleVersion?,
     ) {
-
-        val path =
-            PathManager.getJarPathForClass(DCEVMGradleManagerExtension::class.java) ?: return
+        val classpathJars = listOfNotNull(
+            PathManager.getJarPathForClass(IntelliJDcevmGradlePlugin::class.java),
+            PathManager.getJarPathForClass(DCEVMSupport::class.java),
+        ).distinct()
+        if (classpathJars.isEmpty()) return
+        val classpathFiles = classpathJars.joinToString(", ") { it.toGroovyStringLiteral() }
 
         settings.addInitScript(
             "ghostflyby.intellij.gradle.dcevm",
-            @Suppress("SpellCheckingInspection")
             """
 initscript{
 dependencies {
-    classpath files(${path.toGroovyStringLiteral()})
+    classpath files($classpathFiles)
 }
 }
 pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
@@ -75,9 +77,11 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
             Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
         )
         if (resolved.enableHotswapAgent) {
-            // pass agent jar path to Gradle if we already have it; also kick off download if missing
-            val jar = HotswapAgentManager.getInstance().getLocalAgentJar(project) ?: return false
-            settings.addEnvironmentVariable(HOTSWAP_AGENT_JAR_PATH_ENV_KEY, jar.toAbsolutePath().toString())
+            // pass bundled agent jar path to Gradle when agent feature is enabled
+            settings.addEnvironmentVariable(
+                HOTSWAP_AGENT_JAR_PATH_ENV_KEY,
+                BundledHotSwapAgentJarPath.toAbsolutePath().toString(),
+            )
         }
         return false
     }

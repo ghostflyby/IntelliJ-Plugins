@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -29,7 +29,7 @@ import javax.inject.Inject
 
 abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory, providers: ProviderFactory) {
     val platformType: Property<IntelliJPlatformType> = objects.property<IntelliJPlatformType>()
-        .convention(providers.gradleProperty("platformType").map { IntelliJPlatformType.fromCode(it) })
+        .convention(IntelliJPlatformType.IntellijIdea)
     val platformVersion: Property<String> = objects.property<String>()
         .convention(providers.gradleProperty("platformVersion"))
     val pluginVersion: Property<String> = objects.property()

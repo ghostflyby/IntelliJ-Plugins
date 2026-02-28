@@ -15,8 +15,14 @@ Start the RunConfiguration with debug mode.
 
 1. Enables `-XX:EnhancedClassRedefinition` in RunConfigurations when supported JDKs are used.
 2. Supports Gradle tasks with `JavaExec` type.
-3. Auto download and configure the HotSwapAgent.
+3. Bundles and configures HotSwapAgent (`org.hotswapagent:hotswap-agent`, version managed in version catalog).
 4. Configurations for features.
 5. TODO: Extension points for other plugins to add custom java agents.
+
+## Third-party License Notice
+
+This plugin distribution includes HotSwapAgent (`GPL-2.0`).
+Source code is available at: <https://github.com/HotswapProjects/HotswapAgent>
+Detailed notice is available in `THIRD_PARTY_NOTICES.md` inside plugin resources.
 
 <!-- Plugin description end -->

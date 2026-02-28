@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -27,36 +27,68 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ForkJoinPool
 import kotlin.io.path.isDirectory
 
-internal const val DCEVM_MANUAL_TASKS_KEY = "ijDcevmManualTasks"
-internal const val ENABLE_DCEVM_ENV_KEY = "ijEnableDcevm"
-internal const val ENABLE_HOTSWAP_AGENT_ENV_KEY = "ijEnableHotswapAgent"
-internal const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY = "ijHotswapAgentJarPath"
+public const val DCEVM_MANUAL_TASKS_KEY: String = "ijDcevmManualTasks"
+public const val ENABLE_DCEVM_ENV_KEY: String = "ijEnableDcevm"
+public const val ENABLE_HOTSWAP_AGENT_ENV_KEY: String = "ijEnableHotswapAgent"
+public const val HOTSWAP_AGENT_JAR_PATH_ENV_KEY: String = "ijHotswapAgentJarPath"
 
-internal const val DCEVM_JVM_OPTION_NAME = "AllowEnhancedClassRedefinition"
-internal const val JVM_OPTION_DCEVM = "-XX:+AllowEnhancedClassRedefinition"
-internal const val JVM_OPTION_DCEVM_ALT = "-XXaltjvm=dcevm"
-internal const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT = "-XX:HotswapAgent=external"
+public const val DCEVM_JVM_OPTION_NAME: String = "AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM: String = "-XX:+AllowEnhancedClassRedefinition"
+public const val JVM_OPTION_DCEVM_ALT: String = "-XXaltjvm=dcevm"
+public const val JVM_OPTION_EXTERNAL_HOTSWAP_AGENT: String = "-XX:HotswapAgent=external"
+private const val JVM_OPTION_ADD_OPENS = "--add-opens"
 
-internal sealed interface DCEVMSupport {
+private val HOTSWAP_AGENT_ADD_OPENS_TARGETS = listOf(
+    "java.base/java.lang=ALL-UNNAMED",
+    "java.base/jdk.internal.loader=ALL-UNNAMED",
+    "java.base/java.io=ALL-UNNAMED",
+    "java.desktop/java.beans=ALL-UNNAMED",
+    "java.desktop/com.sun.beans=ALL-UNNAMED",
+    "java.desktop/com.sun.beans.introspect=ALL-UNNAMED",
+    "java.desktop/com.sun.beans.util=ALL-UNNAMED",
+)
 
-    interface NeedsArgs : DCEVMSupport {
-        val args: List<String>
+public sealed interface DCEVMSupport {
+
+    public interface NeedsArgs : DCEVMSupport {
+        public val args: List<String>
     }
 
-    object None : DCEVMSupport
-    object Auto : DCEVMSupport
-    object RequiresArg : NeedsArgs {
-        override val args = listOf(JVM_OPTION_DCEVM)
+    public object None : DCEVMSupport
+    public object Auto : DCEVMSupport
+    public object RequiresArg : NeedsArgs {
+        override val args: List<String> = listOf(JVM_OPTION_DCEVM)
     }
 
-    object AltJvm : NeedsArgs {
-        override val args = listOf(JVM_OPTION_DCEVM_ALT)
+    public object AltJvm : NeedsArgs {
+        override val args: List<String> = listOf(JVM_OPTION_DCEVM_ALT)
     }
+}
+
+public fun missingHotswapAgentAddOpensJvmArgs(
+    existingArgs: Collection<String>,
+    isJava9OrHigher: Boolean,
+): List<String> {
+    if (!isJava9OrHigher) return emptyList()
+    val args = existingArgs.toList()
+    return HOTSWAP_AGENT_ADD_OPENS_TARGETS
+        .filterNot { target -> hasAddOpensJvmArg(args, target) }
+        .map { target -> "$JVM_OPTION_ADD_OPENS=$target" }
+}
+
+private fun hasAddOpensJvmArg(existingArgs: List<String>, target: String): Boolean {
+    if ("$JVM_OPTION_ADD_OPENS=$target" in existingArgs) return true
+    for (index in 0 until existingArgs.lastIndex) {
+        if (existingArgs[index] == JVM_OPTION_ADD_OPENS && existingArgs[index + 1] == target) {
+            return true
+        }
+    }
+    return false
 }
 
 private val dcevmCheckCache = ConcurrentHashMap<Path, DCEVMSupport>()
 
-internal fun getDcevmSupport(
+public fun getDcevmSupport(
     javaHome: Path,
     execute: (Runnable) -> Unit = ForkJoinPool.commonPool()::execute,
     optionLinesProvider: (javaExecutable: String) -> Sequence<String>,

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,76 +20,43 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
     id("repo.intellij-plugin")
-    kotlin("plugin.sam.with.receiver") version libs.versions.kotlin
 }
 
-version = "1.3.6"
+version = "1.4.7"
 
 buildLogic {
     pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaCommunity
-    platformVersion = "2025.1"
-    pluginSinceBuild = "251"
 }
 
-
-sourceSets {
-    val common by creating
-    val gradle by creating
-
-    tasks.jar {
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        from(common.output, main.map { it.output }, gradle.output)
-    }
-}
-
-kotlin.target.compilations {
-    val main by getting
-    val common by getting
-    val gradle by getting
-    main.associateWith(common)
-    gradle.associateWith(common)
-}
-
-samWithReceiver {
-    annotation("org.gradle.api.HasImplicitReceiver")
+val hotswapAgentDistribution by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = false
+    isTransitive = false
 }
 
 dependencies {
-    val commonCompileOnly by configurations.getting
-    val gradleCompileOnly by configurations.getting
+    hotswapAgentDistribution(libs.hotswap.agent)
 
-    commonCompileOnly(kotlin("stdlib"))
-    gradleCompileOnly(gradleKotlinDsl())
-    gradleCompileOnly(gradleApi())
+    implementation(project(":plugins:EnhancedHotSwapEnabler:common"))
+    implementation(project(":plugins:EnhancedHotSwapEnabler:gradle"))
 
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
     }
 }
-tasks.prepareSandbox {
-    val common by sourceSets.getting
-    val commonFiles = common.output.asFileTree.map { it.toPath() }.toSet()
-    exclude {
-        it.file.toPath() in commonFiles
-    }
-    includeEmptyDirs = false
-}
 
-tasks.withType<KotlinCompile>().named { it == "compileCommonKotlin" || it == "compileGradleKotlin" }.configureEach {
-    compilerOptions {
-        jvmTarget = JvmTarget.JVM_1_8
+tasks {
+    prepareSandbox {
+        from(hotswapAgentDistribution) {
+            into("${project.name}/lib")
+        }
     }
-}
-
-tasks.withType<JavaCompile>().named { it == "compileCommonJava" || it == "compileGradleJava" }.configureEach {
-    targetCompatibility = "1.8"
-    sourceCompatibility = "21"
+    prepareTestSandbox {
+        from(hotswapAgentDistribution) {
+            into("${project.name}/lib")
+        }
+    }
 }

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -29,9 +29,8 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.kotlin.dsl.withType
 
 
-@Suppress("unused")
-internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
-    override fun apply(target: Gradle) = target.allprojects {
+public class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
+    override fun apply(target: Gradle): Unit = target.allprojects {
         val manualTasks = providers.environmentVariable(DCEVM_MANUAL_TASKS_KEY)
             .map { JsonSlurper().parse(it.toCharArray()) as Collection<*> }
 
@@ -73,6 +72,12 @@ internal class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
                     // Always add external
                     val jar = hotswapAgentJarPath.get()
                     if (jar.isNotBlank()) {
+                        jvmArgs(
+                            missingHotswapAgentAddOpensJvmArgs(
+                                allJvmArgs,
+                                javaLauncher.get().metadata.languageVersion.canCompileOrRun(9),
+                            ),
+                        )
                         if (support !is DCEVMSupport.NeedsArgs) {
                             jvmArgs(JVM_OPTION_EXTERNAL_HOTSWAP_AGENT)
                         }
