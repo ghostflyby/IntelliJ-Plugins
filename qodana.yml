@@ -6,17 +6,7 @@ projectJDK: "21"
 linter: qodana-jvm-community
 withinDocker: "false"
 profile:
-  name: Project Default
+  base:
+    name: qodana.recommended
 plugins:
   - id: DevKit
-exclude:
-  - name: All
-    paths:
-      - build
-      - buildSrc/build
-      - plugins/*/build
-      - LICENSE
-      - gradlew
-      - gradlew.bat
-      - .intellijPlatform
-  - name: SpellCheckingInspection
