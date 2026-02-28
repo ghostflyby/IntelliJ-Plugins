@@ -281,7 +281,7 @@ public fun VirtualFile.isUnderVitePressRoot(): Boolean {
         CachedValueImpl {
             val tracker = service<VitePressRootTracker>()
             val value = tracker.isUnderVitePressRoot(this)
-            CachedValueProvider.Result.create(value, tracker)
+            CachedValueProvider.Result.create(value, tracker, this)
         }
     }.value
 }
@@ -291,7 +291,7 @@ public fun VirtualFile.isVitePressRoot(): Boolean {
         CachedValueImpl {
             val tracker = service<VitePressRootTracker>()
             val value = tracker.isVitePressRoot(this)
-            CachedValueProvider.Result.create(value, tracker)
+            CachedValueProvider.Result.create(value, tracker, this)
         }
     }.value
 }
