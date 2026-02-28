@@ -20,18 +20,12 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.mcp.gradle.common
 
-version = "1.1.0"
+import com.intellij.mcpserver.reportToolActivity
+import com.intellij.openapi.util.NlsContexts
+import kotlinx.coroutines.currentCoroutineContext
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
+internal suspend fun reportActivity(@NlsContexts.Label description: String) {
+    currentCoroutineContext().reportToolActivity(description)
 }

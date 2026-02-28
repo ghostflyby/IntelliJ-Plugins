@@ -20,18 +20,22 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.mcp.gradle
 
-version = "1.1.0"
+import com.intellij.DynamicBundle
+import org.jetbrains.annotations.Nls
+import org.jetbrains.annotations.PropertyKey
+import java.util.function.Supplier
 
-buildLogic {
-    pluginVersion = version.toString()
-}
+private const val BUNDLE = "messages.Bundle"
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
+internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
+    @JvmStatic
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
+        getMessage(key, *params)
+
+    @JvmStatic
+    @Nls
+    fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): Supplier<String> =
+        getLazyMessage(key, *params)
 }

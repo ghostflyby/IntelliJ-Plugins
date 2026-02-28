@@ -94,6 +94,9 @@
 4. record newly discovered first-call shortcuts and failure/retry patterns in docs incrementally.
 5. treat plugin `TODO.md` as a staging document only; completed work must be archived in `docs/`
    with a topic-specific filename to keep planning and historical records separated.
+6. changelog entries should describe the final user-visible or integrator-visible outcome of a change.
+   do not list internal refactor steps, test-only work, or implementation mechanics unless they change external
+   behavior.
 
 ## Common Pattern
 
