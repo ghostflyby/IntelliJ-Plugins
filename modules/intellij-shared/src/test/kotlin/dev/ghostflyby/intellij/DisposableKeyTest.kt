@@ -143,4 +143,55 @@ class DisposableKeyTest {
 
         Disposer.dispose(disposable)
     }
+
+    @Test
+    fun toDisposableKeyWithDisposableCleansOnDispose() {
+        val disposable: Disposable = Disposer.newDisposable()
+        val key = Key.create<String>("key.toDisposableKey.disposable")
+        val cleaner = key.toDisposableKey(disposable)
+
+        val holder = object : UserDataHolderBase() {
+            var value: String? by cleaner
+        }
+
+        holder.value = "stored"
+        assertEquals("stored", holder.value)
+
+        Disposer.dispose(disposable)
+
+        assertNull(holder.getUserData(key))
+    }
+
+    @Test
+    fun toDisposableKeyWithScopeCleansOnCompletion() {
+        val job = Job()
+        val scope = CoroutineScope(job)
+        val key = Key.create<String>("key.toDisposableKey.scope")
+        val cleaner = key.toDisposableKey(scope)
+
+        val holder = object : UserDataHolderBase() {
+            var value: String? by cleaner
+        }
+
+        holder.value = "scoped"
+        assertEquals("scoped", holder.value)
+
+        runBlocking {
+            job.complete()
+            job.join()
+        }
+
+        assertNull(holder.getUserData(key))
+    }
+
+    @Test
+    fun toDisposableKeyExposesOriginalKey() {
+        val disposable: Disposable = Disposer.newDisposable()
+        val key = Key.create<String>("key.toDisposableKey.property")
+        val cleaner = key.toDisposableKey(disposable)
+
+        assertEquals(key, cleaner.key)
+
+        Disposer.dispose(disposable)
+    }
 }

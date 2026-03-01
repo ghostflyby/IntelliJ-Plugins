@@ -87,3 +87,11 @@ public operator fun <H : UserDataHolder, K : NotNullLazyKey<T, H>, T> Disposable
 ): T {
     return property.run { thisRef.getUserData(key) ?: key.getValue(thisRef) }
 }
+
+public fun <K : Key<T>, T> K.toDisposableKey(disposable: Disposable): DisposableKey<K, T> {
+    return DisposableKey(disposable, this)
+}
+
+public fun <K : Key<T>, T> K.toDisposableKey(scope: CoroutineScope): DisposableKey<K, T> {
+    return DisposableKey(scope, this)
+}
