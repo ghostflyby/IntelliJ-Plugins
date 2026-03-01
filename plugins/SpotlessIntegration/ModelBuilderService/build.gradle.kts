@@ -26,10 +26,6 @@ plugins {
     id("repo.intellij-module")
 }
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
 kotlin {
     compilerOptions.jvmTarget = JvmTarget.JVM_1_8
 }

@@ -26,10 +26,6 @@ plugins {
 
 version = "1.4.7"
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
 val hotswapAgentDistribution by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = false
