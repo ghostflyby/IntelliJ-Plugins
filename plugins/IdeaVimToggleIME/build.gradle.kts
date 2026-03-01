@@ -26,10 +26,6 @@ plugins {
 
 version = "1.0.1"
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
 dependencies.intellijPlatform {
     plugin("IdeaVIM:2.27.2")
 }

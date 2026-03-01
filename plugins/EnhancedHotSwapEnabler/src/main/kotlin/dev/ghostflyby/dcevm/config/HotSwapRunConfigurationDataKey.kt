@@ -20,14 +20,14 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.dcevm.config
 
-version = "1.1.0"
+import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.UserDataHolder
+import dev.ghostflyby.dcevm.PluginDisposable
+import dev.ghostflyby.intellij.getValue
+import dev.ghostflyby.intellij.setValue
+import dev.ghostflyby.intellij.toAutoCleanKey
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
-}
+private val hotswapDataKey = Key.create<HotswapConfigState>("HotSwapEnabler.State").toAutoCleanKey(PluginDisposable)
+internal var UserDataHolder.hotswapState: HotswapConfigState? by hotswapDataKey

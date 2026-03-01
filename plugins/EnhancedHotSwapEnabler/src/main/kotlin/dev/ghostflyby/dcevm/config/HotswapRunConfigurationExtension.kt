@@ -26,28 +26,14 @@ import com.intellij.execution.RunConfigurationExtension
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.components.service
 import com.intellij.openapi.options.SettingsEditor
-import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.UserDataHolder
-import com.intellij.openapi.util.removeUserData
 import com.intellij.util.xmlb.XmlSerializer
 import dev.ghostflyby.dcevm.Bundle
-import dev.ghostflyby.dcevm.PluginDisposable
 import org.jdom.Element
-import java.util.*
 import javax.swing.JComponent
 
 // do not change qualified name to avoid breaking existing configurations
-internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), Disposable {
-    private val trackedHolders =
-        Collections.newSetFromMap(WeakHashMap<UserDataHolder, Boolean>())
-
-    init {
-        val plugin = service<PluginDisposable>()
-        Disposer.register(plugin, this)
-    }
+internal class HotswapRunConfigurationExtension : RunConfigurationExtension() {
 
     override fun isApplicableFor(configuration: RunConfigurationBase<*>): Boolean =
         true
@@ -59,17 +45,17 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
         } catch (_: Throwable) {
             null
         }
-        setTrackedState(runConfiguration, deserialized)
+        runConfiguration.hotswapState = deserialized
     }
 
     override fun writeExternal(runConfiguration: RunConfigurationBase<*>, element: Element) {
-        val state = runConfiguration.getUserData(HotSwapRunConfigurationDataKey.KEY) ?: return
+        val state = runConfiguration.hotswapState ?: return
         val child = element.getOrCreateChild(configKey)
         XmlSerializer.serializeInto(state, child)
     }
 
     override fun cleanUserData(runConfigurationBase: RunConfigurationBase<*>) {
-        clearTrackedState(runConfigurationBase)
+        runConfigurationBase.hotswapState = null
     }
 
     override fun <P : RunConfigurationBase<*>> createEditor(configuration: P): SettingsEditor<P?> {
@@ -78,13 +64,13 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
             private val ui = hotswapConfigView(model)
 
             override fun resetEditorFrom(s: P) {
-                val st = s.getUserData(HotSwapRunConfigurationDataKey.KEY)
+                val st = s.hotswapState
                 if (st != null) model.setFrom(st)
             }
 
             override fun applyEditorTo(s: P) {
                 val newState = HotswapConfigState().setFrom(model)
-                setTrackedState(s, newState)
+                s.hotswapState = newState
             }
 
             override fun createEditor(): JComponent = ui
@@ -94,7 +80,6 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
 
     override fun getEditorTitle(): String = Bundle.message("configuration.section.name")
 
-    @Suppress("EmptyMethod")
     override fun <T : RunConfigurationBase<*>> updateJavaParameters(
         configuration: T,
         params: JavaParameters,
@@ -103,30 +88,5 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension(), D
         return
     }
 
-    override fun dispose() {
-        synchronized(trackedHolders) {
-            trackedHolders.forEach { holder ->
-                holder.removeUserData(HotSwapRunConfigurationDataKey.KEY)
-            }
-            trackedHolders.clear()
-        }
-    }
-
-    private fun setTrackedState(holder: UserDataHolder, state: HotswapConfigState?) {
-        holder.putUserData(HotSwapRunConfigurationDataKey.KEY, state)
-        synchronized(trackedHolders) {
-            if (state == null) {
-                trackedHolders.remove(holder)
-            } else {
-                trackedHolders.add(holder)
-            }
-        }
-    }
-
-    private fun clearTrackedState(holder: UserDataHolder) {
-        holder.removeUserData(HotSwapRunConfigurationDataKey.KEY)
-        synchronized(trackedHolders) {
-            trackedHolders.remove(holder)
-        }
-    }
 }
+

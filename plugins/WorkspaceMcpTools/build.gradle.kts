@@ -27,10 +27,6 @@ plugins {
 
 version = "1.0.0"
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
 dependencies.intellijPlatform {
     bundledPlugin("com.intellij.mcpServer")
 }

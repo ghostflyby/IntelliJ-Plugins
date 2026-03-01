@@ -32,7 +32,6 @@ abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory, pr
         .convention(IntelliJPlatformType.IntellijIdea)
     val platformVersion: Property<String> = objects.property<String>()
         .convention(providers.gradleProperty("platformVersion"))
-    val pluginVersion: Property<String> = objects.property()
     val pluginSinceBuild: Property<String> = objects.property<String>()
         .convention(providers.gradleProperty("pluginSinceBuild"))
 }

@@ -21,13 +21,8 @@
  */
 
 plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
+    id("repo.intellij-module")
+    `java-library`
 }
 
-version = "1.1.0"
-
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
-}
+// Core IntelliJ platform dependency comes from repo.intellij-module.

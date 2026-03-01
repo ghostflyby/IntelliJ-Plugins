@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025-2026 ghostflyby
- * SPDX-FileCopyrightText: 2025-2026 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -22,18 +22,11 @@
 
 package dev.ghostflyby.selectionlivetemplate
 
-import com.intellij.openapi.util.Key
-import com.intellij.openapi.util.UserDataHolder
-import kotlin.reflect.KProperty
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 
-internal operator fun <T : Any> Key<T>.getValue(thisRef: UserDataHolder, property: KProperty<*>): T? {
-    return property.run {
-        thisRef.getUserData(this@getValue)
-    }
-}
+@Service
+private class D : Disposable.Default
 
-internal operator fun <T : Any> Key<T>.setValue(thisRef: UserDataHolder, property: KProperty<*>, value: T?) {
-    property.run {
-        thisRef.putUserData(this@setValue, value)
-    }
-}
+internal val PluginDisposable: Disposable get() = service<D>()

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -24,7 +24,6 @@ package dev.ghostflyby.dcevm.config
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.UserDataHolder
 
 internal interface HotswapConfig {
@@ -50,10 +49,6 @@ internal data class HotswapConfigState(
     }
 }
 
-internal object HotSwapRunConfigurationDataKey {
-    val KEY: Key<HotswapConfigState> = Key.create("HotSwapEnabler.State")
-}
-
 internal data class ResolvedHotSwapConfig(
     val enable: Boolean,
     val enableHotswapAgent: Boolean,
@@ -64,7 +59,7 @@ internal fun effectiveHotSwapConfig(
     project: Project?,
 ): ResolvedHotSwapConfig {
     return resolveHotSwapConfig(sequence {
-        yield(profile?.getUserData(HotSwapRunConfigurationDataKey.KEY))
+        yield(profile?.hotswapState)
         yield(project?.service<ProjectUserSettings>())
         yield(project?.service<ProjectSharedSettings>())
         yield(service<AppSettings>())
