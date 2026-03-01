@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -22,44 +22,38 @@
 
 package dev.ghostflyby.selectionlivetemplate
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.event.*
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
-
-@Service
-internal class PluginDisposable : Disposable.Default
+import com.intellij.openapi.util.KeyWithDefaultValue
+import dev.ghostflyby.intellij.getValue
+import dev.ghostflyby.intellij.setValue
+import dev.ghostflyby.intellij.toAutoCleanKey
 
 internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 
     override fun editorCreated(event: EditorFactoryEvent) =
         event.editor.run {
-            if (isViewer || document.getUserData(listenerAttachedKey) != null) return
-            document.putUserData(listenerAttachedKey, Unit)
-            val disposable = service<PluginDisposable>()
+            if (isViewer || document.listenerAttached) return
+            document.listenerAttached = true
             if (selectionModel.hasSelection()) {
                 document.previousSelection = selectionModel.selectedText
             }
-            document.addDocumentListener(MyDocumentListener, disposable)
-            Disposer.register(disposable) {
-                document.previousSelection = null
-                document.replacedSelection = null
-            }
-            selectionModel.addSelectionListener(MySelectionListener, disposable)
+            document.addDocumentListener(MyDocumentListener, PluginDisposable)
+            selectionModel.addSelectionListener(MySelectionListener, PluginDisposable)
         }
 
 }
 
-private val previousSelectionKey = Key<String>("previousSelection")
-private val replacedSelectionKey = Key<String>("replacedSelection")
+private val previousSelectionKey = Key<String>("previousSelection").toAutoCleanKey(PluginDisposable)
+private val replacedSelectionKey = Key<String>("replacedSelection").toAutoCleanKey(PluginDisposable)
 
-private val listenerAttachedKey = Key<Unit>("selectionTemplateListenerAttached")
+private val listenerAttachedKey =
+    KeyWithDefaultValue<Boolean>.create("selectionTemplateListenerAttached", false).toAutoCleanKey(PluginDisposable)
 
 private var Document.previousSelection by previousSelectionKey
 internal var Document.replacedSelection by replacedSelectionKey
+private var Document.listenerAttached: Boolean by listenerAttachedKey
 
 private object MySelectionListener : SelectionListener {
     override fun selectionChanged(e: SelectionEvent) = e.editor.run {

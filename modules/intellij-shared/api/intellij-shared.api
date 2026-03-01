@@ -1,0 +1,15 @@
+public final class dev/ghostflyby/intellij/DisposableKey {
+	public fun <init> (Lcom/intellij/openapi/Disposable;Lcom/intellij/openapi/util/Key;)V
+	public fun <init> (Lkotlinx/coroutines/CoroutineScope;Lcom/intellij/openapi/util/Key;)V
+	public final fun getKey ()Lcom/intellij/openapi/util/Key;
+}
+
+public final class dev/ghostflyby/intellij/DisposableKeyKt {
+	public static final fun getValue (Ldev/ghostflyby/intellij/DisposableKey;Lcom/intellij/openapi/util/UserDataHolder;Lkotlin/reflect/KProperty;)Ljava/lang/Object;
+	public static final fun getValueFromKeyWithDefaultValue (Ldev/ghostflyby/intellij/DisposableKey;Lcom/intellij/openapi/util/UserDataHolder;Lkotlin/reflect/KProperty;)Ljava/lang/Object;
+	public static final fun setValue (Ldev/ghostflyby/intellij/DisposableKey;Lcom/intellij/openapi/util/UserDataHolder;Lkotlin/reflect/KProperty;Ljava/lang/Object;)V
+	public static final fun setValueFromNotNullLazyKey (Ldev/ghostflyby/intellij/DisposableKey;Lcom/intellij/openapi/util/UserDataHolder;Lkotlin/reflect/KProperty;)Ljava/lang/Object;
+	public static final fun toDisposableKey (Lcom/intellij/openapi/util/Key;Lcom/intellij/openapi/Disposable;)Ldev/ghostflyby/intellij/DisposableKey;
+	public static final fun toDisposableKey (Lcom/intellij/openapi/util/Key;Lkotlinx/coroutines/CoroutineScope;)Ldev/ghostflyby/intellij/DisposableKey;
+}
+

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025-2026 ghostflyby
- * SPDX-FileCopyrightText: 2025-2026 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,12 +20,14 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-}
+package dev.ghostflyby.dcevm.config
 
-version = "1.0.4"
+import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.UserDataHolder
+import dev.ghostflyby.dcevm.PluginDisposable
+import dev.ghostflyby.intellij.getValue
+import dev.ghostflyby.intellij.setValue
+import dev.ghostflyby.intellij.toAutoCleanKey
 
-dependencies {
-    implementation(project(":modules:intellij-shared"))
-}
+private val hotswapDataKey = Key.create<HotswapConfigState>("HotSwapEnabler.State").toAutoCleanKey(PluginDisposable)
+internal var UserDataHolder.hotswapState: HotswapConfigState? by hotswapDataKey

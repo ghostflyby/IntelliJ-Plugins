@@ -36,7 +36,7 @@ val buildLogic: BuildLogicSettings by extensions
 
 intellijPlatform {
     pluginConfiguration {
-        version = project.version.toString()
+        version = providers.provider { project.version.toString() }
 
         description = providers.fileContents(layout.projectDirectory.file("README.md")).asText.map {
             val start = "<!-- Plugin description -->"

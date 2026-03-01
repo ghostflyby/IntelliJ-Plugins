@@ -29,7 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import java.util.*
 import kotlin.reflect.KProperty
 
-public class DisposableKey<K : Key<T>, T> private constructor(public val key: K) {
+public class AutoCleanKey<K : Key<T>, T> private constructor(public val key: K) {
     public constructor(disposable: Disposable, key: K) : this(key) {
         Disposer.register(disposable) {
             synchronized(holders) {
@@ -59,39 +59,42 @@ public class DisposableKey<K : Key<T>, T> private constructor(public val key: K)
     }
 }
 
-public operator fun <K : Key<T>, T> DisposableKey<K, T>.getValue(thisRef: UserDataHolder, property: KProperty<*>): T? {
+public operator fun <H : UserDataHolder, K : Key<T>, T> AutoCleanKey<K, T>.getValue(
+    thisRef: H,
+    property: KProperty<*>,
+): T? {
     return property.run { thisRef.getUserData(key) }
 }
 
-public operator fun <K : Key<T>, T> DisposableKey<K, T>.setValue(
-    thisRef: UserDataHolder,
+public operator fun <H : UserDataHolder, K : Key<T>, T> AutoCleanKey<K, T>.setValue(
+    thisRef: H,
     property: KProperty<*>,
-    value: T,
+    value: T?,
 ) {
     put(thisRef)
     property.run { thisRef.putUserData(key, value) }
 }
 
 @JvmName("getValueFromKeyWithDefaultValue")
-public operator fun <K : KeyWithDefaultValue<T>, T> DisposableKey<K, T>.getValue(
-    thisRef: UserDataHolder,
+public operator fun <H : UserDataHolder, K : KeyWithDefaultValue<T>, T> AutoCleanKey<K, T>.getValue(
+    thisRef: H,
     property: KProperty<*>,
 ): T {
     return property.run { thisRef.getUserData(key) ?: key.defaultValue }
 }
 
 @JvmName("setValueFromNotNullLazyKey")
-public operator fun <H : UserDataHolder, K : NotNullLazyKey<T, H>, T> DisposableKey<K, T>.getValue(
+public operator fun <H : UserDataHolder, K : NotNullLazyKey<T, H>, T> AutoCleanKey<K, T>.getValue(
     thisRef: H,
     property: KProperty<*>,
 ): T {
     return property.run { thisRef.getUserData(key) ?: key.getValue(thisRef) }
 }
 
-public fun <K : Key<T>, T> K.toDisposableKey(disposable: Disposable): DisposableKey<K, T> {
-    return DisposableKey(disposable, this)
+public fun <K : Key<T>, T> K.toAutoCleanKey(disposable: Disposable): AutoCleanKey<K, T> {
+    return AutoCleanKey(disposable, this)
 }
 
-public fun <K : Key<T>, T> K.toDisposableKey(scope: CoroutineScope): DisposableKey<K, T> {
-    return DisposableKey(scope, this)
+public fun <K : Key<T>, T> K.toAutoCleanKey(scope: CoroutineScope): AutoCleanKey<K, T> {
+    return AutoCleanKey(scope, this)
 }

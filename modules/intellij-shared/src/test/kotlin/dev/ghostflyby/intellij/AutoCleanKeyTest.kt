@@ -31,13 +31,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-class DisposableKeyTest {
+class AutoCleanKeyTest {
 
     @Test
     fun removesUserDataOnDispose() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.with.clean.test")
-        val cleaner = DisposableKey(disposable, key)
+        val cleaner = AutoCleanKey(disposable, key)
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -56,7 +56,7 @@ class DisposableKeyTest {
     fun removesUserDataFromAllHoldersOnDispose() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.with.clean.multiple")
-        val cleaner = DisposableKey(disposable, key)
+        val cleaner = AutoCleanKey(disposable, key)
 
         val holderA = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -78,7 +78,7 @@ class DisposableKeyTest {
     fun returnsDefaultValueWhenUnset() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = KeyWithDefaultValue.create("key.with.clean.default", "fallback")
-        val cleaner = DisposableKey(disposable, key)
+        val cleaner = AutoCleanKey(disposable, key)
 
         val holder = object : UserDataHolderBase() {
             val value: String by cleaner
@@ -93,7 +93,7 @@ class DisposableKeyTest {
     fun returnsStoredValueWhenPresent() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = KeyWithDefaultValue.create("key.with.clean.stored", "fallback")
-        val cleaner = DisposableKey(disposable, key)
+        val cleaner = AutoCleanKey(disposable, key)
 
         val holder = object : UserDataHolderBase() {
             var value: String by cleaner
@@ -111,7 +111,7 @@ class DisposableKeyTest {
         val job = Job()
         val scope = CoroutineScope(job)
         val key = Key.create<String>("key.with.clean.scope")
-        val cleaner = DisposableKey(scope, key)
+        val cleaner = AutoCleanKey(scope, key)
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -133,7 +133,7 @@ class DisposableKeyTest {
         val key = NotNullLazyKey.createLazyKey<String, UserDataHolderBase>("key.with.clean.lazy") {
             "computed"
         }
-        val cleaner = DisposableKey(disposable, key)
+        val cleaner = AutoCleanKey(disposable, key)
 
         val holder = object : UserDataHolderBase() {
             val value: String by cleaner
@@ -148,7 +148,7 @@ class DisposableKeyTest {
     fun toDisposableKeyWithDisposableCleansOnDispose() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.toDisposableKey.disposable")
-        val cleaner = key.toDisposableKey(disposable)
+        val cleaner = key.toAutoCleanKey(disposable)
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -167,7 +167,7 @@ class DisposableKeyTest {
         val job = Job()
         val scope = CoroutineScope(job)
         val key = Key.create<String>("key.toDisposableKey.scope")
-        val cleaner = key.toDisposableKey(scope)
+        val cleaner = key.toAutoCleanKey(scope)
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -188,7 +188,7 @@ class DisposableKeyTest {
     fun toDisposableKeyExposesOriginalKey() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.toDisposableKey.property")
-        val cleaner = key.toDisposableKey(disposable)
+        val cleaner = key.toAutoCleanKey(disposable)
 
         assertEquals(key, cleaner.key)
 
