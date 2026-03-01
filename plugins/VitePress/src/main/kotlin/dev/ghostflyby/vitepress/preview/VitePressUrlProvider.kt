@@ -26,8 +26,8 @@ import com.intellij.ide.browsers.OpenInBrowserRequest
 import com.intellij.ide.browsers.WebBrowserUrlProvider
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileTypes.FileTypeManager
-import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.util.Url
 import com.intellij.util.Urls
 import dev.ghostflyby.vitepress.VitePressFiletype
@@ -40,15 +40,18 @@ internal class VitePressUrlProvider : WebBrowserUrlProvider() {
         val file = request.virtualFile ?: return false
         if (!file.isVitePressFileType()) return false
         val root = findNearestVitePressRoot(file) ?: return false
-        return project.service<VitePressPreviewUrlStore>().get(root) != null
+        val rootPath = root.toNioPathOrNull() ?: return false
+        return project.service<VitePressPreviewUrlStore>().get(rootPath) != null
     }
 
     override fun getUrl(request: OpenInBrowserRequest, file: VirtualFile): Url? {
         val project = request.project
         if (!file.isVitePressFileType()) return null
         val root = findNearestVitePressRoot(file) ?: return null
-        val baseUrl = project.service<VitePressPreviewUrlStore>().get(root) ?: return null
-        val pagePath = buildPreviewRelativePath(root.path, file)
+        val rootPath = root.toNioPathOrNull() ?: return null
+        val targetPath = file.toNioPathOrNull() ?: return null
+        val baseUrl = project.service<VitePressPreviewUrlStore>().get(rootPath) ?: return null
+        val pagePath = buildPreviewRelativePath(rootPath, targetPath)
         val resolved = runCatching {
             baseUrl.resolve(pagePath).toASCIIString()
         }.getOrNull() ?: return null
@@ -60,11 +63,9 @@ private fun VirtualFile.isVitePressFileType(): Boolean {
     return FileTypeManager.getInstance().isFileOfType(this, VitePressFiletype)
 }
 
-private fun buildPreviewRelativePath(rootPath: String, file: VirtualFile): String {
-    val root = Path.of(FileUtil.toSystemDependentName(rootPath))
-    val target = Path.of(FileUtil.toSystemDependentName(file.path))
-    val relativePath = runCatching { root.relativize(target).toString() }.getOrNull() ?: return ""
-    val normalized = FileUtil.toSystemIndependentName(relativePath)
+private fun buildPreviewRelativePath(rootPath: Path, targetPath: Path): String {
+    val relativePath = rootPath.relativize(targetPath)
+    val normalized = relativePath.normalize().toString()
     if (!normalized.endsWith(MARKDOWN_SUFFIX, ignoreCase = true)) return normalized
     val withoutExtension = normalized.substring(0, normalized.length - MARKDOWN_SUFFIX.length)
     if (withoutExtension == INDEX_PAGE_NAME) return ""

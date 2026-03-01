@@ -27,16 +27,18 @@ import com.intellij.execution.process.*
 import com.intellij.execution.runners.ExecutionEnvironment
 import com.intellij.lang.javascript.buildTools.npm.rc.NpmCommand
 import com.intellij.lang.javascript.buildTools.npm.rc.NpmRunConfiguration
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.io.URLUtil
 import dev.ghostflyby.vitepress.PluginDisposable
 import kotlinx.datetime.Clock
 import java.net.URI
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.Path
 import kotlin.time.Duration.Companion.seconds
 
 internal class PreviewNpmListener : ExecutionListener {
@@ -44,10 +46,11 @@ internal class PreviewNpmListener : ExecutionListener {
         val profile = env.runProfile as? NpmRunConfiguration ?: return
         val runSettings = profile.runSettings
         if (runSettings.command != NpmCommand.RUN_SCRIPT) return
+        val packageJsonPath = runCatching { Path(runSettings.packageJsonSystemIndependentPath) }.getOrNull() ?: return
         val previewRoots =
             env.project
                 .service<VitePressPackageJsonScriptIndex>()
-                .findPreviewRoots(runSettings.packageJsonSystemIndependentPath, runSettings.scriptNames)
+                .findPreviewRoots(packageJsonPath, runSettings.scriptNames)
         if (previewRoots.isEmpty()) return
 
         val store = env.project.service<VitePressPreviewUrlStore>()
@@ -92,25 +95,28 @@ internal class PreviewNpmListener : ExecutionListener {
 }
 
 @Service(Service.Level.PROJECT)
-internal class VitePressPreviewUrlStore {
+internal class VitePressPreviewUrlStore : Disposable {
     private data class StoredPreview(val baseUrl: URI, val ownerId: Int)
 
-    private val rootDirectoryToBaseUrl = ConcurrentHashMap<VirtualFile, StoredPreview>()
+    private val rootDirectoryToBaseUrl = ConcurrentHashMap<Path, StoredPreview>()
 
-    internal fun put(root: VirtualFile, baseUrl: URI, ownerId: Int) {
-        if (!root.isValid) return
-        rootDirectoryToBaseUrl[root] = StoredPreview(baseUrl, ownerId)
+    internal fun put(root: Path, baseUrl: URI, ownerId: Int) {
+        rootDirectoryToBaseUrl[root.normalize()] = StoredPreview(baseUrl, ownerId)
     }
 
-    internal fun get(root: VirtualFile): URI? {
-        if (!root.isValid) return null
-        return rootDirectoryToBaseUrl[root]?.baseUrl
+    internal fun get(root: Path): URI? {
+        return rootDirectoryToBaseUrl[root.normalize()]?.baseUrl
     }
 
-    internal fun removeOwnedBy(root: VirtualFile, ownerId: Int) {
-        rootDirectoryToBaseUrl.computeIfPresent(root) { _, stored ->
+    internal fun removeOwnedBy(root: Path, ownerId: Int) {
+        val normalizedRoot = root.normalize()
+        rootDirectoryToBaseUrl.computeIfPresent(normalizedRoot) { _, stored ->
             if (stored.ownerId == ownerId) null else stored
         }
+    }
+
+    override fun dispose() {
+        rootDirectoryToBaseUrl.clear()
     }
 }
 

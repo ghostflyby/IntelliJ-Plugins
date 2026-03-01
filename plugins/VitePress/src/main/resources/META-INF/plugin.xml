@@ -33,8 +33,6 @@
     <projectListeners>
         <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"
                   topic="com.intellij.execution.ExecutionListener"/>
-        <listener class="dev.ghostflyby.vitepress.preview.VitePressPackageJsonScriptIndexListener"
-                  topic="com.intellij.javascript.nodejs.packageJson.PackageJsonFileManager$CHANGES_TOPIC"/>
     </projectListeners>
 
 </idea-plugin>

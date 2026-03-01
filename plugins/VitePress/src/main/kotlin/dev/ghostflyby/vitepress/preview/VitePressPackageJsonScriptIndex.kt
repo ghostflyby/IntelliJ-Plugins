@@ -22,234 +22,116 @@
 
 package dev.ghostflyby.vitepress.preview
 
-import com.intellij.javascript.nodejs.packageJson.PackageJsonFileManager
-import com.intellij.json.psi.JsonFile
-import com.intellij.json.psi.JsonObject
-import com.intellij.json.psi.JsonStringLiteral
-import com.intellij.openapi.application.readAction
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.openapi.vfs.findPsiFile
-import dev.ghostflyby.vitepress.isUnderVitePressRoot
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
-import java.nio.file.InvalidPathException
+import com.intellij.openapi.vfs.readText
+import com.intellij.openapi.vfs.toNioPathOrNull
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
+import java.util.*
 
 @Service(Service.Level.PROJECT)
-internal class VitePressPackageJsonScriptIndex(
-    private val project: Project,
-    scope: CoroutineScope,
-) {
-    private sealed class UpdateRequest {
-        data object RefreshAll : UpdateRequest()
-        data class Reindex(val packageJsonPath: String) : UpdateRequest()
-        data class Remove(val packageJsonPath: String) : UpdateRequest()
-    }
-
-    private data class ScriptRecord(
-        val scriptName: String,
-        val command: String,
-        val roots: Set<VirtualFile>,
-    )
-
-    private data class PackageJsonRecord(
-        val scripts: Map<String, ScriptRecord>,
-    )
-
-    private val packageJsonPathToRecord = ConcurrentHashMap<String, PackageJsonRecord>()
+internal class VitePressPackageJsonScriptIndex(private val project: Project) : Disposable {
     private val virtualFileManager = service<VirtualFileManager>()
-    private val updateRequests =
-        MutableSharedFlow<UpdateRequest>(
-            extraBufferCapacity = 256,
-            onBufferOverflow = BufferOverflow.DROP_OLDEST,
-        )
+    private val json = Json { ignoreUnknownKeys = true }
+    private val cachedFiles = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<VirtualFile, Boolean>()),
+    )
 
-    init {
-        scope.launch {
-            updateRequests.collect { request ->
-                when (request) {
-                    is UpdateRequest.RefreshAll -> processFullRefresh()
-                    is UpdateRequest.Reindex -> processReindex(request.packageJsonPath)
-                    is UpdateRequest.Remove -> packageJsonPathToRecord.remove(request.packageJsonPath)
-                }
-            }
+    override fun dispose() {
+        val snapshot = synchronized(cachedFiles) { cachedFiles.toList() }
+        snapshot.forEach { file ->
+            file.putUserData(SCRIPTS_CACHE_KEY, null)
         }
-
+        synchronized(cachedFiles) { cachedFiles.clear() }
     }
 
+    internal fun findPreviewRoots(packageJsonPath: Path, scriptNames: List<String>): Set<Path> {
 
-    internal fun refreshAll() {
-        enqueue(UpdateRequest.RefreshAll)
-    }
-
-    internal fun findPreviewRoots(packageJsonPath: String, scriptNames: List<String>): Set<VirtualFile> {
         if (scriptNames.isEmpty()) return emptySet()
-        ensureIndexed(packageJsonPath)
-        val record = packageJsonPathToRecord[packageJsonPath] ?: return emptySet()
-        return scriptNames.asSequence()
-            .mapNotNull { scriptName -> record.scripts[scriptName] }
-            .flatMap { scriptRecord -> scriptRecord.roots.asSequence() }
-            .filter { root -> root.isValid }
-            .toCollection(linkedSetOf())
+        val normalizedPath = packageJsonPath.normalize()
+        val packageJsonFile = findFileByPath(normalizedPath) ?: return emptySet()
+        val scriptCommands = parseScriptsFromFile(packageJsonFile)
+        if (scriptCommands.isEmpty()) return emptySet()
+        val packageJsonDirectory = packageJsonFile.parent ?: return emptySet()
+
+        val roots = linkedSetOf<Path>()
+        scriptNames.forEach { scriptName ->
+            val command = scriptCommands[scriptName] ?: return@forEach
+            extractVitePressRootPaths(command, packageJsonDirectory)
+                .asSequence()
+                .mapNotNull { path -> resolvePathToVitePressRoot(path) }
+                .forEach { root -> roots.add(root) }
+        }
+        return roots
     }
 
-    internal fun onPackageJsonChanged(event: PackageJsonFileManager.PackageJsonChangeEvent) {
-        val packageJsonFile = event.file
-        when (event.type) {
-            PackageJsonFileManager.PackageJsonEventType.CREATED,
-            PackageJsonFileManager.PackageJsonEventType.DOCUMENT_CONTENT_CHANGED,
-            PackageJsonFileManager.PackageJsonEventType.VIRTUAL_FILE_CONTENT_CHANGED,
-                -> {
-                enqueue(UpdateRequest.Reindex(packageJsonFile.path))
-            }
-
-            PackageJsonFileManager.PackageJsonEventType.DELETED -> {
-                enqueue(UpdateRequest.Remove(packageJsonFile.path))
-            }
-        }
-    }
-
-    private fun ensureIndexed(packageJsonPath: String) {
-        if (packageJsonPathToRecord.containsKey(packageJsonPath)) return
-        enqueue(UpdateRequest.Reindex(packageJsonPath))
-    }
-
-    private fun enqueue(request: UpdateRequest) {
-        updateRequests.tryEmit(request)
-    }
-
-    private suspend fun processFullRefresh() {
-        val packageJsonFiles = readAction {
-            PackageJsonFileManager.getInstance(project).validPackageJsonFiles.toList()
-        }
-        val validPaths = packageJsonFiles.mapTo(hashSetOf()) { it.path }
-        packageJsonPathToRecord.keys.retainAll(validPaths)
-        packageJsonFiles.forEach { packageJsonFile ->
-            indexPackageJson(packageJsonFile)
-        }
-    }
-
-    private suspend fun processReindex(packageJsonPath: String) {
-        val packageJsonFile = findFileByPath(packageJsonPath) ?: run {
-            packageJsonPathToRecord.remove(packageJsonPath)
-            return
-        }
-        indexPackageJson(packageJsonFile)
-    }
-
-    private suspend fun indexPackageJson(packageJsonFile: VirtualFile) {
-        if (!packageJsonFile.isValid) {
-            packageJsonPathToRecord.remove(packageJsonFile.path)
-            return
-        }
-        val scriptCommands = parseScriptsWithPsi(project, packageJsonFile)
-        if (scriptCommands.isEmpty()) {
-            packageJsonPathToRecord.remove(packageJsonFile.path)
-            return
-        }
-
-        val packageJsonDirectory = packageJsonFile.parent ?: run {
-            packageJsonPathToRecord.remove(packageJsonFile.path)
-            return
-        }
-
-        val scriptRecords = buildMap {
-            scriptCommands.forEach { (scriptName, command) ->
-                val roots =
-                    extractVitePressRootPaths(command, packageJsonDirectory)
-                        .asSequence()
-                        .mapNotNull { path -> resolvePathToVitePressRoot(path) }
-                        .toCollection(linkedSetOf())
-                if (roots.isEmpty()) return@forEach
-                put(
-                    scriptName,
-                    ScriptRecord(
-                        scriptName = scriptName,
-                        command = command,
-                        roots = roots,
-                    ),
-                )
-            }
-        }
-
-        if (scriptRecords.isEmpty()) {
-            packageJsonPathToRecord.remove(packageJsonFile.path)
-            return
-        }
-        packageJsonPathToRecord[packageJsonFile.path] = PackageJsonRecord(scriptRecords)
-    }
-
-    private fun findFileByPath(path: String): VirtualFile? {
+    private fun findFileByPath(path: Path): VirtualFile? {
         return runCatching {
-            virtualFileManager.findFileByNioPath(Path.of(FileUtil.toSystemDependentName(path)))
+            virtualFileManager.findFileByNioPath(path)
         }.getOrNull()
     }
 
-    private fun resolvePathToVitePressRoot(path: String): VirtualFile? {
+    private fun resolvePathToVitePressRoot(path: Path): Path? {
+
         val root = runCatching {
-            virtualFileManager.findFileByNioPath(Path.of(FileUtil.toSystemDependentName(path)))
+            virtualFileManager.findFileByNioPath(path)
         }.getOrNull() ?: return null
-        return normalizeToVitePressRoot(root)
+        val normalizedRoot = normalizeToVitePressRoot(root) ?: return null
+        return normalizedRoot.toNioPathOrNull()
+    }
+
+    private fun parseScriptsFromFile(file: VirtualFile): Map<String, String> {
+        if (!file.isValid) return emptyMap()
+        val stamp = file.modificationStamp
+        val cached = file.getUserData(SCRIPTS_CACHE_KEY)
+        if (cached != null && cached.stamp == stamp) return cached.scripts
+
+        val scripts = readScriptsFromFile(file)
+        file.putUserData(SCRIPTS_CACHE_KEY, PackageJsonScriptsCache(stamp, scripts))
+        cachedFiles.add(file)
+        return scripts
+    }
+
+    private fun readScriptsFromFile(file: VirtualFile): Map<String, String> {
+        val text = file.readText()
+        val payload = runCatching {
+            json.decodeFromString<PackageJsonScriptsPayload>(text)
+        }.getOrNull() ?: return emptyMap()
+        return payload.scripts
     }
 }
 
-internal class VitePressPackageJsonScriptIndexListener(private val project: Project) :
-    PackageJsonFileManager.PackageJsonChangesListener {
-    override fun onChange(events: List<PackageJsonFileManager.PackageJsonChangeEvent>) {
-        val index = project.service<VitePressPackageJsonScriptIndex>()
-        events.forEach {
-            index.onPackageJsonChanged(it)
-        }
-        index.refreshAll()
-    }
-}
 
-private suspend fun parseScriptsWithPsi(project: Project, file: VirtualFile): Map<String, String> {
-    return readAction {
-        val psiFile = file.findPsiFile(project) as? JsonFile ?: return@readAction emptyMap()
-        val rootObject = psiFile.topLevelValue as? JsonObject ?: return@readAction emptyMap()
-        val scriptsObject =
-            rootObject.findProperty("scripts")?.value as? JsonObject ?: return@readAction emptyMap()
-        buildMap {
-            scriptsObject.propertyList.forEach { property ->
-                val command = (property.value as? JsonStringLiteral)?.value ?: return@forEach
-                put(property.name, command)
-            }
-        }
-    }
-}
+@Serializable
+private data class PackageJsonScriptsPayload(
+    val scripts: Map<String, String> = emptyMap(),
+)
 
-private fun extractVitePressRootPaths(command: String, packageJsonDirectory: VirtualFile): Set<String> {
-    val packageJsonDirectoryPath = safePathOf(packageJsonDirectory.path) ?: return emptySet()
-    val resolvedRoots = linkedSetOf<String>()
-    var currentWorkingDirectory = packageJsonDirectoryPath
+private data class PackageJsonScriptsCache(
+    val stamp: Long,
+    val scripts: Map<String, String>,
+)
+
+private fun extractVitePressRootPaths(command: String, packageJsonDirectory: VirtualFile): Set<Path> {
+    val packageJsonDirectoryPath = packageJsonDirectory.toNioPathOrNull() ?: return emptySet()
+    val resolvedRoots = linkedSetOf<Path>()
 
     splitCommandSegments(command).forEach { segment ->
         val tokens = tokenizeCommandSegment(segment)
         if (tokens.isEmpty()) return@forEach
 
-        if (tokens.first().equals("cd", ignoreCase = true) && tokens.size >= 2) {
-            resolvePathFromWorkingDirectory(currentWorkingDirectory, tokens[1])?.let { resolved ->
-                currentWorkingDirectory = resolved
-            }
-            return@forEach
-        }
-
         val invocation = parseVitePressInvocation(tokens) ?: return@forEach
-        val rootPath =
-            invocation.rootDirectoryArg?.let { arg ->
-                resolvePathFromWorkingDirectory(currentWorkingDirectory, arg)
-            } ?: currentWorkingDirectory
-
-        resolvedRoots += FileUtil.toSystemIndependentName(rootPath.normalize().toString())
+        val rootPath = invocation.rootDirectoryArg?.let { arg ->
+            resolvePathAgainstBase(packageJsonDirectoryPath, arg)
+        } ?: packageJsonDirectoryPath
+        resolvedRoots.add(rootPath.normalize())
     }
     return resolvedRoots
 }
@@ -282,17 +164,9 @@ private fun isVitePressExecutableToken(token: String): Boolean {
     return binaryName.equals("vitepress", ignoreCase = true)
 }
 
-private fun resolvePathFromWorkingDirectory(workingDirectory: Path, pathText: String): Path? {
-    val path = safePathOf(pathText) ?: return null
-    return if (path.isAbsolute) path.normalize() else workingDirectory.resolve(path).normalize()
-}
-
-private fun safePathOf(pathText: String): Path? {
-    return try {
-        Path.of(FileUtil.toSystemDependentName(pathText))
-    } catch (_: InvalidPathException) {
-        null
-    }
+private fun resolvePathAgainstBase(basePath: Path, pathText: String): Path? {
+    val path = runCatching { Path.of(pathText) }.getOrNull() ?: return null
+    return if (path.isAbsolute) path.normalize() else basePath.resolve(path).normalize()
 }
 
 private fun splitCommandSegments(command: String): List<String> {
@@ -352,6 +226,7 @@ private fun splitCommandSegments(command: String): List<String> {
                 current.append(ch)
                 index++
             }
+
             else -> {
                 current.append(ch)
                 index++
@@ -406,7 +281,6 @@ private fun tokenizeCommandSegment(segment: String): List<String> {
 }
 
 private fun normalizeToVitePressRoot(file: VirtualFile): VirtualFile? {
-    file.isUnderVitePressRoot()
     if (!file.isValid) return null
     if (file.isDirectory) {
         if (file.findChild(VITEPRESS_CONFIG_DIRECTORY)?.isDirectory == true) return file
@@ -423,3 +297,4 @@ private fun normalizeToVitePressRoot(file: VirtualFile): VirtualFile? {
 
 private val VITEPRESS_COMMANDS = setOf("dev", "preview")
 private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
+private val SCRIPTS_CACHE_KEY = Key.create<PackageJsonScriptsCache>("vitepress.packageJsonScriptsCache")
