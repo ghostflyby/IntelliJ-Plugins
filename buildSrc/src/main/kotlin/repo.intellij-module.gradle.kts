@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -66,7 +66,7 @@ repositories {
 
 afterEvaluate {
     dependencies.intellijPlatform {
-        val relative = buildLogic.platformType.map { "build/intellij/${it.code}" }
+        val relative = buildLogic.platformType.map { ".idea/intellij/${it.code}" }
         val localPlatform = rootProject.file(relative.get())
         if (localPlatform.exists()) {
             local(localPlatform.readText())
