@@ -36,3 +36,14 @@ file("plugins").listFiles()?.filter { it.isDirectory }?.forEach { pluginDir ->
     else emptyList()
     include(sub)
 }
+
+// Shared modules under `modules/`
+file("modules").listFiles()?.filter { it.isDirectory }?.forEach { moduleDir ->
+    include(":modules:${moduleDir.name}")
+    val projects = moduleDir.resolve("projects.txt")
+    val sub = if (projects.exists()) projects.readLines().map {
+        ":modules:${moduleDir.name}:$it"
+    }
+    else emptyList()
+    include(sub)
+}
