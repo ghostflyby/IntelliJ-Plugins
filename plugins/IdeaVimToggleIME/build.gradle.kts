@@ -24,8 +24,8 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "1.0.1"
+version = "1.0.2"
 
 dependencies.intellijPlatform {
-    plugin("IdeaVIM:2.27.2")
+    plugin("IdeaVIM:2.30.0")
 }

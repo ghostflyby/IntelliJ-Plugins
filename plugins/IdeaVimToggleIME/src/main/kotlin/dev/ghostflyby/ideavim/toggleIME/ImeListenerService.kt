@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -22,14 +22,21 @@
 
 package dev.ghostflyby.ideavim.toggleIME
 
-import com.intellij.openapi.components.service
-import com.maddyhome.idea.vim.extension.VimExtension
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.Service
 
+@Service
+internal class ImeListenerService : Disposable {
+    private val adapter = IdeaVimListenerAdapter()
+    private var registration: ListenerRegistration? = null
 
-internal class DisableImeInNormal : VimExtension {
-    override fun getName() = "autotoggleime"
+    fun ensureRegistered() {
+        if (registration != null) return
+        registration = adapter.register(ImeVimModeListener, ImeEditorListener)
+    }
 
-    override fun init() {
-        service<ImeListenerService>().ensureRegistered()
+    override fun dispose() {
+        registration?.dispose()
+        registration = null
     }
 }

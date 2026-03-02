@@ -46,6 +46,8 @@
 
 1. MUST use MCP tools if available for the task, as they provide better performance,
    reliability, and agent-friendly semantics than direct PSI/VFS access.
+2. for API lookup, prioritize MCP flow: search to get VFS URL, use VFS tools for content,
+   and use navigation/symbol tools for documentation whenever possible.
 
 ## PSI/VFS Read-Write Safety
 
