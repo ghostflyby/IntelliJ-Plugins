@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.spotless.gradle
 
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -38,6 +39,7 @@ import kotlin.io.path.Path
 import kotlin.io.path.div
 
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
+    private val logger = logger<SpotlessGradleExtension>()
 
     override fun isApplicableTo(
         project: Project,
@@ -80,6 +82,21 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         return rootDirs
             .filter { abs.startsWith(it) }
             .minByOrNull { it.nameCount }
+    }
+
+    override suspend fun afterDaemonStopped(
+        daemon: SpotlessDaemonHost,
+        reason: String,
+    ) {
+        if (daemon !is SpotlessDaemonHost.Unix) return
+        runCatching {
+            val deleted = daemon.workingDirectory.toFile().deleteRecursively()
+            if (!deleted && Files.exists(daemon.workingDirectory)) {
+                logger.warn("Failed to delete daemon temp directory after stop ($reason): ${daemon.workingDirectory}")
+            }
+        }.onFailure { error ->
+            logger.warn("Failed to cleanup daemon temp directory after stop ($reason): ${daemon.workingDirectory}", error)
+        }
     }
 
 }

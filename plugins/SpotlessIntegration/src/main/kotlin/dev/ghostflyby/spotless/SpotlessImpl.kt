@@ -35,7 +35,6 @@ import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import kotlinx.coroutines.*
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
@@ -59,8 +58,6 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     private val logger = logger<SpotlessImpl>()
 
     internal val http = HttpClient(CIO)
-
-    private val cleanupScope = scope + Dispatchers.IO
 
     private val hosts = ConcurrentHashMap<String, DaemonEntry>()
 
@@ -90,7 +87,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
 
     override fun releaseDaemon(host: SpotlessDaemonHost) {
         val entries = hosts.entries
-            .filter { it.value.host == host }
+            .filter { it.value.host === host }
         entries.forEach { (key, entry) ->
             hosts.remove(key, entry)
         }
@@ -103,12 +100,6 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     }
 
     private fun scheduleStop(entry: DaemonEntry, reason: String) {
-        if (cleanupScope.isActive) {
-            cleanupScope.launch {
-                stopDaemonEntry(entry, reason)
-            }
-            return
-        }
         runBlocking(NonCancellable + Dispatchers.IO) {
             stopDaemonEntry(entry, reason)
         }
@@ -194,33 +185,15 @@ private suspend fun HttpClient.healthCheck(
 internal suspend fun HttpClient.stopDaemon(
     spotlessHost: SpotlessDaemonHost,
 ) {
-    var stopFailure: Throwable? = null
-    runCatching {
-        post("/stop") {
-            when (spotlessHost) {
-                is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
-                is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
-            }
-            url {
-                protocol = URLProtocol.HTTP
-            }
+    post("/stop") {
+        when (spotlessHost) {
+            is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
+            is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
         }
-    }.onFailure { error ->
-        stopFailure = error
-    }
-    var cleanupFailure: Throwable? = null
-    if (spotlessHost is SpotlessDaemonHost.Unix) {
-        runCatching {
-            val deleted = spotlessHost.workingDirectory.toFile().deleteRecursively()
-            if (!deleted && Files.exists(spotlessHost.workingDirectory)) {
-                error("Failed to delete daemon temp directory: ${spotlessHost.workingDirectory}")
-            }
-        }.onFailure { error ->
-            cleanupFailure = error
+        url {
+            protocol = URLProtocol.HTTP
         }
     }
-    cleanupFailure?.let { throw it }
-    stopFailure?.let { throw it }
 }
 
 
