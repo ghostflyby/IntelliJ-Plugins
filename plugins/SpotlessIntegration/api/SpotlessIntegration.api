@@ -82,3 +82,4 @@ public final class dev/ghostflyby/spotless/SpotlessFormatResult$Error : dev/ghos
 public final class dev/ghostflyby/spotless/SpotlessFormatResult$NotCovered : dev/ghostflyby/spotless/SpotlessFormatResult {
 	public static final field INSTANCE Ldev/ghostflyby/spotless/SpotlessFormatResult$NotCovered;
 }
+
