@@ -78,6 +78,9 @@ dependencies {
     }
 
 }
+configurations.all {
+    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
+}
 
 kover { reports { total { xml { onCheck = true } } } }
 

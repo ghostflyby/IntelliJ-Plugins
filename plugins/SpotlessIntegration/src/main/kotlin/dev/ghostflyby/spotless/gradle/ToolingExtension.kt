@@ -152,13 +152,17 @@ internal class SpotlessGradleStateHolder
     var gradleDaemonVersion: @NlsSafe String
         get() = state.gradleDaemonVersion
         set(value) {
-            state = state.copy(gradleDaemonVersion = value)
+            updateState {
+                it.copy(gradleDaemonVersion = value)
+            }
         }
 
     var gradleDaemonJar: @NlsSafe String
         get() = state.gradleDaemonJar
         set(value) {
-            state = state.copy(gradleDaemonJar = value)
+            updateState {
+                it.copy(gradleDaemonJar = value)
+            }
         }
 
     internal data class State(
