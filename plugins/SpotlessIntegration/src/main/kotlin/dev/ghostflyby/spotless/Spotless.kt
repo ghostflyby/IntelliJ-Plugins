@@ -24,11 +24,9 @@ package dev.ghostflyby.spotless
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.extensions.ExtensionPointListener
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointName
-import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
@@ -37,10 +35,8 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.*
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolutePathString
@@ -52,49 +48,102 @@ internal const val spotlessNotificationGroupId = "Spotless Notifications"
 
 @Service(Service.Level.APP)
 public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
+    private data class DaemonEntry(
+        val provider: SpotlessDaemonProvider,
+        val host: SpotlessDaemonHost,
+    )
+
     public companion object {
         @JvmField
         public val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
             ExtensionPointName.create("dev.ghostflyby.spotless.spotlessDaemonProvider")
     }
 
-    init {
-        EP_NAME.forEachExtensionSafe(::addDisposable)
-        EP_NAME.addExtensionPointListener(
-            scope,
-            object : ExtensionPointListener<SpotlessDaemonProvider> {
-                override fun extensionAdded(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
-                    addDisposable(extension)
-                }
-
-                override fun extensionRemoved(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
-                    Disposer.dispose(extension)
-                }
-            },
-        )
-    }
-
-    private fun addDisposable(disposable: Disposable): Unit = Disposer.register(this, disposable)
-
+    private val logger = logger<Spotless>()
 
     internal val http = HttpClient(CIO)
 
-    private val hosts = ConcurrentHashMap<String, SpotlessDaemonHost>()
+    private val cleanupScope = scope + Dispatchers.IO
+
+    private val hosts = ConcurrentHashMap<String, DaemonEntry>()
 
     private suspend fun SpotlessDaemonProvider.getDaemon(
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
         val pathString = externalProject.normalize().absolutePathString()
-        return hosts.getOrPut(pathString) {
-            val host = startDaemon(project, externalProject)
-            Disposer.register(this) {
-                hosts.remove(pathString)?.let { Disposer.dispose(it) }
+        val current = hosts[pathString]
+        if (current != null) {
+            if (current.provider === this) {
+                return current.host
             }
-            Disposer.register(host) {
-                hosts.remove(pathString)
+            if (hosts.remove(pathString, current)) {
+                scheduleStop(current, "provider switched")
             }
-            host
+        }
+        val host = startDaemon(project, externalProject)
+        val newEntry = DaemonEntry(this, host)
+        val raceEntry = hosts.putIfAbsent(pathString, newEntry)
+        if (raceEntry != null) {
+            scheduleStop(newEntry, "daemon race lost")
+            return raceEntry.host
+        }
+        return host
+    }
+
+    private fun reconcileDaemonRegistry() {
+        val activeProviders = EP_NAME.extensionList.toSet()
+        releaseDaemonsOwnedBy { provider -> provider !in activeProviders }
+    }
+
+    private fun releaseDaemonsOwnedBy(predicate: (SpotlessDaemonProvider) -> Boolean) {
+        val entries = hosts.entries
+            .filter { predicate(it.value.provider) }
+        entries.forEach { (key, entry) ->
+            hosts.remove(key, entry)
+        }
+        entries.forEach {
+            scheduleStop(it.value, "provider unavailable")
+        }
+    }
+
+    internal fun releaseDaemon(host: SpotlessDaemonHost) {
+        val entries = hosts.entries
+            .filter { it.value.host == host }
+        entries.forEach { (key, entry) ->
+            hosts.remove(key, entry)
+        }
+        if (entries.isEmpty()) {
+            return
+        }
+        entries.forEach {
+            scheduleStop(it.value, "external release")
+        }
+    }
+
+    private fun scheduleStop(entry: DaemonEntry, reason: String) {
+        if (cleanupScope.isActive) {
+            cleanupScope.launch {
+                stopDaemonEntry(entry, reason)
+            }
+            return
+        }
+        runBlocking(NonCancellable + Dispatchers.IO) {
+            stopDaemonEntry(entry, reason)
+        }
+    }
+
+    private suspend fun stopDaemonEntry(entry: DaemonEntry, reason: String) {
+        val stopFailure = runCatching {
+            http.stopDaemon(entry.host)
+        }.exceptionOrNull()
+        runCatching {
+            entry.provider.afterDaemonStopped(entry.host, reason)
+        }.onFailure { error ->
+            logger.warn("Provider afterDaemonStopped hook failed ($reason): ${entry.host}", error)
+        }
+        if (stopFailure != null) {
+            logger.warn("Failed to stop daemon ($reason): ${entry.host}", stopFailure)
         }
     }
 
@@ -103,6 +152,7 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         virtualFile: VirtualFile,
         content: CharSequence,
     ): SpotlessFormatResult = scope.async {
+        reconcileDaemonRegistry()
         val filePath = virtualFile.toNioPathOrNull() ?: return@async NotCovered
         val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
         val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
@@ -127,8 +177,18 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
     }
 
     override fun dispose() {
-        http.close()
-        hosts.forEach { (_, host) -> Disposer.dispose(host) }
+        val entries = hosts.values.toList()
+        hosts.clear()
+        runBlocking(NonCancellable + Dispatchers.IO) {
+            entries.forEach { entry ->
+                stopDaemonEntry(entry, "service disposed")
+            }
+            runCatching {
+                http.close()
+            }.onFailure { error ->
+                logger.warn("Failed to close Spotless HTTP client", error)
+            }
+        }
     }
 
 }
@@ -175,6 +235,38 @@ private suspend fun HttpClient.healthCheck(
     }.map { response ->
         response.status == HttpStatusCode.OK
     }.getOrElse { false }
+
+internal suspend fun HttpClient.stopDaemon(
+    spotlessHost: SpotlessDaemonHost,
+) {
+    var stopFailure: Throwable? = null
+    runCatching {
+        post("/stop") {
+            when (spotlessHost) {
+                is SpotlessDaemonHost.Localhost -> host = "localhost:${spotlessHost.port}"
+                is SpotlessDaemonHost.Unix -> unixSocket(spotlessHost.path.toString())
+            }
+            url {
+                protocol = URLProtocol.HTTP
+            }
+        }
+    }.onFailure { error ->
+        stopFailure = error
+    }
+    var cleanupFailure: Throwable? = null
+    if (spotlessHost is SpotlessDaemonHost.Unix) {
+        runCatching {
+            val deleted = spotlessHost.workingDirectory.toFile().deleteRecursively()
+            if (!deleted && Files.exists(spotlessHost.workingDirectory)) {
+                error("Failed to delete daemon temp directory: ${spotlessHost.workingDirectory}")
+            }
+        }.onFailure { error ->
+            cleanupFailure = error
+        }
+    }
+    cleanupFailure?.let { throw it }
+    stopFailure?.let { throw it }
+}
 
 
 private suspend fun HttpClient.format(

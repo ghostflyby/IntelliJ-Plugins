@@ -8,6 +8,11 @@
 
 ### Changed
 
+- redesigned Spotless daemon cleanup lifecycle: removed blocking `Disposable`-based shutdown from daemon/provider APIs,
+  centralized async release in `Spotless` service, and aligned Gradle daemon cleanup with the new lifecycle.
+- switched daemon stop to a fixed core HTTP contract and replaced provider stop customization with an optional post-stop
+  notification hook.
+
 ### Deprecated
 
 ### Removed

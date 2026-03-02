@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -51,11 +51,11 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         project: Project,
         externalProject: Path,
     ): SpotlessDaemonHost {
-        val dir: Path = withContext(Dispatchers.IO) {
+        val workingDirectory: Path = withContext(Dispatchers.IO) {
             Files.createTempDirectory(null)
         }
-        val unixSocketPath = dir / "spotless-daemon.sock"
-        val host = SpotlessDaemonHost.Unix(unixSocketPath)
+        val unixSocketPath = workingDirectory / "spotless-daemon.sock"
+        val host = SpotlessDaemonHost.Unix(unixSocketPath, workingDirectory)
         runGradleSpotlessDaemon(
             project,
             externalProject,
