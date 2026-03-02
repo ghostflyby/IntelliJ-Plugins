@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- update IdeaVIM compatibility to `2.30.0`
+- make IME listener lifecycle unload-safe to keep mode/focus synchronization stable
+
 ## [1.0.1] - 2025-08-25
 
 ### Fixed

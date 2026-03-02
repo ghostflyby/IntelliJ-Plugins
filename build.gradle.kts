@@ -25,6 +25,16 @@ plugins {
 }
 
 allprojects {
+    apply(plugin = "java")
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+            @Suppress("UnstableApiUsage")
+            vendor = JvmVendorSpec.JETBRAINS
+        }
+    }
     repositories { mavenCentral() }
 }
 
