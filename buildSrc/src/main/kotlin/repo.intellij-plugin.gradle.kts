@@ -132,6 +132,10 @@ tasks {
         finalizedBy(upload)
     }
 
+    verifyPlugin {
+        failureLevel = VerifyPluginTask.FailureLevel.ALL
+    }
+
 }
 
 intellijPlatformTesting {
