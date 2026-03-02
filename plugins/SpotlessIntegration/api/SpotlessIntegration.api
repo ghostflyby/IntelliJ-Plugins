@@ -1,16 +1,13 @@
-public final class dev/ghostflyby/spotless/Spotless : com/intellij/openapi/Disposable$Default {
-	public static final field Companion Ldev/ghostflyby/spotless/Spotless$Companion;
-	public static final field EP_NAME Lcom/intellij/openapi/extensions/ExtensionPointName;
-	public fun <init> (Lkotlinx/coroutines/CoroutineScope;)V
-	public final fun canFormat (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun canFormatSync-SxA4cEA (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;J)Z
+public abstract interface class dev/ghostflyby/spotless/Spotless {
+	public abstract fun canFormat (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun canFormatSync-SxA4cEA (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;J)Z
 	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
-	public fun dispose ()V
-	public final fun format (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Ljava/lang/CharSequence;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun releaseDaemon (Ldev/ghostflyby/spotless/SpotlessDaemonHost;)V
+	public abstract fun format (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Ljava/lang/CharSequence;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun releaseDaemon (Ldev/ghostflyby/spotless/SpotlessDaemonHost;)V
 }
 
-public final class dev/ghostflyby/spotless/Spotless$Companion {
+public final class dev/ghostflyby/spotless/Spotless$DefaultImpls {
+	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
 }
 
 public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost {
@@ -83,3 +80,4 @@ public final class dev/ghostflyby/spotless/SpotlessFormatResult$Error : dev/ghos
 public final class dev/ghostflyby/spotless/SpotlessFormatResult$NotCovered : dev/ghostflyby/spotless/SpotlessFormatResult {
 	public static final field INSTANCE Ldev/ghostflyby/spotless/SpotlessFormatResult$NotCovered;
 }
+

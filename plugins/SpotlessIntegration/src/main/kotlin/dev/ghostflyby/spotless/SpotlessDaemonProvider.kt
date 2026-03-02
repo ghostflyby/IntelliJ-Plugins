@@ -69,12 +69,3 @@ public interface SpotlessDaemonProvider {
 }
 
 
-public sealed interface SpotlessDaemonHost {
-    public data class Localhost(val port: Int) : SpotlessDaemonHost
-
-    public data class Unix(
-        val path: Path,
-        val workingDirectory: Path,
-    ) : SpotlessDaemonHost
-
-}

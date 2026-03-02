@@ -22,28 +22,27 @@
 
 package dev.ghostflyby.spotless
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
-
-public interface Spotless {
+public sealed interface SpotlessFormatResult {
     /**
-     * Public cleanup entry for provider implementations to release a started daemon explicitly.
+     * Formatted successfully with the file on disk untouched
+     * @property content The formatted output
      */
-    public fun releaseDaemon(host: SpotlessDaemonHost)
+    public data class Dirty(val content: String) : SpotlessFormatResult
 
-    public suspend fun format(
-        project: Project,
-        virtualFile: VirtualFile,
-        content: CharSequence,
-    ): SpotlessFormatResult
+    /**
+     * Untouched as already formatted
+     */
+    public object Clean : SpotlessFormatResult
 
-    public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean
+    /**
+     * Not covered by Spotless, either no formater for the filetype or path pattern not included
+     */
+    public object NotCovered : SpotlessFormatResult
 
-    public fun canFormatSync(
-        project: Project,
-        virtualFile: VirtualFile,
-        timeout: Duration = 500.milliseconds,
-    ): Boolean
+    /**
+     * Error occurred during formatting, see `message` for details
+     */
+    public data class Error(val message: String) : SpotlessFormatResult
+
+
 }

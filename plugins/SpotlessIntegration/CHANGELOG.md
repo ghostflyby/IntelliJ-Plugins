@@ -6,6 +6,9 @@
 
 ### Added
 
+- exposed Spotless as an explicit application service API via plugin.xml interface + implementation
+  registration.
+
 ### Changed
 
 - redesigned Spotless daemon cleanup lifecycle: removed blocking `Disposable`-based shutdown from daemon/provider APIs,

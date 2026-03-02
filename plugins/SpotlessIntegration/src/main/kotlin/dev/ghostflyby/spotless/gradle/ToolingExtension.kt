@@ -23,6 +23,7 @@
 package dev.ghostflyby.spotless.gradle
 
 import com.intellij.execution.executors.DefaultRunExecutor
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
@@ -84,8 +85,10 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
                     myModel.spotless,
                 ),
             )
-            Disposer.register(service<Spotless>()) {
-                re.clear(true)
+            (service<Spotless>() as? Disposable)?.let {
+                Disposer.register(it) {
+                    re.clear(true)
+                }
             }
         }
         nextResolver.populateModuleExtraModels(gradleModule, ideModule)

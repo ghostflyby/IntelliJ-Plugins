@@ -22,28 +22,14 @@
 
 package dev.ghostflyby.spotless
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
+import java.nio.file.Path
 
-public interface Spotless {
-    /**
-     * Public cleanup entry for provider implementations to release a started daemon explicitly.
-     */
-    public fun releaseDaemon(host: SpotlessDaemonHost)
+public sealed interface SpotlessDaemonHost {
+    public data class Localhost(val port: Int) : SpotlessDaemonHost
 
-    public suspend fun format(
-        project: Project,
-        virtualFile: VirtualFile,
-        content: CharSequence,
-    ): SpotlessFormatResult
+    public data class Unix(
+        val path: Path,
+        val workingDirectory: Path,
+    ) : SpotlessDaemonHost
 
-    public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean
-
-    public fun canFormatSync(
-        project: Project,
-        virtualFile: VirtualFile,
-        timeout: Duration = 500.milliseconds,
-    ): Boolean
 }
