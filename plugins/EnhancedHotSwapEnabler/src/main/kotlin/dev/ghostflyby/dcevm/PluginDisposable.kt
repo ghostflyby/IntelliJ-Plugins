@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -24,6 +24,9 @@ package dev.ghostflyby.dcevm
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 
 @Service
-internal class PluginDisposable : Disposable.Default
+private class D : Disposable.Default
+
+internal val PluginDisposable: Disposable get() = service<D>()

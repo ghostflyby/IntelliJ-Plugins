@@ -29,10 +29,6 @@ plugins {
 
 version = "0.4.0"
 
-buildLogic {
-    pluginVersion = version.toString()
-}
-
 dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.gradle")

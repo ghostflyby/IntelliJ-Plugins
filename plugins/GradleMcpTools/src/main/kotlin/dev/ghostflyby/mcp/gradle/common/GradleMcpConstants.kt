@@ -20,14 +20,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.mcp.gradle.common
 
-version = "1.1.0"
+internal const val DEFAULT_TIMEOUT_MS: Int = 600_000
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
-}
+internal fun activityValue(value: String?): String = value?.takeIf { it.isNotBlank() } ?: "<all>"
