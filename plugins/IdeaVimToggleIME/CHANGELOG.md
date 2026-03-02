@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.0.2] - 2026-03-02
+
 ### Changed
 
 - update IdeaVIM compatibility to `2.30.0`
@@ -21,6 +35,7 @@
 
 - Auto toggle IME for IdeaVim
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.1...HEAD
-[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.0...v1.0.1
-[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.0
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/IdeaVimToggleIME-v1.0.2...HEAD
+[1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/IdeaVimToggleIME-v1.0.1...IdeaVimToggleIME-v1.0.2
+[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/IdeaVimToggleIME-v1.0.0...IdeaVimToggleIME-v1.0.1
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/IdeaVimToggleIME-v1.0.0
