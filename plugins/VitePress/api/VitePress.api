@@ -1,0 +1,84 @@
+public final class dev/ghostflyby/vitepress/VitePressFiletype : com/intellij/openapi/fileTypes/LanguageFileType, com/intellij/openapi/fileTypes/TemplateLanguageFileType {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressFiletype;
+	public fun getDefaultExtension ()Ljava/lang/String;
+	public fun getDescription ()Ljava/lang/String;
+	public fun getIcon ()Ljavax/swing/Icon;
+	public fun getName ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressLanguage : com/intellij/lang/Language, com/intellij/psi/templateLanguages/TemplateLanguage {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/VitePressLanguage;
+}
+
+public final class dev/ghostflyby/vitepress/VitePressRootTrackerKt {
+	public static final fun isUnderVitePressRoot (Lcom/intellij/openapi/vfs/VirtualFile;)Z
+	public static final fun isVitePressRoot (Lcom/intellij/openapi/vfs/VirtualFile;)Z
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressCustomFenceMarkerBlock : org/intellij/markdown/parser/markerblocks/MarkerBlockImpl {
+	public fun <init> (Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;Lorg/intellij/markdown/parser/ProductionHolder;Lkotlin/jvm/functions/Function1;)V
+	public fun allowsSubBlocks ()Z
+	public fun getDefaultNodeType ()Lorg/intellij/markdown/IElementType;
+	public fun isInterestingOffset (Lorg/intellij/markdown/parser/LookaheadText$Position;)Z
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressCustomFenceProvider : org/intellij/markdown/parser/markerblocks/MarkerBlockProvider {
+	public fun <init> (Lkotlin/jvm/functions/Function1;)V
+	public fun createMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/MarkerProcessor$StateInfo;)Ljava/util/List;
+	public fun interruptsParagraph (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)Z
+}
+
+public class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor : org/intellij/plugins/markdown/lang/parser/MarkdownDefaultFlavour {
+	public static final field Companion Ldev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$Companion;
+	public fun <init> ()V
+	public fun getMarkerProcessorFactory ()Lorg/intellij/markdown/parser/MarkerProcessorFactory;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$Companion : dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor {
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor : org/intellij/plugins/markdown/lang/parser/MarkdownDefaultMarkerProcessor {
+	public fun <init> (Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)V
+	public fun createNewMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;)Ljava/util/List;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor$Factory : org/intellij/markdown/parser/MarkerProcessorFactory {
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressFlavourDescriptor$VitePressMarkerProcessor$Factory;
+	public fun createMarkerProcessor (Lorg/intellij/markdown/parser/ProductionHolder;)Lorg/intellij/markdown/parser/MarkerProcessor;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider : org/intellij/markdown/parser/markerblocks/MarkerBlockProvider {
+	public static final field Companion Ldev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider$Companion;
+	public fun <init> ()V
+	public fun createMarkerBlocks (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/ProductionHolder;Lorg/intellij/markdown/parser/MarkerProcessor$StateInfo;)Ljava/util/List;
+	public fun interruptsParagraph (Lorg/intellij/markdown/parser/LookaheadText$Position;Lorg/intellij/markdown/parser/constraints/MarkdownConstraints;)Z
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressHtmlBlockProvider$Companion {
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressMarkdownElementTypes {
+	public static final field CUSTOM_FENCE Lorg/intellij/markdown/IElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressMarkdownElementTypes;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/VitePressMarkdownTokenTypes {
+	public static final field CUSTOM_FENCE_END Lorg/intellij/markdown/IElementType;
+	public static final field CUSTOM_FENCE_INFO Lorg/intellij/markdown/IElementType;
+	public static final field CUSTOM_FENCE_START Lorg/intellij/markdown/IElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/VitePressMarkdownTokenTypes;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownElementTypes : org/intellij/plugins/markdown/lang/MarkdownElementTypes {
+	public static final field CUSTOM_FENCE Lcom/intellij/psi/tree/IElementType;
+	public static final field FILE_ELEMENT_TYPE Lcom/intellij/psi/tree/IFileElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownElementTypes;
+}
+
+public final class dev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownTokenTypes : org/intellij/plugins/markdown/lang/MarkdownTokenTypes {
+	public static final field CUSTOM_FENCE_END Lcom/intellij/psi/tree/IElementType;
+	public static final field CUSTOM_FENCE_INFO Lcom/intellij/psi/tree/IElementType;
+	public static final field CUSTOM_FENCE_START Lcom/intellij/psi/tree/IElementType;
+	public static final field INSTANCE Ldev/ghostflyby/vitepress/markdown/lang/VitePressMarkdownTokenTypes;
+}
+
