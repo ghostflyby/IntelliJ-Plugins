@@ -14,6 +14,8 @@
 
 ### Fixed
 
+- Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly sequential progress reporting, avoiding read-access assertion crashes in background search.
+
 ### Security
 
 ## [1.0.0] - 2026-02-27
