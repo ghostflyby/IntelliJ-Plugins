@@ -78,10 +78,13 @@ intellijPlatform {
     }
 
     pluginVerification {
-        this.verificationReportsFormats.add(VerifyPluginTask.VerificationReportsFormats.MARKDOWN)
+        this.verificationReportsFormats = listOf(
+            VerifyPluginTask.VerificationReportsFormats.MARKDOWN,
+            VerifyPluginTask.VerificationReportsFormats.PLAIN,
+        )
+        ides.recommended()
     }
 
-    pluginVerification { ides { recommended() } }
 }
 
 changelog {
