@@ -26,6 +26,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Path
 
+/**
+ * Public application service for Spotless daemon lifecycle.
+ * Provider implementations can call [Spotless.releaseDaemon] from their own lifecycle hooks when they want explicit cleanup.
+ */
 public interface SpotlessDaemonProvider {
 
     /**

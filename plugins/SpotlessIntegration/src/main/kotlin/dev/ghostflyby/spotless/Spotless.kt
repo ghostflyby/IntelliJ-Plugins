@@ -91,23 +91,10 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         return host
     }
 
-    private fun reconcileDaemonRegistry() {
-        val activeProviders = EP_NAME.extensionList.toSet()
-        releaseDaemonsOwnedBy { provider -> provider !in activeProviders }
-    }
-
-    private fun releaseDaemonsOwnedBy(predicate: (SpotlessDaemonProvider) -> Boolean) {
-        val entries = hosts.entries
-            .filter { predicate(it.value.provider) }
-        entries.forEach { (key, entry) ->
-            hosts.remove(key, entry)
-        }
-        entries.forEach {
-            scheduleStop(it.value, "provider unavailable")
-        }
-    }
-
-    internal fun releaseDaemon(host: SpotlessDaemonHost) {
+    /**
+     * Public cleanup entry for provider implementations to release a started daemon explicitly.
+     */
+    public fun releaseDaemon(host: SpotlessDaemonHost) {
         val entries = hosts.entries
             .filter { it.value.host == host }
         entries.forEach { (key, entry) ->
@@ -152,7 +139,6 @@ public class Spotless(private val scope: CoroutineScope) : Disposable.Default {
         virtualFile: VirtualFile,
         content: CharSequence,
     ): SpotlessFormatResult = scope.async {
-        reconcileDaemonRegistry()
         val filePath = virtualFile.toNioPathOrNull() ?: return@async NotCovered
         val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
         val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
