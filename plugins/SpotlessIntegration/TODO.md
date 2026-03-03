@@ -7,7 +7,7 @@ Last Updated: 2026-02-27
 
 1. Remove production `runBlocking` usage and migrate to coroutine-native async flows.
 2. Replace unfinished `TODO()` production stubs with implemented behavior or remove dead extension wiring.
-3. Rework daemon lifecycle shutdown to avoid blocking dispose paths.
+3. ✅ Reworked daemon lifecycle shutdown to avoid blocking dispose paths.
 4. Revisit API surface visibility (`public` vs `internal`) and keep ABI updates explicit.
 5. Add integration tests for format/canFormat behavior, daemon startup health checks, and failure handling.
 

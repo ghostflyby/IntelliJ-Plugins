@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2025-2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
@@ -10,13 +10,14 @@
     <depends optional="true" config-file="gradle.xml">com.intellij.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!--        <checkinHandlerFactory implementation="dev.ghostflyby.spotless.SpotlessCommitHandlerFactory"/>-->
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
         <!--        <fileEncodingProvider implementation="dev.ghostflyby.spotless.SpotlessFileEncodingProvider"/>-->
         <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.spotless.workspace"
                              instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
                              key="spotless.configuration.title.workspace"
                              parentId="build"/>
+        <applicationService serviceInterface="dev.ghostflyby.spotless.Spotless"
+                            serviceImplementation="dev.ghostflyby.spotless.SpotlessImpl"/>
     </extensions>
 
     <extensionPoints>
