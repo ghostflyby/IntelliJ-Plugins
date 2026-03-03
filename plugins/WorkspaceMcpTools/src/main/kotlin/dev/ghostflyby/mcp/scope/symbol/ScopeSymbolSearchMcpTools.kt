@@ -33,10 +33,10 @@ import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.progress.coroutineToIndicator
+import com.intellij.openapi.progress.runBlockingCancellable
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
 import com.intellij.openapi.project.Project
@@ -165,7 +165,6 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             )
             val provider = ChooseByNameModelEx.getItemProvider(model, null)
 
-            val rawCandidates = Collections.synchronizedList(mutableListOf<RawCandidate>())
             val observedCandidateCount = AtomicInteger(0)
             val processedCandidateCount = AtomicInteger(0)
             val finished = AtomicBoolean(false)
@@ -202,38 +201,37 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                             Bundle.message("progress.title.scope.symbol.search", query),
                             cancellable = true,
                         ) {
-                            val completed =
+                            val collection =
                                 coroutineToIndicator { indicator ->
-                                    runReadAction {
-                                        if (provider is ChooseByNameInScopeItemProvider) {
-                                            collectRawCandidatesByInScopeProvider(
-                                                provider = provider,
-                                                baseViewModel = baseViewModel,
-                                                parameters = findParameters,
-                                                indicator = indicator,
-                                                maxResultCount = maxResultCount,
-                                                observedCandidateCount = observedCandidateCount,
-                                                out = rawCandidates,
-                                            )
-                                        } else {
-                                            collectRawCandidatesByModelFallback(
-                                                model = model,
-                                                parameters = findParameters,
-                                                indicator = indicator,
-                                                maxResultCount = maxResultCount,
-                                                observedCandidateCount = observedCandidateCount,
-                                                out = rawCandidates,
-                                            )
+                                    runBlockingCancellable {
+                                        readAction {
+                                            if (provider is ChooseByNameInScopeItemProvider) {
+                                                collectRawCandidatesByInScopeProvider(
+                                                    provider = provider,
+                                                    baseViewModel = baseViewModel,
+                                                    parameters = findParameters,
+                                                    indicator = indicator,
+                                                    maxResultCount = maxResultCount,
+                                                )
+                                            } else {
+                                                collectRawCandidatesByModelFallback(
+                                                    model = model,
+                                                    parameters = findParameters,
+                                                    indicator = indicator,
+                                                    maxResultCount = maxResultCount,
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            if (!completed) {
+                            observedCandidateCount.set(collection.observedCount)
+                            if (!collection.completed) {
                                 probablyHasMore.set(true)
                             }
                             converted = convertCandidates(
                                 project = project,
                                 model = model,
-                                candidates = rawCandidates.toList(),
+                                candidates = collection.candidates,
                                 postFilterPolicy = effectiveScope.postFilterPolicy,
                                 requirePhysicalLocation = requirePhysicalLocation,
                                 processedCandidateCount = processedCandidateCount,
@@ -440,26 +438,28 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         parameters: FindSymbolParameters,
         indicator: ProgressIndicator,
         maxResultCount: Int,
-        observedCandidateCount: AtomicInteger,
-        out: MutableList<RawCandidate>,
-    ): Boolean {
+    ): RawCollectionResult {
+        var observedCount = 0
+        val candidates = mutableListOf<RawCandidate>()
         val completedByProvider = provider.filterElementsWithWeights(
             baseViewModel,
             parameters,
             indicator,
             Processor { descriptor: FoundItemDescriptor<*> ->
                 indicator.checkCanceled()
-                observedCandidateCount.incrementAndGet()
-                synchronized(out) {
-                    if (out.size >= maxResultCount) {
-                        return@Processor false
-                    }
-                    out += RawCandidate(item = descriptor.item, score = descriptor.weight)
-                    out.size < maxResultCount
+                observedCount++
+                if (candidates.size >= maxResultCount) {
+                    return@Processor false
                 }
+                candidates += RawCandidate(item = descriptor.item, score = descriptor.weight)
+                candidates.size < maxResultCount
             },
         )
-        return completedByProvider && out.size < maxResultCount
+        return RawCollectionResult(
+            candidates = candidates.toList(),
+            observedCount = observedCount,
+            completed = completedByProvider && candidates.size < maxResultCount,
+        )
     }
 
     private fun collectRawCandidatesByModelFallback(
@@ -467,10 +467,10 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         parameters: FindSymbolParameters,
         indicator: ProgressIndicator,
         maxResultCount: Int,
-        observedCandidateCount: AtomicInteger,
-        out: MutableList<RawCandidate>,
-    ): Boolean {
+    ): RawCollectionResult {
         val names = Collections.synchronizedSet(linkedSetOf<String>())
+        val candidates = mutableListOf<RawCandidate>()
+        var observedCount = 0
         model.processNames(
             Processor { name ->
                 indicator.checkCanceled()
@@ -485,17 +485,23 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             val elements = model.getElementsByName(name, parameters, indicator)
             for (element in elements) {
                 indicator.checkCanceled()
-                observedCandidateCount.incrementAndGet()
-                synchronized(out) {
-                    if (out.size >= maxResultCount) {
-                        return false
-                    }
-                    out += RawCandidate(item = element, score = null)
+                observedCount++
+                if (candidates.size >= maxResultCount) {
+                    return RawCollectionResult(
+                        candidates = candidates.toList(),
+                        observedCount = observedCount,
+                        completed = false,
+                    )
                 }
+                candidates += RawCandidate(item = element, score = null)
             }
         }
 
-        return true
+        return RawCollectionResult(
+            candidates = candidates.toList(),
+            observedCount = observedCount,
+            completed = true,
+        )
     }
 
     private suspend fun convertCandidates(
@@ -807,6 +813,12 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     private data class RawCandidate(
         val item: Any,
         val score: Int?,
+    )
+
+    private data class RawCollectionResult(
+        val candidates: List<RawCandidate>,
+        val observedCount: Int,
+        val completed: Boolean,
     )
 
     private data class ConversionResult(
