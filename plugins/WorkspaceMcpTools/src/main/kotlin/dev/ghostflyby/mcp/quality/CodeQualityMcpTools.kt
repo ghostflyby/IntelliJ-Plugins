@@ -39,6 +39,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
@@ -184,7 +185,7 @@ internal class CodeQualityMcpTools : McpToolset {
                         cancellable = true,
                     ) {
                         for (file in scopeFiles.files) {
-                            ProgressManager.checkCanceled()
+                            checkCanceled()
                             scannedProgress.incrementAndGet()
                             if (totalProblemCount >= maxProblemCount) {
                                 probablyHasMoreProblems = true
@@ -645,7 +646,7 @@ internal class CodeQualityMcpTools : McpToolset {
                         cancellable = true,
                     ) {
                         for (file in scopeFiles.files) {
-                            ProgressManager.checkCanceled()
+                            checkCanceled()
                             processedProgress.incrementAndGet()
                             var optimizeImportsApplied = false
                             var reformatApplied = false
@@ -900,7 +901,7 @@ internal class CodeQualityMcpTools : McpToolset {
                         cancellable = true,
                     ) {
                         for (file in scopeFiles.files) {
-                            ProgressManager.checkCanceled()
+                            checkCanceled()
                             processedProgress.incrementAndGet()
                             val output = batchTry(continueOnError) {
                                 val psiFile = resolveWritablePsiFile(project, file)
@@ -1048,7 +1049,7 @@ internal class CodeQualityMcpTools : McpToolset {
                         cancellable = true,
                     ) {
                         for (file in scopeFiles.files) {
-                            ProgressManager.checkCanceled()
+                            checkCanceled()
                             processedProgress.incrementAndGet()
                             val output = batchTry(continueOnError) {
                                 processSingleFileOperation(project, file, operation)
@@ -1163,20 +1164,30 @@ internal class CodeQualityMcpTools : McpToolset {
         val deduplicated = linkedMapOf<String, QualityProblemDto>()
 
         tools.forEach { tool ->
-            ProgressManager.checkCanceled()
-            val descriptors = InspectionEngine.runInspectionOnFile(
-                psiFile,
-                tool,
-                inspectionManager.createNewGlobalContext(),
-            )
-            descriptors.forEach { descriptor ->
-                val severity = resolveProblemSeverity(
-                    descriptor,
-                    toolSeverityByShortName[tool.shortName] ?: HighlightSeverity.WARNING,
+            checkCanceled()
+            val problemSnapshots = readAction {
+                InspectionEngine.runInspectionOnFile(
+                    psiFile,
+                    tool,
+                    inspectionManager.createNewGlobalContext(),
                 )
-                if (severity.myVal < minSeverity.myVal) return@forEach
-                val problem = buildProblemFromDescriptor(document, descriptor, severity)
-                    ?: return@forEach
+                    .mapNotNull { descriptor ->
+                        ProgressManager.checkCanceled()
+                        buildProblemSnapshotFromDescriptor(
+                            descriptor = descriptor,
+                            configuredToolSeverity = toolSeverityByShortName[tool.shortName]
+                                ?: HighlightSeverity.WARNING,
+                            minSeverity = minSeverity,
+                        )
+                    }
+            }
+            problemSnapshots.forEach { snapshot ->
+                val problem = createQualityProblem(
+                    document = document,
+                    severity = snapshot.severity,
+                    description = snapshot.description,
+                    startOffset = snapshot.startOffset,
+                )
                 deduplicated.putIfAbsent(
                     "${problem.severity}:${problem.line}:${problem.column}:${problem.description}",
                     problem,
@@ -1184,15 +1195,24 @@ internal class CodeQualityMcpTools : McpToolset {
             }
         }
 
-        val syntaxErrors = readAction { PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java) }
-        syntaxErrors.forEach { error ->
+        val syntaxErrorSnapshots = readAction {
+            PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java)
+                .map { error ->
+                    DescriptorProblemSnapshot(
+                        startOffset = error.textRange.startOffset,
+                        description = error.errorDescription,
+                        severity = HighlightSeverity.ERROR.name,
+                    )
+                }
+        }
+        syntaxErrorSnapshots.forEach { snapshot ->
             val severity = HighlightSeverity.ERROR
             if (severity.myVal < minSeverity.myVal) return@forEach
             val problem = createQualityProblem(
                 document = document,
-                severity = severity.name,
-                description = error.errorDescription,
-                startOffset = error.textRange.startOffset,
+                severity = snapshot.severity,
+                description = snapshot.description,
+                startOffset = snapshot.startOffset,
             )
             deduplicated.putIfAbsent(
                 "${problem.severity}:${problem.line}:${problem.column}:${problem.description}",
@@ -1267,27 +1287,24 @@ internal class CodeQualityMcpTools : McpToolset {
         }
     }
 
-    private suspend fun buildProblemFromDescriptor(
-        document: Document,
+    private fun buildProblemSnapshotFromDescriptor(
         descriptor: ProblemDescriptor,
-        severity: HighlightSeverity,
-    ): QualityProblemDto? {
-        val snapshot = readAction {
-            val anchor = descriptor.startElement ?: descriptor.psiElement ?: return@readAction null
-            val anchorRange = anchor.textRange ?: return@readAction null
-            val rangeInElement = descriptor.textRangeInElement
-            val startOffset = anchorRange.startOffset + rangeInElement.startOffset
-            val description = ProblemDescriptorUtil.renderDescriptionMessage(descriptor, anchor)
-            DescriptorProblemSnapshot(
-                startOffset = startOffset,
-                description = description,
-            )
-        } ?: return null
-        return createQualityProblem(
-            document = document,
+        configuredToolSeverity: HighlightSeverity,
+        minSeverity: HighlightSeverity,
+    ): DescriptorProblemSnapshot? {
+        val severity = resolveProblemSeverity(descriptor, configuredToolSeverity)
+        if (severity.myVal < minSeverity.myVal) {
+            return null
+        }
+        val anchor = descriptor.startElement ?: descriptor.psiElement ?: return null
+        val anchorRange = anchor.textRange ?: return null
+        val rangeInElement = descriptor.textRangeInElement
+        val startOffset = anchorRange.startOffset + rangeInElement.startOffset
+        val description = ProblemDescriptorUtil.renderDescriptionMessage(descriptor, anchor)
+        return DescriptorProblemSnapshot(
+            startOffset = startOffset,
+            description = description,
             severity = severity.name,
-            description = snapshot.description,
-            startOffset = snapshot.startOffset,
         )
     }
 
@@ -1431,7 +1448,8 @@ internal class CodeQualityMcpTools : McpToolset {
 
     private data class DescriptorProblemSnapshot(
         val startOffset: Int,
-        val description: String,
+        val description: String?,
+        val severity: String,
     )
 
     private data class ScopeFileCollection(

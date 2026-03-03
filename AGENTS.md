@@ -51,15 +51,23 @@
 
 ## PSI/VFS Read-Write Safety
 
-1. all PSI/VFS/document reads must run inside `readAction`/`runReadAction`.
-2. do not assume caller context for internal helpers that read PSI/VFS.
-   add explicit guards where useful (for example read-access assertions in deep helper functions).
-3. after mutating editor `Document` in write action, call
+1. all PSI reads must run inside `readAction`/`runReadAction`, unless a specific PSI API explicitly documents a
+   different safe access contract.
+2. `Document` reads that must stay consistent with PSI, committed offsets, or navigation/symbol resolution must use a
+   committed document and run under read access.
+   for pure document-only reads, follow the specific document API's contract when weaker locking is acceptable.
+3. for VFS reads/writes, follow the specific API's locking annotations and documented contract.
+   acquire read/write access when required by that contract, or when a consistent snapshot with PSI/document state is
+   needed.
+4. do not assume caller context for internal helpers that read PSI/document or require VFS access constraints.
+   add explicit guards where useful (for example read-access assertions in deep helper functions, committed-document
+   checks, or checks that match the VFS API contract being used).
+5. after mutating editor `Document` in write action, call
    `PsiDocumentManager.doPostponedOperationsAndUnblockDocument(document)` and
    `PsiDocumentManager.commitDocument(document)` before returning.
-4. for offset-based navigation/symbol tools, prefer committed documents from
+6. for offset-based navigation/symbol tools, prefer committed documents from
    `PsiDocumentManager.getLastCommittedDocument(psiFile)` to keep PSI/document consistent.
-5. if committed document is unavailable, fail with a clear retriable message
+7. if committed document is unavailable, fail with a clear retriable message
    (ask caller to commit/retry) instead of silently using potentially stale/uncommitted state.
 
 ## MCP Tool Contract
