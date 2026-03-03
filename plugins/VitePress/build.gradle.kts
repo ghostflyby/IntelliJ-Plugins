@@ -20,8 +20,6 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
-
 plugins {
     id("repo.intellij-plugin")
     alias(libs.plugins.kotlin.serialization)
@@ -29,11 +27,6 @@ plugins {
 
 version = "0.0.1"
 
-buildLogic {
-    pluginVersion = version.toString()
-    platformType = IntelliJPlatformType.IntellijIdeaUltimate
-    platformVersion = "2025.3"
-}
 dependencies.intellijPlatform {
     bundledPlugin("org.intellij.plugins.markdown")
     bundledPlugin("org.jetbrains.plugins.vue")
