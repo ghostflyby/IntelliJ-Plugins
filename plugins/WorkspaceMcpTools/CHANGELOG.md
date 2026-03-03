@@ -14,9 +14,13 @@
 
 ### Fixed
 
-- Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly sequential progress reporting, avoiding read-access assertion crashes in background search.
-
 ### Security
+
+## [1.0.1] - 2026-03-03
+
+### Fixed
+
+- Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly sequential progress reporting, avoiding read-access assertion crashes in background search.
 
 ## [1.0.0] - 2026-02-27
 
@@ -81,5 +85,6 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.1...HEAD
+[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.0...WorkspaceMcpTools-v1.0.1
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/WorkspaceMcpTools-v1.0.0
