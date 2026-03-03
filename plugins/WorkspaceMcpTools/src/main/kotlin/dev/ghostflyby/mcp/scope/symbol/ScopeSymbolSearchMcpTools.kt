@@ -439,26 +439,29 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         indicator: ProgressIndicator,
         maxResultCount: Int,
     ): RawCollectionResult {
-        var observedCount = 0
         val candidates = mutableListOf<RawCandidate>()
+        val observedCount = AtomicInteger(0)
         val completedByProvider = provider.filterElementsWithWeights(
             baseViewModel,
             parameters,
             indicator,
             Processor { descriptor: FoundItemDescriptor<*> ->
                 indicator.checkCanceled()
-                observedCount++
-                if (candidates.size >= maxResultCount) {
-                    return@Processor false
+                observedCount.incrementAndGet()
+                synchronized(candidates) {
+                    if (candidates.size >= maxResultCount) {
+                        return@Processor false
+                    }
+                    candidates += RawCandidate(item = descriptor.item, score = descriptor.weight)
+                    candidates.size < maxResultCount
                 }
-                candidates += RawCandidate(item = descriptor.item, score = descriptor.weight)
-                candidates.size < maxResultCount
             },
         )
+        val candidateSnapshot = synchronized(candidates) { candidates.toList() }
         return RawCollectionResult(
-            candidates = candidates.toList(),
-            observedCount = observedCount,
-            completed = completedByProvider && candidates.size < maxResultCount,
+            candidates = candidateSnapshot,
+            observedCount = observedCount.get(),
+            completed = completedByProvider && candidateSnapshot.size < maxResultCount,
         )
     }
 
