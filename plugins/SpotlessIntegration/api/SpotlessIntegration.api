@@ -1,18 +1,16 @@
-public final class dev/ghostflyby/spotless/Spotless : com/intellij/openapi/Disposable$Default {
-	public static final field Companion Ldev/ghostflyby/spotless/Spotless$Companion;
-	public static final field EP_NAME Lcom/intellij/openapi/extensions/ExtensionPointName;
-	public fun <init> (Lkotlinx/coroutines/CoroutineScope;)V
-	public final fun canFormat (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun canFormatSync-SxA4cEA (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;J)Z
+public abstract interface class dev/ghostflyby/spotless/Spotless {
+	public abstract fun canFormat (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun canFormatSync-SxA4cEA (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;J)Z
 	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
-	public fun dispose ()V
-	public final fun format (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Ljava/lang/CharSequence;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun format (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;Ljava/lang/CharSequence;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun releaseDaemon (Ldev/ghostflyby/spotless/SpotlessDaemonHost;)V
 }
 
-public final class dev/ghostflyby/spotless/Spotless$Companion {
+public final class dev/ghostflyby/spotless/Spotless$DefaultImpls {
+	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost : com/intellij/openapi/Disposable {
+public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost {
 }
 
 public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Localhost : dev/ghostflyby/spotless/SpotlessDaemonHost {
@@ -20,7 +18,6 @@ public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Localhost : dev/gh
 	public final fun component1 ()I
 	public final fun copy (I)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;
 	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;IILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Localhost;
-	public fun dispose ()V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPort ()I
 	public fun hashCode ()I
@@ -28,26 +25,27 @@ public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Localhost : dev/gh
 }
 
 public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Unix : dev/ghostflyby/spotless/SpotlessDaemonHost {
-	public fun <init> (Ljava/nio/file/Path;)V
+	public fun <init> (Ljava/nio/file/Path;Ljava/nio/file/Path;)V
 	public final fun component1 ()Ljava/nio/file/Path;
-	public final fun copy (Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
-	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
-	public fun dispose ()V
+	public final fun component2 ()Ljava/nio/file/Path;
+	public final fun copy (Ljava/nio/file/Path;Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;Ljava/nio/file/Path;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonHost$Unix;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPath ()Ljava/nio/file/Path;
+	public final fun getWorkingDirectory ()Ljava/nio/file/Path;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonProvider : com/intellij/openapi/Disposable {
-	public fun dispose ()V
+public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonProvider {
+	public fun afterDaemonStopped (Ldev/ghostflyby/spotless/SpotlessDaemonHost;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun findExternalProjectPath (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ljava/nio/file/Path;
 	public abstract fun isApplicableTo (Lcom/intellij/openapi/project/Project;)Z
 	public abstract fun startDaemon (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/ghostflyby/spotless/SpotlessDaemonProvider$DefaultImpls {
-	public static fun dispose (Ldev/ghostflyby/spotless/SpotlessDaemonProvider;)V
+	public static fun afterDaemonStopped (Ldev/ghostflyby/spotless/SpotlessDaemonProvider;Ldev/ghostflyby/spotless/SpotlessDaemonHost;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class dev/ghostflyby/spotless/SpotlessFormatResult {

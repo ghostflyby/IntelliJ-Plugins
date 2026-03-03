@@ -37,16 +37,6 @@ val buildLogic = extensions.create<BuildLogicSettings>("buildLogic")
 
 group = providers.gradleProperty("pluginGroup").get()
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-        @Suppress("UnstableApiUsage")
-        vendor = JvmVendorSpec.JETBRAINS
-    }
-}
-
 kotlin {
     jvmToolchain(21)
     compilerOptions {
@@ -87,6 +77,9 @@ dependencies {
         testFramework(TestFrameworkType.Platform)
     }
 
+}
+configurations.all {
+    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }
 
 kover { reports { total { xml { onCheck = true } } } }

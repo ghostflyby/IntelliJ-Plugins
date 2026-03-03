@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,16 +20,16 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.ideavim.toggleIME
+package dev.ghostflyby.spotless
 
-import com.intellij.openapi.components.service
-import com.maddyhome.idea.vim.extension.VimExtension
+import java.nio.file.Path
 
+public sealed interface SpotlessDaemonHost {
+    public data class Localhost(val port: Int) : SpotlessDaemonHost
 
-internal class DisableImeInNormal : VimExtension {
-    override fun getName() = "autotoggleime"
+    public data class Unix(
+        val path: Path,
+        val workingDirectory: Path,
+    ) : SpotlessDaemonHost
 
-    override fun init() {
-        service<ImeListenerService>().ensureRegistered()
-    }
 }

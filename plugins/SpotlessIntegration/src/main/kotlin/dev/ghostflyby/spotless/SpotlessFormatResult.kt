@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -19,18 +19,30 @@
  * License along with this library; if not, see
  * <https://www.gnu.org/licenses/>.
  */
+
 package dev.ghostflyby.spotless
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.encoding.FileEncodingProvider
-import java.nio.charset.Charset
+public sealed interface SpotlessFormatResult {
+    /**
+     * Formatted successfully with the file on disk untouched
+     * @property content The formatted output
+     */
+    public data class Dirty(val content: String) : SpotlessFormatResult
 
-internal class SpotlessFileEncodingProvider : FileEncodingProvider {
-    override fun getEncoding(
-        virtualFile: VirtualFile,
-        project: Project?,
-    ): Charset {
-        TODO("Not yet implemented")
-    }
+    /**
+     * Untouched as already formatted
+     */
+    public object Clean : SpotlessFormatResult
+
+    /**
+     * Not covered by Spotless, either no formater for the filetype or path pattern not included
+     */
+    public object NotCovered : SpotlessFormatResult
+
+    /**
+     * Error occurred during formatting, see `message` for details
+     */
+    public data class Error(val message: String) : SpotlessFormatResult
+
+
 }

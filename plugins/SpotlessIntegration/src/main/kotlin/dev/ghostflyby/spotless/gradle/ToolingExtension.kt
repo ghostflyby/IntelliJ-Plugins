@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -23,6 +23,7 @@
 package dev.ghostflyby.spotless.gradle
 
 import com.intellij.execution.executors.DefaultRunExecutor
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
@@ -48,6 +49,7 @@ import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExten
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
 
@@ -83,8 +85,10 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
                     myModel.spotless,
                 ),
             )
-            Disposer.register(service<Spotless>()) {
-                re.clear(true)
+            (service<Spotless>() as? Disposable)?.let {
+                Disposer.register(it) {
+                    re.clear(true)
+                }
             }
         }
         nextResolver.populateModuleExtraModels(gradleModule, ideModule)
@@ -125,7 +129,7 @@ internal class SpotlessGradleStateHolder
         return state.paths.contains(path.absolutePathString())
     }
 
-    val daemons = mutableListOf<SpotlessDaemonHost>()
+    val daemons: MutableSet<SpotlessDaemonHost> = ConcurrentHashMap.newKeySet()
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
         updateState { state ->
@@ -137,20 +141,28 @@ internal class SpotlessGradleStateHolder
             )
         }
         nodes.forEach { it.clear(true) }
-        daemons.forEach { Disposer.dispose(it) }
+        val runningDaemons = daemons.toList()
         daemons.clear()
+        val spotless = service<Spotless>()
+        runningDaemons.forEach { daemon ->
+            spotless.releaseDaemon(daemon)
+        }
     }
 
     var gradleDaemonVersion: @NlsSafe String
         get() = state.gradleDaemonVersion
         set(value) {
-            state = state.copy(gradleDaemonVersion = value)
+            updateState {
+                it.copy(gradleDaemonVersion = value)
+            }
         }
 
     var gradleDaemonJar: @NlsSafe String
         get() = state.gradleDaemonJar
         set(value) {
-            state = state.copy(gradleDaemonJar = value)
+            updateState {
+                it.copy(gradleDaemonJar = value)
+            }
         }
 
     internal data class State(
@@ -180,11 +192,13 @@ internal fun runGradleSpotlessDaemon(
         .withListener(
             object : ExternalSystemTaskNotificationListener {
                 override fun onEnd(projectPath: String, id: ExternalSystemTaskId) {
-                    Disposer.dispose(host)
+                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
+                    service<Spotless>().releaseDaemon(host)
                 }
 
                 override fun onCancel(projectPath: String, id: ExternalSystemTaskId) {
-                    Disposer.dispose(host)
+                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
+                    service<Spotless>().releaseDaemon(host)
                 }
 
             },
@@ -193,5 +207,3 @@ internal fun runGradleSpotlessDaemon(
         .build()
     ExternalSystemUtil.runTask(exe)
 }
-
-

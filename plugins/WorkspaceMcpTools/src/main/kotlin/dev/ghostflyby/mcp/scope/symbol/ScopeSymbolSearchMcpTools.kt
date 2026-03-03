@@ -33,8 +33,9 @@ import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.progress.ProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.IndexNotReadyException
@@ -42,6 +43,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
+import com.intellij.platform.util.progress.reportSequentialProgress
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiNamedElement
@@ -71,6 +73,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     @OptIn(ExperimentalSerializationApi::class)
     enum class ScopeSymbolQuickPreset {
         PROJECT_FILES,
+
         @JsonNames("ALL")
         ALL_PLACES,
     }
@@ -103,7 +106,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     @McpTool
     @McpDescription(
         "Search symbols within a resolved scope descriptor. " +
-            "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
+                "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
     )
     suspend fun scope_search_symbols(
         @McpDescription("Symbol query string (for example class/method/field name pattern).")
@@ -199,28 +202,31 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                             Bundle.message("progress.title.scope.symbol.search", query),
                             cancellable = true,
                         ) {
-                            val completed = coroutineToIndicator { indicator ->
-                                if (provider is ChooseByNameInScopeItemProvider) {
-                                    collectRawCandidatesByInScopeProvider(
-                                        provider = provider,
-                                        baseViewModel = baseViewModel,
-                                        parameters = findParameters,
-                                        indicator = indicator,
-                                        maxResultCount = maxResultCount,
-                                        observedCandidateCount = observedCandidateCount,
-                                        out = rawCandidates,
-                                    )
-                                } else {
-                                    collectRawCandidatesByModelFallback(
-                                        model = model,
-                                        parameters = findParameters,
-                                        indicator = indicator,
-                                        maxResultCount = maxResultCount,
-                                        observedCandidateCount = observedCandidateCount,
-                                        out = rawCandidates,
-                                    )
+                            val completed =
+                                coroutineToIndicator { indicator ->
+                                    runReadAction {
+                                        if (provider is ChooseByNameInScopeItemProvider) {
+                                            collectRawCandidatesByInScopeProvider(
+                                                provider = provider,
+                                                baseViewModel = baseViewModel,
+                                                parameters = findParameters,
+                                                indicator = indicator,
+                                                maxResultCount = maxResultCount,
+                                                observedCandidateCount = observedCandidateCount,
+                                                out = rawCandidates,
+                                            )
+                                        } else {
+                                            collectRawCandidatesByModelFallback(
+                                                model = model,
+                                                parameters = findParameters,
+                                                indicator = indicator,
+                                                maxResultCount = maxResultCount,
+                                                observedCandidateCount = observedCandidateCount,
+                                                out = rawCandidates,
+                                            )
+                                        }
+                                    }
                                 }
-                            }
                             if (!completed) {
                                 probablyHasMore.set(true)
                             }
@@ -270,12 +276,12 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                 timedOut = timedOut,
                 canceled = false,
                 diagnostics = (
-                    scope.diagnostics +
-                        resolved.diagnostics +
-                        effectiveScope.diagnostics +
-                        converted.diagnostics +
-                        runtimeDiagnostics
-                    ).distinct(),
+                        scope.diagnostics +
+                                resolved.diagnostics +
+                                effectiveScope.diagnostics +
+                                converted.diagnostics +
+                                runtimeDiagnostics
+                        ).distinct(),
             )
             reportActivity(
                 Bundle.message(
@@ -297,7 +303,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     @McpTool
     @McpDescription(
         "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope." +
-            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
+                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_search_symbols_quick(
         @McpDescription("Symbol query string.")
@@ -508,41 +514,45 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         var skippedPostFilter = 0
         var skippedDuplicates = 0
 
-        for (candidate in candidates) {
-            ProgressManager.checkCanceled()
-            val converted = convertCandidate(
-                project = project,
-                model = model,
-                candidate = candidate,
-                postFilterPolicy = postFilterPolicy,
-                requirePhysicalLocation = requirePhysicalLocation,
-            )
-            processedCandidateCount.incrementAndGet()
-            val item = converted.item
-            if (item == null) {
-                when (converted.skipReason) {
-                    SkipReason.UNSUPPORTED_ITEM -> skippedUnsupported++
-                    SkipReason.LOCATION_UNAVAILABLE -> skippedLocation++
-                    SkipReason.POST_FILTER_REJECTED -> skippedPostFilter++
-                    SkipReason.NONE -> {
+        reportSequentialProgress(candidates.size) { reporter ->
+            for (candidate in candidates) {
+                reporter.itemStep {
+                    checkCanceled()
+                    val converted = convertCandidate(
+                        project = project,
+                        model = model,
+                        candidate = candidate,
+                        postFilterPolicy = postFilterPolicy,
+                        requirePhysicalLocation = requirePhysicalLocation,
+                    )
+                    processedCandidateCount.incrementAndGet()
+                    val item = converted.item
+                    if (item == null) {
+                        when (converted.skipReason) {
+                            SkipReason.UNSUPPORTED_ITEM -> skippedUnsupported++
+                            SkipReason.LOCATION_UNAVAILABLE -> skippedLocation++
+                            SkipReason.POST_FILTER_REJECTED -> skippedPostFilter++
+                            SkipReason.NONE -> {
+                            }
+                        }
+                        return@itemStep
                     }
-                }
-                continue
-            }
 
-            val dedupeKey = listOf(
-                item.name,
-                item.qualifiedName ?: "",
-                item.fileUrl ?: "",
-                item.line?.toString() ?: "",
-                item.column?.toString() ?: "",
-                item.kind.name,
-            ).joinToString("|")
-            if (!seen.add(dedupeKey)) {
-                skippedDuplicates++
-                continue
+                    val dedupeKey = listOf(
+                        item.name,
+                        item.qualifiedName ?: "",
+                        item.fileUrl ?: "",
+                        item.line?.toString() ?: "",
+                        item.column?.toString() ?: "",
+                        item.kind.name,
+                    ).joinToString("|")
+                    if (!seen.add(dedupeKey)) {
+                        skippedDuplicates++
+                        return@itemStep
+                    }
+                    items += item
+                }
             }
-            items += item
         }
 
         if (skippedUnsupported > 0) {
@@ -689,7 +699,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                 if (reflectedLocal != null) {
                     diagnostics +=
                         "Resolved non-global scope '${resolvedScope.javaClass.name}' exposes LocalSearchScope via reflection; " +
-                            "using global recall plus local post-filter."
+                                "using global recall plus local post-filter."
                     EffectiveScope(
                         globalScope = GlobalSearchScopeUtil.toGlobalSearchScope(reflectedLocal, project),
                         postFilterPolicy = PostFilterPolicy.LocalOnly(reflectedLocal),
@@ -698,7 +708,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
                 } else {
                     diagnostics +=
                         "Scope type '${resolvedScope.javaClass.name}' cannot be converted losslessly to GlobalSearchScope; " +
-                            "using broad global recall with generic post-filter."
+                                "using broad global recall with generic post-filter."
                     EffectiveScope(
                         globalScope = ProjectScope.getAllScope(project),
                         postFilterPolicy = PostFilterPolicy.Generic(resolvedScope),
@@ -724,7 +734,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
             is PostFilterPolicy.GlobalOrLocal -> {
                 val inGlobal = file?.let(postFilterPolicy.globalScope::contains) ?: false
                 inGlobal || element?.let { PsiSearchScopeUtil.isInScope(postFilterPolicy.localScope, it) } == true ||
-                    (file != null && postFilterPolicy.localScope.isInScope(file))
+                        (file != null && postFilterPolicy.localScope.isInScope(file))
             }
 
             is PostFilterPolicy.Generic -> {
@@ -751,8 +761,10 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
         if (scope.javaClass.name != GLOBAL_AND_LOCAL_UNION_SCOPE_CLASS) {
             return null
         }
-        val localScope = extractFieldValue(scope, GLOBAL_AND_LOCAL_UNION_LOCAL_FIELD) as? LocalSearchScope ?: return null
-        val globalScope = extractFieldValue(scope, GLOBAL_AND_LOCAL_UNION_GLOBAL_FIELD) as? GlobalSearchScope ?: return null
+        val localScope =
+            extractFieldValue(scope, GLOBAL_AND_LOCAL_UNION_LOCAL_FIELD) as? LocalSearchScope ?: return null
+        val globalScope =
+            extractFieldValue(scope, GLOBAL_AND_LOCAL_UNION_GLOBAL_FIELD) as? GlobalSearchScope ?: return null
         return GlobalAndLocalUnionScopeParts(globalScope = globalScope, localScope = localScope)
     }
 

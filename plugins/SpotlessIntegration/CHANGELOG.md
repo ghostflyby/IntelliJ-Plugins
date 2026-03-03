@@ -16,6 +16,20 @@
 
 ### Security
 
+## [1.0.0] - 2026-03-02
+
+### Added
+
+- exposed Spotless as an explicit application service API via plugin.xml interface + implementation
+  registration.
+
+### Changed
+
+- redesigned Spotless daemon cleanup lifecycle: removed blocking `Disposable`-based shutdown from daemon/provider APIs,
+  centralized async release in `Spotless` service, and aligned Gradle daemon cleanup with the new lifecycle.
+- switched daemon stop to a fixed core HTTP contract and replaced provider stop customization with an optional post-stop
+  notification hook.
+
 ## [0.4.0] - 2025-12-20
 
 ### Changed
@@ -52,7 +66,8 @@
 - Initial release of the Spotless Integration plugin for IntelliJ IDEA.
 - Support for automatic code formatting using Spotless.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.4.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.0.0...HEAD
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.4.0...SpotlessIntegration-v1.0.0
 [0.4.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.3.0...SpotlessIntegration-v0.4.0
 [0.3.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.2.0...SpotlessIntegration-v0.3.0
 [0.2.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.1.1...SpotlessIntegration-v0.2.0

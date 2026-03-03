@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -20,19 +20,23 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.spotless
+package dev.ghostflyby.ideavim.toggleIME
 
-import com.intellij.openapi.vcs.CheckinProjectPanel
-import com.intellij.openapi.vcs.changes.CommitContext
-import com.intellij.openapi.vcs.checkin.CheckinHandler
-import com.intellij.openapi.vcs.checkin.CheckinHandlerFactory
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.components.Service
 
-internal class SpotlessCommitHandlerFactory : CheckinHandlerFactory() {
-    override fun createHandler(
-        panel: CheckinProjectPanel,
-        commitContext: CommitContext,
-    ): CheckinHandler {
-        panel.roots
-        TODO()
+@Service
+internal class ImeListenerService : Disposable {
+    private val adapter = IdeaVimListenerAdapter()
+    private var registration: ListenerRegistration? = null
+
+    fun ensureRegistered() {
+        if (registration != null) return
+        registration = adapter.register(ImeVimModeListener, ImeEditorListener)
+    }
+
+    override fun dispose() {
+        registration?.dispose()
+        registration = null
     }
 }

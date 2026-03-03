@@ -20,14 +20,26 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
+package dev.ghostflyby.ideavim.toggleIME
+
+import com.maddyhome.idea.vim.api.injector
+import com.maddyhome.idea.vim.common.EditorListener
+import com.maddyhome.idea.vim.common.ModeChangeListener
+
+internal fun interface ListenerRegistration {
+    fun dispose()
 }
 
-version = "1.1.1"
-
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
-    bundledPlugin("com.intellij.gradle")
+internal class IdeaVimListenerAdapter {
+    // IdeaVim's listener registry is still marked unstable; keep access centralized for updates.
+    @Suppress("UnstableApiUsage")
+    fun register(modeListener: ModeChangeListener, editorListener: EditorListener): ListenerRegistration {
+        val notifier = injector.listenersNotifier
+        notifier.modeChangeListeners.add(modeListener)
+        notifier.myEditorListeners.add(editorListener)
+        return ListenerRegistration {
+            notifier.modeChangeListeners.remove(modeListener)
+            notifier.myEditorListeners.remove(editorListener)
+        }
+    }
 }
