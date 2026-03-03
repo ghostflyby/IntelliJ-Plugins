@@ -8,6 +8,8 @@
 
 ### Changed
 
+- Updated IDE capability range
+
 ### Deprecated
 
 ### Removed

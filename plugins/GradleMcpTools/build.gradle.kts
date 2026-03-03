@@ -25,7 +25,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "1.1.0"
+version = "1.1.1"
 
 dependencies.intellijPlatform {
     bundledPlugin("com.intellij.mcpServer")
