@@ -31,7 +31,7 @@ internal class VitePressFileTypeOverrider : FileTypeOverrider {
         if (!file.extension.equals("md", ignoreCase = true)) {
             return null
         }
-        if (file.isUnderVitePressRoot()) {
+        if (file.isUnderVitePressRoot.value) {
             return VitePressFiletype
         }
         return null

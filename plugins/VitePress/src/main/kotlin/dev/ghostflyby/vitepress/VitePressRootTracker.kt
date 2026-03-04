@@ -36,9 +36,8 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.startup.ProjectActivity
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.ModificationTracker
-import com.intellij.openapi.util.getOrCreateUserData
+import com.intellij.openapi.util.NotNullLazyKey
 import com.intellij.openapi.vfs.AsyncFileListener
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
@@ -49,6 +48,8 @@ import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.util.CachedValueImpl
 import com.intellij.util.FileContentUtil
+import dev.ghostflyby.intellij.getValue
+import dev.ghostflyby.intellij.toAutoCleanKey
 import kotlinx.collections.immutable.PersistentSet
 import kotlinx.collections.immutable.persistentHashSetOf
 import kotlinx.coroutines.CancellationException
@@ -271,30 +272,26 @@ internal class VitePressRootTracker(
     }
 }
 
-private val IS_ROOT_CACHE_KEY: Key<CachedValue<Boolean>> =
-    Key.create("dev.ghostflyby.vitepress.isRootCache")
-private val IS_UNDER_ROOT_CACHE_KEY: Key<CachedValue<Boolean>> =
-    Key.create("dev.ghostflyby.vitepress.isUnderRootCache")
-
-public fun VirtualFile.isUnderVitePressRoot(): Boolean {
-    return getOrCreateUserData(IS_UNDER_ROOT_CACHE_KEY) {
+private val isRootCacheKey =
+    NotNullLazyKey.createLazyKey<CachedValue<Boolean>, VirtualFile>("dev.ghostflyby.vitepress.isRootCache") {
         CachedValueImpl {
             val tracker = service<VitePressRootTracker>()
-            val value = tracker.isUnderVitePressRoot(this)
-            CachedValueProvider.Result.create(value, tracker, this)
+            val value = tracker.isVitePressRoot(it)
+            CachedValueProvider.Result.create(value, tracker, it)
         }
-    }.value
-}
+    }.toAutoCleanKey(PluginDisposable)
 
-public fun VirtualFile.isVitePressRoot(): Boolean {
-    return getOrCreateUserData(IS_ROOT_CACHE_KEY) {
+private val isUnderRootCacheKey =
+    NotNullLazyKey.createLazyKey<CachedValue<Boolean>, VirtualFile>("dev.ghostflyby.vitepress.isUnderRootCache") {
         CachedValueImpl {
             val tracker = service<VitePressRootTracker>()
-            val value = tracker.isVitePressRoot(this)
-            CachedValueProvider.Result.create(value, tracker, this)
+            val value = tracker.isUnderVitePressRoot(it)
+            CachedValueProvider.Result.create(value, tracker, it)
         }
-    }.value
-}
+    }.toAutoCleanKey(PluginDisposable)
+
+public val VirtualFile.isVitePressRoot: CachedValue<Boolean> by isRootCacheKey
+public val VirtualFile.isUnderVitePressRoot: CachedValue<Boolean> by isUnderRootCacheKey
 
 internal class VitePressRootTrackerActivity : ProjectActivity {
     override suspend fun execute(project: Project) {

@@ -76,7 +76,7 @@ private fun buildPreviewRelativePath(rootPath: Path, targetPath: Path): String {
 private fun findNearestVitePressRoot(file: VirtualFile): VirtualFile? {
     var current: VirtualFile? = if (file.isDirectory) file else file.parent
     while (current != null) {
-        if (current.isVitePressRoot()) return current
+        if (current.isVitePressRoot.value) return current
         current = current.parent
     }
     return null

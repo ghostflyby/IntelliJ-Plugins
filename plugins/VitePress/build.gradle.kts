@@ -27,6 +27,10 @@ plugins {
 
 version = "0.0.1"
 
+dependencies {
+    implementation(project(":modules:intellij-shared"))
+}
+
 dependencies.intellijPlatform {
     bundledPlugin("org.intellij.plugins.markdown")
     bundledPlugin("org.jetbrains.plugins.vue")
