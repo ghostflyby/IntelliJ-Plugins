@@ -1,0 +1,38 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+
+    <id>dev.ghostflyby.vitepress</id>
+    <name>Markdown</name>
+    <vendor>ghostflyby</vendor>
+
+    <depends>com.intellij.modules.ultimate</depends>
+    <depends>org.intellij.plugins.markdown</depends>
+    <depends>org.jetbrains.plugins.vue</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <lang.parserDefinition
+                language="VitePress"
+                implementationClass="dev.ghostflyby.vitepress.VitePressParserDefinition"/>
+        <lang.fileViewProviderFactory
+                language="VitePress"
+                id="VitePressFileViewerProviderFactory"
+                implementationClass="dev.ghostflyby.vitepress.VitePressFileViewProvider$Factory"/>
+        <fileType name="VitePress" language="VitePress" fieldName="INSTANCE"
+                  implementationClass="dev.ghostflyby.vitepress.VitePressFiletype"/>
+        <multiLangCommenter implementation="dev.ghostflyby.vitepress.VitePressCommentProvider"/>
+        <editorHighlighterProvider filetype="VitePress"
+                                   implementationClass="dev.ghostflyby.vitepress.VitePressHighlighterFactory"/>
+        <spellchecker.bundledDictionaryProvider implementation="dev.ghostflyby.vitepress.spellcheck.Dict"/>
+        <fileTypeOverrider implementation="dev.ghostflyby.vitepress.VitePressFileTypeOverrider"/>
+        <webBrowserUrlProvider implementation="dev.ghostflyby.vitepress.preview.VitePressUrlProvider"/>
+        <postStartupActivity implementation="dev.ghostflyby.vitepress.VitePressRootTrackerActivity"/>
+        <vfs.asyncListenerBackgroundable implementation="dev.ghostflyby.vitepress.VitePressRootTrackerFileListener"/>
+    </extensions>
+    <projectListeners>
+        <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"
+                  topic="com.intellij.execution.ExecutionListener"/>
+    </projectListeners>
+
+</idea-plugin>
