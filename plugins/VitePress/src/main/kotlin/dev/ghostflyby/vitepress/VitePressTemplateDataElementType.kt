@@ -39,31 +39,31 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
     MARKDOWN_OUTER_BLOCK,
 ) {
     override fun collectTemplateModifications(sourceCode: CharSequence, baseLexer: Lexer): TemplateDataModifications {
+        val interpolationHostsByRange =
+            collectTemplateInterpolationHosts(sourceCode, baseLexer).associateBy { it.hostRange }
         val outerRanges = mutableListOf<TextRange>()
-        baseLexer.start(sourceCode)
         var hasTopLevelMustache = false
+        baseLexer.start(sourceCode)
 
         while (baseLexer.tokenType != null) {
             val range = TextRange.create(baseLexer.tokenStart, baseLexer.tokenEnd)
             when (baseLexer.tokenType) {
                 MarkdownTokenTypes.HTML_BLOCK_CONTENT -> Unit
-                MarkdownElementTypes.PARAGRAPH -> {
-                    if (!isPlainParagraphHost(sourceCode, range)) {
-                        outerRanges += range
-                        baseLexer.advance()
-                        continue
-                    }
-                    val mustacheRanges = collectMustacheRanges(sourceCode, range)
-                    if (mustacheRanges.isEmpty()) {
+                MarkdownElementTypes.PARAGRAPH,
+                MarkdownTokenTypes.ATX_CONTENT,
+                MarkdownTokenTypes.SETEXT_CONTENT,
+                    -> {
+                    val interpolationHost = interpolationHostsByRange[range]
+                    if (interpolationHost == null) {
                         outerRanges += range
                     } else {
                         hasTopLevelMustache = true
                         var cursor = range.startOffset
-                        mustacheRanges.forEach { mustacheRange ->
-                            if (cursor < mustacheRange.startOffset) {
-                                outerRanges += TextRange.create(cursor, mustacheRange.startOffset)
+                        interpolationHost.interpolationRanges.forEach { interpolationRange ->
+                            if (cursor < interpolationRange.startOffset) {
+                                outerRanges += TextRange.create(cursor, interpolationRange.startOffset)
                             }
-                            cursor = mustacheRange.endOffset
+                            cursor = interpolationRange.endOffset
                         }
                         if (cursor < range.endOffset) {
                             outerRanges += TextRange.create(cursor, range.endOffset)
@@ -103,50 +103,5 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
 internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
     return VitePressTemplateDataElementType.buildTemplateDataText(sourceCode)
 }
-
-private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {
-    val result = mutableListOf<TextRange>()
-    var cursor = hostRange.startOffset
-    while (cursor < hostRange.endOffset) {
-        val start =
-            sourceCode.indexOf(TEMPLATE_INTERPOLATION_OPEN, cursor).takeIf { it in cursor until hostRange.endOffset }
-                ?: break
-        val end =
-            sourceCode.indexOf(TEMPLATE_INTERPOLATION_CLOSE, start + TEMPLATE_INTERPOLATION_OPEN.length)
-                .takeIf { it in (start + TEMPLATE_INTERPOLATION_OPEN.length)..<hostRange.endOffset }
-                ?.plus(TEMPLATE_INTERPOLATION_CLOSE.length)
-                ?: hostRange.endOffset
-        result += TextRange.create(start, end)
-        cursor = end
-    }
-    return result
-}
-
-private fun isPlainParagraphHost(sourceCode: CharSequence, hostRange: TextRange): Boolean {
-    val mustacheRanges = collectMustacheRanges(sourceCode, hostRange)
-    if (mustacheRanges.isEmpty()) return true
-
-    var cursor = hostRange.startOffset
-    mustacheRanges.forEach { mustacheRange ->
-        if (containsMarkdownInlineMarker(sourceCode, cursor, mustacheRange.startOffset)) {
-            return false
-        }
-        cursor = mustacheRange.endOffset
-    }
-    return !containsMarkdownInlineMarker(sourceCode, cursor, hostRange.endOffset)
-}
-
-private fun containsMarkdownInlineMarker(sourceCode: CharSequence, start: Int, end: Int): Boolean {
-    for (index in start until end) {
-        if (sourceCode[index] in MARKDOWN_INLINE_MARKERS) {
-            return true
-        }
-    }
-    return false
-}
-
-private const val TEMPLATE_INTERPOLATION_OPEN: String = "{{"
-private const val TEMPLATE_INTERPOLATION_CLOSE: String = "}}"
 private const val TEMPLATE_ROOT_PREFIX: String = "<vitepress-template-root>"
 private const val TEMPLATE_ROOT_SUFFIX: String = "</vitepress-template-root>"
-private val MARKDOWN_INLINE_MARKERS: Set<Char> = setOf('`', '[', ']', '(', ')', '!', '*', '_')

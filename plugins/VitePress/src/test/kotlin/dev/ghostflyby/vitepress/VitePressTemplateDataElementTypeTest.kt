@@ -22,6 +22,9 @@
 
 package dev.ghostflyby.vitepress
 
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.util.TextRange
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
 internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
@@ -51,8 +54,22 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
         assertEquals("", buildVitePressTemplateDataText("```vue\n{{a*2}}\n```").toString())
     }
 
-    fun testIgnoresMustacheInsideHeading() {
-        assertEquals("", buildVitePressTemplateDataText("# {{a*2}}").toString())
+    fun testExtractsMustacheInsideAtxHeading() {
+        assertEquals(
+            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            buildVitePressTemplateDataText("# {{a*2}}").toString(),
+        )
+    }
+
+    fun testExtractsMustacheInsideSetextHeading() {
+        assertEquals(
+            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            buildVitePressTemplateDataText("{{a*2}}\n===").toString(),
+        )
+    }
+
+    fun testIgnoresMustacheInsideRichHeading() {
+        assertEquals("", buildVitePressTemplateDataText("# **{{a*2}}**").toString())
     }
 
     fun testIgnoresMustacheInsideLinkText() {
@@ -61,5 +78,28 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
 
     fun testIgnoresMustacheInsideInlineCode() {
         assertEquals("", buildVitePressTemplateDataText("`{{a*2}}`").toString())
+    }
+
+    fun testCachesInterpolationHostsOnPsiFile() {
+        val psiFile = myFixture.configureByText("docs.md", "# {{a*2}}")
+
+        assertEquals(
+            listOf(
+                VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.AtxHeading,
+                    hostRange = TextRange(1, 9),
+                    interpolationRanges = listOf(TextRange(2, 9)),
+                ),
+            ),
+            psiFile.getVitePressTemplateInterpolationHosts(),
+        )
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            myFixture.editor.document.setText("plain text")
+            PsiDocumentManager.getInstance(project).doPostponedOperationsAndUnblockDocument(myFixture.editor.document)
+            PsiDocumentManager.getInstance(project).commitDocument(myFixture.editor.document)
+        }
+
+        assertEmpty(psiFile.getVitePressTemplateInterpolationHosts())
     }
 }
