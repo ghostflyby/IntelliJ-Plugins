@@ -59,11 +59,12 @@ internal class VitePressPackageJsonScriptIndex : Disposable {
         val scriptCommands = parseScriptsFromFile(packageJsonFile)
         if (scriptCommands.isEmpty()) return emptySet()
         val packageJsonDirectory = packageJsonFile.parent ?: return emptySet()
+        val packageJsonDirectoryPath = packageJsonDirectory.toNioPathOrNull() ?: return emptySet()
 
         val roots = linkedSetOf<Path>()
         scriptNames.forEach { scriptName ->
             val command = scriptCommands[scriptName] ?: return@forEach
-            extractVitePressRootPaths(command, packageJsonDirectory)
+            extractVitePressRootPaths(command, packageJsonDirectoryPath)
                 .asSequence()
                 .mapNotNull { path -> resolvePathToVitePressRoot(path) }
                 .forEach { root -> roots.add(root) }
@@ -118,44 +119,107 @@ private data class PackageJsonScriptsCache(
     val scripts: Map<String, String>,
 )
 
-private fun extractVitePressRootPaths(command: String, packageJsonDirectory: VirtualFile): Set<Path> {
-    val packageJsonDirectoryPath = packageJsonDirectory.toNioPathOrNull() ?: return emptySet()
+internal fun extractVitePressRootPaths(command: String, packageJsonDirectoryPath: Path): Set<Path> {
     val resolvedRoots = linkedSetOf<Path>()
+    var workingDirectory = packageJsonDirectoryPath
 
     splitCommandSegments(command).forEach { segment ->
         val tokens = tokenizeCommandSegment(segment)
         if (tokens.isEmpty()) return@forEach
 
+        parseCdInvocation(tokens)?.let { cd ->
+            workingDirectory = resolvePathAgainstBase(workingDirectory, cd.targetDirectory) ?: workingDirectory
+            return@forEach
+        }
+
         val invocation = parseVitePressInvocation(tokens) ?: return@forEach
         val rootPath = invocation.rootDirectoryArg?.let { arg ->
-            resolvePathAgainstBase(packageJsonDirectoryPath, arg)
-        } ?: packageJsonDirectoryPath
+            resolvePathAgainstBase(workingDirectory, arg)
+        } ?: workingDirectory
         resolvedRoots.add(rootPath.normalize())
     }
     return resolvedRoots
 }
 
+private data class ParsedCdInvocation(
+    val targetDirectory: String,
+)
+
 private data class ParsedVitePressInvocation(
     val rootDirectoryArg: String?,
 )
+
+private fun parseCdInvocation(tokens: List<String>): ParsedCdInvocation? {
+    if (!tokens.firstOrNull().equals("cd", ignoreCase = true)) return null
+    val targetDirectory =
+        tokens.asSequence()
+            .drop(1)
+            .firstOrNull { token -> token != "--" && !token.startsWith("-") }
+            ?: return null
+    return ParsedCdInvocation(targetDirectory)
+}
 
 private fun parseVitePressInvocation(tokens: List<String>): ParsedVitePressInvocation? {
     val vitepressIndex = tokens.indexOfFirst { token -> isVitePressExecutableToken(token) }
     if (vitepressIndex < 0) return null
 
-    var subcommandIndex = vitepressIndex + 1
-    if (tokens.getOrNull(subcommandIndex) == "--") {
-        subcommandIndex++
+    var argumentIndex = vitepressIndex + 1
+    if (tokens.getOrNull(argumentIndex) == "--") {
+        argumentIndex++
     }
 
-    val subcommand = tokens.getOrNull(subcommandIndex)?.lowercase() ?: return null
-    if (subcommand !in VITEPRESS_COMMANDS) return null
+    val command =
+        when (val explicitCommand = tokens.getOrNull(argumentIndex)?.lowercase()) {
+            null -> VITEPRESS_DEV_COMMAND
+            in VITEPRESS_COMMANDS -> {
+                argumentIndex++
+                explicitCommand
+            }
 
-    val rootDirectoryArg =
-        tokens.asSequence()
-            .drop(subcommandIndex + 1)
-            .firstOrNull { token -> !token.startsWith("-") }
+            in VITEPRESS_NON_PREVIEW_COMMANDS -> return null
+            else -> VITEPRESS_DEV_COMMAND
+        }
+
+    val rootDirectoryArg = parseVitePressRootArgument(tokens, argumentIndex, command)
     return ParsedVitePressInvocation(rootDirectoryArg)
+}
+
+private fun parseVitePressRootArgument(tokens: List<String>, startIndex: Int, command: String): String? {
+    val optionValueKinds = VITEPRESS_OPTION_VALUE_KINDS[command] ?: emptyMap()
+    var index = startIndex
+
+    while (index < tokens.size) {
+        val token = tokens[index]
+        when {
+            token == "--" -> {
+                index++
+                break
+            }
+
+            !token.startsWith("-") -> return token
+            else -> {
+                val optionName = token.substringBefore('=')
+                val valueKind = optionValueKinds[optionName] ?: VitePressOptionValueKind.NONE
+                val hasInlineValue = token.contains('=')
+
+                index += when {
+                    hasInlineValue -> 1
+                    valueKind == VitePressOptionValueKind.REQUIRED && index + 1 < tokens.size -> 2
+                    valueKind == VitePressOptionValueKind.OPTIONAL &&
+                            tokens.getOrNull(index + 1)?.startsWith("-") == false -> 2
+
+                    else -> 1
+                }
+            }
+        }
+    }
+
+    while (index < tokens.size) {
+        val token = tokens[index]
+        if (!token.startsWith("-")) return token
+        index++
+    }
+    return null
 }
 
 private fun isVitePressExecutableToken(token: String): Boolean {
@@ -294,6 +358,29 @@ private fun normalizeToVitePressRoot(file: VirtualFile): VirtualFile? {
     return null
 }
 
-private val VITEPRESS_COMMANDS = setOf("dev", "preview")
+private enum class VitePressOptionValueKind {
+    NONE,
+    REQUIRED,
+    OPTIONAL,
+}
+
+private val VITEPRESS_COMMANDS = setOf(VITEPRESS_DEV_COMMAND, VITEPRESS_PREVIEW_COMMAND)
+private val VITEPRESS_NON_PREVIEW_COMMANDS = setOf("build")
+private val VITEPRESS_OPTION_VALUE_KINDS = mapOf(
+    VITEPRESS_DEV_COMMAND to mapOf(
+        "--open" to VitePressOptionValueKind.OPTIONAL,
+        "--port" to VitePressOptionValueKind.REQUIRED,
+        "--base" to VitePressOptionValueKind.REQUIRED,
+        "--cors" to VitePressOptionValueKind.NONE,
+        "--strictPort" to VitePressOptionValueKind.NONE,
+        "--force" to VitePressOptionValueKind.NONE,
+    ),
+    VITEPRESS_PREVIEW_COMMAND to mapOf(
+        "--base" to VitePressOptionValueKind.REQUIRED,
+        "--port" to VitePressOptionValueKind.REQUIRED,
+    ),
+)
+private const val VITEPRESS_DEV_COMMAND: String = "dev"
+private const val VITEPRESS_PREVIEW_COMMAND: String = "preview"
 private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
 private val SCRIPTS_CACHE_KEY = Key.create<PackageJsonScriptsCache>("vitepress.packageJsonScriptsCache")
