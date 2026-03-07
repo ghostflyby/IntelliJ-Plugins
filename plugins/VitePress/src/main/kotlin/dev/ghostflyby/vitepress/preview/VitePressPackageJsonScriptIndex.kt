@@ -25,7 +25,6 @@ package dev.ghostflyby.vitepress.preview
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -36,9 +35,9 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.util.*
 
-@Service(Service.Level.PROJECT)
-internal class VitePressPackageJsonScriptIndex(private val project: Project) : Disposable {
-    private val virtualFileManager = service<VirtualFileManager>()
+@Service
+internal class VitePressPackageJsonScriptIndex : Disposable {
+    private val virtualFileManager get() = service<VirtualFileManager>()
     private val json = Json { ignoreUnknownKeys = true }
     private val cachedFiles = Collections.synchronizedSet(
         Collections.newSetFromMap(WeakHashMap<VirtualFile, Boolean>()),
