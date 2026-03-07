@@ -173,7 +173,7 @@ private fun parseVitePressInvocation(tokens: List<String>): ParsedVitePressInvoc
             null -> VITEPRESS_DEV_COMMAND
             in VITEPRESS_COMMANDS -> {
                 argumentIndex++
-                explicitCommand
+                normalizeVitePressCommand(explicitCommand)
             }
 
             in VITEPRESS_NON_PREVIEW_COMMANDS -> return null
@@ -220,6 +220,13 @@ private fun parseVitePressRootArgument(tokens: List<String>, startIndex: Int, co
         index++
     }
     return null
+}
+
+private fun normalizeVitePressCommand(command: String): String {
+    return when (command) {
+        VITEPRESS_SERVE_COMMAND -> VITEPRESS_PREVIEW_COMMAND
+        else -> command
+    }
 }
 
 private fun isVitePressExecutableToken(token: String): Boolean {
@@ -364,7 +371,7 @@ private enum class VitePressOptionValueKind {
     OPTIONAL,
 }
 
-private val VITEPRESS_COMMANDS = setOf(VITEPRESS_DEV_COMMAND, VITEPRESS_PREVIEW_COMMAND)
+private val VITEPRESS_COMMANDS = setOf(VITEPRESS_DEV_COMMAND, VITEPRESS_PREVIEW_COMMAND, VITEPRESS_SERVE_COMMAND)
 private val VITEPRESS_NON_PREVIEW_COMMANDS = setOf("build")
 private val VITEPRESS_OPTION_VALUE_KINDS = mapOf(
     VITEPRESS_DEV_COMMAND to mapOf(
@@ -382,5 +389,6 @@ private val VITEPRESS_OPTION_VALUE_KINDS = mapOf(
 )
 private const val VITEPRESS_DEV_COMMAND: String = "dev"
 private const val VITEPRESS_PREVIEW_COMMAND: String = "preview"
+private const val VITEPRESS_SERVE_COMMAND: String = "serve"
 private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
 private val SCRIPTS_CACHE_KEY = Key.create<PackageJsonScriptsCache>("vitepress.packageJsonScriptsCache")

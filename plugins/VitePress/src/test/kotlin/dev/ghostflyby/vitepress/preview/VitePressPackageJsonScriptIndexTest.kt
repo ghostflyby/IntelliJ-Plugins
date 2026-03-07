@@ -64,6 +64,13 @@ internal class VitePressPackageJsonScriptIndexTest {
     }
 
     @Test
+    fun `supports omitted dev subcommand with base option and root`() {
+        val roots = extractVitePressRootPaths("vitepress --base /docs/ site", Path.of("/repo"))
+
+        assertEquals(setOf(Path.of("/repo/site")), roots)
+    }
+
+    @Test
     fun `supports dev options before root`() {
         val roots = extractVitePressRootPaths("vitepress dev --open /guide --port 3000 docs", Path.of("/repo"))
 
@@ -78,8 +85,29 @@ internal class VitePressPackageJsonScriptIndexTest {
     }
 
     @Test
+    fun `supports preview base option before root`() {
+        val roots = extractVitePressRootPaths("vitepress preview --base /docs/ site", Path.of("/repo"))
+
+        assertEquals(setOf(Path.of("/repo/site")), roots)
+    }
+
+    @Test
     fun `supports preview subcommand after cd with options`() {
         val roots = extractVitePressRootPaths("cd site && vitepress preview --port 4173", Path.of("/repo"))
+
+        assertEquals(setOf(Path.of("/repo/site")), roots)
+    }
+
+    @Test
+    fun `supports serve alias for preview`() {
+        val roots = extractVitePressRootPaths("vitepress serve docs", Path.of("/repo"))
+
+        assertEquals(setOf(Path.of("/repo/docs")), roots)
+    }
+
+    @Test
+    fun `supports serve alias with preview options`() {
+        val roots = extractVitePressRootPaths("cd site && vitepress serve --base /docs/ --port 4173", Path.of("/repo"))
 
         assertEquals(setOf(Path.of("/repo/site")), roots)
     }
