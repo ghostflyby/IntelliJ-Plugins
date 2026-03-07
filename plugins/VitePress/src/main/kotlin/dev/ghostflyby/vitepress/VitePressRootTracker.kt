@@ -279,7 +279,7 @@ private val isRootCacheKey =
             val value = tracker.isVitePressRoot(it)
             CachedValueProvider.Result.create(value, tracker, it)
         }
-    }.toAutoCleanKey(PluginDisposable)
+    }.toAutoCleanKey { PluginDisposable }
 
 private val isUnderRootCacheKey =
     NotNullLazyKey.createLazyKey<CachedValue<Boolean>, VirtualFile>("dev.ghostflyby.vitepress.isUnderRootCache") {
@@ -288,7 +288,7 @@ private val isUnderRootCacheKey =
             val value = tracker.isUnderVitePressRoot(it)
             CachedValueProvider.Result.create(value, tracker, it)
         }
-    }.toAutoCleanKey(PluginDisposable)
+    }.toAutoCleanKey { PluginDisposable }
 
 public val VirtualFile.isVitePressRoot: CachedValue<Boolean> by isRootCacheKey
 public val VirtualFile.isUnderVitePressRoot: CachedValue<Boolean> by isUnderRootCacheKey

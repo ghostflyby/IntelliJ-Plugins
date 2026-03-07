@@ -27,18 +27,22 @@ import com.intellij.openapi.util.*
 import com.intellij.util.disposeOnCompletion
 import kotlinx.coroutines.CoroutineScope
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.reflect.KProperty
 
-public class AutoCleanKey<K : Key<T>, T> private constructor(public val key: K) {
-    public constructor(disposable: Disposable, key: K) : this(key) {
-        Disposer.register(disposable) {
-            synchronized(holders) {
-                holders.forEach {
-                    it.removeUserData(this.key)
-                }
-            }
-        }
-    }
+public class AutoCleanKey<K : Key<T>, T> private constructor(
+    public val key: K,
+    private val cleanupRegistrar: ((AutoCleanKey<K, T>) -> Unit)? = null,
+) {
+    public constructor(disposable: Disposable, key: K) : this(
+        key,
+        { cleaner -> cleaner.registerCleanup(disposable) },
+    )
+
+    public constructor(disposableProvider: () -> Disposable, key: K) : this(
+        key,
+        { cleaner -> cleaner.registerCleanup(disposableProvider()) },
+    )
 
     public constructor(scope: CoroutineScope, key: K) : this(
         Disposer.newDisposable().apply {
@@ -53,9 +57,28 @@ public class AutoCleanKey<K : Key<T>, T> private constructor(public val key: K) 
             WeakHashMap(),
         ),
     )
+    private val cleanupRegistered = AtomicBoolean(false)
 
-    internal fun put(holder: UserDataHolder) {
+    internal fun track(holder: UserDataHolder) {
+        ensureCleanupRegistered()
         holders.add(holder)
+    }
+
+    private fun ensureCleanupRegistered() {
+        val registrar = cleanupRegistrar ?: return
+        if (cleanupRegistered.compareAndSet(false, true)) {
+            registrar(this)
+        }
+    }
+
+    private fun registerCleanup(disposable: Disposable) {
+        Disposer.register(disposable) {
+            synchronized(holders) {
+                holders.forEach {
+                    it.removeUserData(key)
+                }
+            }
+        }
     }
 }
 
@@ -63,6 +86,7 @@ public operator fun <H : UserDataHolder, K : Key<T>, T> AutoCleanKey<K, T>.getVa
     thisRef: H,
     property: KProperty<*>,
 ): T? {
+    track(thisRef)
     return property.run { thisRef.getUserData(key) }
 }
 
@@ -71,7 +95,7 @@ public operator fun <H : UserDataHolder, K : Key<T>, T> AutoCleanKey<K, T>.setVa
     property: KProperty<*>,
     value: T?,
 ) {
-    put(thisRef)
+    track(thisRef)
     property.run { thisRef.putUserData(key, value) }
 }
 
@@ -80,6 +104,7 @@ public operator fun <H : UserDataHolder, K : KeyWithDefaultValue<T>, T> AutoClea
     thisRef: H,
     property: KProperty<*>,
 ): T {
+    track(thisRef)
     return property.run { thisRef.getUserData(key) ?: key.defaultValue }
 }
 
@@ -88,11 +113,16 @@ public operator fun <H : UserDataHolder, K : NotNullLazyKey<T, H>, T> AutoCleanK
     thisRef: H,
     property: KProperty<*>,
 ): T {
+    track(thisRef)
     return property.run { key.getValue(thisRef) }
 }
 
 public fun <K : Key<T>, T> K.toAutoCleanKey(disposable: Disposable): AutoCleanKey<K, T> {
     return AutoCleanKey(disposable, this)
+}
+
+public fun <K : Key<T>, T> K.toAutoCleanKey(disposableProvider: () -> Disposable): AutoCleanKey<K, T> {
+    return AutoCleanKey(disposableProvider, this)
 }
 
 public fun <K : Key<T>, T> K.toAutoCleanKey(scope: CoroutineScope): AutoCleanKey<K, T> {
