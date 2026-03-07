@@ -28,7 +28,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.psi.impl.source.PsiFileImpl
 import com.intellij.psi.templateLanguages.TemplateLanguageFileViewProvider
-import org.intellij.plugins.markdown.lang.MarkdownElementTypes.MARKDOWN_TEMPLATE_DATA
 import org.jetbrains.vuejs.lang.html.VueLanguage
 
 internal class VitePressFileViewProvider(manager: PsiManager, virtualFile: VirtualFile, eventSystemEnabled: Boolean) :
@@ -60,7 +59,7 @@ internal class VitePressFileViewProvider(manager: PsiManager, virtualFile: Virtu
         if (language != templateDataLanguage) return null
         val file = LanguageParserDefinitions.INSTANCE.forLanguage(language).createFile(this)
         if (file is PsiFileImpl) {
-            file.contentElementType = MARKDOWN_TEMPLATE_DATA
+            file.contentElementType = VitePressTemplateDataElementType
         }
         return file
     }
@@ -78,4 +77,3 @@ internal class VitePressFileViewProvider(manager: PsiManager, virtualFile: Virtu
 
 
 }
-

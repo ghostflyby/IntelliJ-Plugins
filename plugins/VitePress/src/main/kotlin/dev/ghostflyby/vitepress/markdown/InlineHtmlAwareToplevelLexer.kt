@@ -24,7 +24,9 @@ package dev.ghostflyby.vitepress.markdown
 
 import com.intellij.lexer.LexerBase
 import com.intellij.psi.tree.IElementType
+import com.intellij.psi.tree.TokenSet
 import org.intellij.markdown.flavours.MarkdownFlavourDescriptor
+import org.intellij.plugins.markdown.lang.MarkdownTokenTypeSets
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 import kotlin.math.min
@@ -91,6 +93,11 @@ internal class InlineHtmlAwareToplevelLexer(
 
         // Skip further processing for already-HTML tokens.
         if (type == MarkdownTokenTypes.HTML_BLOCK_CONTENT) {
+            segments += Segment(tokenStart, tokenEnd, type)
+            return
+        }
+
+        if (!SPLITTABLE_TOKEN_TYPES.contains(type)) {
             segments += Segment(tokenStart, tokenEnd, type)
             return
         }
@@ -174,4 +181,15 @@ internal class InlineHtmlAwareToplevelLexer(
 
     private data class Segment(val start: Int, val end: Int, val type: IElementType)
     private data class Range(val start: Int, val end: Int)
+
+    private companion object {
+        val SPLITTABLE_TOKEN_TYPES: TokenSet = TokenSet.orSet(
+            MarkdownTokenTypeSets.HEADER_CONTENT,
+            TokenSet.create(
+                MarkdownTokenTypes.TEXT,
+                MarkdownTokenTypes.WHITE_SPACE,
+                MarkdownTokenTypes.EOL,
+            ),
+        )
+    }
 }
