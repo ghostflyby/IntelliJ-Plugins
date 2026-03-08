@@ -4,7 +4,7 @@
 <idea-plugin>
 
     <id>dev.ghostflyby.vitepress</id>
-    <name>Markdown</name>
+    <name>VitePress</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.ultimate</depends>
