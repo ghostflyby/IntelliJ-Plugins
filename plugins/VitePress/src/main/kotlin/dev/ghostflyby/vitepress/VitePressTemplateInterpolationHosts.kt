@@ -49,6 +49,13 @@ internal data class VitePressTemplateInterpolationHost(
     val guestRanges: List<TextRange>,
 )
 
+internal data class VitePressTemplateInterpolationSnapshot(
+    val hosts: List<VitePressTemplateInterpolationHost>,
+    val headingInterpolationRanges: List<TextRange>,
+    val headingGuestRanges: List<TextRange>,
+    val linkGuestRanges: List<TextRange>,
+)
+
 internal fun collectTemplateInterpolationHosts(
     sourceCode: CharSequence,
 ): List<VitePressTemplateInterpolationHost> {
@@ -89,37 +96,44 @@ internal fun collectTemplateInterpolationHosts(
     return result
 }
 
+private fun buildTemplateInterpolationSnapshot(
+    sourceCode: CharSequence,
+): VitePressTemplateInterpolationSnapshot {
+    val hosts = collectTemplateInterpolationHosts(sourceCode)
+    val headingHosts =
+        hosts.filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
+    val linkHosts = hosts.filter { it.kind == VitePressTemplateHostKind.LinkText }
+    return VitePressTemplateInterpolationSnapshot(
+        hosts = hosts,
+        headingInterpolationRanges = headingHosts.flatMap { it.interpolationRanges },
+        headingGuestRanges = headingHosts.flatMap { it.guestRanges },
+        linkGuestRanges = linkHosts.flatMap { it.guestRanges },
+    )
+}
+
 internal fun PsiFile.getVitePressTemplateInterpolationHosts(): List<VitePressTemplateInterpolationHost> {
+    return getVitePressTemplateInterpolationSnapshot().hosts
+}
+
+internal fun PsiFile.getVitePressTemplateInterpolationSnapshot(): VitePressTemplateInterpolationSnapshot {
     return CachedValuesManager.getCachedValue(this, TEMPLATE_INTERPOLATION_HOSTS_KEY) {
         CachedValueProvider.Result.create(
-            collectTemplateInterpolationHosts(text),
+            buildTemplateInterpolationSnapshot(text),
             this,
         )
     }
 }
 
 internal fun PsiFile.getVitePressHeadingInterpolationRanges(): List<TextRange> {
-    return getVitePressTemplateInterpolationHosts()
-        .asSequence()
-        .filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
-        .flatMap { it.interpolationRanges.asSequence() }
-        .toList()
+    return getVitePressTemplateInterpolationSnapshot().headingInterpolationRanges
 }
 
 internal fun PsiFile.getVitePressHeadingGuestRanges(): List<TextRange> {
-    return getVitePressTemplateInterpolationHosts()
-        .asSequence()
-        .filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
-        .flatMap { it.guestRanges.asSequence() }
-        .toList()
+    return getVitePressTemplateInterpolationSnapshot().headingGuestRanges
 }
 
 internal fun PsiFile.getVitePressLinkGuestRanges(): List<TextRange> {
-    return getVitePressTemplateInterpolationHosts()
-        .asSequence()
-        .filter { it.kind == VitePressTemplateHostKind.LinkText }
-        .flatMap { it.guestRanges.asSequence() }
-        .toList()
+    return getVitePressTemplateInterpolationSnapshot().linkGuestRanges
 }
 
 internal fun subtractRanges(baseRange: TextRange, excludedRanges: List<TextRange>): List<TextRange> {
@@ -317,7 +331,7 @@ private fun containsMarkdownInlineMarker(sourceCode: CharSequence, start: Int, e
 }
 
 private val TEMPLATE_INTERPOLATION_HOSTS_KEY =
-    Key.create<CachedValue<List<VitePressTemplateInterpolationHost>>>("dev.ghostflyby.vitepress.templateInterpolationHosts")
+    Key.create<CachedValue<VitePressTemplateInterpolationSnapshot>>("dev.ghostflyby.vitepress.templateInterpolationHosts")
 
 private const val TEMPLATE_INTERPOLATION_OPEN: String = "{{"
 private const val TEMPLATE_INTERPOLATION_CLOSE: String = "}}"

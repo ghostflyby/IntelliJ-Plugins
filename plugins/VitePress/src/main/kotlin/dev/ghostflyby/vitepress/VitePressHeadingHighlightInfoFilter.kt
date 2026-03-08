@@ -33,26 +33,33 @@ import org.intellij.plugins.markdown.highlighting.MarkdownHighlighterColors
 
 internal class VitePressHeadingHighlightInfoFilter : HighlightInfoFilter {
     override fun accept(highlightInfo: HighlightInfo, psiFile: PsiFile?): Boolean {
-        if (psiFile?.virtualFile?.isVitePressFileType() != true) {
-            return true
-        }
         if (highlightInfo.severity != HighlightSeverity.INFORMATION) {
             return true
         }
-        val highlightRange = TextRange(highlightInfo.startOffset, highlightInfo.endOffset)
-        return when (highlightInfo.forcedTextAttributesKey) {
-            in headingTextAttributes -> {
-                psiFile.getVitePressHeadingGuestRanges()
-                    .none { guestRange -> guestRange.intersectsStrict(highlightRange) }
+        val forcedTextAttributesKey = highlightInfo.forcedTextAttributesKey ?: return true
+        val targetKind =
+            when (forcedTextAttributesKey) {
+                in headingTextAttributes -> HighlightTargetKind.Heading
+                in linkTextAttributes -> HighlightTargetKind.Link
+                else -> return true
             }
-
-            in linkTextAttributes -> {
-                psiFile.getVitePressLinkGuestRanges().none { guestRange -> guestRange.intersectsStrict(highlightRange) }
-            }
-
-            else -> true
+        if (psiFile?.virtualFile?.isVitePressFileType() != true) {
+            return true
         }
+
+        val highlightRange = TextRange(highlightInfo.startOffset, highlightInfo.endOffset)
+        val guestRanges =
+            when (targetKind) {
+                HighlightTargetKind.Heading -> psiFile.getVitePressHeadingGuestRanges()
+                HighlightTargetKind.Link -> psiFile.getVitePressLinkGuestRanges()
+            }
+        return guestRanges.none { guestRange -> guestRange.intersectsStrict(highlightRange) }
     }
+}
+
+private enum class HighlightTargetKind {
+    Heading,
+    Link,
 }
 
 private val headingTextAttributes: Set<TextAttributesKey> =
