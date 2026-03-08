@@ -40,33 +40,46 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
     override fun collectTemplateModifications(sourceCode: CharSequence, baseLexer: Lexer): TemplateDataModifications {
         val guestRanges = mutableListOf<TextRange>()
         val interpolationHosts = collectTemplateInterpolationHosts(sourceCode)
-        val hasTopLevelMustache = interpolationHosts.any { host ->
-            host.interpolationRanges.any { interpolationRange ->
-                host.htmlGuestRanges.none { htmlGuestRange -> htmlGuestRange.contains(interpolationRange) }
-            }
-        }
+        val topLevelMustacheRanges = mergeRanges(
+            interpolationHosts.flatMap { host ->
+                host.interpolationRanges.filter { interpolationRange ->
+                    host.htmlGuestRanges.none { htmlGuestRange -> htmlGuestRange.contains(interpolationRange) }
+                }
+            },
+        )
         guestRanges += interpolationHosts.flatMap { it.guestRanges }
-        baseLexer.start(sourceCode)
+        val htmlBlockLexer = InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor)
+        htmlBlockLexer.start(sourceCode)
 
-        while (baseLexer.tokenType != null) {
-            val range = TextRange.create(baseLexer.tokenStart, baseLexer.tokenEnd)
-            when (baseLexer.tokenType) {
+        while (htmlBlockLexer.tokenType != null) {
+            val range = TextRange.create(htmlBlockLexer.tokenStart, htmlBlockLexer.tokenEnd)
+            when (htmlBlockLexer.tokenType) {
                 MarkdownTokenTypes.HTML_BLOCK_CONTENT -> guestRanges += range
             }
-            baseLexer.advance()
+            htmlBlockLexer.advance()
         }
 
         val outerRanges = subtractRanges(TextRange(0, sourceCode.length), mergeRanges(guestRanges))
 
         val modifications = TemplateDataModifications()
-        if (hasTopLevelMustache) {
-            modifications.addRangeToRemove(0, TEMPLATE_ROOT_PREFIX)
-        }
-        outerRanges.forEach { outerRange ->
-            modifications.addOuterRange(outerRange)
-        }
-        if (hasTopLevelMustache) {
-            modifications.addRangeToRemove(sourceCode.length, TEMPLATE_ROOT_SUFFIX)
+        val operations =
+            buildList {
+                topLevelMustacheRanges.forEach { mustacheRange ->
+                    add(TemplateModificationOperation.insertion(mustacheRange.startOffset, TEMPLATE_BLOCK_PREFIX))
+                    add(TemplateModificationOperation.insertion(mustacheRange.endOffset, TEMPLATE_BLOCK_SUFFIX))
+                }
+                outerRanges.forEach { outerRange ->
+                    add(TemplateModificationOperation.outer(outerRange))
+                }
+            }.sortedWith(compareBy(TemplateModificationOperation::offset, TemplateModificationOperation::priority))
+        operations.forEach { operation ->
+            when (operation) {
+                is TemplateModificationOperation.Insertion ->
+                    modifications.addRangeToRemove(operation.offset, operation.text)
+
+                is TemplateModificationOperation.Outer ->
+                    modifications.addOuterRange(operation.range)
+            }
         }
         return modifications
     }
@@ -78,12 +91,37 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
                 InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor),
             )
         val applied = modifications.applyToText(sourceCode, this)
-        return applied.first as CharSequence
+        return applied.first
     }
 }
 
 internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
     return VitePressTemplateDataElementType.buildTemplateDataText(sourceCode)
 }
-private const val TEMPLATE_ROOT_PREFIX: String = "<vitepress-template-root>"
-private const val TEMPLATE_ROOT_SUFFIX: String = "</vitepress-template-root>"
+private const val TEMPLATE_BLOCK_PREFIX: String = "<template>"
+private const val TEMPLATE_BLOCK_SUFFIX: String = "</template>"
+
+private sealed interface TemplateModificationOperation {
+    val offset: Int
+    val priority: Int
+
+    data class Insertion(
+        override val offset: Int,
+        val text: CharSequence,
+    ) : TemplateModificationOperation {
+        override val priority: Int = 0
+    }
+
+    data class Outer(
+        val range: TextRange,
+    ) : TemplateModificationOperation {
+        override val offset: Int = range.startOffset
+        override val priority: Int = 1
+    }
+
+    companion object {
+        fun insertion(offset: Int, text: CharSequence): TemplateModificationOperation = Insertion(offset, text)
+
+        fun outer(range: TextRange): TemplateModificationOperation = Outer(range)
+    }
+}

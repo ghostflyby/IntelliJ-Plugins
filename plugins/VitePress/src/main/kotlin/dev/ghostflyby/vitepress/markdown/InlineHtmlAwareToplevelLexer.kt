@@ -51,6 +51,7 @@ internal class InlineHtmlAwareToplevelLexer(
 
     private val segments = mutableListOf<Segment>()
     private var currentIndex: Int = -1
+    private var consumedTopLevelHtmlEndOffset: Int = 0
 
     override fun start(buffer: CharSequence, startOffset: Int, endOffset: Int, initialState: Int) {
         this.buffer = buffer
@@ -60,6 +61,7 @@ internal class InlineHtmlAwareToplevelLexer(
 
         segments.clear()
         currentIndex = -1
+        consumedTopLevelHtmlEndOffset = startOffset
 
         delegate.start(buffer, startOffset, endOffset, initialState)
         while (delegate.tokenType != null) {
@@ -90,19 +92,22 @@ internal class InlineHtmlAwareToplevelLexer(
 
     private fun splitAndAdd(type: IElementType, tokenStart: Int, tokenEnd: Int) {
         if (tokenStart >= tokenEnd) return
+        if (tokenEnd <= consumedTopLevelHtmlEndOffset) return
 
-        // Skip further processing for already-HTML tokens.
+        val effectiveStart = maxOf(tokenStart, consumedTopLevelHtmlEndOffset)
+        if (effectiveStart >= tokenEnd) return
+
         if (type == MarkdownTokenTypes.HTML_BLOCK_CONTENT) {
-            segments += Segment(tokenStart, tokenEnd, type)
+            appendTopLevelHtmlSegment(effectiveStart, tokenEnd)
             return
         }
 
         if (!SPLITTABLE_TOKEN_TYPES.contains(type)) {
-            segments += Segment(tokenStart, tokenEnd, type)
+            segments += Segment(effectiveStart, tokenEnd, type)
             return
         }
 
-        var pos = tokenStart
+        var pos = effectiveStart
         while (pos < tokenEnd) {
             val nextLt = buffer.indexOf('<', pos).takeIf { it in pos until tokenEnd } ?: tokenEnd
             if (nextLt > pos) {
@@ -111,7 +116,7 @@ internal class InlineHtmlAwareToplevelLexer(
 
             if (nextLt >= tokenEnd) break
 
-            val htmlRange = findHtmlRange(nextLt, tokenEnd)
+            val htmlRange = findInlineHtmlRange(nextLt, tokenEnd)
             if (htmlRange != null) {
                 val end = htmlRange.end.coerceAtMost(tokenEnd)
                 if (end > htmlRange.start) {
@@ -131,12 +136,30 @@ internal class InlineHtmlAwareToplevelLexer(
         }
     }
 
-    private fun findHtmlRange(start: Int, tokenEnd: Int): Range? {
-        if (start + 1 >= tokenEnd) return null
+    private fun appendTopLevelHtmlSegment(tokenStart: Int, tokenEnd: Int) {
+        val expandedRange = findTopLevelHtmlRange(tokenStart)
+        if (expandedRange != null) {
+            segments += Segment(expandedRange.start, expandedRange.end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
+            consumedTopLevelHtmlEndOffset = expandedRange.end
+        } else {
+            segments += Segment(tokenStart, tokenEnd, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
+        }
+    }
+
+    private fun findTopLevelHtmlRange(start: Int): Range? {
+        return findHtmlRange(start, endOffset)?.takeIf { it.start == start }
+    }
+
+    private fun findInlineHtmlRange(start: Int, tokenEnd: Int): Range? {
+        return findHtmlRange(start, tokenEnd)
+    }
+
+    private fun findHtmlRange(start: Int, searchEnd: Int): Range? {
+        if (start + 1 >= searchEnd) return null
 
         // Match using the same permissive start patterns as VitePressHtmlBlockProvider (line-based).
         val lineEndExclusive = buffer.indexOf('\n', start).let { newlineIndex ->
-            if (newlineIndex == -1 || newlineIndex > tokenEnd) tokenEnd else newlineIndex
+            if (newlineIndex == -1 || newlineIndex > searchEnd) searchEnd else newlineIndex
         }
         val lineSlice = buffer.subSequence(start, lineEndExclusive).toString()
 
@@ -168,12 +191,12 @@ internal class InlineHtmlAwareToplevelLexer(
 
         val closeRegex = patterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return Range(start, afterStart)
 
-        val searchSlice = buffer.subSequence(afterStart, tokenEnd).toString()
+        val searchSlice = buffer.subSequence(afterStart, searchEnd).toString()
         val closeMatch = closeRegex.find(searchSlice)
         val end = if (closeMatch != null) {
             afterStart + closeMatch.range.last + 1
         } else {
-            tokenEnd
+            searchEnd
         }
 
         return Range(start, end)
@@ -183,7 +206,7 @@ internal class InlineHtmlAwareToplevelLexer(
     private data class Range(val start: Int, val end: Int)
 
     private companion object {
-        val SPLITTABLE_TOKEN_TYPES: TokenSet = TokenSet.orSet(
+        private val SPLITTABLE_TOKEN_TYPES: TokenSet = TokenSet.orSet(
             MarkdownTokenTypeSets.HEADER_CONTENT,
             TokenSet.create(
                 org.intellij.plugins.markdown.lang.MarkdownElementTypes.LINK_TEXT,

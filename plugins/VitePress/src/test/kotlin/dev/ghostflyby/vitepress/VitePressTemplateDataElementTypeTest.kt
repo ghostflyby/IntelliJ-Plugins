@@ -31,22 +31,36 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
 
     fun testWrapsTopLevelMustacheIntoSyntheticRoot() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            "<template>{{a*2}}</template>",
             buildVitePressTemplateDataText("{{a*2}}").toString(),
         )
     }
 
     fun testExtractsTopLevelMustacheFromParagraphText() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            "<template>{{a*2}}</template>",
             buildVitePressTemplateDataText("before {{a*2}} after").toString(),
         )
     }
 
     fun testKeepsExistingHtmlTemplateDataAndTopLevelMustacheTogether() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}<Comp :value=\"n\" /></vitepress-template-root>",
+            "<template>{{a*2}}</template><Comp :value=\"n\" />",
             buildVitePressTemplateDataText("{{a*2}}\n<Comp :value=\"n\" />").toString(),
+        )
+    }
+
+    fun testKeepsScriptBlockTopLevelWhenTopLevelMustacheExists() {
+        assertEquals(
+            "<template>{{a*2}}</template><script>\nconst answer = 42\n</script>",
+            buildVitePressTemplateDataText("{{a*2}}\n<script>\nconst answer = 42\n</script>").toString(),
+        )
+    }
+
+    fun testKeepsTopLevelMustacheTopLevelWhenScriptBlockPrecedesIt() {
+        assertEquals(
+            "<script>\nconst answer = 42\n</script><template>{{a*2}}</template>",
+            buildVitePressTemplateDataText("<script>\nconst answer = 42\n</script>\n{{a*2}}").toString(),
         )
     }
 
@@ -56,14 +70,14 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
 
     fun testExtractsMustacheInsideAtxHeading() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            "<template>{{a*2}}</template>",
             buildVitePressTemplateDataText("# {{a*2}}").toString(),
         )
     }
 
     fun testExtractsMustacheInsideSetextHeading() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            "<template>{{a*2}}</template>",
             buildVitePressTemplateDataText("{{a*2}}\n===").toString(),
         )
     }
@@ -74,7 +88,7 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
 
     fun testExtractsMustacheInsideLinkText() {
         assertEquals(
-            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            "<template>{{a*2}}</template>",
             buildVitePressTemplateDataText("[{{a*2}}](#demo)").toString(),
         )
     }
