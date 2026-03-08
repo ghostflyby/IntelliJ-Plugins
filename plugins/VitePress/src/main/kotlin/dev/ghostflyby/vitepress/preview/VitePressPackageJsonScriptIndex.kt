@@ -35,7 +35,7 @@ import kotlinx.serialization.json.Json
 import java.nio.file.Path
 import java.util.*
 
-@Service
+@Service(Service.Level.PROJECT)
 internal class VitePressPackageJsonScriptIndex : Disposable {
     private val virtualFileManager get() = service<VirtualFileManager>()
     private val json = Json { ignoreUnknownKeys = true }
