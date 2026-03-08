@@ -39,9 +39,13 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
 ) {
     override fun collectTemplateModifications(sourceCode: CharSequence, baseLexer: Lexer): TemplateDataModifications {
         val guestRanges = mutableListOf<TextRange>()
-        val interpolationHosts = collectTemplateInterpolationHosts(sourceCode, baseLexer)
-        val hasTopLevelMustache = interpolationHosts.isNotEmpty()
-        guestRanges += interpolationHosts.flatMap { it.interpolationRanges }
+        val interpolationHosts = collectTemplateInterpolationHosts(sourceCode)
+        val hasTopLevelMustache = interpolationHosts.any { host ->
+            host.interpolationRanges.any { interpolationRange ->
+                host.htmlGuestRanges.none { htmlGuestRange -> htmlGuestRange.contains(interpolationRange) }
+            }
+        }
+        guestRanges += interpolationHosts.flatMap { it.guestRanges }
         baseLexer.start(sourceCode)
 
         while (baseLexer.tokenType != null) {
@@ -80,23 +84,6 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
 
 internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
     return VitePressTemplateDataElementType.buildTemplateDataText(sourceCode)
-}
-
-private fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
-    if (ranges.isEmpty()) return emptyList()
-    val sortedRanges = ranges.sortedBy { it.startOffset }
-    val result = mutableListOf<TextRange>()
-    var current = sortedRanges.first()
-    sortedRanges.drop(1).forEach { range ->
-        if (range.startOffset <= current.endOffset) {
-            current = TextRange(current.startOffset, maxOf(current.endOffset, range.endOffset))
-        } else {
-            result += current
-            current = range
-        }
-    }
-    result += current
-    return result
 }
 private const val TEMPLATE_ROOT_PREFIX: String = "<vitepress-template-root>"
 private const val TEMPLATE_ROOT_SUFFIX: String = "</vitepress-template-root>"

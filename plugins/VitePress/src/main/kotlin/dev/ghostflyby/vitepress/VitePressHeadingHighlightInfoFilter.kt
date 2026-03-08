@@ -42,15 +42,12 @@ internal class VitePressHeadingHighlightInfoFilter : HighlightInfoFilter {
         val highlightRange = TextRange(highlightInfo.startOffset, highlightInfo.endOffset)
         return when (highlightInfo.forcedTextAttributesKey) {
             in headingTextAttributes -> {
-                psiFile.getVitePressHeadingInterpolationRanges().none { interpolationRange ->
-                    interpolationRange.intersectsStrict(highlightRange)
-                }
+                psiFile.getVitePressHeadingGuestRanges()
+                    .none { guestRange -> guestRange.intersectsStrict(highlightRange) }
             }
 
             in linkTextAttributes -> {
-                psiFile.getVitePressLinkInterpolationRanges().none { interpolationRange ->
-                    interpolationRange.intersectsStrict(highlightRange)
-                }
+                psiFile.getVitePressLinkGuestRanges().none { guestRange -> guestRange.intersectsStrict(highlightRange) }
             }
 
             else -> true

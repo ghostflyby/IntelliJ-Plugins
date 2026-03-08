@@ -36,9 +36,28 @@ internal class VitePressHeadingInterpolationAnnotatorTest : BasePlatformTestCase
         )
     }
 
+    fun testCollectsHeadingGuestRangeForHtmlTag() {
+        val psiFile = myFixture.configureByText("docs.md", "# hello <Comp>{{x}}</Comp>")
+
+        assertEquals(
+            listOf(TextRange(8, 26)),
+            psiFile.getVitePressHeadingGuestRanges(),
+        )
+    }
+
+    fun testCollectsLinkGuestRangeForHtmlTag() {
+        val psiFile = myFixture.configureByText("docs.md", "[hello <Comp>{{x}}</Comp>](#demo)")
+
+        assertEquals(
+            listOf(TextRange(7, 25)),
+            psiFile.getVitePressLinkGuestRanges(),
+        )
+    }
+
     fun testIgnoresPlainHeading() {
         val psiFile = myFixture.configureByText("docs.md", "# before after")
 
         assertEmpty(psiFile.getVitePressHeadingInterpolationRanges())
+        assertEmpty(psiFile.getVitePressHeadingGuestRanges())
     }
 }

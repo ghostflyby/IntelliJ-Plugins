@@ -22,17 +22,17 @@
 
 package dev.ghostflyby.vitepress
 
-import com.intellij.lexer.Lexer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
-import dev.ghostflyby.vitepress.markdown.InlineHtmlAwareToplevelLexer
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
+import dev.ghostflyby.vitepress.markdown.VitePressHtmlPatterns
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
+import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
 
 internal enum class VitePressTemplateHostKind {
     Paragraph,
@@ -45,50 +45,48 @@ internal data class VitePressTemplateInterpolationHost(
     val kind: VitePressTemplateHostKind,
     val hostRange: TextRange,
     val interpolationRanges: List<TextRange>,
+    val htmlGuestRanges: List<TextRange>,
+    val guestRanges: List<TextRange>,
 )
 
 internal fun collectTemplateInterpolationHosts(
     sourceCode: CharSequence,
-    baseLexer: Lexer,
 ): List<VitePressTemplateInterpolationHost> {
     val result = mutableListOf<VitePressTemplateInterpolationHost>()
-    baseLexer.start(sourceCode)
+    val hostLexer = MarkdownToplevelLexer(VitePressFlavourDescriptor)
+    hostLexer.start(sourceCode)
 
-    while (baseLexer.tokenType != null) {
+    while (hostLexer.tokenType != null) {
         val kind =
-            when (baseLexer.tokenType) {
+            when (hostLexer.tokenType) {
                 MarkdownElementTypes.PARAGRAPH -> VitePressTemplateHostKind.Paragraph
                 MarkdownTokenTypes.ATX_CONTENT -> VitePressTemplateHostKind.AtxHeading
                 MarkdownTokenTypes.SETEXT_CONTENT -> VitePressTemplateHostKind.SetextHeading
-                MarkdownElementTypes.LINK_TEXT -> VitePressTemplateHostKind.LinkText
                 else -> null
             }
         if (kind != null) {
-            val hostRange = TextRange.create(baseLexer.tokenStart, baseLexer.tokenEnd)
-            if (isPlainTextMustacheHost(sourceCode, hostRange)) {
+            val hostRange = TextRange.create(hostLexer.tokenStart, hostLexer.tokenEnd)
+            if (isPlainTextTemplateHost(sourceCode, hostRange)) {
                 val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
-                if (interpolationRanges.isNotEmpty()) {
+                val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
+                val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
+                if (guestRanges.isNotEmpty()) {
                     result +=
                         VitePressTemplateInterpolationHost(
                             kind = kind,
                             hostRange = hostRange,
                             interpolationRanges = interpolationRanges,
+                            htmlGuestRanges = htmlGuestRanges,
+                            guestRanges = guestRanges,
                         )
                 }
             }
         }
-        baseLexer.advance()
+        hostLexer.advance()
     }
 
     result += collectLinkTextInterpolationHosts(sourceCode)
     return result
-}
-
-internal fun collectTemplateInterpolationHosts(sourceCode: CharSequence): List<VitePressTemplateInterpolationHost> {
-    return collectTemplateInterpolationHosts(
-        sourceCode,
-        InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor),
-    )
 }
 
 internal fun PsiFile.getVitePressTemplateInterpolationHosts(): List<VitePressTemplateInterpolationHost> {
@@ -108,11 +106,19 @@ internal fun PsiFile.getVitePressHeadingInterpolationRanges(): List<TextRange> {
         .toList()
 }
 
-internal fun PsiFile.getVitePressLinkInterpolationRanges(): List<TextRange> {
+internal fun PsiFile.getVitePressHeadingGuestRanges(): List<TextRange> {
+    return getVitePressTemplateInterpolationHosts()
+        .asSequence()
+        .filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
+        .flatMap { it.guestRanges.asSequence() }
+        .toList()
+}
+
+internal fun PsiFile.getVitePressLinkGuestRanges(): List<TextRange> {
     return getVitePressTemplateInterpolationHosts()
         .asSequence()
         .filter { it.kind == VitePressTemplateHostKind.LinkText }
-        .flatMap { it.interpolationRanges.asSequence() }
+        .flatMap { it.guestRanges.asSequence() }
         .toList()
 }
 
@@ -141,6 +147,66 @@ internal fun subtractRanges(baseRange: TextRange, excludedRanges: List<TextRange
     return result
 }
 
+private fun collectHtmlGuestRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {
+    val result = mutableListOf<TextRange>()
+    var cursor = hostRange.startOffset
+    while (cursor < hostRange.endOffset) {
+        val nextLt = sourceCode.indexOf('<', cursor).takeIf { it in cursor until hostRange.endOffset } ?: break
+        val htmlRange = findHtmlGuestRange(sourceCode, nextLt, hostRange.endOffset)
+        if (htmlRange != null) {
+            result += htmlRange
+            cursor = htmlRange.endOffset
+        } else {
+            cursor = nextLt + 1
+        }
+    }
+    return mergeRanges(result)
+}
+
+private fun findHtmlGuestRange(
+    sourceCode: CharSequence,
+    startOffset: Int,
+    endOffset: Int,
+): TextRange? {
+    if (startOffset + 1 >= endOffset) return null
+
+    val lineEndExclusive = sourceCode.indexOf('\n', startOffset).let { newlineIndex ->
+        if (newlineIndex == -1 || newlineIndex > endOffset) endOffset else newlineIndex
+    }
+    val lineSlice = sourceCode.subSequence(startOffset, lineEndExclusive).toString()
+
+    val inlineSelfClosing = VitePressHtmlPatterns.INLINE_SELF_CLOSING_REGEX.find(lineSlice)
+        ?.takeIf { it.range.first == 0 }
+    if (inlineSelfClosing != null) {
+        return TextRange(startOffset, startOffset + inlineSelfClosing.range.last + 1)
+    }
+
+    val match = VitePressHtmlPatterns.FIND_START_REGEX.find(lineSlice) ?: return null
+    val matchedGroupIndex = match.groups.drop(2).indexOfFirst { it != null }
+    if (matchedGroupIndex == -1) return null
+
+    val afterStart = if (matchedGroupIndex == VitePressHtmlPatterns.OPEN_TAG_BLOCK_GROUP_INDEX) {
+        val gtIndex = lineSlice.indexOf('>')
+        if (gtIndex >= 0) startOffset + gtIndex + 1 else startOffset + match.range.last + 1
+    } else {
+        startOffset + match.range.last + 1
+    }
+
+    if (matchedGroupIndex == VitePressHtmlPatterns.IMMEDIATE_TAG_GROUP_INDEX) {
+        return TextRange(startOffset, lineEndExclusive)
+    }
+    if (matchedGroupIndex == VitePressHtmlPatterns.ENTITY_GROUP_INDEX) {
+        return TextRange(startOffset, afterStart)
+    }
+
+    val closeRegex =
+        VitePressHtmlPatterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return TextRange(startOffset, afterStart)
+    val searchSlice = sourceCode.subSequence(afterStart, endOffset).toString()
+    val closeMatch = closeRegex.find(searchSlice)
+    val rangeEnd = if (closeMatch != null) afterStart + closeMatch.range.last + 1 else endOffset
+    return TextRange(startOffset, rangeEnd)
+}
+
 private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {
     val result = mutableListOf<TextRange>()
     var cursor = hostRange.startOffset
@@ -159,15 +225,21 @@ private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange
     return result
 }
 
-private fun collectLinkTextInterpolationHosts(sourceCode: CharSequence): List<VitePressTemplateInterpolationHost> {
+private fun collectLinkTextInterpolationHosts(
+    sourceCode: CharSequence,
+): List<VitePressTemplateInterpolationHost> {
     return collectInlineLinkTextRanges(sourceCode).mapNotNull { hostRange ->
-        if (isPlainTextMustacheHost(sourceCode, hostRange)) {
+        if (isPlainTextTemplateHost(sourceCode, hostRange)) {
             val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
-            if (interpolationRanges.isNotEmpty()) {
+            val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
+            val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
+            if (guestRanges.isNotEmpty()) {
                 return@mapNotNull VitePressTemplateInterpolationHost(
                     kind = VitePressTemplateHostKind.LinkText,
                     hostRange = hostRange,
                     interpolationRanges = interpolationRanges,
+                    htmlGuestRanges = htmlGuestRanges,
+                    guestRanges = guestRanges,
                 )
             }
         }
@@ -219,9 +291,11 @@ private fun collectInlineLinkTextRanges(sourceCode: CharSequence): List<TextRang
     return result
 }
 
-private fun isPlainTextMustacheHost(sourceCode: CharSequence, hostRange: TextRange): Boolean {
+private fun isPlainTextTemplateHost(sourceCode: CharSequence, hostRange: TextRange): Boolean {
     val mustacheRanges = collectMustacheRanges(sourceCode, hostRange)
-    if (mustacheRanges.isEmpty()) return true
+    if (mustacheRanges.isEmpty()) {
+        return !containsMarkdownInlineMarker(sourceCode, hostRange.startOffset, hostRange.endOffset)
+    }
 
     var cursor = hostRange.startOffset
     mustacheRanges.forEach { mustacheRange ->
@@ -248,3 +322,21 @@ private val TEMPLATE_INTERPOLATION_HOSTS_KEY =
 private const val TEMPLATE_INTERPOLATION_OPEN: String = "{{"
 private const val TEMPLATE_INTERPOLATION_CLOSE: String = "}}"
 private val MARKDOWN_INLINE_MARKERS: Set<Char> = setOf('`', '[', ']', '(', ')', '!', '*', '_')
+
+internal fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+
+    val sortedRanges = ranges.sortedBy { it.startOffset }
+    val result = mutableListOf<TextRange>()
+    var current = sortedRanges.first()
+    sortedRanges.drop(1).forEach { range ->
+        if (range.startOffset <= current.endOffset) {
+            current = TextRange(current.startOffset, maxOf(current.endOffset, range.endOffset))
+        } else {
+            result += current
+            current = range
+        }
+    }
+    result += current
+    return result
+}

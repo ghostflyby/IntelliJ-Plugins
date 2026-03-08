@@ -46,10 +46,8 @@ internal class VitePressHeadingInterpolationAnnotator : Annotator {
         val elementRange = element.textRange
         val hostAttributes = hostAttributes(element) ?: return
         val guestRanges = guestRanges(element)
-        val interpolationRanges = guestRanges.filter { interpolationRange ->
-                interpolationRange.intersectsStrict(elementRange)
-            }
-        subtractRanges(elementRange, interpolationRanges).forEach { remainingRange ->
+        val overlappingGuestRanges = guestRanges.filter { guestRange -> guestRange.intersectsStrict(elementRange) }
+        subtractRanges(elementRange, overlappingGuestRanges).forEach { remainingRange ->
             holder
                 .newSilentAnnotation(HighlightSeverity.INFORMATION)
                 .range(remainingRange)
@@ -74,8 +72,8 @@ internal class VitePressHeadingInterpolationAnnotator : Annotator {
 
     private fun guestRanges(element: PsiElement): List<com.intellij.openapi.util.TextRange> {
         return when (PsiUtilCore.getElementType(element)) {
-            in headingTokenTypes -> element.containingFile.getVitePressHeadingInterpolationRanges()
-            MarkdownElementTypes.LINK_TEXT -> element.containingFile.getVitePressLinkInterpolationRanges()
+            in headingTokenTypes -> element.containingFile.getVitePressHeadingGuestRanges()
+            MarkdownElementTypes.LINK_TEXT -> element.containingFile.getVitePressLinkGuestRanges()
             else -> emptyList()
         }
     }

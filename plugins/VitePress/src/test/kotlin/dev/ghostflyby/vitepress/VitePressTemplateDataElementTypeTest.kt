@@ -79,6 +79,24 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
         )
     }
 
+    fun testKeepsHtmlGuestRangeInsideHeading() {
+        assertEquals(
+            "<Comp>{{x}}</Comp>",
+            buildVitePressTemplateDataText("# hello <Comp>{{x}}</Comp>").toString(),
+        )
+    }
+
+    fun testKeepsHtmlGuestRangeInsideLinkText() {
+        assertEquals(
+            "<Comp>{{x}}</Comp>",
+            buildVitePressTemplateDataText("[hello <Comp>{{x}}</Comp>](#demo)").toString(),
+        )
+    }
+
+    fun testIgnoresHtmlGuestInsideRichHeading() {
+        assertEquals("<Comp>{{x}}</Comp>", buildVitePressTemplateDataText("# **hello <Comp>{{x}}</Comp>**").toString())
+    }
+
     fun testCachesLinkInterpolationHostsOnPsiFile() {
         val psiFile = myFixture.configureByText("docs.md", "[{{a*2}}](#demo)")
 
@@ -88,6 +106,42 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
                     kind = VitePressTemplateHostKind.LinkText,
                     hostRange = TextRange(1, 8),
                     interpolationRanges = listOf(TextRange(1, 8)),
+                    htmlGuestRanges = emptyList(),
+                    guestRanges = listOf(TextRange(1, 8)),
+                ),
+            ),
+            psiFile.getVitePressTemplateInterpolationHosts(),
+        )
+    }
+
+    fun testCachesHeadingGuestRangesOnPsiFile() {
+        val psiFile = myFixture.configureByText("docs.md", "# hello <Comp>{{x}}</Comp>")
+
+        assertEquals(
+            listOf(
+                VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.AtxHeading,
+                    hostRange = TextRange(1, 26),
+                    interpolationRanges = listOf(TextRange(14, 19)),
+                    htmlGuestRanges = listOf(TextRange(8, 26)),
+                    guestRanges = listOf(TextRange(8, 26)),
+                ),
+            ),
+            psiFile.getVitePressTemplateInterpolationHosts(),
+        )
+    }
+
+    fun testCachesLinkGuestRangesOnPsiFile() {
+        val psiFile = myFixture.configureByText("docs.md", "[hello <Comp>{{x}}</Comp>](#demo)")
+
+        assertEquals(
+            listOf(
+                VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.LinkText,
+                    hostRange = TextRange(1, 25),
+                    interpolationRanges = listOf(TextRange(13, 18)),
+                    htmlGuestRanges = listOf(TextRange(7, 25)),
+                    guestRanges = listOf(TextRange(7, 25)),
                 ),
             ),
             psiFile.getVitePressTemplateInterpolationHosts(),
@@ -107,6 +161,8 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
                     kind = VitePressTemplateHostKind.AtxHeading,
                     hostRange = TextRange(1, 9),
                     interpolationRanges = listOf(TextRange(2, 9)),
+                    htmlGuestRanges = emptyList(),
+                    guestRanges = listOf(TextRange(2, 9)),
                 ),
             ),
             psiFile.getVitePressTemplateInterpolationHosts(),
