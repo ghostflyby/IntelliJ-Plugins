@@ -25,7 +25,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "0.0.1"
+version = "1.0.0"
 
 dependencies {
     implementation(project(":modules:intellij-shared"))
