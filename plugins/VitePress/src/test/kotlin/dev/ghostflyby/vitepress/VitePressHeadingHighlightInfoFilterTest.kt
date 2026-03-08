@@ -40,4 +40,11 @@ internal class VitePressHeadingHighlightInfoFilterTest : BasePlatformTestCase() 
             subtractRanges(TextRange(1, 13), emptyList()),
         )
     }
+
+    fun testSubtractRangesRemovesInterpolationFromLinkText() {
+        assertEquals(
+            listOf(TextRange(1, 7), TextRange(14, 19)),
+            subtractRanges(TextRange(1, 19), listOf(TextRange(7, 14))),
+        )
+    }
 }

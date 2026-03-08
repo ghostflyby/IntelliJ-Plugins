@@ -186,6 +186,7 @@ internal class InlineHtmlAwareToplevelLexer(
         val SPLITTABLE_TOKEN_TYPES: TokenSet = TokenSet.orSet(
             MarkdownTokenTypeSets.HEADER_CONTENT,
             TokenSet.create(
+                org.intellij.plugins.markdown.lang.MarkdownElementTypes.LINK_TEXT,
                 MarkdownTokenTypes.TEXT,
                 MarkdownTokenTypes.WHITE_SPACE,
                 MarkdownTokenTypes.EOL,

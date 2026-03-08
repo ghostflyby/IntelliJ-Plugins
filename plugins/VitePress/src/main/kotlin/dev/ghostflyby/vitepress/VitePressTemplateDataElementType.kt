@@ -28,7 +28,6 @@ import com.intellij.psi.templateLanguages.TemplateDataElementType
 import com.intellij.psi.templateLanguages.TemplateDataModifications
 import dev.ghostflyby.vitepress.markdown.InlineHtmlAwareToplevelLexer
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
-import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes.MARKDOWN_OUTER_BLOCK
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 
@@ -39,42 +38,21 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
     MARKDOWN_OUTER_BLOCK,
 ) {
     override fun collectTemplateModifications(sourceCode: CharSequence, baseLexer: Lexer): TemplateDataModifications {
-        val interpolationHostsByRange =
-            collectTemplateInterpolationHosts(sourceCode, baseLexer).associateBy { it.hostRange }
-        val outerRanges = mutableListOf<TextRange>()
-        var hasTopLevelMustache = false
+        val guestRanges = mutableListOf<TextRange>()
+        val interpolationHosts = collectTemplateInterpolationHosts(sourceCode, baseLexer)
+        val hasTopLevelMustache = interpolationHosts.isNotEmpty()
+        guestRanges += interpolationHosts.flatMap { it.interpolationRanges }
         baseLexer.start(sourceCode)
 
         while (baseLexer.tokenType != null) {
             val range = TextRange.create(baseLexer.tokenStart, baseLexer.tokenEnd)
             when (baseLexer.tokenType) {
-                MarkdownTokenTypes.HTML_BLOCK_CONTENT -> Unit
-                MarkdownElementTypes.PARAGRAPH,
-                MarkdownTokenTypes.ATX_CONTENT,
-                MarkdownTokenTypes.SETEXT_CONTENT,
-                    -> {
-                    val interpolationHost = interpolationHostsByRange[range]
-                    if (interpolationHost == null) {
-                        outerRanges += range
-                    } else {
-                        hasTopLevelMustache = true
-                        var cursor = range.startOffset
-                        interpolationHost.interpolationRanges.forEach { interpolationRange ->
-                            if (cursor < interpolationRange.startOffset) {
-                                outerRanges += TextRange.create(cursor, interpolationRange.startOffset)
-                            }
-                            cursor = interpolationRange.endOffset
-                        }
-                        if (cursor < range.endOffset) {
-                            outerRanges += TextRange.create(cursor, range.endOffset)
-                        }
-                    }
-                }
-
-                else -> outerRanges += range
+                MarkdownTokenTypes.HTML_BLOCK_CONTENT -> guestRanges += range
             }
             baseLexer.advance()
         }
+
+        val outerRanges = subtractRanges(TextRange(0, sourceCode.length), mergeRanges(guestRanges))
 
         val modifications = TemplateDataModifications()
         if (hasTopLevelMustache) {
@@ -102,6 +80,23 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
 
 internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
     return VitePressTemplateDataElementType.buildTemplateDataText(sourceCode)
+}
+
+private fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    val sortedRanges = ranges.sortedBy { it.startOffset }
+    val result = mutableListOf<TextRange>()
+    var current = sortedRanges.first()
+    sortedRanges.drop(1).forEach { range ->
+        if (range.startOffset <= current.endOffset) {
+            current = TextRange(current.startOffset, maxOf(current.endOffset, range.endOffset))
+        } else {
+            result += current
+            current = range
+        }
+    }
+    result += current
+    return result
 }
 private const val TEMPLATE_ROOT_PREFIX: String = "<vitepress-template-root>"
 private const val TEMPLATE_ROOT_SUFFIX: String = "</vitepress-template-root>"

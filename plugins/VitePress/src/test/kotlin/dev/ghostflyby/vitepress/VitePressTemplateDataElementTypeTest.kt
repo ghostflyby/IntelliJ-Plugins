@@ -72,8 +72,26 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
         assertEquals("", buildVitePressTemplateDataText("# **{{a*2}}**").toString())
     }
 
-    fun testIgnoresMustacheInsideLinkText() {
-        assertEquals("", buildVitePressTemplateDataText("[{{a*2}}](#demo)").toString())
+    fun testExtractsMustacheInsideLinkText() {
+        assertEquals(
+            "<vitepress-template-root>{{a*2}}</vitepress-template-root>",
+            buildVitePressTemplateDataText("[{{a*2}}](#demo)").toString(),
+        )
+    }
+
+    fun testCachesLinkInterpolationHostsOnPsiFile() {
+        val psiFile = myFixture.configureByText("docs.md", "[{{a*2}}](#demo)")
+
+        assertEquals(
+            listOf(
+                VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.LinkText,
+                    hostRange = TextRange(1, 8),
+                    interpolationRanges = listOf(TextRange(1, 8)),
+                ),
+            ),
+            psiFile.getVitePressTemplateInterpolationHosts(),
+        )
     }
 
     fun testIgnoresMustacheInsideInlineCode() {

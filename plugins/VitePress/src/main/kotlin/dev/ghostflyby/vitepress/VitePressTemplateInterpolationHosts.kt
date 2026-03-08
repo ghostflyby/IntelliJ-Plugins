@@ -38,6 +38,7 @@ internal enum class VitePressTemplateHostKind {
     Paragraph,
     AtxHeading,
     SetextHeading,
+    LinkText,
 }
 
 internal data class VitePressTemplateInterpolationHost(
@@ -59,6 +60,7 @@ internal fun collectTemplateInterpolationHosts(
                 MarkdownElementTypes.PARAGRAPH -> VitePressTemplateHostKind.Paragraph
                 MarkdownTokenTypes.ATX_CONTENT -> VitePressTemplateHostKind.AtxHeading
                 MarkdownTokenTypes.SETEXT_CONTENT -> VitePressTemplateHostKind.SetextHeading
+                MarkdownElementTypes.LINK_TEXT -> VitePressTemplateHostKind.LinkText
                 else -> null
             }
         if (kind != null) {
@@ -78,6 +80,7 @@ internal fun collectTemplateInterpolationHosts(
         baseLexer.advance()
     }
 
+    result += collectLinkTextInterpolationHosts(sourceCode)
     return result
 }
 
@@ -101,6 +104,14 @@ internal fun PsiFile.getVitePressHeadingInterpolationRanges(): List<TextRange> {
     return getVitePressTemplateInterpolationHosts()
         .asSequence()
         .filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
+        .flatMap { it.interpolationRanges.asSequence() }
+        .toList()
+}
+
+internal fun PsiFile.getVitePressLinkInterpolationRanges(): List<TextRange> {
+    return getVitePressTemplateInterpolationHosts()
+        .asSequence()
+        .filter { it.kind == VitePressTemplateHostKind.LinkText }
         .flatMap { it.interpolationRanges.asSequence() }
         .toList()
 }
@@ -144,6 +155,66 @@ private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange
                 ?: hostRange.endOffset
         result += TextRange.create(start, end)
         cursor = end
+    }
+    return result
+}
+
+private fun collectLinkTextInterpolationHosts(sourceCode: CharSequence): List<VitePressTemplateInterpolationHost> {
+    return collectInlineLinkTextRanges(sourceCode).mapNotNull { hostRange ->
+        if (isPlainTextMustacheHost(sourceCode, hostRange)) {
+            val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
+            if (interpolationRanges.isNotEmpty()) {
+                return@mapNotNull VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.LinkText,
+                    hostRange = hostRange,
+                    interpolationRanges = interpolationRanges,
+                )
+            }
+        }
+        null
+    }
+}
+
+private fun collectInlineLinkTextRanges(sourceCode: CharSequence): List<TextRange> {
+    val result = mutableListOf<TextRange>()
+    var index = 0
+    while (index < sourceCode.length) {
+        if (sourceCode[index] != '[' || (index > 0 && sourceCode[index - 1] == '!')) {
+            index++
+            continue
+        }
+
+        val textStart = index + 1
+        var cursor = textStart
+        var nestedBrackets = 0
+        var textEnd = -1
+        while (cursor < sourceCode.length) {
+            when (sourceCode[cursor]) {
+                '\\' -> {
+                    cursor = (cursor + 2).coerceAtMost(sourceCode.length)
+                    continue
+                }
+
+                '[' -> nestedBrackets++
+                ']' -> {
+                    if (nestedBrackets == 0 && cursor + 1 < sourceCode.length && sourceCode[cursor + 1] == '(') {
+                        textEnd = cursor
+                        break
+                    }
+                    if (nestedBrackets > 0) {
+                        nestedBrackets--
+                    }
+                }
+            }
+            cursor++
+        }
+
+        if (textEnd != -1 && textStart < textEnd) {
+            result += TextRange(textStart, textEnd)
+            index = textEnd + 1
+        } else {
+            index++
+        }
     }
     return result
 }

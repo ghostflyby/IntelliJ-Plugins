@@ -39,13 +39,21 @@ internal class VitePressHeadingHighlightInfoFilter : HighlightInfoFilter {
         if (highlightInfo.severity != HighlightSeverity.INFORMATION) {
             return true
         }
-        if (highlightInfo.forcedTextAttributesKey !in headingTextAttributes) {
-            return true
-        }
-
         val highlightRange = TextRange(highlightInfo.startOffset, highlightInfo.endOffset)
-        return psiFile.getVitePressHeadingInterpolationRanges().none { interpolationRange ->
-            interpolationRange.intersectsStrict(highlightRange)
+        return when (highlightInfo.forcedTextAttributesKey) {
+            in headingTextAttributes -> {
+                psiFile.getVitePressHeadingInterpolationRanges().none { interpolationRange ->
+                    interpolationRange.intersectsStrict(highlightRange)
+                }
+            }
+
+            in linkTextAttributes -> {
+                psiFile.getVitePressLinkInterpolationRanges().none { interpolationRange ->
+                    interpolationRange.intersectsStrict(highlightRange)
+                }
+            }
+
+            else -> true
         }
     }
 }
@@ -58,4 +66,12 @@ private val headingTextAttributes: Set<TextAttributesKey> =
         MarkdownHighlighterColors.HEADER_LEVEL_4,
         MarkdownHighlighterColors.HEADER_LEVEL_5,
         MarkdownHighlighterColors.HEADER_LEVEL_6,
+    )
+
+private val linkTextAttributes: Set<TextAttributesKey> =
+    setOf(
+        MarkdownHighlighterColors.LINK_TEXT,
+        MarkdownHighlighterColors.EXPLICIT_LINK,
+        MarkdownHighlighterColors.REFERENCE_LINK,
+        MarkdownHighlighterColors.IMAGE,
     )
