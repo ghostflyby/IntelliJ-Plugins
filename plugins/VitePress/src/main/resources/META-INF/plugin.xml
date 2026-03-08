@@ -29,6 +29,10 @@
         <webBrowserUrlProvider implementation="dev.ghostflyby.vitepress.preview.VitePressUrlProvider"/>
         <postStartupActivity implementation="dev.ghostflyby.vitepress.VitePressRootTrackerActivity"/>
         <vfs.asyncListenerBackgroundable implementation="dev.ghostflyby.vitepress.VitePressRootTrackerFileListener"/>
+        <annotator language="Markdown"
+                   order="last"
+                   implementationClass="dev.ghostflyby.vitepress.VitePressHeadingInterpolationAnnotator"/>
+        <daemon.highlightInfoFilter implementation="dev.ghostflyby.vitepress.VitePressHeadingHighlightInfoFilter"/>
     </extensions>
     <projectListeners>
         <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"

@@ -59,7 +59,7 @@ internal class VitePressUrlProvider : WebBrowserUrlProvider() {
     }
 }
 
-private fun VirtualFile.isVitePressFileType(): Boolean {
+internal fun VirtualFile.isVitePressFileType(): Boolean {
     return FileTypeManager.getInstance().isFileOfType(this, VitePressFiletype)
 }
 

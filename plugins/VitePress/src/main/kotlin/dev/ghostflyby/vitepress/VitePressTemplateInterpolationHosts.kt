@@ -97,6 +97,39 @@ internal fun PsiFile.getVitePressTemplateInterpolationHosts(): List<VitePressTem
     }
 }
 
+internal fun PsiFile.getVitePressHeadingInterpolationRanges(): List<TextRange> {
+    return getVitePressTemplateInterpolationHosts()
+        .asSequence()
+        .filter { it.kind == VitePressTemplateHostKind.AtxHeading || it.kind == VitePressTemplateHostKind.SetextHeading }
+        .flatMap { it.interpolationRanges.asSequence() }
+        .toList()
+}
+
+internal fun subtractRanges(baseRange: TextRange, excludedRanges: List<TextRange>): List<TextRange> {
+    if (excludedRanges.isEmpty()) return listOf(baseRange)
+
+    val sortedExcludedRanges =
+        excludedRanges
+            .asSequence()
+            .mapNotNull { excludedRange -> excludedRange.intersection(baseRange) }
+            .sortedBy { it.startOffset }
+            .toList()
+    if (sortedExcludedRanges.isEmpty()) return listOf(baseRange)
+
+    val result = mutableListOf<TextRange>()
+    var cursor = baseRange.startOffset
+    sortedExcludedRanges.forEach { excludedRange ->
+        if (cursor < excludedRange.startOffset) {
+            result += TextRange(cursor, excludedRange.startOffset)
+        }
+        cursor = maxOf(cursor, excludedRange.endOffset)
+    }
+    if (cursor < baseRange.endOffset) {
+        result += TextRange(cursor, baseRange.endOffset)
+    }
+    return result
+}
+
 private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {
     val result = mutableListOf<TextRange>()
     var cursor = hostRange.startOffset
