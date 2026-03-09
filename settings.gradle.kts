@@ -26,9 +26,12 @@ plugins {
 
 rootProject.name = "IntelliJ-Plugins"
 
-val excludedPlugins = listOf(
-    "IdeaVimToggleIME",
-)
+val excludedPlugins = file(".ci/excluded-plugins.txt")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.map(String::trim)
+    ?.filter { it.isNotEmpty() && !it.startsWith("#") }
+    ?: emptyList()
 
 // Monorepo: include plugin subprojects under `plugins/`
 file("plugins").listFiles()?.filter { it.isDirectory && it.name !in excludedPlugins }?.forEach { pluginDir ->

@@ -41,6 +41,14 @@ jobs:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
         run: |
+          [string[]]$excludedPlugins = @()
+          if (Test-Path '.ci/excluded-plugins.txt')
+          {
+              $excludedPlugins = Get-Content '.ci/excluded-plugins.txt' |
+                      ForEach-Object { $_.Trim() } |
+                      Where-Object { $_ -and -not $_.StartsWith('#') }
+          }
+
           # Fetch main to compare diffs; ignore failures
           git fetch origin main --quiet | Out-Null
 
@@ -80,13 +88,19 @@ jobs:
                       }
                   } |
                   Where-Object { $_ } |
+                  Where-Object {
+                      $pluginName = $_.Split('/')[1]
+                      $pluginName -notin $excludedPlugins
+                  } |
                   Sort-Object -Unique
 
           # Map to :plugins:module format and emit JSON array
           [string[]]$modules = $paths | ForEach-Object { $_ -replace 'plugins/', ':plugins:' }
           if ($modules.Count -eq 0)
           {
-              $modules = Get-ChildItem -Path 'plugins/*' -Directory | ForEach-Object { ":plugins:$( $_.Name )" }
+              $modules = Get-ChildItem -Path 'plugins/*' -Directory |
+                      Where-Object { $_.Name -notin $excludedPlugins } |
+                      ForEach-Object { ":plugins:$( $_.Name )" }
           }
           $json = $modules | ConvertTo-Json -Compress -AsArray
 
