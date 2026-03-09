@@ -27,8 +27,7 @@ import com.intellij.openapi.util.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.*
 import org.junit.Test
 
 class AutoCleanKeyTest {
@@ -180,6 +179,32 @@ class AutoCleanKeyTest {
             job.complete()
             job.join()
         }
+
+        assertNull(holder.getUserData(key))
+    }
+
+    @Test
+    fun toDisposableKeyWithProviderResolvesDisposableLazily() {
+        val disposable: Disposable = Disposer.newDisposable()
+        var providerCalled = false
+        val key = Key.create<String>("key.toDisposableKey.provider")
+        val cleaner =
+            key.toAutoCleanKey {
+                providerCalled = true
+                disposable
+            }
+
+        assertFalse(providerCalled)
+
+        val holder = object : UserDataHolderBase() {
+            var value: String? by cleaner
+        }
+
+        holder.value = "stored"
+
+        assertTrue(providerCalled)
+
+        Disposer.dispose(disposable)
 
         assertNull(holder.getUserData(key))
     }
