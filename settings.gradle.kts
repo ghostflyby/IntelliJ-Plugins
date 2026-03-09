@@ -26,8 +26,15 @@ plugins {
 
 rootProject.name = "IntelliJ-Plugins"
 
+val excludedPlugins = file(".ci/excluded-plugins.txt")
+    .takeIf { it.exists() }
+    ?.readLines()
+    ?.map(String::trim)
+    ?.filter { it.isNotEmpty() && !it.startsWith("#") }
+    ?: emptyList()
+
 // Monorepo: include plugin subprojects under `plugins/`
-file("plugins").listFiles()?.filter { it.isDirectory }?.forEach { pluginDir ->
+file("plugins").listFiles()?.filter { it.isDirectory && it.name !in excludedPlugins }?.forEach { pluginDir ->
     include(":plugins:${pluginDir.name}")
     val projects = pluginDir.resolve("projects.txt")
     val sub = if (projects.exists()) projects.readLines().map {
