@@ -3,8 +3,10 @@
 <!-- Plugin description -->
 Adds VitePress-aware editing for Markdown files inside a VitePress site.
 
-The plugin detects VitePress project roots, treats site Markdown as a dedicated file type, and keeps Vue template
-fragments, commenting behavior, and syntax highlighting aligned with VitePress semantics. It also understands `:::`
-custom containers and can open pages in the browser by resolving them against a running VitePress preview server started
-from the IDE.
+## features
+
+1. in IDE and browser preview with `vitepress dev`, `vitepress preview` or `cd some/dir && vitepress ...` command.
+2. mixed Markdown and Vue editing, including top-level Vue tags and interpolations.
+3. Vue template support inside plain text, headings, and link text, with Vue highlighting preserved
+
 <!-- Plugin description end -->
