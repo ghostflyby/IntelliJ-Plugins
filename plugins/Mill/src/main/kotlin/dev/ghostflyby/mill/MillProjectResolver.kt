@@ -59,7 +59,10 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     moduleName = module.displayName,
                 )
                 val moduleNode = projectNode.createChild(ProjectKeys.MODULE, moduleData)
-                moduleNode.createChild(ProjectKeys.CONTENT_ROOT, MillProjectResolverSupport.buildContentRoot(module.directory))
+                moduleNode.createChild(
+                    ProjectKeys.CONTENT_ROOT,
+                    MillContentRootResolver.buildContentRoot(module, settings, id, listener),
+                )
                 module to moduleNode
             }
 
@@ -68,6 +71,10 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 val productionModuleNode = module.productionModulePrefix?.let(moduleNodesByTargetPrefix::get)
                 if (productionModuleNode != null) {
                     node.data.productionModuleId = productionModuleNode.data.id
+                    node.createChild(
+                        ProjectKeys.MODULE_DEPENDENCY,
+                        MillProjectResolverSupport.buildModuleDependency(node.data, productionModuleNode.data),
+                    )
                 }
             }
 
