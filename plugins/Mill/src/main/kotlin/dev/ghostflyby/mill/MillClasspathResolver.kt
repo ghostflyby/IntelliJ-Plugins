@@ -37,13 +37,14 @@ internal object MillClasspathResolver {
         settings: MillExecutionSettings?,
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
+        classpathTarget: String = "__.compileClasspath",
     ): List<Path> {
         val output = try {
-            CapturingProcessHandler(createCommandLine(root, settings)).runProcess()
+            CapturingProcessHandler(createCommandLine(root, settings, classpathTarget)).runProcess()
         } catch (_: ExecutionException) {
             listener.onTaskOutput(
                 taskId,
-                "Mill dependency resolution skipped because the Mill process could not be started.\n",
+                "Mill dependency resolution skipped because the Mill process could not be started for `$classpathTarget`.\n",
                 ProcessOutputType.STDERR,
             )
             return emptyList()
@@ -54,7 +55,7 @@ internal object MillClasspathResolver {
             listener.onTaskOutput(
                 taskId,
                 buildString {
-                    append("Mill dependency resolution skipped because `show __.compileClasspath` failed.")
+                    append("Mill dependency resolution skipped because `show $classpathTarget` failed.")
                     if (details.isNotBlank()) {
                         append('\n')
                         append(details)
@@ -86,10 +87,14 @@ internal object MillClasspathResolver {
             .toList()
     }
 
-    private fun createCommandLine(root: Path, settings: MillExecutionSettings?): GeneralCommandLine {
+    private fun createCommandLine(
+        root: Path,
+        settings: MillExecutionSettings?,
+        classpathTarget: String,
+    ): GeneralCommandLine {
         val executable = settings?.millExecutablePath?.ifBlank { MillConstants.defaultExecutable }
             ?: MillConstants.defaultExecutable
-        return GeneralCommandLine(listOf(executable, "show", "__.compileClasspath"))
+        return GeneralCommandLine(listOf(executable, "show", classpathTarget))
             .withWorkingDirectory(root)
             .withEnvironment(settings?.env ?: emptyMap())
             .withParentEnvironmentType(

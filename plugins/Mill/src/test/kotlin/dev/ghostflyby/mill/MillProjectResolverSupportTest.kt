@@ -26,6 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
+import java.util.Comparator
 import kotlin.io.path.createDirectories
 
 internal class MillProjectResolverSupportTest {
@@ -110,6 +111,41 @@ internal class MillProjectResolverSupportTest {
         val paths = MillClasspathResolver.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
 
         assertEquals(listOf("""C:\\Users\\me\\cache\\lib.jar"""), paths)
+    }
+
+    @Test
+    fun `parses resolved mill targets`() {
+        val targets = MillModuleDiscovery.parseResolvedTargets(
+            """
+            [info] compiling
+            foo.compile
+            foo.test.compile
+            bar.runBackground
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("foo.compile", "foo.test.compile", "bar.runBackground"), targets)
+    }
+
+    @Test
+    fun `discovers modules from resolved targets and filesystem layout`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve("build.sc"), "// mill")
+            root.resolve("foo/src").createDirectories()
+            root.resolve("foo/test/src").createDirectories()
+            root.resolve("bar/src").createDirectories()
+
+            val modules = MillModuleDiscovery.discoverModulesFromTargets(
+                root = root,
+                projectName = "sample",
+                resolvedTargets = listOf("foo.compile", "foo.test.compile", "bar.compile"),
+            )
+
+            assertEquals(listOf("bar", "foo", "foo.test"), modules.map { it.displayName })
+        } finally {
+            deleteRecursively(root)
+        }
     }
 
     private fun deleteRecursively(root: java.nio.file.Path) {

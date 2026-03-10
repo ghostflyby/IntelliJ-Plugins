@@ -7,7 +7,7 @@ System API.
 Current implementation provides:
 
 - Mill project root detection from `build.sc`, `mill.sc`, `build.mill`, and `.mill-version`
-- A minimal external project resolver that imports a basic project/module model
+- Best-effort multi-module import from Mill target resolution
 - Best-effort aggregate compile classpath import into `External Libraries`
 - Structured import progress reporting during Mill project resolution
 - Basic Mill task entries and direct CLI-backed task execution
