@@ -4,6 +4,20 @@
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.0.0] - 2026-03-09
+
+### Added
+
 - Automatic VitePress root detection that recognizes site Markdown files and opens them with the dedicated `VitePress`
   file type.
 - Mixed Markdown and Vue editing support for VitePress pages, including top-level Vue tags and interpolations.
@@ -24,4 +38,5 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/commits
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...HEAD
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/VitePress-v1.0.0
