@@ -21,7 +21,7 @@
  */
 
 plugins {
-    id(libs.plugins.intellij.module.get().pluginId)
+    java
 }
 
 allprojects {
@@ -37,9 +37,13 @@ allprojects {
     }
     repositories { mavenCentral() }
 }
-
 repositories {
-    intellijPlatform {
-        defaultRepositories()
-    }
+    mavenCentral()
+
+    // Keep IntelliJ Maven repositories visible from the root build so the IDE can resolve sources
+    // without turning the aggregator project itself into an IntelliJ Platform module.
+    maven(url = "https://www.jetbrains.com/intellij-repository/releases")
+    maven(url = "https://www.jetbrains.com/intellij-repository/snapshots")
+    maven(url = "https://packages.jetbrains.team/maven/p/ij/intellij-dependencies")
+    maven(url = "https://plugins.jetbrains.com/maven")
 }
