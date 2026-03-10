@@ -13,6 +13,7 @@
 - Structured progress events for Mill project import.
 - A Mill Project Settings page under `Build Tools`.
 - Standard unlinked-project detection so Mill projects can surface the IDE import prompt after open.
+- A Mill-specific external-system view contributor for cleaner task and dependency labels in the tool window.
 
 ### Changed
 
