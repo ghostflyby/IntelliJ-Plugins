@@ -7,11 +7,13 @@
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.externalSystem</depends>
     <depends>org.intellij.scala</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
         <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
         <projectOpenProcessor
                 id="mill"
                 implementation="dev.ghostflyby.mill.MillProjectOpenProcessor"

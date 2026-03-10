@@ -13,6 +13,7 @@ Current implementation provides:
 - Basic Mill task entries and direct CLI-backed task execution
 - Project-open integration so Mill projects can be opened/imported without falling straight into BSP
 - Standard unlinked-project detection so opened Mill projects can show the IDE import prompt and link flow
+- A Mill-specific external-system view contributor for cleaner task and dependency names in the tool window
 - A Project Settings entry under `Build Tools` with basic linked-project configuration
 - Scala plugin dependency wiring for future Scala-aware integration work
 
