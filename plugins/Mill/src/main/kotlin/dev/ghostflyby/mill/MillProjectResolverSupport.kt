@@ -89,8 +89,15 @@ public object MillProjectResolverSupport {
 
     @JvmStatic
     public fun buildContentRoot(root: Path): ContentRootData {
+        return buildContentRoot(root, detectSourceRoots(root))
+    }
+
+    @JvmStatic
+    public fun buildContentRoot(root: Path, sourceRoots: Collection<Pair<ExternalSystemSourceType, Path>>): ContentRootData {
         return ContentRootData(MillConstants.systemId, root.toString()).apply {
-            detectSourceRoots(root).forEach { (type, path) ->
+            sourceRoots
+                .distinct()
+                .forEach { (type, path) ->
                 storePath(type, path.toString())
             }
             detectExcludedRoots(root).forEach { path ->
@@ -106,6 +113,13 @@ public object MillProjectResolverSupport {
             addPath(LibraryPathType.BINARY, binaryPath.toString())
         }
         return LibraryDependencyData(ownerModule, libraryData, LibraryLevel.PROJECT).apply {
+            scope = DependencyScope.COMPILE
+        }
+    }
+
+    @JvmStatic
+    public fun buildModuleDependency(ownerModule: ModuleData, targetModule: ModuleData): ModuleDependencyData {
+        return ModuleDependencyData(ownerModule, targetModule).apply {
             scope = DependencyScope.COMPILE
         }
     }
