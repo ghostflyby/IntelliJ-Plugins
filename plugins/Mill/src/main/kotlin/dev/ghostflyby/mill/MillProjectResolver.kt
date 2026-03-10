@@ -48,20 +48,46 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             val projectData = MillProjectResolverSupport.buildProjectData(root)
             val projectNode = DataNode(ProjectKeys.PROJECT, projectData, null)
 
-            progressReporter.progress(65, "Creating module and content roots")
-            val moduleNode = projectNode.createChild(
-                ProjectKeys.MODULE,
-                MillProjectResolverSupport.buildModuleData(root, projectData.externalName),
-            )
-            moduleNode.createChild(ProjectKeys.CONTENT_ROOT, MillProjectResolverSupport.buildContentRoot(root))
+            progressReporter.progress(55, "Discovering Mill modules")
+            val discoveredModules = MillModuleDiscovery.discoverModules(root, projectData.externalName, settings, id, listener)
 
-            progressReporter.progress(80, "Resolving Mill compile classpath")
-            val libraryPaths = MillClasspathResolver.resolveBinaryLibraryPaths(root, settings, id, listener)
-            libraryPaths.forEach { path ->
-                moduleNode.createChild(
-                    ProjectKeys.LIBRARY_DEPENDENCY,
-                    MillProjectResolverSupport.buildLibraryDependency(moduleNode.data, path),
+            progressReporter.progress(70, "Creating module and content roots")
+            val moduleNodes = discoveredModules.map { module ->
+                val moduleData = MillProjectResolverSupport.buildModuleData(
+                    projectRoot = root,
+                    moduleDir = module.directory,
+                    moduleName = module.displayName,
                 )
+                val moduleNode = projectNode.createChild(ProjectKeys.MODULE, moduleData)
+                moduleNode.createChild(ProjectKeys.CONTENT_ROOT, MillProjectResolverSupport.buildContentRoot(module.directory))
+                module to moduleNode
+            }
+
+            val moduleNodesByTargetPrefix = moduleNodes.associateBy({ it.first.targetPrefix }, { it.second })
+            moduleNodes.forEach { (module, node) ->
+                val productionModuleNode = module.productionModulePrefix?.let(moduleNodesByTargetPrefix::get)
+                if (productionModuleNode != null) {
+                    node.data.productionModuleId = productionModuleNode.data.id
+                }
+            }
+
+            progressReporter.progress(82, "Resolving Mill compile classpaths")
+            var libraryCount = 0
+            moduleNodes.forEach { (module, node) ->
+                val libraryPaths = MillClasspathResolver.resolveBinaryLibraryPaths(
+                    root = root,
+                    settings = settings,
+                    taskId = id,
+                    listener = listener,
+                    classpathTarget = "${module.targetPrefix}.compileClasspath",
+                )
+                libraryCount += libraryPaths.size
+                libraryPaths.forEach { path ->
+                    node.createChild(
+                        ProjectKeys.LIBRARY_DEPENDENCY,
+                        MillProjectResolverSupport.buildLibraryDependency(node.data, path),
+                    )
+                }
             }
 
             progressReporter.progress(90, "Collecting Mill tasks")
@@ -78,9 +104,8 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                             root.fileName?.toString().orEmpty().ifBlank { "Mill" }
                         }.",
                     )
-                    if (libraryPaths.isNotEmpty()) {
-                        append(" Imported ${libraryPaths.size} external libraries.")
-                    }
+                    append(" Imported ${moduleNodes.size} modules.")
+                    if (libraryCount > 0) append(" Imported $libraryCount external libraries.")
                     append('\n')
                 },
                 ProcessOutputType.STDOUT,
