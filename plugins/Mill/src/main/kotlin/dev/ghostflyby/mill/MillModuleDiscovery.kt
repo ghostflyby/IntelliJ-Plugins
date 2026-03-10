@@ -99,6 +99,7 @@ internal object MillModuleDiscovery {
                     candidateModules[prefix] = MillDiscoveredModule(
                         displayName = prefix,
                         targetPrefix = prefix,
+                        projectRoot = root,
                         directory = directory,
                         productionModulePrefix = prefix.removeSuffix(".test").takeIf { prefix.endsWith(".test") },
                     )
@@ -115,6 +116,7 @@ internal object MillModuleDiscovery {
                 MillDiscoveredModule(
                     displayName = projectName,
                     targetPrefix = "__",
+                    projectRoot = root,
                     directory = root,
                 ),
             )
@@ -149,7 +151,7 @@ internal object MillModuleDiscovery {
     }
 
     private fun fallbackModules(root: Path, projectName: String): List<MillDiscoveredModule> {
-        return listOf(MillDiscoveredModule(displayName = projectName, targetPrefix = "__", directory = root))
+        return listOf(MillDiscoveredModule(displayName = projectName, targetPrefix = "__", projectRoot = root, directory = root))
     }
 
     private fun hasModuleContent(directory: Path): Boolean {
@@ -164,6 +166,10 @@ internal object MillModuleDiscovery {
 internal data class MillDiscoveredModule(
     val displayName: String,
     val targetPrefix: String,
+    val projectRoot: Path,
     val directory: Path,
     val productionModulePrefix: String? = null,
-)
+) {
+    val isTestModule: Boolean
+        get() = productionModulePrefix != null || targetPrefix.endsWith(".test")
+}

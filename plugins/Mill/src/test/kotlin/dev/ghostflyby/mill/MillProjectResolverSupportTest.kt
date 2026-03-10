@@ -22,10 +22,13 @@
 
 package dev.ghostflyby.mill
 
+import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
+import com.intellij.openapi.roots.DependencyScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.Comparator
 import kotlin.io.path.createDirectories
 
@@ -95,6 +98,34 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `builds content root from explicit mill metadata roots`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val sourceRoot = root.resolve("generated/src").createDirectories()
+            val resourceRoot = root.resolve("generated/resources").createDirectories()
+
+            val contentRoot = MillProjectResolverSupport.buildContentRoot(
+                root,
+                listOf(
+                    ExternalSystemSourceType.SOURCE_GENERATED to sourceRoot,
+                    ExternalSystemSourceType.RESOURCE_GENERATED to resourceRoot,
+                ),
+            )
+
+            assertEquals(
+                listOf(sourceRoot.toString()),
+                contentRoot.getPaths(ExternalSystemSourceType.SOURCE_GENERATED).map { it.path },
+            )
+            assertEquals(
+                listOf(resourceRoot.toString()),
+                contentRoot.getPaths(ExternalSystemSourceType.RESOURCE_GENERATED).map { it.path },
+            )
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
     fun `parses compile classpath from mill show output`() {
         val paths = MillClasspathResolver.parsePathList(
             """
@@ -143,9 +174,22 @@ internal class MillProjectResolverSupportTest {
             )
 
             assertEquals(listOf("bar", "foo", "foo.test"), modules.map { it.displayName })
+            assertEquals(listOf(root, root, root), modules.map { it.projectRoot })
         } finally {
             deleteRecursively(root)
         }
+    }
+
+    @Test
+    fun `builds module dependency data for mill modules`() {
+        val owner = MillProjectResolverSupport.buildModuleData(Path.of("/tmp/project"), Path.of("/tmp/project/foo/test"), "foo.test")
+        val target = MillProjectResolverSupport.buildModuleData(Path.of("/tmp/project"), Path.of("/tmp/project/foo"), "foo")
+
+        val dependency = MillProjectResolverSupport.buildModuleDependency(owner, target)
+
+        assertEquals(DependencyScope.COMPILE, dependency.scope)
+        assertEquals(target, dependency.target)
+        assertEquals(owner, dependency.ownerModule)
     }
 
     private fun deleteRecursively(root: java.nio.file.Path) {
