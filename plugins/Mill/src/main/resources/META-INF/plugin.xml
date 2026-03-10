@@ -1,0 +1,26 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <id>dev.ghostflyby.mill</id>
+    <name>Mill</name>
+    <vendor>ghostflyby</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.intellij.scala</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
+        <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <projectOpenProcessor
+                id="mill"
+                implementation="dev.ghostflyby.mill.MillProjectOpenProcessor"
+                order="first"/>
+        <projectConfigurable
+                groupId="build.tools"
+                groupWeight="115"
+                id="reference.settingsdialog.project.mill"
+                displayName="Mill"
+                instance="dev.ghostflyby.mill.MillConfigurable"/>
+    </extensions>
+</idea-plugin>
