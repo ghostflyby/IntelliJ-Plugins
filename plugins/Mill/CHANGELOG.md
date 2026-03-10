@@ -9,6 +9,7 @@
 - Initial Mill external system implementation with manager, settings, project resolver, and task manager support.
 - Basic Mill project detection, source root mapping, and default task nodes.
 - Basic CLI-backed Mill task execution and auto-import file tracking.
+- Best-effort multi-module import from Mill target resolution.
 - Best-effort aggregate Mill compile classpath import into `External Libraries`.
 - Structured progress events for Mill project import.
 - A Mill Project Settings page under `Build Tools`.

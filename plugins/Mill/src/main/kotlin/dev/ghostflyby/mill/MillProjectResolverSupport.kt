@@ -31,6 +31,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 public object MillProjectResolverSupport {
+    @JvmField
+    public val moduleContentDirectoryNames: Set<String> = linkedSetOf("src", "resources", "test/src", "test/resources")
+
     @JvmStatic
     public fun isProjectFileName(fileName: String): Boolean {
         return fileName in MillConstants.projectFileNames
@@ -71,16 +74,16 @@ public object MillProjectResolverSupport {
     }
 
     @JvmStatic
-    public fun buildModuleData(root: Path, projectName: String): ModuleData {
+    public fun buildModuleData(projectRoot: Path, moduleDir: Path, moduleName: String): ModuleData {
         return ModuleData(
-            "$projectName:${root.toAbsolutePath()}",
+            "$moduleName:${moduleDir.toAbsolutePath()}",
             MillConstants.systemId,
             MillConstants.moduleTypeId,
-            projectName,
-            root.toString(),
-            root.toString(),
+            moduleName,
+            moduleDir.toString(),
+            projectRoot.toString(),
         ).apply {
-            moduleName = projectName
+            this.moduleName = moduleName
         }
     }
 
