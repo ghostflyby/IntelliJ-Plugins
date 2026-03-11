@@ -71,7 +71,17 @@ public final class MillExternalSystemManager implements ExternalSystemManager<
         return (Function<Pair<Project, String>, MillExecutionSettings>) pair -> {
             MillProjectSettings linkedSettings = MillSettings.getInstance(pair.first).getLinkedProjectSettings(pair.second);
             MillExecutionSettings settings = new MillExecutionSettings();
-            settings.setMillExecutablePath(linkedSettings == null ? MillConstants.defaultExecutable : linkedSettings.getMillExecutablePath());
+            if (linkedSettings == null) {
+                settings.setMillExecutablePath(MillConstants.defaultExecutable);
+                settings.setMillJvmOptions("");
+                settings.setUseMillMetadataDuringImport(true);
+                settings.setCreatePerModuleTaskNodes(true);
+            } else {
+                settings.setMillExecutablePath(linkedSettings.getMillExecutablePath());
+                settings.setMillJvmOptions(linkedSettings.getMillJvmOptions());
+                settings.setUseMillMetadataDuringImport(linkedSettings.getUseMillMetadataDuringImport());
+                settings.setCreatePerModuleTaskNodes(linkedSettings.getCreatePerModuleTaskNodes());
+            }
             return settings;
         };
     }

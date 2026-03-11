@@ -26,11 +26,17 @@ import com.intellij.openapi.externalSystem.model.settings.ExternalSystemExecutio
 
 internal class MillExecutionSettings : ExternalSystemExecutionSettings {
     var millExecutablePath: String = MillConstants.defaultExecutable
+    var millJvmOptions: String = ""
+    var useMillMetadataDuringImport: Boolean = true
+    var createPerModuleTaskNodes: Boolean = true
 
     constructor() : super()
 
     constructor(other: MillExecutionSettings) : super(other) {
         millExecutablePath = other.millExecutablePath
+        millJvmOptions = other.millJvmOptions
+        useMillMetadataDuringImport = other.useMillMetadataDuringImport
+        createPerModuleTaskNodes = other.createPerModuleTaskNodes
     }
 
     override fun equals(other: Any?): Boolean {
@@ -38,10 +44,17 @@ internal class MillExecutionSettings : ExternalSystemExecutionSettings {
         if (other !is MillExecutionSettings) return false
         if (!super.equals(other)) return false
 
-        return millExecutablePath == other.millExecutablePath
+        return millExecutablePath == other.millExecutablePath &&
+            millJvmOptions == other.millJvmOptions &&
+            useMillMetadataDuringImport == other.useMillMetadataDuringImport &&
+            createPerModuleTaskNodes == other.createPerModuleTaskNodes
     }
 
     override fun hashCode(): Int {
-        return 31 * super.hashCode() + millExecutablePath.hashCode()
+        var result = 31 * super.hashCode() + millExecutablePath.hashCode()
+        result = 31 * result + millJvmOptions.hashCode()
+        result = 31 * result + useMillMetadataDuringImport.hashCode()
+        result = 31 * result + createPerModuleTaskNodes.hashCode()
+        return result
     }
 }

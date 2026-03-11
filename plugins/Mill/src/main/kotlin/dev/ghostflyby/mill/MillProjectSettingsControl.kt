@@ -29,8 +29,11 @@ import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.ui.TextBrowseFolderListener
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.openapi.util.text.StringUtil
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.GridBag
+import com.intellij.util.execution.ParametersListUtil
 import java.awt.GridBagConstraints
 
 internal class MillProjectSettingsControl(
@@ -39,6 +42,11 @@ internal class MillProjectSettingsControl(
     private var executableLabel: JBLabel? = null
     private var executablePathField: TextFieldWithBrowseButton? = null
     private var executableComment: JBLabel? = null
+    private var jvmOptionsLabel: JBLabel? = null
+    private var jvmOptionsField: JBTextField? = null
+    private var jvmOptionsComment: JBLabel? = null
+    private var metadataImportCheckBox: JBCheckBox? = null
+    private var perModuleTasksCheckBox: JBCheckBox? = null
 
     override fun fillExtraControls(
         content: com.intellij.openapi.externalSystem.util.PaintAwarePanel,
@@ -64,18 +72,51 @@ internal class MillProjectSettingsControl(
 
         val commentConstraints: GridBag = ExternalSystemUiUtil.getCommentConstraints(indentLevel + 1)
         content.add(comment, commentConstraints)
+
+        val jvmLabel = JBLabel("Mill JVM options")
+        val jvmField = JBTextField()
+        val jvmComment = JBLabel("Pass launcher JVM options such as `-J-Xmx2g -J-Dkey=value`.")
+        val metadataCheckBox = JBCheckBox("Use Mill metadata during import")
+        val perModuleTasksBox = JBCheckBox("Create per-module task nodes")
+
+        jvmOptionsLabel = jvmLabel
+        jvmOptionsField = jvmField
+        jvmOptionsComment = jvmComment
+        metadataImportCheckBox = metadataCheckBox
+        perModuleTasksCheckBox = perModuleTasksBox
+
+        content.add(jvmLabel, ExternalSystemUiUtil.getFillLineConstraints(indentLevel))
+        content.add(
+            jvmField,
+            ExternalSystemUiUtil.getFillLineConstraints(indentLevel + 1)
+                .fillCellHorizontally()
+                .weightx(1.0)
+                .anchor(GridBagConstraints.WEST),
+        )
+        content.add(jvmComment, ExternalSystemUiUtil.getCommentConstraints(indentLevel + 1))
+        content.add(metadataCheckBox, ExternalSystemUiUtil.getFillLineConstraints(indentLevel))
+        content.add(perModuleTasksBox, ExternalSystemUiUtil.getFillLineConstraints(indentLevel))
     }
 
     override fun isExtraSettingModified(): Boolean {
-        return currentExecutablePath() != initialSettings.millExecutablePath
+        return currentExecutablePath() != initialSettings.millExecutablePath ||
+            currentJvmOptions() != initialSettings.millJvmOptions ||
+            isMetadataImportEnabled() != initialSettings.useMillMetadataDuringImport ||
+            isPerModuleTaskNodesEnabled() != initialSettings.createPerModuleTaskNodes
     }
 
     override fun resetExtraSettings(isDefaultModuleCreation: Boolean) {
         executablePathField?.text = initialSettings.millExecutablePath
+        jvmOptionsField?.text = initialSettings.millJvmOptions
+        metadataImportCheckBox?.isSelected = initialSettings.useMillMetadataDuringImport
+        perModuleTasksCheckBox?.isSelected = initialSettings.createPerModuleTaskNodes
     }
 
     override fun applyExtraSettings(settings: MillProjectSettings) {
         settings.millExecutablePath = currentExecutablePath()
+        settings.millJvmOptions = currentJvmOptions()
+        settings.useMillMetadataDuringImport = isMetadataImportEnabled()
+        settings.createPerModuleTaskNodes = isPerModuleTaskNodesEnabled()
     }
 
     override fun validate(settings: MillProjectSettings): Boolean {
@@ -83,15 +124,29 @@ internal class MillProjectSettingsControl(
         if (path.contains('\n')) {
             throw ConfigurationException("Mill executable path must be a single path.")
         }
+        try {
+            ParametersListUtil.parse(currentJvmOptions(), false, true)
+        } catch (error: RuntimeException) {
+            throw ConfigurationException("Mill JVM options could not be parsed: ${error.message.orEmpty()}")
+        }
         return true
     }
 
     override fun updateInitialExtraSettings() {
         initialSettings.millExecutablePath = currentExecutablePath()
+        initialSettings.millJvmOptions = currentJvmOptions()
+        initialSettings.useMillMetadataDuringImport = isMetadataImportEnabled()
+        initialSettings.createPerModuleTaskNodes = isPerModuleTaskNodesEnabled()
     }
 
     private fun currentExecutablePath(): String {
         val rawValue = executablePathField?.text.orEmpty().trim()
         return StringUtil.defaultIfEmpty(rawValue, MillConstants.defaultExecutable)
     }
+
+    private fun currentJvmOptions(): String = jvmOptionsField?.text.orEmpty().trim()
+
+    private fun isMetadataImportEnabled(): Boolean = metadataImportCheckBox?.isSelected ?: true
+
+    private fun isPerModuleTaskNodesEnabled(): Boolean = perModuleTasksCheckBox?.isSelected ?: true
 }
