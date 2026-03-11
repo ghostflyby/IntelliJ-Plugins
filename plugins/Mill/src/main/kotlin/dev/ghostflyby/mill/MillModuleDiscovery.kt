@@ -32,13 +32,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 internal object MillModuleDiscovery {
-    fun discoverModules(
+    fun resolveTargets(
         root: Path,
-        projectName: String,
         settings: MillExecutionSettings?,
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
-    ): List<MillDiscoveredModule> {
+    ): List<String> {
         val output = try {
             CapturingProcessHandler(createCommandLine(root, settings)).runProcess()
         } catch (_: ExecutionException) {
@@ -47,7 +46,7 @@ internal object MillModuleDiscovery {
                 "Mill module discovery skipped because the Mill process could not be started.\n",
                 ProcessOutputType.STDERR,
             )
-            return fallbackModules(root, projectName)
+            return emptyList()
         }
 
         if (output.exitCode != 0) {
@@ -64,10 +63,20 @@ internal object MillModuleDiscovery {
                 },
                 ProcessOutputType.STDERR,
             )
-            return fallbackModules(root, projectName)
+            return emptyList()
         }
 
-        val resolvedTargets = parseResolvedTargets(output.stdout)
+        return parseResolvedTargets(output.stdout)
+    }
+
+    fun discoverModules(
+        root: Path,
+        projectName: String,
+        settings: MillExecutionSettings?,
+        taskId: ExternalSystemTaskId,
+        listener: ExternalSystemTaskNotificationListener,
+    ): List<MillDiscoveredModule> {
+        val resolvedTargets = resolveTargets(root, settings, taskId, listener)
         val discoveredModules = discoverModulesFromTargets(root, projectName, resolvedTargets)
         return if (discoveredModules.isEmpty()) fallbackModules(root, projectName) else discoveredModules
     }

@@ -14,6 +14,7 @@
 - Explicit test-to-production module dependencies for discovered `*.test` modules.
 - Direct Mill inter-module dependency import from `show <module>.moduleDeps` where discovered modules can be matched.
 - Best-effort aggregate Mill compile classpath import into `External Libraries`.
+- Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`.
 - Structured progress events for Mill project import.
 - A Mill Project Settings page under `Build Tools`.
 - Standard unlinked-project detection so Mill projects can surface the IDE import prompt after open.
