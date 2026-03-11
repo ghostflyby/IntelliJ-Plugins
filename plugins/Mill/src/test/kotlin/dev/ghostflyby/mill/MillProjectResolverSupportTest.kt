@@ -160,7 +160,7 @@ internal class MillProjectResolverSupportTest {
     fun `parses hashed path refs from mill show output`() {
         val values = MillShowTargetPathResolver.parseStringList(
             """
-            ["ref:8befb7a8:/tmp/coursier/cache/a.jar","ref:feedbeef:C:\\Users\\me\\cache\\b.jar"]
+            ["ref:v0:8befb7a8:/tmp/coursier/cache/a.jar","qref:v1:feedbeef:C:\\Users\\me\\cache\\b.jar"]
             """.trimIndent(),
         )
 
@@ -227,7 +227,7 @@ internal class MillProjectResolverSupportTest {
             val modules = MillModuleDiscovery.discoverModulesFromTargets(
                 root = root,
                 projectName = "sample",
-                resolvedTargets = listOf("foo.compile", "foo.test.test", "bar.runBackground"),
+                resolvedTargets = listOf("foo.compile", "foo.test.test", "bar.compile"),
             )
 
             assertEquals(listOf("bar", "foo", "foo.test"), modules.map { it.displayName })
@@ -235,6 +235,29 @@ internal class MillProjectResolverSupportTest {
                 listOf(root.resolve("bar"), root.resolve("foo"), root.resolve("foo/test")),
                 modules.map { it.directory },
             )
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `filters mill pseudo modules from resolved targets`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve("build.mill"), "// mill")
+
+            val modules = MillModuleDiscovery.discoverModulesFromTargets(
+                root = root,
+                projectName = "sample",
+                resolvedTargets = listOf(
+                    "examples.compile",
+                    "examples.sources",
+                    "selective.resolve",
+                    "selective.run",
+                ),
+            )
+
+            assertEquals(listOf("examples"), modules.map { it.displayName })
         } finally {
             deleteRecursively(root)
         }
@@ -285,6 +308,7 @@ internal class MillProjectResolverSupportTest {
     @Test
     fun `builds mill command lines with jvm options before tasks`() {
         val command = MillCommandLineUtil.buildMillCommand(
+            projectRoot = Path.of("/tmp/project"),
             executable = "mill",
             jvmOptionsText = """-J-Xmx2g "-J-Dmill.profile=dev mode"""",
             arguments = listOf("show", "foo.compileClasspath"),
@@ -294,6 +318,49 @@ internal class MillProjectResolverSupportTest {
             listOf("mill", "-J-Xmx2g", "-J-Dmill.profile=dev mode", "show", "foo.compileClasspath"),
             command,
         )
+    }
+
+    @Test
+    fun `prefers project mill wrapper over global command`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val wrapper = Files.writeString(root.resolve("mill"), "#!/bin/sh\n")
+
+            val command = MillCommandLineUtil.buildMillCommand(
+                projectRoot = root,
+                executable = MillConstants.defaultExecutable,
+                jvmOptionsText = "",
+                arguments = listOf("resolve", MillConstants.moduleDiscoveryQuery),
+            )
+
+            assertEquals(wrapper.toString(), command.first())
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `creates default resolve task for module discovery query`() {
+        val tasks = MillProjectResolverSupport.createTaskData(Path.of("/tmp/project"))
+
+        assertTrue(tasks.any { it.name == "resolve ${MillConstants.moduleDiscoveryQuery}" })
+        assertTrue(tasks.none { it.name == "resolve _" })
+    }
+
+    @Test
+    fun `resolves configured relative executable against project root`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val wrapper = root.resolve("tools/mill")
+            Files.createDirectories(wrapper.parent)
+            Files.writeString(wrapper, "#!/bin/sh\n")
+
+            val executable = MillCommandLineUtil.resolveExecutable(root, "tools/mill")
+
+            assertEquals(wrapper.toString(), executable)
+        } finally {
+            deleteRecursively(root)
+        }
     }
 
     private fun deleteRecursively(root: java.nio.file.Path) {

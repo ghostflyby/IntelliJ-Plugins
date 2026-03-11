@@ -42,6 +42,9 @@ internal class MillImportRefreshCallback(
     override fun onSuccess(externalTaskId: ExternalSystemTaskId, externalProject: DataNode<ProjectData>?) {
         val resolvedModuleCount = externalProject.count(ProjectKeys.MODULE)
         val resolvedLibraryCount = externalProject.count(ProjectKeys.LIBRARY_DEPENDENCY)
+        MillImportDebugLogger.info(
+            "Refresh callback success task=${externalTaskId.id} resolvedModules=$resolvedModuleCount resolvedLibraries=$resolvedLibraryCount",
+        )
         ApplicationManager.getApplication().invokeLater(
             {
                 if (project.isDisposed) return@invokeLater
@@ -49,6 +52,9 @@ internal class MillImportRefreshCallback(
                 val moduleManager = ModuleManager.getInstance(project)
                 val moduleCountBefore = moduleManager.modules.size
                 if (externalProject != null && resolvedModuleCount > 0 && moduleCountBefore == 0) {
+                    MillImportDebugLogger.warn(
+                        "Refresh callback saw resolved modules but project had no IDE modules. Triggering fallback importData().",
+                    )
                     ProjectDataManager.getInstance().importData(externalProject, project)
                 }
                 val moduleCountAfter = moduleManager.modules.size
@@ -64,6 +70,9 @@ internal class MillImportRefreshCallback(
                     append(moduleCountAfter)
                     append(" module(s).")
                 }
+                MillImportDebugLogger.info(
+                    "Refresh callback completed task=${externalTaskId.id} beforeModules=$moduleCountBefore afterModules=$moduleCountAfter",
+                )
                 thisLogger().warn("Mill import result: $content")
                 NotificationGroupManager.getInstance()
                     .getNotificationGroup(MillConstants.notificationGroupId)
@@ -82,6 +91,9 @@ internal class MillImportRefreshCallback(
                 append(errorDetails)
             }
         }
+        MillImportDebugLogger.warn(
+            "Refresh callback failure task=${externalTaskId.id} message=${MillImportDebugLogger.trim(content)}",
+        )
         thisLogger().warn("Mill import failed: $content")
         NotificationGroupManager.getInstance()
             .getNotificationGroup(MillConstants.notificationGroupId)

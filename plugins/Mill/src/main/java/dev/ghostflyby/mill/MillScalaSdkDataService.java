@@ -41,6 +41,7 @@ import scala.collection.immutable.Seq;
 import scala.jdk.javaapi.CollectionConverters;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -70,6 +71,11 @@ public final class MillScalaSdkDataService extends AbstractProjectDataService<Mi
 
       try {
         MillScalaSdkData data = dataNode.getData();
+        LOG.info("[Mill import] Configuring Scala SDK for module " + ideModule.getName() +
+                 " version=" + data.getScalaVersion() +
+                 " scalacJars=" + data.getScalacClasspath().size() +
+                 " scaladocJars=" + data.getScaladocClasspath().size() +
+                 " replJars=" + data.getReplClasspath().size());
         ReplClasspath replClasspath = ReplClasspath$.MODULE$.fromPaths(toScalaSeq(data.getReplClasspath()));
         ScalaSdkUtils$.MODULE$.configureScalaSdk(
           ideModule,
@@ -81,6 +87,7 @@ public final class MillScalaSdkDataService extends AbstractProjectDataService<Mi
           MillConstants.scalaSdkPrefix,
           modelsProvider
         );
+        LOG.info("[Mill import] Scala SDK configured for module " + ideModule.getName());
       }
       catch (Throwable t) {
         LOG.warn("Failed to configure Mill Scala SDK for module " + ideModule.getName(), t);
@@ -88,7 +95,11 @@ public final class MillScalaSdkDataService extends AbstractProjectDataService<Mi
     }
   }
 
-  private static Seq<Path> toScalaSeq(List<Path> values) {
-    return CollectionConverters.asScala(values).toSeq();
+  private static Seq<Path> toScalaSeq(List<String> values) {
+    ArrayList<Path> paths = new ArrayList<>(values.size());
+    for (String value : values) {
+      paths.add(Path.of(value));
+    }
+    return CollectionConverters.asScala(paths).toSeq();
   }
 }

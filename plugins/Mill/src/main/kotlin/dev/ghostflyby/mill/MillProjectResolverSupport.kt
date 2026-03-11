@@ -217,7 +217,12 @@ public object MillProjectResolverSupport {
 
     private fun createDefaultTaskData(root: Path): List<TaskData> {
         return listOf(
-            task(root, "resolve _", "Resolve all available Mill targets", group = "help"),
+            task(
+                root,
+                "resolve ${MillConstants.moduleDiscoveryQuery}",
+                "Resolve available Mill targets under ${MillConstants.moduleDiscoveryQuery}",
+                group = "help",
+            ),
             task(root, "__.compile", "Compile all Mill modules", group = "build"),
             task(root, "__.test", "Run tests for all Mill modules", group = "verification", isTest = true),
             task(root, "__.runBackground", "Run the default background target", group = "application"),

@@ -23,23 +23,68 @@
 package dev.ghostflyby.mill
 
 import com.intellij.util.execution.ParametersListUtil
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal object MillCommandLineUtil {
     fun buildMillCommand(
+        projectRoot: Path,
         executable: String,
         jvmOptionsText: String,
         arguments: List<String>,
     ): List<String> {
+        val resolvedExecutable = resolveExecutable(projectRoot, executable)
         return buildList {
-            add(executable.ifBlank { MillConstants.defaultExecutable })
+            add(resolvedExecutable)
             addAll(parseOptions(jvmOptionsText))
             addAll(arguments.filter(String::isNotBlank))
         }
+    }
+
+    internal fun resolveExecutable(projectRoot: Path, configuredExecutable: String): String {
+        val rawExecutable = configuredExecutable.trim()
+        if (rawExecutable.isNotEmpty()) {
+            val configuredPath = runCatching { Path.of(rawExecutable) }.getOrNull()
+            if (configuredPath != null) {
+                if (configuredPath.isAbsolute) {
+                    val resolved = configuredPath.normalize().toString()
+                    MillImportDebugLogger.info("Using configured Mill executable `$resolved`")
+                    return resolved
+                }
+                val projectRelativePath = projectRoot.resolve(configuredPath).normalize()
+                if (Files.isRegularFile(projectRelativePath)) {
+                    val resolved = projectRelativePath.toString()
+                    MillImportDebugLogger.info("Using project-relative Mill executable `$resolved`")
+                    return resolved
+                }
+            }
+            if (rawExecutable != MillConstants.defaultExecutable) {
+                MillImportDebugLogger.info("Using configured Mill executable command `$rawExecutable`")
+                return rawExecutable
+            }
+        }
+
+        discoverWrapper(projectRoot)?.let { wrapper ->
+            val resolved = wrapper.toString()
+            MillImportDebugLogger.info("Using detected Mill wrapper `$resolved`")
+            return resolved
+        }
+        val resolved = rawExecutable.ifBlank { MillConstants.defaultExecutable }
+        MillImportDebugLogger.info("Falling back to Mill executable command `$resolved`")
+        return resolved
     }
 
     internal fun parseOptions(rawValue: String): List<String> {
         return ParametersListUtil.parse(rawValue.trim(), false, true)
             .map(String::trim)
             .filter(String::isNotEmpty)
+    }
+
+    private fun discoverWrapper(projectRoot: Path): Path? {
+        val candidates = buildList {
+            add(projectRoot.resolve(MillConstants.wrapperScriptName))
+            add(projectRoot.resolve(MillConstants.wrapperBatchName))
+        }
+        return candidates.firstOrNull(Files::isRegularFile)
     }
 }

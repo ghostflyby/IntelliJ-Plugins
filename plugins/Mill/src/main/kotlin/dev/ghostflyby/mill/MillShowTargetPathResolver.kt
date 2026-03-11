@@ -41,7 +41,9 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean = true,
     ): List<String> {
         val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
-        return parseStringList(output.stdout)
+        val values = parseStringList(output.stdout)
+        MillImportDebugLogger.info("`mill show $showTarget` parsed ${values.size} string value(s): ${MillImportDebugLogger.sample(values)}")
+        return values
     }
 
     fun resolveStringValue(
@@ -54,7 +56,9 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean = true,
     ): String? {
         val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return null
-        return parseSingleStringValue(output.stdout)
+        val value = parseSingleStringValue(output.stdout)
+        MillImportDebugLogger.info("`mill show $showTarget` parsed single value=${value ?: "<null>"}")
+        return value
     }
 
     fun resolvePaths(
@@ -67,13 +71,15 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean = true,
     ): List<Path> {
         val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
-        return parsePathList(output.stdout)
+        val paths = parsePathList(output.stdout)
             .asSequence()
             .mapNotNull { rawPath -> runCatching { Path.of(rawPath) }.getOrNull() }
             .map(Path::toAbsolutePath)
             .map(Path::normalize)
             .distinct()
             .toList()
+        MillImportDebugLogger.info("`mill show $showTarget` parsed ${paths.size} path(s): ${MillImportDebugLogger.sample(paths.map(Path::toString))}")
+        return paths
     }
 
     internal fun parsePathList(output: String): List<String> = parseStringList(output)
@@ -109,8 +115,14 @@ internal object MillShowTargetPathResolver {
         failureContext: String,
         reportFailures: Boolean,
     ) = try {
+        MillImportDebugLogger.info("Running `mill show $showTarget` in $root")
         val output = CapturingProcessHandler(createCommandLine(root, settings, showTarget)).runProcess()
         if (output.exitCode != 0) {
+            MillImportDebugLogger.warn(
+                "`mill show $showTarget` failed in $root exitCode=${output.exitCode} details=${
+                    MillImportDebugLogger.trim(output.stderr.ifBlank { output.stdout })
+                }",
+            )
             if (reportFailures) {
                 val details = output.stderr.ifBlank { output.stdout }.trim()
                 listener.onTaskOutput(
@@ -128,9 +140,11 @@ internal object MillShowTargetPathResolver {
             }
             null
         } else {
+            MillImportDebugLogger.info("`mill show $showTarget` succeeded in $root")
             output
         }
     } catch (_: ExecutionException) {
+        MillImportDebugLogger.warn("Mill process could not be started for `show $showTarget` in $root")
         if (reportFailures) {
             listener.onTaskOutput(
                 taskId,
@@ -147,6 +161,7 @@ internal object MillShowTargetPathResolver {
         showTarget: String,
     ): GeneralCommandLine {
         val command = MillCommandLineUtil.buildMillCommand(
+            projectRoot = root,
             executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
             jvmOptionsText = settings?.millJvmOptions.orEmpty(),
             arguments = listOf("show", showTarget),
@@ -229,25 +244,21 @@ internal object MillShowTargetPathResolver {
     }
 
     private fun normalizeValue(value: String): String {
-        if (!value.startsWith("ref:")) {
+        if (value.startsWith("/") || windowsPathPattern.matches(value)) {
             return value
         }
 
-        val pathRefValue = value.removePrefix("ref:")
-        if (pathRefValue.startsWith("/") || windowsPathPattern.matches(pathRefValue)) {
-            return pathRefValue
-        }
+        var candidate = value
+        while (true) {
+            val separatorIndex = candidate.indexOf(':')
+            if (separatorIndex < 0 || separatorIndex == candidate.lastIndex) {
+                return value
+            }
 
-        val separatorIndex = pathRefValue.indexOf(':')
-        if (separatorIndex < 0 || separatorIndex == pathRefValue.lastIndex) {
-            return pathRefValue
-        }
-
-        val candidatePath = pathRefValue.substring(separatorIndex + 1)
-        return when {
-            candidatePath.startsWith("/") -> candidatePath
-            windowsPathPattern.matches(candidatePath) -> candidatePath
-            else -> pathRefValue
+            candidate = candidate.substring(separatorIndex + 1)
+            if (candidate.startsWith("/") || windowsPathPattern.matches(candidate)) {
+                return candidate
+            }
         }
     }
 
