@@ -43,7 +43,7 @@ internal object MillContentRootResolver {
         return if (metadataRoots.isEmpty()) {
             MillProjectResolverSupport.buildContentRoot(module.directory)
         } else {
-            MillProjectResolverSupport.buildContentRoot(module.directory, metadataRoots)
+            MillProjectResolverSupport.buildContentRoot(resolveContentRootBase(module, metadataRoots), metadataRoots)
         }
     }
 
@@ -68,9 +68,34 @@ internal object MillContentRootResolver {
                 ).asSequence().map { sourceType to it }
             }
             .filter { (_, path) -> Files.isDirectory(path) }
-            .filter { (_, path) -> path.startsWith(module.directory) }
+            .filter { (_, path) -> path.startsWith(module.projectRoot) }
             .distinct()
             .toList()
+    }
+
+    private fun resolveContentRootBase(
+        module: MillDiscoveredModule,
+        metadataRoots: List<Pair<ExternalSystemSourceType, Path>>,
+    ): Path {
+        val roots = metadataRoots.map { it.second }
+        val commonAncestor = commonAncestor(roots)
+        return when {
+            commonAncestor == null -> module.directory
+            commonAncestor.startsWith(module.projectRoot) -> commonAncestor
+            else -> module.directory
+        }
+    }
+
+    private fun commonAncestor(paths: List<Path>): Path? {
+        val first = paths.firstOrNull() ?: return null
+        var candidate: Path? = first
+        while (candidate != null) {
+            if (paths.all { it.startsWith(candidate) }) {
+                return candidate
+            }
+            candidate = candidate.parent
+        }
+        return null
     }
 
     private fun sourceTargetsFor(module: MillDiscoveredModule): Map<String, ExternalSystemSourceType> {

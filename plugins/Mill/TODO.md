@@ -12,15 +12,15 @@ Last Updated: 2026-03-10
 ## Complete
 
 1. Import real Mill modules, content roots, and inter-module dependencies instead of a single root module.
-2. Import external libraries from Mill metadata instead of only best-effort aggregate classpath fallback.
-3. Add a dedicated `externalSystemViewContributor` for a usable Mill tool window structure.
+2. Add a dedicated `externalSystemViewContributor` for a usable Mill tool window structure.
+3. Keep Scala SDK and external library import stable across common Scala Mill layouts.
 
 ## Extended
 
 1. Add `externalSystemOutputParserProvider` for structured Mill build, test, and error output.
 2. Add `externalSystemExecutionConsoleManager` and notification integration for better task execution UX.
 3. Add config locator and watcher contributors so auto-reload follows Mill config changes more precisely.
-4. Add custom project data services once Mill-specific `DataNode` types are introduced.
+4. Expand custom project data services beyond Scala SDK once more Mill-specific `DataNode` types are introduced.
 
 ## Gradle/Maven Level
 

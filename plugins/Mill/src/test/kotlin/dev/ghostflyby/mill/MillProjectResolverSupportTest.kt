@@ -149,11 +149,37 @@ internal class MillProjectResolverSupportTest {
         val values = MillShowTargetPathResolver.parseStringList(
             """
             [info] resolving
-            ["foo","bar.test","qux[2.13]"]
+            ["foo","ref:/tmp/coursier/cache/a.jar","qux[2.13]"]
             """.trimIndent(),
         )
 
-        assertEquals(listOf("foo", "bar.test", "qux[2.13]"), values)
+        assertEquals(listOf("foo", "/tmp/coursier/cache/a.jar", "qux[2.13]"), values)
+    }
+
+    @Test
+    fun `parses hashed path refs from mill show output`() {
+        val values = MillShowTargetPathResolver.parseStringList(
+            """
+            ["ref:8befb7a8:/tmp/coursier/cache/a.jar","ref:feedbeef:C:\\Users\\me\\cache\\b.jar"]
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf("/tmp/coursier/cache/a.jar", """C:\Users\me\cache\b.jar"""),
+            values,
+        )
+    }
+
+    @Test
+    fun `parses single string mill show output`() {
+        val value = MillShowTargetPathResolver.parseSingleStringValue(
+            """
+            [info] resolving
+            "2.13.16"
+            """.trimIndent(),
+        )
+
+        assertEquals("2.13.16", value)
     }
 
     @Test
@@ -187,6 +213,28 @@ internal class MillProjectResolverSupportTest {
 
             assertEquals(listOf("bar", "foo", "foo.test"), modules.map { it.displayName })
             assertEquals(listOf(root, root, root), modules.map { it.projectRoot })
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `discovers modules from resolved targets without requiring filesystem layout`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve("build.sc"), "// mill")
+
+            val modules = MillModuleDiscovery.discoverModulesFromTargets(
+                root = root,
+                projectName = "sample",
+                resolvedTargets = listOf("foo.compile", "foo.test.test", "bar.runBackground"),
+            )
+
+            assertEquals(listOf("bar", "foo", "foo.test"), modules.map { it.displayName })
+            assertEquals(
+                listOf(root.resolve("bar"), root.resolve("foo"), root.resolve("foo/test")),
+                modules.map { it.directory },
+            )
         } finally {
             deleteRecursively(root)
         }

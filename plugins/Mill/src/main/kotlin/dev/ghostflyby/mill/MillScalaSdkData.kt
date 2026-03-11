@@ -22,25 +22,18 @@
 
 package dev.ghostflyby.mill
 
-import com.intellij.openapi.externalSystem.model.ProjectSystemId
+import com.intellij.openapi.externalSystem.model.Key
+import com.intellij.openapi.externalSystem.model.project.AbstractExternalEntityData
+import java.nio.file.Path
 
-public object MillConstants {
-    @JvmField
-    public val systemId: ProjectSystemId = ProjectSystemId("MILL", "Mill")
-
-    public const val defaultExecutable: String = "mill"
-    public const val moduleTypeId: String = "JAVA_MODULE"
-    public const val settingsFileName: String = "mill.xml"
-    public const val versionFileName: String = ".mill-version"
-    public const val scalaSdkPrefix: String = "Mill"
-    public const val notificationGroupId: String = "Mill Import"
-
-    @JvmField
-    public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill")
-
-    @JvmField
-    public val configFileNames: Set<String> = linkedSetOf(
-        *projectFileNames.toTypedArray(),
-        versionFileName,
-    )
+internal class MillScalaSdkData(
+    val scalaVersion: String,
+    val scalacClasspath: List<Path>,
+    val scaladocClasspath: List<Path>,
+    val replClasspath: List<Path>,
+) : AbstractExternalEntityData(MillConstants.systemId) {
+    companion object {
+        @JvmField
+        val key: Key<MillScalaSdkData> = Key.create(MillScalaSdkData::class.java, 225)
+    }
 }

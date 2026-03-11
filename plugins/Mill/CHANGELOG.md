@@ -14,8 +14,10 @@
 - Mill metadata-backed source, resource, and generated-root import where `show <module>.*` is available.
 - Explicit test-to-production module dependencies for discovered `*.test` modules.
 - Direct Mill inter-module dependency import from `show <module>.moduleDeps` where discovered modules can be matched.
-- Best-effort aggregate Mill compile classpath import into `External Libraries`.
+- External library import from Mill dependency metadata via `resolvedMvnDeps` / `resolvedIvyDeps`, with `compileClasspath` as fallback.
+- Scala SDK import for Scala Mill modules using Mill metadata-backed Scala classpaths.
 - Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`.
+- A `Reload Mill Project` action under `Tools` for refreshing linked Mill imports on demand.
 - Structured progress events for Mill project import.
 - A Mill Project Settings page under `Build Tools`.
 - Standard unlinked-project detection so Mill projects can surface the IDE import prompt after open.

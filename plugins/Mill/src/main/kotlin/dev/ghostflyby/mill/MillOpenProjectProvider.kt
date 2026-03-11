@@ -74,6 +74,11 @@ internal class MillOpenProjectProvider : AbstractOpenProjectProvider() {
         val settings = MillProjectSettings().apply {
             externalProjectPath = projectPath.toString()
         }
-        ExternalSystemUtil.linkExternalProject(settings, ImportSpecBuilder(project, systemId))
+        ExternalSystemUtil.linkExternalProject(
+            settings,
+            ImportSpecBuilder(project, systemId)
+                .withActivateToolWindowOnStart(true)
+                .withCallback(MillImportRefreshCallback(project)),
+        )
     }
 }

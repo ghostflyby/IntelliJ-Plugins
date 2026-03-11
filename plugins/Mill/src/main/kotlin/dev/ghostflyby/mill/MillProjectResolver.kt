@@ -92,15 +92,14 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 }
             }
 
-            progressReporter.progress(82, "Resolving Mill compile classpaths")
+            progressReporter.progress(82, "Resolving Mill external libraries")
             var libraryCount = 0
             moduleNodes.forEach { (module, node) ->
-                val libraryPaths = MillClasspathResolver.resolveBinaryLibraryPaths(
-                    root = root,
+                val libraryPaths = MillExternalLibraryResolver.resolveBinaryLibraryPaths(
+                    module = module,
                     settings = settings,
                     taskId = id,
                     listener = listener,
-                    classpathTarget = "${module.targetPrefix}.compileClasspath",
                 )
                 libraryCount += libraryPaths.size
                 libraryPaths.forEach { path ->
@@ -108,6 +107,14 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                         ProjectKeys.LIBRARY_DEPENDENCY,
                         MillProjectResolverSupport.buildLibraryDependency(node.data, path),
                     )
+                }
+                MillScalaSdkResolver.resolve(
+                    module = module,
+                    settings = settings,
+                    taskId = id,
+                    listener = listener,
+                )?.let { scalaSdkData ->
+                    node.createChild(MillScalaSdkData.key, scalaSdkData)
                 }
             }
 
