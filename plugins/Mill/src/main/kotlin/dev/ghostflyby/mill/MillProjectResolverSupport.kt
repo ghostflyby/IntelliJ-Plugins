@@ -151,11 +151,12 @@ public object MillProjectResolverSupport {
 
         discoveredModules.forEach { module ->
             val moduleLabel = presentableModuleLabel(module)
+            val compileClasspathTarget = module.queryTarget("compileClasspath")
             tasks.putIfAbsent(
-                "show ${module.targetPrefix}.compileClasspath",
+                "show $compileClasspathTarget",
                 task(
                     root = root,
-                    name = "show ${module.targetPrefix}.compileClasspath",
+                    name = "show $compileClasspathTarget",
                     description = "Print the compile classpath for $moduleLabel",
                     group = "help",
                 ),
@@ -275,7 +276,7 @@ public object MillProjectResolverSupport {
     private fun presentableModuleLabel(module: MillDiscoveredModule?): String {
         return when (module?.targetPrefix) {
             null -> "the selected Mill target"
-            "__" -> "all Mill modules"
+            MillConstants.rootModulePrefix -> "the root Mill module"
             else -> "Mill module `${module.displayName}`"
         }
     }

@@ -61,7 +61,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 "Resolved ${resolvedTargets.size} target(s): ${MillImportDebugLogger.sample(resolvedTargets)}",
             )
             val discoveredModules = MillModuleDiscovery.discoverModulesFromTargets(root, projectData.externalName, resolvedTargets)
-                .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, "__", root, root)) }
+                .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, MillConstants.rootModulePrefix, root, root)) }
             MillImportDebugLogger.warn(
                 "Discovered ${discoveredModules.size} module(s): ${
                     MillImportDebugLogger.sample(discoveredModules.map { "${it.targetPrefix} -> ${it.directory}" })

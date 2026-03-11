@@ -102,6 +102,21 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `omits sentinel prefix for default module query targets`() {
+        val rootModule = MillDiscoveredModule(
+            "sample",
+            MillConstants.rootModulePrefix,
+            Path.of("/tmp/project"),
+            Path.of("/tmp/project"),
+        )
+        val namedModule = MillDiscoveredModule("foo", "foo", Path.of("/tmp/project"), Path.of("/tmp/project/foo"))
+
+        assertEquals("compileClasspath", rootModule.queryTarget("compileClasspath"))
+        assertEquals("java", rootModule.queryTarget("java"))
+        assertEquals("foo.compileClasspath", namedModule.queryTarget("compileClasspath"))
+    }
+
+    @Test
     fun `detects mill config in project root`() {
         val root = Files.createTempDirectory("mill-project")
         try {

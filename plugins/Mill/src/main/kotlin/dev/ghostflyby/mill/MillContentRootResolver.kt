@@ -70,7 +70,7 @@ internal object MillContentRootResolver {
                     settings = settings,
                     taskId = taskId,
                     listener = listener,
-                    showTarget = "${module.targetPrefix}.$targetName",
+                    showTarget = module.queryTarget(targetName),
                     failureContext = "content root resolution",
                     reportFailures = false,
                 ).asSequence().map { sourceType to it }

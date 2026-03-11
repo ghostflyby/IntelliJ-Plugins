@@ -36,6 +36,7 @@ public object MillConstants {
     public const val notificationGroupId: String = "Mill Import"
     public const val wrapperScriptName: String = "mill"
     public const val wrapperBatchName: String = "mill.bat"
+    public const val rootModulePrefix: String = "<root>"
     public const val moduleDiscoveryQuery: String = "__"
 
     @JvmField

@@ -8,6 +8,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.externalSystem</depends>
+    <depends>com.intellij.modules.java</depends>
     <depends>org.intellij.scala</depends>
 
     <extensions defaultExtensionNs="com.intellij">

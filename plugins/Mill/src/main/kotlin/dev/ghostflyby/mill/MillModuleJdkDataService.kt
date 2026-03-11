@@ -33,10 +33,9 @@ import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsPr
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.projectRoots.JdkUtil
+import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
-import com.intellij.openapi.projectRoots.SimpleJavaSdkType
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFileManager
 import java.nio.file.Path
@@ -81,15 +80,15 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData,
 
     private fun findOrCreateSdk(jdkHomePath: String): Sdk? {
         val sdkTable = ProjectJdkTable.getInstance()
-        val javaSdk = SimpleJavaSdkType.getInstance()
+        val javaSdk = JavaSdk.getInstance()
         val existingSdk = sdkTable.getSdksOfType(javaSdk)
             .firstOrNull { sdk -> sameSdkHomePath(sdk.homePath, jdkHomePath) }
         if (existingSdk != null) {
             return existingSdk
         }
 
-        if (!isValidJavaHome(jdkHomePath)) {
-            LOG.warn("Skipping Mill module JDK import because `$jdkHomePath` is not a valid JDK/JRE home")
+        if (!isValidJavaHome(javaSdk, jdkHomePath)) {
+            LOG.warn("Skipping Mill module JDK import because `$jdkHomePath` is not a valid JDK home")
             return null
         }
 
@@ -103,7 +102,7 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData,
         return createdSdk
     }
 
-    private fun createSdk(javaSdk: SimpleJavaSdkType, jdkHomePath: String): Sdk {
+    private fun createSdk(javaSdk: JavaSdk, jdkHomePath: String): Sdk {
         VirtualFileManager.getInstance().refreshAndFindFileByNioPath(Path.of(jdkHomePath))
         val existingNames = ProjectJdkTable.getInstance()
             .getSdksOfType(javaSdk)
@@ -113,12 +112,12 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData,
         return javaSdk.createJdk(uniqueName, jdkHomePath)
     }
 
-    private fun isValidJavaHome(jdkHomePath: String): Boolean {
+    private fun isValidJavaHome(javaSdk: JavaSdk, jdkHomePath: String): Boolean {
         val path = runCatching { Path.of(jdkHomePath) }.getOrNull() ?: return false
         if (!path.exists()) {
             return false
         }
-        return JdkUtil.checkForJre(path) || JdkUtil.checkForJdk(path)
+        return javaSdk.isValidSdkHome(jdkHomePath)
     }
 
     private fun sameSdkHome(projectSdk: Sdk?, moduleSdk: Sdk): Boolean = sameSdkHomePath(projectSdk?.homePath, moduleSdk.homePath)

@@ -39,7 +39,7 @@ internal object MillScalaSdkResolver {
             settings = settings,
             taskId = taskId,
             listener = listener,
-            showTarget = "${module.targetPrefix}.scalaVersion",
+            showTarget = module.queryTarget("scalaVersion"),
             failureContext = "Scala SDK resolution",
             reportFailures = false,
         ) ?: run {
@@ -84,7 +84,7 @@ internal object MillScalaSdkResolver {
         settings = settings,
         taskId = taskId,
         listener = listener,
-        showTarget = "${module.targetPrefix}.$suffix",
+        showTarget = module.queryTarget(suffix),
         failureContext = "Scala SDK resolution",
         reportFailures = false,
     ).asSequence()
