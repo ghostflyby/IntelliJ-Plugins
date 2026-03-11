@@ -28,6 +28,7 @@ import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.mill.output.MillShowJsonSupport
 import java.nio.file.Path
 
 internal object MillShowTargetPathResolver {
@@ -41,7 +42,9 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean = true,
     ): List<String> {
         val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
-        val values = parseStringList(output.stdout)
+        val values = MillShowJsonSupport.parseStringList(output.stdout)?.values.orEmpty()
+            .map(::normalizeValue)
+            .filter(String::isNotBlank)
         MillImportDebugLogger.info("`mill show $showTarget` parsed ${values.size} string value(s): ${MillImportDebugLogger.sample(values)}")
         return values
     }
@@ -56,7 +59,7 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean = true,
     ): String? {
         val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return null
-        val value = parseSingleStringValue(output.stdout)
+        val value = MillShowJsonSupport.parseStringValue(output.stdout)?.value?.let(::normalizeValue)
         MillImportDebugLogger.info("`mill show $showTarget` parsed single value=${value ?: "<null>"}")
         return value
     }
@@ -70,8 +73,8 @@ internal object MillShowTargetPathResolver {
         failureContext: String,
         reportFailures: Boolean = true,
     ): List<Path> {
-        val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
-        val paths = parsePathList(output.stdout)
+        val values = resolveStringValues(root, settings, taskId, listener, showTarget, failureContext, reportFailures)
+        val paths = values
             .asSequence()
             .mapNotNull { rawPath -> runCatching { Path.of(rawPath) }.getOrNull() }
             .map(Path::toAbsolutePath)
@@ -82,29 +85,14 @@ internal object MillShowTargetPathResolver {
         return paths
     }
 
-    internal fun parsePathList(output: String): List<String> = parseStringList(output)
+    internal fun parsePathList(output: String): List<String> = MillShowJsonSupport.parseStringList(output)?.values
+        .orEmpty()
+        .map(::normalizeValue)
 
-    internal fun parseStringList(output: String): List<String> {
-        val arrayText = extractLastArray(output) ?: return emptyList()
-        return quotedStringPattern
-            .findAll(arrayText)
-            .map { match -> normalizeValue(unescapeJsonString(match.groupValues[1])) }
-            .filter(String::isNotBlank)
-            .toList()
-    }
+    internal fun parseStringList(output: String): List<String> = parsePathList(output)
 
-    internal fun parseSingleStringValue(output: String): String? {
-        val lines = output.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .filterNot { it.startsWith("[") && !it.startsWith("[\"") }
-            .toList()
-        val candidate = lines.lastOrNull() ?: return null
-        if (candidate.startsWith("\"") && candidate.endsWith("\"") && candidate.length >= 2) {
-            return normalizeValue(unescapeJsonString(candidate.substring(1, candidate.length - 1)))
-        }
-        return candidate.takeIf { it.isNotBlank() }
-    }
+    internal fun parseSingleStringValue(output: String): String? = MillShowJsonSupport.parseStringValue(output)?.value
+        ?.let(::normalizeValue)
 
     private fun runShowTarget(
         root: Path,
@@ -178,71 +166,6 @@ internal object MillShowTargetPathResolver {
             )
     }
 
-    private fun extractLastArray(output: String): String? {
-        val end = output.lastIndexOf(']')
-        if (end < 0) {
-            return null
-        }
-
-        var depth = 0
-        for (index in end downTo 0) {
-            when (output[index]) {
-                ']' -> depth += 1
-                '[' -> {
-                    depth -= 1
-                    if (depth == 0) {
-                        return output.substring(index, end + 1)
-                    }
-                }
-            }
-        }
-        return null
-    }
-
-    private fun unescapeJsonString(value: String): String {
-        val result = StringBuilder(value.length)
-        var index = 0
-        while (index < value.length) {
-            val current = value[index]
-            if (current != '\\') {
-                result.append(current)
-                index += 1
-                continue
-            }
-
-            if (index + 1 >= value.length) {
-                result.append('\\')
-                break
-            }
-
-            when (val escaped = value[index + 1]) {
-                '"', '\\', '/' -> result.append(escaped)
-                'b' -> result.append('\b')
-                'f' -> result.append('\u000C')
-                'n' -> result.append('\n')
-                'r' -> result.append('\r')
-                't' -> result.append('\t')
-                'u' -> {
-                    val hexStart = index + 2
-                    val hexEnd = hexStart + 4
-                    if (hexEnd <= value.length) {
-                        val codePoint = value.substring(hexStart, hexEnd).toIntOrNull(16)
-                        if (codePoint != null) {
-                            result.append(codePoint.toChar())
-                            index = hexEnd
-                            continue
-                        }
-                    }
-                    result.append("\\u")
-                }
-
-                else -> result.append(escaped)
-            }
-            index += 2
-        }
-        return result.toString()
-    }
-
     private fun normalizeValue(value: String): String {
         if (value.startsWith("/") || windowsPathPattern.matches(value)) {
             return value
@@ -262,6 +185,5 @@ internal object MillShowTargetPathResolver {
         }
     }
 
-    private val quotedStringPattern = Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
     private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
 }

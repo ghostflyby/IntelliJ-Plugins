@@ -128,10 +128,7 @@ internal class MillProjectResolverSupportTest {
     @Test
     fun `parses compile classpath from mill show output`() {
         val paths = MillClasspathResolver.parsePathList(
-            """
-            [info] compiling 1 Scala source to out/foo/compile.dest/classes ...
-            ["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]
-            """.trimIndent(),
+            """["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]""",
         )
 
         assertEquals(listOf("/tmp/coursier/cache/a.jar", "/tmp/coursier/cache/b.jar"), paths)
@@ -147,10 +144,7 @@ internal class MillProjectResolverSupportTest {
     @Test
     fun `parses generic string lists from mill show output`() {
         val values = MillShowTargetPathResolver.parseStringList(
-            """
-            [info] resolving
-            ["foo","ref:/tmp/coursier/cache/a.jar","qux[2.13]"]
-            """.trimIndent(),
+            """["foo","ref:/tmp/coursier/cache/a.jar","qux[2.13]"]""",
         )
 
         assertEquals(listOf("foo", "/tmp/coursier/cache/a.jar", "qux[2.13]"), values)
@@ -172,14 +166,34 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses single string mill show output`() {
-        val value = MillShowTargetPathResolver.parseSingleStringValue(
-            """
-            [info] resolving
-            "2.13.16"
-            """.trimIndent(),
-        )
+        val value = MillShowTargetPathResolver.parseSingleStringValue(""""2.13.16"""")
 
         assertEquals("2.13.16", value)
+    }
+
+    @Test
+    fun `parses show string list from pure json stdout`() {
+        val output = """
+            ["ref:v0:70b0c2a0:/tmp/project/examples/src","qref:v1:acedc6f5:/tmp/cache/scala3-library.jar"]
+        """.trimIndent()
+
+        val values = MillShowTargetPathResolver.parseStringList(output)
+
+        assertEquals(
+            listOf("/tmp/project/examples/src", "/tmp/cache/scala3-library.jar"),
+            values,
+        )
+    }
+
+    @Test
+    fun `parses show string value from pure json stdout`() {
+        val output = """
+            "3.8.2"
+        """.trimIndent()
+
+        val value = MillShowTargetPathResolver.parseSingleStringValue(output)
+
+        assertEquals("3.8.2", value)
     }
 
     @Test
