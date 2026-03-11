@@ -24,13 +24,12 @@ package dev.ghostflyby.mill
 
 import com.intellij.openapi.externalSystem.model.Key
 import com.intellij.openapi.externalSystem.model.project.AbstractExternalEntityData
-import java.nio.file.Path
 
 internal class MillScalaSdkData(
     val scalaVersion: String,
-    val scalacClasspath: List<Path>,
-    val scaladocClasspath: List<Path>,
-    val replClasspath: List<Path>,
+    val scalacClasspath: List<String>,
+    val scaladocClasspath: List<String>,
+    val replClasspath: List<String>,
 ) : AbstractExternalEntityData(MillConstants.systemId) {
     companion object {
         @JvmField

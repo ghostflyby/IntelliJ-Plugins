@@ -38,9 +38,13 @@ internal object MillModuleDiscovery {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): List<String> {
+        MillImportDebugLogger.info("Running `mill resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
         val output = try {
             CapturingProcessHandler(createCommandLine(root, settings)).runProcess()
         } catch (_: ExecutionException) {
+            MillImportDebugLogger.warn(
+                "Mill process could not be started for `resolve ${MillConstants.moduleDiscoveryQuery}` in $root",
+            )
             listener.onTaskOutput(
                 taskId,
                 "Mill module discovery skipped because the Mill process could not be started.\n",
@@ -51,10 +55,16 @@ internal object MillModuleDiscovery {
 
         if (output.exitCode != 0) {
             val details = output.stderr.ifBlank { output.stdout }.trim()
+            MillImportDebugLogger.warn(
+                "`mill resolve ${MillConstants.moduleDiscoveryQuery}` failed in $root exitCode=${output.exitCode} " +
+                    "details=${MillImportDebugLogger.trim(details)}",
+            )
             listener.onTaskOutput(
                 taskId,
                 buildString {
-                    append("Mill module discovery skipped because `resolve _` failed.")
+                    append(
+                        "Mill module discovery skipped because `resolve ${MillConstants.moduleDiscoveryQuery}` failed.",
+                    )
                     if (details.isNotBlank()) {
                         append('\n')
                         append(details)
@@ -66,7 +76,13 @@ internal object MillModuleDiscovery {
             return emptyList()
         }
 
-        return parseResolvedTargets(output.stdout)
+        val targets = parseResolvedTargets(output.stdout)
+        MillImportDebugLogger.warn(
+            "`mill resolve ${MillConstants.moduleDiscoveryQuery}` produced ${targets.size} target(s): " +
+                "${MillImportDebugLogger.sample(targets)}; " +
+                "raw=${MillImportDebugLogger.trim(output.stdout, 800)}",
+        )
+        return targets
     }
 
     fun discoverModules(
@@ -98,9 +114,11 @@ internal object MillModuleDiscovery {
         resolvedTargets: List<String>,
     ): List<MillDiscoveredModule> {
         val candidateModules = linkedMapOf<String, MillDiscoveredModule>()
+        val targetsByPrefix = resolvedTargets.groupBy(::targetPrefix)
 
         resolvedTargets
             .mapNotNull(::targetPrefix)
+            .filter { prefix -> isModuleLikePrefix(prefix, targetsByPrefix[prefix].orEmpty()) }
             .distinct()
             .forEach { prefix ->
                 candidateModules[prefix] = MillDiscoveredModule(
@@ -128,7 +146,13 @@ internal object MillModuleDiscovery {
             )
         }
 
-        return modules.distinctBy { it.targetPrefix }
+        val distinctModules = modules.distinctBy { it.targetPrefix }
+        MillImportDebugLogger.info(
+            "Module discovery mapped ${distinctModules.size} module(s): ${
+                MillImportDebugLogger.sample(distinctModules.map { "${it.targetPrefix} -> ${it.directory}" })
+            }",
+        )
+        return distinctModules
     }
 
     private fun targetPrefix(target: String): String? {
@@ -141,11 +165,38 @@ internal object MillModuleDiscovery {
         return prefix.takeUnless { it == "_" || it == "__" || it.isBlank() }
     }
 
+    private fun isModuleLikePrefix(prefix: String, targetsForPrefix: List<String>): Boolean {
+        if (prefix.isBlank() || prefix == "selective") {
+            return false
+        }
+        return targetsForPrefix.any { target ->
+            when (target.substringAfterLast('.', missingDelimiterValue = target)) {
+                "compile",
+                "test",
+                "assembly",
+                "jar",
+                "sources",
+                "resources",
+                "generatedSources",
+                "generatedResources",
+                "compileClasspath",
+                "resolvedMvnDeps",
+                "resolvedIvyDeps",
+                "scalaVersion",
+                "scalaCompilerClasspath",
+                -> true
+
+                else -> false
+            }
+        }
+    }
+
     private fun createCommandLine(root: Path, settings: MillExecutionSettings?): GeneralCommandLine {
         val command = MillCommandLineUtil.buildMillCommand(
+            projectRoot = root,
             executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
             jvmOptionsText = settings?.millJvmOptions.orEmpty(),
-            arguments = listOf("resolve", "_"),
+            arguments = listOf("resolve", MillConstants.moduleDiscoveryQuery),
         )
         return GeneralCommandLine(command)
             .withWorkingDirectory(root)
