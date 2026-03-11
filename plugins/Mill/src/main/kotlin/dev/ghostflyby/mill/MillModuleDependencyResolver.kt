@@ -43,7 +43,7 @@ internal object MillModuleDependencyResolver {
             settings = settings,
             taskId = taskId,
             listener = listener,
-            showTarget = "${module.targetPrefix}.moduleDeps",
+            showTarget = module.queryTarget("moduleDeps"),
             failureContext = "module dependency resolution",
             reportFailures = false,
         ).asSequence()

@@ -36,8 +36,8 @@ internal object MillExternalLibraryResolver {
         listener: ExternalSystemTaskNotificationListener,
     ): List<Path> {
         val metadataTargets = listOf(
-            "${module.targetPrefix}.resolvedMvnDeps",
-            "${module.targetPrefix}.resolvedIvyDeps",
+            module.queryTarget("resolvedMvnDeps"),
+            module.queryTarget("resolvedIvyDeps"),
         )
         metadataTargets.forEach { showTarget ->
             val paths = MillShowTargetPathResolver.resolvePaths(
@@ -68,7 +68,7 @@ internal object MillExternalLibraryResolver {
             settings = settings,
             taskId = taskId,
             listener = listener,
-            classpathTarget = "${module.targetPrefix}.compileClasspath",
+            classpathTarget = module.queryTarget("compileClasspath"),
         )
         if (fallbackPaths.isNotEmpty()) {
             MillImportDebugLogger.warn(
