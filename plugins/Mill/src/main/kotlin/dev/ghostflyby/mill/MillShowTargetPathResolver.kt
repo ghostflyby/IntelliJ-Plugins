@@ -31,6 +31,19 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotifica
 import java.nio.file.Path
 
 internal object MillShowTargetPathResolver {
+    fun resolveStringValues(
+        root: Path,
+        settings: MillExecutionSettings?,
+        taskId: ExternalSystemTaskId,
+        listener: ExternalSystemTaskNotificationListener,
+        showTarget: String,
+        failureContext: String,
+        reportFailures: Boolean = true,
+    ): List<String> {
+        val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
+        return parseStringList(output.stdout)
+    }
+
     fun resolvePaths(
         root: Path,
         settings: MillExecutionSettings?,
@@ -40,19 +53,37 @@ internal object MillShowTargetPathResolver {
         failureContext: String,
         reportFailures: Boolean = true,
     ): List<Path> {
-        val output = try {
-            CapturingProcessHandler(createCommandLine(root, settings, showTarget)).runProcess()
-        } catch (_: ExecutionException) {
-            if (reportFailures) {
-                listener.onTaskOutput(
-                    taskId,
-                    "Mill $failureContext skipped because the Mill process could not be started for `$showTarget`.\n",
-                    ProcessOutputType.STDERR,
-                )
-            }
-            return emptyList()
-        }
+        val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return emptyList()
+        return parsePathList(output.stdout)
+            .asSequence()
+            .mapNotNull { rawPath -> runCatching { Path.of(rawPath) }.getOrNull() }
+            .map(Path::toAbsolutePath)
+            .map(Path::normalize)
+            .distinct()
+            .toList()
+    }
 
+    internal fun parsePathList(output: String): List<String> = parseStringList(output)
+
+    internal fun parseStringList(output: String): List<String> {
+        val arrayText = extractLastArray(output) ?: return emptyList()
+        return quotedStringPattern
+            .findAll(arrayText)
+            .map { match -> unescapeJsonString(match.groupValues[1]) }
+            .filter(String::isNotBlank)
+            .toList()
+    }
+
+    private fun runShowTarget(
+        root: Path,
+        settings: MillExecutionSettings?,
+        taskId: ExternalSystemTaskId,
+        listener: ExternalSystemTaskNotificationListener,
+        showTarget: String,
+        failureContext: String,
+        reportFailures: Boolean,
+    ) = try {
+        val output = CapturingProcessHandler(createCommandLine(root, settings, showTarget)).runProcess()
         if (output.exitCode != 0) {
             if (reportFailures) {
                 val details = output.stderr.ifBlank { output.stdout }.trim()
@@ -69,25 +100,19 @@ internal object MillShowTargetPathResolver {
                     ProcessOutputType.STDERR,
                 )
             }
-            return emptyList()
+            null
+        } else {
+            output
         }
-
-        return parsePathList(output.stdout)
-            .asSequence()
-            .mapNotNull { rawPath -> runCatching { Path.of(rawPath) }.getOrNull() }
-            .map(Path::toAbsolutePath)
-            .map(Path::normalize)
-            .distinct()
-            .toList()
-    }
-
-    internal fun parsePathList(output: String): List<String> {
-        val arrayText = extractLastArray(output) ?: return emptyList()
-        return quotedStringPattern
-            .findAll(arrayText)
-            .map { match -> unescapeJsonString(match.groupValues[1]) }
-            .filter(String::isNotBlank)
-            .toList()
+    } catch (_: ExecutionException) {
+        if (reportFailures) {
+            listener.onTaskOutput(
+                taskId,
+                "Mill $failureContext skipped because the Mill process could not be started for `$showTarget`.\n",
+                ProcessOutputType.STDERR,
+            )
+        }
+        null
     }
 
     private fun createCommandLine(
