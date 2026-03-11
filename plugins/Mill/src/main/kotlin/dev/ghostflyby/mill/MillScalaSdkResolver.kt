@@ -42,10 +42,14 @@ internal object MillScalaSdkResolver {
             showTarget = "${module.targetPrefix}.scalaVersion",
             failureContext = "Scala SDK resolution",
             reportFailures = false,
-        ) ?: return null
+        ) ?: run {
+            MillImportDebugLogger.info("Module `${module.targetPrefix}` has no scalaVersion metadata")
+            return null
+        }
 
         val scalacClasspath = resolveBinaryPaths(module, settings, taskId, listener, "scalaCompilerClasspath")
         if (scalacClasspath.isEmpty()) {
+            MillImportDebugLogger.info("Module `${module.targetPrefix}` has scalaVersion=$scalaVersion but empty scalaCompilerClasspath")
             listener.onTaskOutput(
                 taskId,
                 "Mill Scala SDK for `${module.targetPrefix}` skipped because scalaCompilerClasspath is empty.\n",
@@ -56,12 +60,16 @@ internal object MillScalaSdkResolver {
 
         val scaladocClasspath = resolveBinaryPaths(module, settings, taskId, listener, "scalaDocClasspath")
         val replClasspath = resolveBinaryPaths(module, settings, taskId, listener, "ammoniteReplClasspath")
+        MillImportDebugLogger.info(
+            "Module `${module.targetPrefix}` prepared Scala SDK version=$scalaVersion " +
+                "scalac=${scalacClasspath.size} scaladoc=${scaladocClasspath.size} repl=${replClasspath.size}",
+        )
 
         return MillScalaSdkData(
             scalaVersion = scalaVersion,
-            scalacClasspath = scalacClasspath,
-            scaladocClasspath = scaladocClasspath,
-            replClasspath = replClasspath,
+            scalacClasspath = scalacClasspath.map { it.toString() },
+            scaladocClasspath = scaladocClasspath.map { it.toString() },
+            replClasspath = replClasspath.map { it.toString() },
         )
     }
 

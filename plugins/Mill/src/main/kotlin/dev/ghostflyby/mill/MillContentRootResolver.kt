@@ -37,13 +37,21 @@ internal object MillContentRootResolver {
         listener: ExternalSystemTaskNotificationListener,
     ): ContentRootData {
         if (settings?.useMillMetadataDuringImport == false) {
+            MillImportDebugLogger.info("Metadata-backed content roots disabled for `${module.targetPrefix}`, using ${module.directory}")
             return MillProjectResolverSupport.buildContentRoot(module.directory)
         }
         val metadataRoots = resolveMetadataRoots(module, settings, taskId, listener)
         return if (metadataRoots.isEmpty()) {
+            MillImportDebugLogger.warn("No metadata content roots for `${module.targetPrefix}`, using fallback ${module.directory}")
             MillProjectResolverSupport.buildContentRoot(module.directory)
         } else {
-            MillProjectResolverSupport.buildContentRoot(resolveContentRootBase(module, metadataRoots), metadataRoots)
+            val base = resolveContentRootBase(module, metadataRoots)
+            MillImportDebugLogger.warn(
+                "Metadata content roots for `${module.targetPrefix}` base=$base roots=${
+                    MillImportDebugLogger.sample(metadataRoots.map { "${it.first} -> ${it.second}" })
+                }",
+            )
+            MillProjectResolverSupport.buildContentRoot(base, metadataRoots)
         }
     }
 

@@ -54,6 +54,11 @@ internal object MillExternalLibraryResolver {
                 .distinct()
                 .toList()
             if (paths.isNotEmpty()) {
+                MillImportDebugLogger.info(
+                    "Module `${module.targetPrefix}` external libraries came from `$showTarget`: ${
+                        MillImportDebugLogger.sample(paths.map(Path::toString))
+                    }",
+                )
                 return paths
             }
         }
@@ -66,11 +71,18 @@ internal object MillExternalLibraryResolver {
             classpathTarget = "${module.targetPrefix}.compileClasspath",
         )
         if (fallbackPaths.isNotEmpty()) {
+            MillImportDebugLogger.warn(
+                "Module `${module.targetPrefix}` external libraries fell back to compileClasspath: ${
+                    MillImportDebugLogger.sample(fallbackPaths.map(Path::toString))
+                }",
+            )
             listener.onTaskOutput(
                 taskId,
                 "Mill external libraries for `${module.targetPrefix}` fell back to compileClasspath.\n",
                 ProcessOutputType.STDOUT,
             )
+        } else {
+            MillImportDebugLogger.warn("Module `${module.targetPrefix}` resolved no external libraries from metadata or compileClasspath")
         }
         return fallbackPaths
     }

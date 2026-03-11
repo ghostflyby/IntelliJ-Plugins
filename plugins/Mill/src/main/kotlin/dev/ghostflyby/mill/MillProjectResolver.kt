@@ -29,6 +29,7 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.project.ExternalSystemProjectResolver
+import java.nio.file.Path
 
 internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecutionSettings> {
     override fun resolveProjectInfo(
@@ -40,9 +41,15 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
     ): DataNode<ProjectData> {
         val progressReporter = MillImportProgressReporter(id, listener)
         progressReporter.started("Importing Mill project")
+        MillImportDebugLogger.info(
+            "Starting resolver for projectPath=$projectPath preview=$isPreviewMode " +
+                "metadataImport=${settings?.useMillMetadataDuringImport} perModuleTasks=${settings?.createPerModuleTaskNodes} " +
+                "millExecutable=${settings?.millExecutablePath.orEmpty().ifBlank { MillConstants.defaultExecutable }}",
+        )
         return try {
             progressReporter.progress(15, "Resolving Mill project root")
             val root = MillProjectResolverSupport.findProjectRoot(projectPath)
+            MillImportDebugLogger.info("Resolved Mill root to $root")
 
             progressReporter.progress(40, "Building Mill project model")
             val projectData = MillProjectResolverSupport.buildProjectData(root)
@@ -50,8 +57,16 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
 
             progressReporter.progress(55, "Discovering Mill modules")
             val resolvedTargets = MillModuleDiscovery.resolveTargets(root, settings, id, listener)
+            MillImportDebugLogger.info(
+                "Resolved ${resolvedTargets.size} target(s): ${MillImportDebugLogger.sample(resolvedTargets)}",
+            )
             val discoveredModules = MillModuleDiscovery.discoverModulesFromTargets(root, projectData.externalName, resolvedTargets)
                 .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, "__", root, root)) }
+            MillImportDebugLogger.warn(
+                "Discovered ${discoveredModules.size} module(s): ${
+                    MillImportDebugLogger.sample(discoveredModules.map { "${it.targetPrefix} -> ${it.directory}" })
+                }",
+            )
 
             progressReporter.progress(70, "Creating module and content roots")
             val moduleNodes = discoveredModules.map { module ->
@@ -65,6 +80,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     ProjectKeys.CONTENT_ROOT,
                     MillContentRootResolver.buildContentRoot(module, settings, id, listener),
                 )
+                MillImportDebugLogger.info("Created module node `${module.targetPrefix}` for ${module.directory}")
                 module to moduleNode
             }
 
@@ -90,6 +106,9 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                         MillProjectResolverSupport.buildModuleDependency(node.data, dependencyNode.data),
                     )
                 }
+                MillImportDebugLogger.info(
+                    "Module `${module.targetPrefix}` direct module deps: ${MillImportDebugLogger.sample(dependencyPrefixes)}",
+                )
             }
 
             progressReporter.progress(82, "Resolving Mill external libraries")
@@ -102,6 +121,11 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     listener = listener,
                 )
                 libraryCount += libraryPaths.size
+                MillImportDebugLogger.info(
+                    "Module `${module.targetPrefix}` resolved ${libraryPaths.size} external librar" +
+                        if (libraryPaths.size == 1) "y" else "ies" +
+                        ": ${MillImportDebugLogger.sample(libraryPaths.map(Path::toString))}",
+                )
                 libraryPaths.forEach { path ->
                     node.createChild(
                         ProjectKeys.LIBRARY_DEPENDENCY,
@@ -114,8 +138,13 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     taskId = id,
                     listener = listener,
                 )?.let { scalaSdkData ->
+                    MillImportDebugLogger.info(
+                        "Module `${module.targetPrefix}` resolved Scala SDK version=${scalaSdkData.scalaVersion} " +
+                            "scalacJars=${scalaSdkData.scalacClasspath.size} scaladocJars=${scalaSdkData.scaladocClasspath.size} " +
+                            "replJars=${scalaSdkData.replClasspath.size}",
+                    )
                     node.createChild(MillScalaSdkData.key, scalaSdkData)
-                }
+                } ?: MillImportDebugLogger.info("Module `${module.targetPrefix}` has no Scala SDK metadata")
             }
 
             progressReporter.progress(90, "Collecting Mill tasks")
@@ -124,6 +153,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             } else {
                 MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets)
             }
+            MillImportDebugLogger.info("Created ${tasks.size} task node(s)")
             tasks.forEach { task ->
                 projectNode.createChild(ProjectKeys.TASK, task)
             }
@@ -143,9 +173,13 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 },
                 ProcessOutputType.STDOUT,
             )
+            MillImportDebugLogger.info(
+                "Resolver finished successfully with modules=${moduleNodes.size} libraries=$libraryCount tasks=${tasks.size}",
+            )
             progressReporter.finished("Mill import finished")
             projectNode
         } catch (error: Throwable) {
+            MillImportDebugLogger.warn("Resolver failed for projectPath=$projectPath", error)
             progressReporter.failed("Mill import failed", error)
             throw error
         }

@@ -80,6 +80,7 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
 
     private fun createCommandLine(projectRoot: Path, settings: MillExecutionSettings): GeneralCommandLine {
         val command = MillCommandLineUtil.buildMillCommand(
+            projectRoot = projectRoot,
             executable = settings.millExecutablePath,
             jvmOptionsText = settings.millJvmOptions,
             arguments = settings.tasks.filter(String::isNotBlank) + settings.arguments.filter(String::isNotBlank),
