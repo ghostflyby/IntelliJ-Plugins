@@ -145,13 +145,12 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     )
                     node.createChild(MillScalaSdkData.key, scalaSdkData)
                 } ?: MillImportDebugLogger.info("Module `${module.targetPrefix}` has no Scala SDK metadata")
-                node.createChild(
-                    MillModuleJdkData.key,
-                    MillModuleJdkResolver.resolve(
-                        module = module,
-                        settings = settings,
-                    ),
-                )
+                MillModuleJdkResolver.resolve(
+                    module = module,
+                    settings = settings,
+                )?.let { jdkHomePath ->
+                    node.data.setProperty(MillModuleJdkHomeProperty, jdkHomePath)
+                }
             }
 
             progressReporter.progress(90, "Collecting Mill tasks")

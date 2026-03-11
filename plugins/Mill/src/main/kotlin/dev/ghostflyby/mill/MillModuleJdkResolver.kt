@@ -29,11 +29,13 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import java.nio.file.Path
 
+internal const val MillModuleJdkHomeProperty: String = "mill.jdk.home"
+
 internal object MillModuleJdkResolver {
     fun resolve(
         module: MillDiscoveredModule,
         settings: MillExecutionSettings?,
-    ): MillModuleJdkData {
+    ): String? {
         val jdkHomePath = resolveJavaHome(
             module = module,
             settings = settings,
@@ -42,7 +44,7 @@ internal object MillModuleJdkResolver {
         MillImportDebugLogger.info(
             "Module `${module.targetPrefix}` resolved javaHome=${jdkHomePath ?: "<project-sdk>"}",
         )
-        return MillModuleJdkData(jdkHomePath = jdkHomePath)
+        return jdkHomePath
     }
 
     private fun resolveJavaHome(
