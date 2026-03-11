@@ -26,6 +26,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
+import com.intellij.openapi.externalSystem.model.ProjectKeys
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
@@ -41,40 +42,36 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import java.nio.file.Path
 import kotlin.io.path.exists
 
-internal class MillModuleJdkDataService : AbstractProjectDataService<MillModuleJdkData, Module>() {
-    override fun getTargetDataKey(): Key<MillModuleJdkData> = MillModuleJdkData.key
+internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData, Module>() {
+    override fun getTargetDataKey(): Key<ModuleData> = ProjectKeys.MODULE
 
     override fun importData(
-        toImport: Collection<DataNode<MillModuleJdkData>>,
+        toImport: Collection<DataNode<ModuleData>>,
         projectData: ProjectData?,
         project: Project,
         modelsProvider: IdeModifiableModelsProvider,
     ) {
         for (dataNode in toImport) {
-            val parentData = dataNode.parent?.data
-            if (parentData !is ModuleData) {
-                continue
-            }
-
-            val ideModule = modelsProvider.findIdeModule(parentData) ?: continue
-            configureModuleJdk(ideModule, dataNode.data, modelsProvider)
+            val moduleData = dataNode.data
+            val ideModule = modelsProvider.findIdeModule(moduleData) ?: continue
+            configureModuleJdk(ideModule, moduleData, modelsProvider)
         }
     }
 
     private fun configureModuleJdk(
         module: Module,
-        data: MillModuleJdkData,
+        data: ModuleData,
         modelsProvider: IdeModifiableModelsProvider,
     ) {
         val modifiableRootModel = modelsProvider.getModifiableRootModel(module)
-        val jdkHomePath = data.jdkHomePath
+        val jdkHomePath = data.getProperty(MillModuleJdkHomeProperty)
         if (jdkHomePath == null) {
             modifiableRootModel.inheritSdk()
             return
         }
 
         val projectSdk = ProjectRootManager.getInstance(module.project).projectSdk
-        val sdk = findOrCreateSdk(module.project, jdkHomePath)
+        val sdk = findOrCreateSdk(jdkHomePath)
         when {
             sdk == null -> modifiableRootModel.inheritSdk()
             sameSdkHome(projectSdk, sdk) -> modifiableRootModel.inheritSdk()
@@ -82,7 +79,7 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<MillModuleJ
         }
     }
 
-    private fun findOrCreateSdk(project: Project, jdkHomePath: String): Sdk? {
+    private fun findOrCreateSdk(jdkHomePath: String): Sdk? {
         val sdkTable = ProjectJdkTable.getInstance()
         val javaSdk = SimpleJavaSdkType.getInstance()
         val existingSdk = sdkTable.getSdksOfType(javaSdk)
@@ -97,8 +94,11 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<MillModuleJ
         }
 
         val createdSdk = createSdk(javaSdk, jdkHomePath)
-        ApplicationManager.getApplication().runWriteAction {
-            sdkTable.addJdk(createdSdk)
+        val application = ApplicationManager.getApplication()
+        application.invokeAndWait {
+            application.runWriteAction {
+                sdkTable.addJdk(createdSdk)
+            }
         }
         return createdSdk
     }
