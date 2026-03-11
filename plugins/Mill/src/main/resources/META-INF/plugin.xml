@@ -15,6 +15,7 @@
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
         <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillModuleJdkDataService"/>
         <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
         <projectOpenProcessor
                 id="mill"

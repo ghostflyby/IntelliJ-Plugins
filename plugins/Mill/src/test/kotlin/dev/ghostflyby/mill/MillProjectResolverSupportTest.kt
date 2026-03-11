@@ -55,6 +55,39 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `normalizes module jdk home path`() {
+        val normalized = MillModuleJdkSupport.normalizeJdkHomePath(" /tmp/../tmp/jdk ")
+
+        assertEquals("/tmp/jdk", normalized)
+    }
+
+    @Test
+    fun `parses java home from jvm show settings output`() {
+        val javaHome = MillModuleJdkResolver.parseJavaHome(
+            """
+            VM settings:
+                Max. Heap Size (Estimated): 29.97G
+            Property settings:
+                file.encoding = UTF-8
+                java.home = /Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+                java.version = 21.0.6
+            """.trimIndent(),
+        )
+
+        assertEquals("/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home", javaHome)
+    }
+
+    @Test
+    fun `creates unique module jdk names`() {
+        val uniqueName = MillModuleJdkSupport.createUniqueSdkName(
+            baseName = "temurin-21",
+            existingNames = linkedSetOf("temurin-21", "temurin-21 (2)"),
+        )
+
+        assertEquals("temurin-21 (3)", uniqueName)
+    }
+
+    @Test
     fun `detects mill config in project root`() {
         val root = Files.createTempDirectory("mill-project")
         try {
