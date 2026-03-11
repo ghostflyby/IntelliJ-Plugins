@@ -39,7 +39,7 @@ public object MillConstants {
     public const val moduleDiscoveryQuery: String = "__"
 
     @JvmField
-    public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill")
+    public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill", "build.mill.yaml")
 
     @JvmField
     public val configFileNames: Set<String> = linkedSetOf(
