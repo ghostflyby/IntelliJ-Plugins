@@ -145,9 +145,12 @@ internal object MillModuleDiscovery {
     }
 
     private fun createCommandLine(root: Path, settings: MillExecutionSettings?): GeneralCommandLine {
-        val executable = settings?.millExecutablePath?.ifBlank { MillConstants.defaultExecutable }
-            ?: MillConstants.defaultExecutable
-        return GeneralCommandLine(listOf(executable, "resolve", "_"))
+        val command = MillCommandLineUtil.buildMillCommand(
+            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
+            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
+            arguments = listOf("resolve", "_"),
+        )
+        return GeneralCommandLine(command)
             .withWorkingDirectory(root)
             .withEnvironment(settings?.env ?: emptyMap())
             .withParentEnvironmentType(

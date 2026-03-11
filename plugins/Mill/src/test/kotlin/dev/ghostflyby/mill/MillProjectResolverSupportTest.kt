@@ -234,6 +234,20 @@ internal class MillProjectResolverSupportTest {
         assertTrue(!taskNames.contains("foo.internalTarget"))
     }
 
+    @Test
+    fun `builds mill command lines with jvm options before tasks`() {
+        val command = MillCommandLineUtil.buildMillCommand(
+            executable = "mill",
+            jvmOptionsText = """-J-Xmx2g "-J-Dmill.profile=dev mode"""",
+            arguments = listOf("show", "foo.compileClasspath"),
+        )
+
+        assertEquals(
+            listOf("mill", "-J-Xmx2g", "-J-Dmill.profile=dev mode", "show", "foo.compileClasspath"),
+            command,
+        )
+    }
+
     private fun deleteRecursively(root: java.nio.file.Path) {
         Files.walk(root)
             .sorted(Comparator.reverseOrder())

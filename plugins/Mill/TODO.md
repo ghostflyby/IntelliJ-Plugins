@@ -14,7 +14,6 @@ Last Updated: 2026-03-10
 1. Import real Mill modules, content roots, and inter-module dependencies instead of a single root module.
 2. Import external libraries from Mill metadata instead of only best-effort aggregate classpath fallback.
 3. Add a dedicated `externalSystemViewContributor` for a usable Mill tool window structure.
-4. Support configurable Mill executable plus JVM/import options in settings UI.
 
 ## Extended
 

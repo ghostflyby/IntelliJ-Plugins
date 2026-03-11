@@ -26,11 +26,17 @@ import com.intellij.openapi.externalSystem.settings.ExternalProjectSettings
 
 internal class MillProjectSettings : ExternalProjectSettings() {
     var millExecutablePath: String = MillConstants.defaultExecutable
+    var millJvmOptions: String = ""
+    var useMillMetadataDuringImport: Boolean = true
+    var createPerModuleTaskNodes: Boolean = true
 
     override fun clone(): MillProjectSettings {
         return MillProjectSettings().also { receiver ->
             copyTo(receiver)
             receiver.millExecutablePath = millExecutablePath
+            receiver.millJvmOptions = millJvmOptions
+            receiver.useMillMetadataDuringImport = useMillMetadataDuringImport
+            receiver.createPerModuleTaskNodes = createPerModuleTaskNodes
         }
     }
 }
