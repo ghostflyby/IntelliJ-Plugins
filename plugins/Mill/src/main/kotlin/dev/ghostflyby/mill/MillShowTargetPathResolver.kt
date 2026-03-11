@@ -120,9 +120,12 @@ internal object MillShowTargetPathResolver {
         settings: MillExecutionSettings?,
         showTarget: String,
     ): GeneralCommandLine {
-        val executable = settings?.millExecutablePath?.ifBlank { MillConstants.defaultExecutable }
-            ?: MillConstants.defaultExecutable
-        return GeneralCommandLine(listOf(executable, "show", showTarget))
+        val command = MillCommandLineUtil.buildMillCommand(
+            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
+            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
+            arguments = listOf("show", showTarget),
+        )
+        return GeneralCommandLine(command)
             .withWorkingDirectory(root)
             .withEnvironment(settings?.env ?: emptyMap())
             .withParentEnvironmentType(

@@ -36,6 +36,9 @@ internal object MillContentRootResolver {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): ContentRootData {
+        if (settings?.useMillMetadataDuringImport == false) {
+            return MillProjectResolverSupport.buildContentRoot(module.directory)
+        }
         val metadataRoots = resolveMetadataRoots(module, settings, taskId, listener)
         return if (metadataRoots.isEmpty()) {
             MillProjectResolverSupport.buildContentRoot(module.directory)

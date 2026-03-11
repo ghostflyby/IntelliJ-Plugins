@@ -112,7 +112,12 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             }
 
             progressReporter.progress(90, "Collecting Mill tasks")
-            MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets).forEach { task ->
+            val tasks = if (settings?.createPerModuleTaskNodes == false) {
+                MillProjectResolverSupport.createTaskData(root)
+            } else {
+                MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets)
+            }
+            tasks.forEach { task ->
                 projectNode.createChild(ProjectKeys.TASK, task)
             }
 

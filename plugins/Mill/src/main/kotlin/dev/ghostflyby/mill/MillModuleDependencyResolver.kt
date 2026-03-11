@@ -34,6 +34,9 @@ internal object MillModuleDependencyResolver {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): List<String> {
+        if (settings?.useMillMetadataDuringImport == false) {
+            return emptyList()
+        }
         val knownModules = discoveredModules.associateBy { it.targetPrefix }
         return MillShowTargetPathResolver.resolveStringValues(
             root = module.projectRoot,

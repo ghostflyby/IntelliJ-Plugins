@@ -7,6 +7,7 @@ System API.
 Current implementation provides:
 
 - Mill project root detection from `build.sc`, `mill.sc`, `build.mill`, and `.mill-version`
+- Project Settings controls for executable path, Mill JVM options, metadata-backed import, and per-module task nodes
 - Best-effort multi-module import from Mill target resolution
 - Mill metadata-backed source, resource, and generated-root import where `show <module>.*` is available
 - Explicit test-to-production module dependencies for discovered `*.test` modules

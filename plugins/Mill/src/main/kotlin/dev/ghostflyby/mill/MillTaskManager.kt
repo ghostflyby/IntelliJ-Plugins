@@ -79,12 +79,11 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
     override fun cancelTask(id: ExternalSystemTaskId, listener: ExternalSystemTaskNotificationListener): Boolean = false
 
     private fun createCommandLine(projectRoot: Path, settings: MillExecutionSettings): GeneralCommandLine {
-        val executable = settings.millExecutablePath.ifBlank { MillConstants.defaultExecutable }
-        val command = buildList {
-            add(executable)
-            addAll(settings.tasks.filter(String::isNotBlank))
-            addAll(settings.arguments.filter(String::isNotBlank))
-        }
+        val command = MillCommandLineUtil.buildMillCommand(
+            executable = settings.millExecutablePath,
+            jvmOptionsText = settings.millJvmOptions,
+            arguments = settings.tasks.filter(String::isNotBlank) + settings.arguments.filter(String::isNotBlank),
+        )
         if (command.size == 1) {
             throw ExternalSystemException("No Mill tasks were provided for execution.")
         }

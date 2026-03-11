@@ -22,21 +22,24 @@
 
 package dev.ghostflyby.mill
 
-import com.intellij.openapi.externalSystem.settings.ExternalProjectSettings
+import com.intellij.util.execution.ParametersListUtil
 
-internal class MillProjectSettings : ExternalProjectSettings() {
-    var millExecutablePath: String = MillConstants.defaultExecutable
-    var millJvmOptions: String = ""
-    var useMillMetadataDuringImport: Boolean = true
-    var createPerModuleTaskNodes: Boolean = true
-
-    override fun clone(): MillProjectSettings {
-        return MillProjectSettings().also { receiver ->
-            copyTo(receiver)
-            receiver.millExecutablePath = millExecutablePath
-            receiver.millJvmOptions = millJvmOptions
-            receiver.useMillMetadataDuringImport = useMillMetadataDuringImport
-            receiver.createPerModuleTaskNodes = createPerModuleTaskNodes
+internal object MillCommandLineUtil {
+    fun buildMillCommand(
+        executable: String,
+        jvmOptionsText: String,
+        arguments: List<String>,
+    ): List<String> {
+        return buildList {
+            add(executable.ifBlank { MillConstants.defaultExecutable })
+            addAll(parseOptions(jvmOptionsText))
+            addAll(arguments.filter(String::isNotBlank))
         }
+    }
+
+    internal fun parseOptions(rawValue: String): List<String> {
+        return ParametersListUtil.parse(rawValue.trim(), false, true)
+            .map(String::trim)
+            .filter(String::isNotEmpty)
     }
 }

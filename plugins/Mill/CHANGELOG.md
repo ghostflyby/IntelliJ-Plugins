@@ -7,6 +7,7 @@
 ### Added
 
 - Initial Mill external system implementation with manager, settings, project resolver, and task manager support.
+- Project Settings controls for executable path, Mill JVM options, metadata-backed import, and per-module task nodes.
 - Basic Mill project detection, source root mapping, and default task nodes.
 - Basic CLI-backed Mill task execution and auto-import file tracking.
 - Best-effort multi-module import from Mill target resolution.
