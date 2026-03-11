@@ -29,44 +29,84 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.externalSystem.importing.ImportSpecBuilder
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbAwareAction
+import com.intellij.openapi.project.Project
 
 internal class MillReloadProjectAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.getData(CommonDataKeys.PROJECT) ?: return
-        val linkedProjects = MillSettings.getInstance(project).linkedProjectsSettings
-            .mapNotNull { settings -> settings.externalProjectPath?.takeIf { it.isNotBlank() } }
+        val linkedProjects = linkedProjectPaths(project)
 
         if (linkedProjects.isEmpty()) {
-            NotificationGroupManager.getInstance()
-                .getNotificationGroup(MillConstants.notificationGroupId)
-                .createNotification(
-                    "No linked Mill project",
-                    "Link a Mill project before reloading it.",
-                    NotificationType.WARNING,
-                )
-                .notify(project)
+            notify(
+                project = project,
+                title = "No linked Mill project",
+                content = "Link a Mill project before reloading it.",
+            )
             return
         }
 
-        linkedProjects.forEach { externalProjectPath ->
-            ExternalSystemUtil.refreshProject(
-                externalProjectPath,
-                ImportSpecBuilder(project, MillConstants.systemId)
-                    .withActivateToolWindowOnStart(true)
-                    .withCallback(MillImportRefreshCallback(project)),
+        val externalProjectPath = findReloadTargetPath(project, event, linkedProjects)
+        if (externalProjectPath == null) {
+            notify(
+                project = project,
+                title = "Cannot determine Mill project to reload",
+                content = "Open a file inside the Mill project you want to reload, or keep only one linked Mill project in this window.",
             )
+            return
         }
+
+        FileDocumentManager.getInstance().saveAllDocuments()
+        ExternalSystemUtil.refreshProject(
+            externalProjectPath,
+            ImportSpecBuilder(project, MillConstants.systemId)
+                .withActivateToolWindowOnStart(true)
+                .withCallback(MillImportRefreshCallback(project)),
+        )
     }
 
     override fun update(event: AnActionEvent) {
         val project = event.getData(CommonDataKeys.PROJECT)
-        val hasLinkedProjects = project != null &&
-            MillSettings.getInstance(project).linkedProjectsSettings.any { settings ->
-                !settings.externalProjectPath.isNullOrBlank()
-            }
-        event.presentation.isEnabledAndVisible = hasLinkedProjects
+        if (project == null) {
+            event.presentation.isEnabledAndVisible = false
+            return
+        }
+
+        val linkedProjects = linkedProjectPaths(project)
+        event.presentation.isVisible = linkedProjects.isNotEmpty() || MillProjectResolverSupport.hasMillConfig(project.basePath)
+        event.presentation.isEnabled = linkedProjects.isNotEmpty() && findReloadTargetPath(project, event, linkedProjects) != null
     }
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+    private fun linkedProjectPaths(project: Project): List<String> {
+        return MillSettings.getInstance(project).linkedProjectsSettings
+            .mapNotNull { settings -> settings.externalProjectPath?.takeIf { it.isNotBlank() } }
+    }
+
+    private fun findReloadTargetPath(
+        project: Project,
+        event: AnActionEvent,
+        linkedProjectPaths: List<String>,
+    ): String? {
+        val contextPaths = buildList {
+            event.getData(CommonDataKeys.VIRTUAL_FILE)?.path?.let(::add)
+            project.basePath?.let(::add)
+        }
+
+        contextPaths.firstNotNullOfOrNull { contextPath ->
+            MillProjectResolverSupport.findLinkedProjectPathForContext(contextPath, linkedProjectPaths)
+        }
+            ?.let { return it }
+
+        return linkedProjectPaths.singleOrNull()
+    }
+
+    private fun notify(project: Project, title: String, content: String) {
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup(MillConstants.notificationGroupId)
+            .createNotification(title, content, NotificationType.WARNING)
+            .notify(project)
+    }
 }

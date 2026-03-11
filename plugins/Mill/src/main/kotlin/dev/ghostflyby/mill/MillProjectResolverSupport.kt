@@ -165,6 +165,26 @@ public object MillProjectResolverSupport {
         return tasks.values.toList()
     }
 
+    internal fun hasMillConfig(projectPath: String?): Boolean {
+        val path = projectPath?.let(Path::of)?.toAbsolutePath()?.normalize() ?: return false
+        return containsMillConfig(path)
+    }
+
+    internal fun findLinkedProjectPathForContext(
+        contextPath: String,
+        linkedProjectPaths: Collection<String>,
+    ): String? {
+        val normalizedContextPath = Path.of(contextPath).toAbsolutePath().normalize()
+        return linkedProjectPaths
+            .asSequence()
+            .map { linkedProjectPath ->
+                linkedProjectPath to Path.of(linkedProjectPath).toAbsolutePath().normalize()
+            }
+            .sortedByDescending { (_, linkedProjectPath) -> linkedProjectPath.nameCount }
+            .firstOrNull { (_, linkedProjectPath) -> normalizedContextPath.startsWith(linkedProjectPath) }
+            ?.first
+    }
+
     @JvmStatic
     public fun findAffectedExternalProjectPath(
         changedFileOrDirPath: String,
