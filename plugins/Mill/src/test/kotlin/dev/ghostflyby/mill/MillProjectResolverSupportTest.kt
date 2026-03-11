@@ -145,6 +145,18 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `parses generic string lists from mill show output`() {
+        val values = MillShowTargetPathResolver.parseStringList(
+            """
+            [info] resolving
+            ["foo","bar.test","qux[2.13]"]
+            """.trimIndent(),
+        )
+
+        assertEquals(listOf("foo", "bar.test", "qux[2.13]"), values)
+    }
+
+    @Test
     fun `parses resolved mill targets`() {
         val targets = MillModuleDiscovery.parseResolvedTargets(
             """
@@ -190,6 +202,14 @@ internal class MillProjectResolverSupportTest {
         assertEquals(DependencyScope.COMPILE, dependency.scope)
         assertEquals(target, dependency.target)
         assertEquals(owner, dependency.ownerModule)
+    }
+
+    @Test
+    fun `normalizes mill module dependency prefixes`() {
+        assertEquals("foo", MillModuleDependencyResolver.normalizeDependencyPrefix("foo"))
+        assertEquals("foo.bar", MillModuleDependencyResolver.normalizeDependencyPrefix("_.foo.bar"))
+        assertEquals("foo.bar", MillModuleDependencyResolver.normalizeDependencyPrefix("foo/bar"))
+        assertEquals("foo.cross", MillModuleDependencyResolver.normalizeDependencyPrefix("foo.cross[2.13.16]"))
     }
 
     private fun deleteRecursively(root: java.nio.file.Path) {

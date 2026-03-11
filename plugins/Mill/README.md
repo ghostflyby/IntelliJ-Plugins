@@ -10,6 +10,7 @@ Current implementation provides:
 - Best-effort multi-module import from Mill target resolution
 - Mill metadata-backed source, resource, and generated-root import where `show <module>.*` is available
 - Explicit test-to-production module dependencies for discovered `*.test` modules
+- Direct Mill module dependency import from `show <module>.moduleDeps` where discovered modules can be matched
 - Best-effort aggregate compile classpath import into `External Libraries`
 - Structured import progress reporting during Mill project resolution
 - Basic Mill task entries and direct CLI-backed task execution
