@@ -55,6 +55,57 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `detects mill config in project root`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve("build.mill"), "// mill")
+
+            assertTrue(MillProjectResolverSupport.hasMillConfig(root.toString()))
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `finds linked project path for file context`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val nestedFile = root.resolve("foo/src/Main.scala")
+            nestedFile.parent.createDirectories()
+            Files.writeString(nestedFile, "object Main")
+
+            val linkedProjectPath = MillProjectResolverSupport.findLinkedProjectPathForContext(
+                nestedFile.toString(),
+                listOf(root.toString()),
+            )
+
+            assertEquals(root.toString(), linkedProjectPath)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `prefers deepest linked project path for nested contexts`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val nestedRoot = root.resolve("nested").createDirectories()
+            val nestedFile = nestedRoot.resolve("src/Main.scala")
+            nestedFile.parent.createDirectories()
+            Files.writeString(nestedFile, "object Main")
+
+            val linkedProjectPath = MillProjectResolverSupport.findLinkedProjectPathForContext(
+                nestedFile.toString(),
+                listOf(root.toString(), nestedRoot.toString()),
+            )
+
+            assertEquals(nestedRoot.toString(), linkedProjectPath)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
     fun `collects existing mill config files`() {
         val root = Files.createTempDirectory("mill-project")
         try {
