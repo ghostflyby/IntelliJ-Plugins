@@ -54,11 +54,34 @@ internal class MillViewContributor : ExternalSystemViewContributor() {
 
     private fun prettifyTaskName(taskName: String): String {
         val trimmed = taskName.trim()
-        if (trimmed.isEmpty() || ' ' in trimmed) {
+        if (trimmed.isEmpty()) {
             return trimmed.ifEmpty { taskName }
         }
 
-        return trimmed.substringAfterLast(':').substringAfterLast('.').ifBlank { trimmed }
+        if (trimmed.startsWith("show ")) {
+            val shownTarget = trimmed.removePrefix("show ").trim()
+            return "show ${prettifyDottedTarget(shownTarget)}"
+        }
+
+        if (' ' in trimmed) {
+            return trimmed
+        }
+
+        return prettifyDottedTarget(trimmed)
+    }
+
+    private fun prettifyDottedTarget(target: String): String {
+        val prefix = target.substringBeforeLast('.', missingDelimiterValue = "")
+        val action = target.substringAfterLast('.', missingDelimiterValue = target)
+        if (prefix.isBlank() || prefix == target) {
+            return target
+        }
+
+        val moduleLabel = when (prefix) {
+            "__" -> "all modules"
+            else -> prefix
+        }
+        return "$moduleLabel / $action"
     }
 
     private fun prettifyLibraryName(data: LibraryDependencyData): String? {

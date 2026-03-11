@@ -49,7 +49,9 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             val projectNode = DataNode(ProjectKeys.PROJECT, projectData, null)
 
             progressReporter.progress(55, "Discovering Mill modules")
-            val discoveredModules = MillModuleDiscovery.discoverModules(root, projectData.externalName, settings, id, listener)
+            val resolvedTargets = MillModuleDiscovery.resolveTargets(root, settings, id, listener)
+            val discoveredModules = MillModuleDiscovery.discoverModulesFromTargets(root, projectData.externalName, resolvedTargets)
+                .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, "__", root, root)) }
 
             progressReporter.progress(70, "Creating module and content roots")
             val moduleNodes = discoveredModules.map { module ->
@@ -110,7 +112,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             }
 
             progressReporter.progress(90, "Collecting Mill tasks")
-            MillProjectResolverSupport.createTaskData(root).forEach { task ->
+            MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets).forEach { task ->
                 projectNode.createChild(ProjectKeys.TASK, task)
             }
 

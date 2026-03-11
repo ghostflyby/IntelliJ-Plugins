@@ -126,13 +126,43 @@ public object MillProjectResolverSupport {
 
     @JvmStatic
     public fun createTaskData(root: Path): List<TaskData> {
-        return listOf(
-            task(root, "resolve _", "Resolve all available Mill targets", group = "help"),
-            task(root, "__.compile", "Compile all Mill modules", group = "build"),
-            task(root, "__.test", "Run tests for all Mill modules", group = "verification", isTest = true),
-            task(root, "__.runBackground", "Run the default background target", group = "application"),
-            task(root, "show __.compileClasspath", "Print the aggregate compile classpath", group = "help"),
-        )
+        return createDefaultTaskData(root)
+    }
+
+    internal fun createTaskData(
+        root: Path,
+        discoveredModules: Collection<MillDiscoveredModule>,
+        resolvedTargets: Collection<String>,
+    ): List<TaskData> {
+        val tasks = linkedMapOf<String, TaskData>()
+        createDefaultTaskData(root).forEach { task ->
+            tasks.putIfAbsent(task.name, task)
+        }
+
+        val modulesByPrefix = discoveredModules.associateBy { it.targetPrefix }
+        resolvedTargets.asSequence()
+            .filter(::isActionableTarget)
+            .forEach { target ->
+                val targetPrefix = target.substringBeforeLast('.', missingDelimiterValue = "")
+                val module = modulesByPrefix[targetPrefix]
+                val (description, group, isTest) = describeTask(target, module)
+                tasks.putIfAbsent(target, task(root, target, description, group, isTest))
+            }
+
+        discoveredModules.forEach { module ->
+            val moduleLabel = presentableModuleLabel(module)
+            tasks.putIfAbsent(
+                "show ${module.targetPrefix}.compileClasspath",
+                task(
+                    root = root,
+                    name = "show ${module.targetPrefix}.compileClasspath",
+                    description = "Print the compile classpath for $moduleLabel",
+                    group = "help",
+                ),
+            )
+        }
+
+        return tasks.values.toList()
     }
 
     @JvmStatic
@@ -183,6 +213,46 @@ public object MillProjectResolverSupport {
         return listOf(".idea", ".bsp", ".mill-ammonite", "out", "target")
             .map(root::resolve)
             .filter(Files::isDirectory)
+    }
+
+    private fun createDefaultTaskData(root: Path): List<TaskData> {
+        return listOf(
+            task(root, "resolve _", "Resolve all available Mill targets", group = "help"),
+            task(root, "__.compile", "Compile all Mill modules", group = "build"),
+            task(root, "__.test", "Run tests for all Mill modules", group = "verification", isTest = true),
+            task(root, "__.runBackground", "Run the default background target", group = "application"),
+            task(root, "show __.compileClasspath", "Print the aggregate compile classpath", group = "help"),
+        )
+    }
+
+    private fun isActionableTarget(target: String): Boolean {
+        return when (target.substringAfterLast('.', missingDelimiterValue = target)) {
+            "compile", "test", "run", "runBackground", "assembly", "jar" -> true
+            else -> false
+        }
+    }
+
+    private fun describeTask(
+        target: String,
+        module: MillDiscoveredModule?,
+    ): Triple<String, String, Boolean> {
+        val action = target.substringAfterLast('.', missingDelimiterValue = target)
+        val moduleLabel = presentableModuleLabel(module)
+        return when (action) {
+            "compile" -> Triple("Compile $moduleLabel", "build", false)
+            "test" -> Triple("Run tests for $moduleLabel", "verification", true)
+            "run", "runBackground" -> Triple("Run $moduleLabel", "application", false)
+            "assembly", "jar" -> Triple("Build an artifact for $moduleLabel", "build", false)
+            else -> Triple("Run $target", "other", false)
+        }
+    }
+
+    private fun presentableModuleLabel(module: MillDiscoveredModule?): String {
+        return when (module?.targetPrefix) {
+            null -> "the selected Mill target"
+            "__" -> "all Mill modules"
+            else -> "Mill module `${module.displayName}`"
+        }
     }
 
     private fun task(
