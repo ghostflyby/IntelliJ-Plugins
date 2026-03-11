@@ -139,7 +139,7 @@ internal object MillModuleDiscovery {
                 0,
                 MillDiscoveredModule(
                     displayName = projectName,
-                    targetPrefix = "__",
+                    targetPrefix = MillConstants.rootModulePrefix,
                     projectRoot = root,
                     directory = root,
                 ),
@@ -211,7 +211,14 @@ internal object MillModuleDiscovery {
     }
 
     private fun fallbackModules(root: Path, projectName: String): List<MillDiscoveredModule> {
-        return listOf(MillDiscoveredModule(displayName = projectName, targetPrefix = "__", projectRoot = root, directory = root))
+        return listOf(
+            MillDiscoveredModule(
+                displayName = projectName,
+                targetPrefix = MillConstants.rootModulePrefix,
+                projectRoot = root,
+                directory = root,
+            ),
+        )
     }
 
     private fun guessModuleDirectory(root: Path, targetPrefix: String): Path {
@@ -237,4 +244,8 @@ internal data class MillDiscoveredModule(
 ) {
     val isTestModule: Boolean
         get() = productionModulePrefix != null || targetPrefix.endsWith(".test")
+
+    fun queryTarget(suffix: String): String {
+        return if (targetPrefix == MillConstants.rootModulePrefix) suffix else "$targetPrefix.$suffix"
+    }
 }

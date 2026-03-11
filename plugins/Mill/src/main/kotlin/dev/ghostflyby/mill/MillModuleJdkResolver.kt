@@ -55,7 +55,7 @@ internal object MillModuleJdkResolver {
             projectRoot = module.projectRoot,
             executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
             jvmOptionsText = settings?.millJvmOptions.orEmpty(),
-            arguments = listOf("${module.targetPrefix}.java", "-XshowSettings:properties", "-version"),
+            arguments = listOf(module.queryTarget("java"), "-XshowSettings:properties", "-version"),
         )
         return try {
             MillImportDebugLogger.info("Running `${command.joinToString(" ")}` in ${module.projectRoot}")
@@ -71,7 +71,7 @@ internal object MillModuleJdkResolver {
                 parseJavaHome(output.stdout + "\n" + output.stderr)
             }
         } catch (_: ExecutionException) {
-            MillImportDebugLogger.warn("Mill process could not be started for `${module.targetPrefix}.java -XshowSettings:properties -version`")
+            MillImportDebugLogger.warn("Mill process could not be started for `${module.queryTarget("java")} -XshowSettings:properties -version`")
             null
         }
     }
