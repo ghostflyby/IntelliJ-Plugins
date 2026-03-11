@@ -29,7 +29,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.Comparator
 import kotlin.io.path.createDirectories
 
 internal class MillProjectResolverSupportTest {
@@ -38,6 +37,7 @@ internal class MillProjectResolverSupportTest {
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.sc"))
         assertTrue(MillProjectResolverSupport.isProjectFileName("mill.sc"))
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill"))
+        assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill.yaml"))
     }
 
     @Test
@@ -47,6 +47,20 @@ internal class MillProjectResolverSupportTest {
             Files.writeString(root.resolve("build.sc"), "// mill")
 
             val resolved = MillProjectResolverSupport.findProjectRoot(root.resolve("build.sc").toString())
+
+            assertEquals(root, resolved)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `finds root from yaml build file path`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve("build.mill.yaml"), "modules: []")
+
+            val resolved = MillProjectResolverSupport.findProjectRoot(root.resolve("build.mill.yaml").toString())
 
             assertEquals(root, resolved)
         } finally {
@@ -165,15 +179,15 @@ internal class MillProjectResolverSupportTest {
             val contentRoot = MillProjectResolverSupport.buildContentRoot(root)
 
             assertTrue(
-                contentRoot.getPaths(com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType.SOURCE)
+                contentRoot.getPaths(ExternalSystemSourceType.SOURCE)
                     .isNotEmpty(),
             )
             assertTrue(
-                contentRoot.getPaths(com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType.TEST)
+                contentRoot.getPaths(ExternalSystemSourceType.TEST)
                     .isNotEmpty(),
             )
             assertTrue(
-                contentRoot.getPaths(com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType.EXCLUDED)
+                contentRoot.getPaths(ExternalSystemSourceType.EXCLUDED)
                     .isNotEmpty(),
             )
         } finally {
@@ -461,7 +475,7 @@ internal class MillProjectResolverSupportTest {
         }
     }
 
-    private fun deleteRecursively(root: java.nio.file.Path) {
+    private fun deleteRecursively(root: Path) {
         Files.walk(root)
             .sorted(Comparator.reverseOrder())
             .forEach(Files::deleteIfExists)

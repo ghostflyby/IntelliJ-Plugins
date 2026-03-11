@@ -60,7 +60,7 @@ import java.nio.file.Path
 internal class MillUnlinkedProjectAware : ExternalSystemUnlinkedProjectAware {
     override val systemId = MillConstants.systemId
 
-    override fun buildFileExtensions(): Array<String> = arrayOf("sc", "mill")
+    override fun buildFileExtensions(): Array<String> = arrayOf("sc", "mill", "yaml")
 
     override fun isBuildFile(project: Project, buildFile: VirtualFile): Boolean {
         return !buildFile.isDirectory && MillProjectResolverSupport.isProjectFileName(buildFile.name)
