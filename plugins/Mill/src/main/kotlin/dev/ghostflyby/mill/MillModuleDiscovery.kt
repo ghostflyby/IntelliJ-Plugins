@@ -103,16 +103,13 @@ internal object MillModuleDiscovery {
             .mapNotNull(::targetPrefix)
             .distinct()
             .forEach { prefix ->
-                val directory = root.resolve(prefix.replace('.', '/')).normalize()
-                if (directory.startsWith(root) && hasModuleContent(directory)) {
-                    candidateModules[prefix] = MillDiscoveredModule(
-                        displayName = prefix,
-                        targetPrefix = prefix,
-                        projectRoot = root,
-                        directory = directory,
-                        productionModulePrefix = prefix.removeSuffix(".test").takeIf { prefix.endsWith(".test") },
-                    )
-                }
+                candidateModules[prefix] = MillDiscoveredModule(
+                    displayName = prefix,
+                    targetPrefix = prefix,
+                    projectRoot = root,
+                    directory = guessModuleDirectory(root, prefix),
+                    productionModulePrefix = prefix.removeSuffix(".test").takeIf { prefix.endsWith(".test") },
+                )
             }
 
         val modules = candidateModules.values
@@ -131,7 +128,7 @@ internal object MillModuleDiscovery {
             )
         }
 
-        return modules.distinctBy { it.directory }
+        return modules.distinctBy { it.targetPrefix }
     }
 
     private fun targetPrefix(target: String): String? {
@@ -164,6 +161,11 @@ internal object MillModuleDiscovery {
 
     private fun fallbackModules(root: Path, projectName: String): List<MillDiscoveredModule> {
         return listOf(MillDiscoveredModule(displayName = projectName, targetPrefix = "__", projectRoot = root, directory = root))
+    }
+
+    private fun guessModuleDirectory(root: Path, targetPrefix: String): Path {
+        val candidate = root.resolve(targetPrefix.replace('.', '/')).normalize()
+        return if (candidate.startsWith(root)) candidate else root
     }
 
     private fun hasModuleContent(directory: Path): Boolean {

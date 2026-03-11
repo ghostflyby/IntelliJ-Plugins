@@ -44,6 +44,19 @@ internal object MillShowTargetPathResolver {
         return parseStringList(output.stdout)
     }
 
+    fun resolveStringValue(
+        root: Path,
+        settings: MillExecutionSettings?,
+        taskId: ExternalSystemTaskId,
+        listener: ExternalSystemTaskNotificationListener,
+        showTarget: String,
+        failureContext: String,
+        reportFailures: Boolean = true,
+    ): String? {
+        val output = runShowTarget(root, settings, taskId, listener, showTarget, failureContext, reportFailures) ?: return null
+        return parseSingleStringValue(output.stdout)
+    }
+
     fun resolvePaths(
         root: Path,
         settings: MillExecutionSettings?,
@@ -69,9 +82,22 @@ internal object MillShowTargetPathResolver {
         val arrayText = extractLastArray(output) ?: return emptyList()
         return quotedStringPattern
             .findAll(arrayText)
-            .map { match -> unescapeJsonString(match.groupValues[1]) }
+            .map { match -> normalizeValue(unescapeJsonString(match.groupValues[1])) }
             .filter(String::isNotBlank)
             .toList()
+    }
+
+    internal fun parseSingleStringValue(output: String): String? {
+        val lines = output.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .filterNot { it.startsWith("[") && !it.startsWith("[\"") }
+            .toList()
+        val candidate = lines.lastOrNull() ?: return null
+        if (candidate.startsWith("\"") && candidate.endsWith("\"") && candidate.length >= 2) {
+            return normalizeValue(unescapeJsonString(candidate.substring(1, candidate.length - 1)))
+        }
+        return candidate.takeIf { it.isNotBlank() }
     }
 
     private fun runShowTarget(
@@ -202,5 +228,29 @@ internal object MillShowTargetPathResolver {
         return result.toString()
     }
 
+    private fun normalizeValue(value: String): String {
+        if (!value.startsWith("ref:")) {
+            return value
+        }
+
+        val pathRefValue = value.removePrefix("ref:")
+        if (pathRefValue.startsWith("/") || windowsPathPattern.matches(pathRefValue)) {
+            return pathRefValue
+        }
+
+        val separatorIndex = pathRefValue.indexOf(':')
+        if (separatorIndex < 0 || separatorIndex == pathRefValue.lastIndex) {
+            return pathRefValue
+        }
+
+        val candidatePath = pathRefValue.substring(separatorIndex + 1)
+        return when {
+            candidatePath.startsWith("/") -> candidatePath
+            windowsPathPattern.matches(candidatePath) -> candidatePath
+            else -> pathRefValue
+        }
+    }
+
     private val quotedStringPattern = Regex("\"((?:\\\\.|[^\"\\\\])*)\"")
+    private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
 }
