@@ -212,6 +212,28 @@ internal class MillProjectResolverSupportTest {
         assertEquals("foo.cross", MillModuleDependencyResolver.normalizeDependencyPrefix("foo.cross[2.13.16]"))
     }
 
+    @Test
+    fun `creates per-module task data from resolved targets`() {
+        val root = Path.of("/tmp/project")
+        val tasks = MillProjectResolverSupport.createTaskData(
+            root = root,
+            discoveredModules = listOf(
+                MillDiscoveredModule("foo", "foo", root, root.resolve("foo")),
+                MillDiscoveredModule("foo.test", "foo.test", root, root.resolve("foo/test"), productionModulePrefix = "foo"),
+            ),
+            resolvedTargets = listOf("foo.compile", "foo.test.test", "foo.runBackground", "foo.internalTarget"),
+        )
+
+        val taskNames = tasks.map { it.name }
+        assertTrue(taskNames.contains("__.compile"))
+        assertTrue(taskNames.contains("foo.compile"))
+        assertTrue(taskNames.contains("foo.test.test"))
+        assertTrue(taskNames.contains("foo.runBackground"))
+        assertTrue(taskNames.contains("show foo.compileClasspath"))
+        assertTrue(taskNames.contains("show foo.test.compileClasspath"))
+        assertTrue(!taskNames.contains("foo.internalTarget"))
+    }
+
     private fun deleteRecursively(root: java.nio.file.Path) {
         Files.walk(root)
             .sorted(Comparator.reverseOrder())

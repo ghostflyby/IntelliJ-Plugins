@@ -12,6 +12,7 @@ Current implementation provides:
 - Explicit test-to-production module dependencies for discovered `*.test` modules
 - Direct Mill module dependency import from `show <module>.moduleDeps` where discovered modules can be matched
 - Best-effort aggregate compile classpath import into `External Libraries`
+- Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`
 - Structured import progress reporting during Mill project resolution
 - Basic Mill task entries and direct CLI-backed task execution
 - Project-open integration so Mill projects can be opened/imported without falling straight into BSP
