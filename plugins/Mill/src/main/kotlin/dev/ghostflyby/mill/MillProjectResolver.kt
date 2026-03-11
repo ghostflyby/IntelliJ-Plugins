@@ -68,12 +68,24 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
 
             val moduleNodesByTargetPrefix = moduleNodes.associateBy({ it.first.targetPrefix }, { it.second })
             moduleNodes.forEach { (module, node) ->
+                val dependencyPrefixes = linkedSetOf<String>()
                 val productionModuleNode = module.productionModulePrefix?.let(moduleNodesByTargetPrefix::get)
                 if (productionModuleNode != null) {
                     node.data.productionModuleId = productionModuleNode.data.id
+                    dependencyPrefixes += module.productionModulePrefix
+                }
+                dependencyPrefixes += MillModuleDependencyResolver.resolveDependencyPrefixes(
+                    module = module,
+                    discoveredModules = discoveredModules,
+                    settings = settings,
+                    taskId = id,
+                    listener = listener,
+                )
+                dependencyPrefixes.forEach { dependencyPrefix ->
+                    val dependencyNode = moduleNodesByTargetPrefix[dependencyPrefix] ?: return@forEach
                     node.createChild(
                         ProjectKeys.MODULE_DEPENDENCY,
-                        MillProjectResolverSupport.buildModuleDependency(node.data, productionModuleNode.data),
+                        MillProjectResolverSupport.buildModuleDependency(node.data, dependencyNode.data),
                     )
                 }
             }
