@@ -23,6 +23,7 @@
 package dev.ghostflyby.mill;
 
 import com.intellij.execution.configurations.SimpleJavaParameters;
+import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.externalSystem.ExternalSystemAutoImportAware;
 import com.intellij.openapi.externalSystem.ExternalSystemManager;
 import com.intellij.openapi.externalSystem.ExternalSystemUiAware;
@@ -35,6 +36,8 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Pair;
 import com.intellij.util.Function;
+import kotlinx.serialization.StringFormat;
+import kotlinx.serialization.json.Json;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -138,5 +141,10 @@ public final class MillExternalSystemManager implements ExternalSystemManager<
 
     @Override
     public void enhanceRemoteProcessing(@NotNull SimpleJavaParameters parameters) {
+        String json = PathManager.getJarPathForClass(Json.class);
+        String core = PathManager.getJarPathForClass(StringFormat.class);
+
+        parameters.getClassPath().add(json);
+        parameters.getClassPath().add(core);
     }
 }
