@@ -32,6 +32,8 @@ public object MillConstants {
     public const val moduleTypeId: String = "JAVA_MODULE"
     public const val settingsFileName: String = "mill.xml"
     public const val versionFileName: String = ".mill-version"
+    public const val scalaSdkPrefix: String = "Mill"
+    public const val notificationGroupId: String = "Mill Import"
 
     @JvmField
     public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill")

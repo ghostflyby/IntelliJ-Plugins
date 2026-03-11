@@ -11,8 +11,10 @@
     <depends>org.intellij.scala</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Mill Import" displayType="BALLOON"/>
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
         <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
         <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
         <projectOpenProcessor
                 id="mill"
@@ -25,4 +27,13 @@
                 displayName="Mill"
                 instance="dev.ghostflyby.mill.MillConfigurable"/>
     </extensions>
+    <actions>
+        <action
+                id="dev.ghostflyby.mill.reloadProject"
+                class="dev.ghostflyby.mill.MillReloadProjectAction"
+                text="Reload Mill Project"
+                description="Reload linked Mill projects in the current IDE project">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
