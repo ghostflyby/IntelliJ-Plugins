@@ -22,7 +22,6 @@
 
 package dev.ghostflyby.mill.sdk
 
-import com.intellij.execution.ExecutionException
 import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.command.MillCommandLineUtil
@@ -48,35 +47,18 @@ internal object MillModuleJdkResolver {
         module: MillDiscoveredModule,
         settings: MillExecutionSettings?,
     ): String? {
-        val arguments = listOf(module.queryTarget("java"), "-XshowSettings:properties", "-version")
-        return try {
-            MillImportDebugLogger.info(
-                "Running `${MillCommandLineUtil.createCommandLine(module.projectRoot, settings, arguments).commandLineString}` in ${module.projectRoot}",
+        val result = MillCommandLineUtil.readJavaHome(
+            projectRoot = module.projectRoot,
+            settings = settings,
+            targetPrefix = module.queryTarget("java"),
+        )
+        if (!result.command.isSuccess) {
+            MillImportDebugLogger.warn(
+                "Module `${module.targetPrefix}` JDK resolution failed exitCode=${result.command.exitCode} details=${
+                    MillImportDebugLogger.trim(result.command.failureDetails)
+                }",
             )
-            val output = MillCommandLineUtil.runCommand(module.projectRoot, settings, arguments)
-            if (output.exitCode != 0) {
-                MillImportDebugLogger.warn(
-                    "Module `${module.targetPrefix}` JDK resolution failed exitCode=${output.exitCode} details=${
-                        MillImportDebugLogger.trim((output.stderr + "\n" + output.stdout).trim())
-                    }",
-                )
-                null
-            } else {
-                parseJavaHome(output.stdout + "\n" + output.stderr)
-            }
-        } catch (_: ExecutionException) {
-            MillImportDebugLogger.warn("Mill process could not be started for `${module.queryTarget("java")} -XshowSettings:properties -version`")
-            null
         }
-    }
-
-    internal fun parseJavaHome(output: String): String? {
-        return output.lineSequence()
-            .map(String::trim)
-            .firstNotNullOfOrNull { line ->
-                line.substringAfter("java.home = ", missingDelimiterValue = "")
-                    .takeIf(String::isNotBlank)
-                    ?: line.substringAfter("java.home=", missingDelimiterValue = "").takeIf(String::isNotBlank)
-            }
+        return result.value
     }
 }
