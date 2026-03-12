@@ -39,9 +39,14 @@ public object MillConstants {
     public const val rootModulePrefix: String = "<root>"
     public const val moduleDiscoveryQuery: String = "__"
     public const val moduleFilesDirectory: String = ".idea/modules"
+    public const val buildScriptModuleName: String = "mill-build_"
+    public const val buildScriptFileName: String = "build.mill"
+    public const val buildScriptOutputDirectory: String = "out/mill-build"
+    public const val buildScriptGeneratedSourcesFileName: String = "generatedScriptSources.json"
+    public const val buildScriptClasspathFileName: String = "compileClasspath.json"
 
     @JvmField
-    public val projectFileNames: Set<String> = linkedSetOf("build.mill", "build.mill.yaml")
+    public val projectFileNames: Set<String> = linkedSetOf(buildScriptFileName, "build.mill.yaml")
 
     @JvmField
     public val configFileNames: Set<String> = linkedSetOf(

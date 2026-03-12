@@ -29,6 +29,7 @@ import dev.ghostflyby.mill.project.MillDiscoveredModule
 import dev.ghostflyby.mill.project.MillModuleDependencyResolver
 import dev.ghostflyby.mill.project.MillModuleDiscovery
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.script.MillBuildScriptSupport
 import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -42,6 +43,7 @@ internal class MillProjectResolverSupportTest {
     fun `recognizes supported mill project files`() {
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill"))
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill.yaml"))
+        assertTrue(MillBuildScriptSupport.isBuildScriptFileName("build.mill"))
     }
 
     @Test
@@ -243,12 +245,57 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `build script content root keeps mill output available for generated sources`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val generatedSourceRoot = root.resolve("out/mill-build/generatedScriptSources.dest/support").createDirectories()
+            root.resolve("out").createDirectories()
+            root.resolve(".bsp").createDirectories()
+
+            val contentRoot = MillProjectResolverSupport.buildBuildScriptContentRoot(root, listOf(generatedSourceRoot))
+
+            assertEquals(
+                listOf(generatedSourceRoot.toString()),
+                contentRoot.getPaths(ExternalSystemSourceType.SOURCE_GENERATED).map { it.path },
+            )
+            assertEquals(
+                listOf(root.resolve(".bsp").toString()),
+                contentRoot.getPaths(ExternalSystemSourceType.EXCLUDED).map { it.path },
+            )
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
     fun `parses compile classpath from mill show output`() {
         val paths = MillCommandLineUtil.parsePathList(
             """["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]""",
         )
 
         assertEquals(listOf("/tmp/coursier/cache/a.jar", "/tmp/coursier/cache/b.jar"), paths)
+    }
+
+    @Test
+    fun `parses generated mill script source roots`() {
+        val roots = MillBuildScriptSupport.parseGeneratedSourceRootPaths(
+            """
+            {
+              "value": {
+                "wrapped": ["ref:v0:1111:/tmp/project/out/mill-build/generatedScriptSources.dest/wrapped"],
+                "support": ["qref:v1:2222:/tmp/project/out/mill-build/generatedScriptSources.dest/support"]
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            listOf(
+                Path.of("/tmp/project/out/mill-build/generatedScriptSources.dest/support"),
+                Path.of("/tmp/project/out/mill-build/generatedScriptSources.dest/wrapped"),
+            ),
+            roots,
+        )
     }
 
     @Test
@@ -286,6 +333,94 @@ internal class MillProjectResolverSupportTest {
         val value = MillCommandLineUtil.parseSingleStringValue(""""2.13.16"""")
 
         assertEquals("2.13.16", value)
+    }
+
+    @Test
+    fun `loads mill build script model from mill output files`() {
+        val root = Files.createTempDirectory("mill-script")
+        try {
+            val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory).createDirectories()
+            val supportRoot = outputRoot.resolve("generatedScriptSources.dest/support").createDirectories()
+            val wrappedRoot = outputRoot.resolve("generatedScriptSources.dest/wrapped").createDirectories()
+            val classesRoot = outputRoot.resolve("compile-resources").createDirectories()
+            val jarPath = Files.write(root.resolve("mill-libs_3-1.1.3.jar"), byteArrayOf())
+
+            Files.writeString(
+                outputRoot.resolve(MillConstants.buildScriptGeneratedSourcesFileName),
+                """
+                {
+                  "value": {
+                    "wrapped": ["ref:v0:1111:${wrappedRoot.toAbsolutePath()}"],
+                    "support": ["qref:v1:2222:${supportRoot.toAbsolutePath()}"]
+                  }
+                }
+                """.trimIndent(),
+            )
+            Files.writeString(
+                outputRoot.resolve(MillConstants.buildScriptClasspathFileName),
+                """
+                {
+                  "value": [
+                    "qref:v1:3333:${jarPath.toAbsolutePath()}",
+                    "ref:v0:4444:${classesRoot.toAbsolutePath()}"
+                  ]
+                }
+                """.trimIndent(),
+            )
+            Files.writeString(
+                outputRoot.resolve("scalaVersion.json"),
+                """
+                {
+                  "value": "3.8.2"
+                }
+                """.trimIndent(),
+            )
+            Files.writeString(
+                outputRoot.resolve("scalaCompilerClasspath.json"),
+                """
+                {
+                  "value": [
+                    "qref:v1:5555:${jarPath.toAbsolutePath()}"
+                  ]
+                }
+                """.trimIndent(),
+            )
+            Files.writeString(
+                outputRoot.resolve("javaHome.json"),
+                """
+                {
+                  "value": "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
+                }
+                """.trimIndent(),
+            )
+
+            val model = MillBuildScriptSupport.loadModel(root)
+
+            requireNotNull(model)
+            assertEquals(root, model.projectRoot)
+            assertEquals(listOf(supportRoot, wrappedRoot), model.sourceRoots)
+            assertEquals(listOf(jarPath, classesRoot), model.resolveBinaryClasspath)
+            assertEquals(listOf(jarPath), model.displayBinaryClasspath)
+            assertEquals("3.8.2", model.scalaVersion)
+            assertEquals(listOf(jarPath), model.scalaCompilerClasspath)
+            assertEquals("/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home", model.javaHomePath)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `filters mill build output paths from displayed script dependencies`() {
+        val root = Path.of("/tmp/project")
+        val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory)
+        val classpath = listOf(
+            outputRoot.resolve("compile-resources"),
+            Path.of("/tmp/coursier/cache/mill-core.jar"),
+        )
+
+        val filtered = MillBuildScriptSupport.filterDisplayBinaryClasspath(root, classpath)
+
+        assertEquals(listOf(Path.of("/tmp/coursier/cache/mill-core.jar")), filtered)
     }
 
     @Test

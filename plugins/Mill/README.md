@@ -14,8 +14,9 @@ Current implementation provides:
 - Direct Mill module dependency import from `show <module>.moduleDeps` where discovered modules can be matched
 - External library import from Mill dependency metadata via `resolvedMvnDeps` / `resolvedIvyDeps`, with `compileClasspath` as fallback
 - Scala SDK import for Scala Mill modules from `scalaVersion`, `scalaCompilerClasspath`, `scalaDocClasspath`, and `ammoniteReplClasspath`
+- `build.mill` editing support as a Scala file with Mill script source roots and compile classpath attached for resolve/completion
 - Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`
-- A `Reload Mill Project` action under `Tools` for refreshing linked Mill builds on demand
+- A `Reload Mill Project` action under `Build` for refreshing linked Mill builds on demand
 - Structured import progress reporting during Mill project resolution
 - Basic Mill task entries and direct CLI-backed task execution
 - Project-open integration so Mill projects can be opened/imported without falling straight into BSP

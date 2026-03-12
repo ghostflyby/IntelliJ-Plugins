@@ -13,9 +13,13 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Mill Import" displayType="BALLOON"/>
+        <fileTypeOverrider implementation="dev.ghostflyby.mill.script.MillBuildScriptFileTypeOverrider"/>
+        <additionalLibraryRootsProvider implementation="dev.ghostflyby.mill.script.MillBuildScriptLibraryRootsProvider"/>
+        <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
         <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillProjectJdkDataService"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillModuleJdkDataService"/>
         <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
         <projectOpenProcessor
@@ -28,6 +32,9 @@
                 id="reference.settingsdialog.project.mill"
                 displayName="Mill"
                 instance="dev.ghostflyby.mill.MillConfigurable"/>
+    </extensions>
+    <extensions defaultExtensionNs="org.intellij.scala">
+        <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>
     </extensions>
     <actions>
         <action
