@@ -296,8 +296,8 @@ Extension point:
 
 Monitored files:
 
-    build.sc
-    mill.sc
+    build.mill
+    build.mill.yaml
 
 ------------------------------------------------------------------------
 
@@ -342,7 +342,7 @@ Register:
 
 Example:
 
-    build.sc
+    build.mill
 
 ------------------------------------------------------------------------
 
