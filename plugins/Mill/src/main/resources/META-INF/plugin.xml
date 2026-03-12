@@ -32,11 +32,19 @@
                 id="reference.settingsdialog.project.mill"
                 displayName="Mill"
                 instance="dev.ghostflyby.mill.MillConfigurable"/>
+        <toolWindow id="Mill" anchor="right" factoryClass="dev.ghostflyby.mill.MillToolWindowFactory"/>
     </extensions>
     <extensions defaultExtensionNs="org.intellij.scala">
         <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>
     </extensions>
     <actions>
+        <action
+                id="dev.ghostflyby.mill.linkProject"
+                class="dev.ghostflyby.mill.MillLinkProjectAction"
+                text="Link Mill Project"
+                description="Link the current Mill build into the Mill external-system tool window">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
         <action
                 id="dev.ghostflyby.mill.reloadProject"
                 class="dev.ghostflyby.mill.MillReloadProjectAction"
