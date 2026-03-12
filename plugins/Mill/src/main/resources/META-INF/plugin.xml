@@ -18,6 +18,7 @@
         <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
         <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <configurationType implementation="dev.ghostflyby.mill.MillExternalTaskConfigurationType"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillProjectJdkDataService"/>
         <externalProjectDataService implementation="dev.ghostflyby.mill.MillModuleJdkDataService"/>
