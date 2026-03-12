@@ -23,11 +23,14 @@
 - A Mill Project Settings page under `Build Tools`.
 - Standard unlinked-project detection so Mill projects can surface the IDE import prompt after open.
 - A Mill-specific external-system view contributor for cleaner task and dependency labels in the tool window.
-- A dedicated Mill task tree in the external-system tool window, grouped by root project, module path, and task group while keeping direct task execution.
+- A dedicated Mill task tree in the external-system tool window while keeping direct task execution.
 - A registered `Mill` tool window factory so linked Mill projects now show a real External System tool window, not just task data behind the scenes.
 - A `Link Mill Project` action so existing IDEA projects can explicitly attach a Mill build and open the Mill tool window.
 
 ### Changed
+
+- Changed the Mill tool window task tree to use the raw dotted task names as nested path segments instead of synthetic
+  task groups or display-name rewriting.
 
 ### Deprecated
 
@@ -39,6 +42,6 @@
 - Added a Mill project-open processor so Mill project directories participate in the IDE project-open flow instead of
   only manual external-system linking.
 - Fixed Mill tool window task execution by registering a standard external-system task run configuration type and
-  routing imported tasks through IntelliJ's built-in `TASK` nodes.
+  restoring runnable task nodes in the Mill tool window.
 
 ### Security

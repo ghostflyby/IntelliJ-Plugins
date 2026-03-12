@@ -16,7 +16,7 @@ Current implementation provides:
 - Scala SDK import for Scala Mill modules from `scalaVersion`, `scalaCompilerClasspath`, `scalaDocClasspath`, and `ammoniteReplClasspath`
 - `build.mill` editing support as a Scala file with Mill script source roots and compile classpath attached for resolve/completion
 - Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`
-- A dedicated Mill tool window task tree that groups imported tasks by root project, module path, and task group
+- A dedicated Mill tool window task tree that nests imported tasks by their raw dotted Mill target names
 - A registered `Mill` external-system tool window factory, so linked Mill projects actually expose a visible tool window like Gradle
 - A `Link Mill Project` action under `Build` for linking the current Mill build into the Mill external-system tool window
 - A `Reload Mill Project` action under `Build` for refreshing linked Mill builds on demand
