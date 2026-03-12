@@ -38,6 +38,7 @@ public object MillConstants {
     public const val wrapperBatchName: String = "mill.bat"
     public const val rootModulePrefix: String = "<root>"
     public const val moduleDiscoveryQuery: String = "__"
+    public const val moduleFilesDirectory: String = ".idea/modules"
 
     @JvmField
     public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill", "build.mill.yaml")
