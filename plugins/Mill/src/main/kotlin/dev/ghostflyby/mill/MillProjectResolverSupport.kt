@@ -75,12 +75,13 @@ public object MillProjectResolverSupport {
 
     @JvmStatic
     public fun buildModuleData(projectRoot: Path, moduleDir: Path, moduleName: String): ModuleData {
+        val moduleFilesDirectory = projectRoot.resolve(MillConstants.moduleFilesDirectory).normalize()
         return ModuleData(
             "$moduleName:${moduleDir.toAbsolutePath()}",
             MillConstants.systemId,
             MillConstants.moduleTypeId,
             moduleName,
-            moduleDir.toString(),
+            moduleFilesDirectory.toString(),
             projectRoot.toString(),
         ).apply {
             this.moduleName = moduleName

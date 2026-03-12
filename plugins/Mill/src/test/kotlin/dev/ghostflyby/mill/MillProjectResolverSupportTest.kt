@@ -403,6 +403,15 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `stores mill module files under idea modules directory`() {
+        val projectRoot = Path.of("/tmp/project")
+        val module = MillProjectResolverSupport.buildModuleData(projectRoot, projectRoot.resolve("foo"), "foo")
+
+        assertEquals(projectRoot.resolve(MillConstants.moduleFilesDirectory).toString(), module.moduleFileDirectoryPath)
+        assertEquals(projectRoot.toString(), module.linkedExternalProjectPath)
+    }
+
+    @Test
     fun `normalizes mill module dependency prefixes`() {
         assertEquals("foo", MillModuleDependencyResolver.normalizeDependencyPrefix("foo"))
         assertEquals("foo.bar", MillModuleDependencyResolver.normalizeDependencyPrefix("_.foo.bar"))
