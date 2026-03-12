@@ -28,10 +28,7 @@ import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceTyp
 import com.intellij.openapi.externalSystem.model.task.TaskData
 import com.intellij.openapi.roots.DependencyScope
 import dev.ghostflyby.mill.command.MillCommandLineUtil
-import dev.ghostflyby.mill.project.MillDiscoveredModule
-import dev.ghostflyby.mill.project.MillModuleDependencyResolver
-import dev.ghostflyby.mill.project.MillModuleDiscovery
-import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.project.*
 import dev.ghostflyby.mill.script.MillBuildScriptSupport
 import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import org.junit.Assert.assertEquals
@@ -550,6 +547,137 @@ internal class MillProjectResolverSupportTest {
 
         assertEquals(projectRoot.resolve(MillConstants.moduleFilesDirectory).toString(), module.moduleFileDirectoryPath)
         assertEquals(projectRoot.toString(), module.linkedExternalProjectPath)
+    }
+
+    @Test
+    fun `resolves production module outputs from local classpath`() {
+        val module = MillDiscoveredModule("foo", "foo", Path.of("/tmp/project"), Path.of("/tmp/project/foo"))
+
+        val outputs = MillModuleOutputResolver.resolveModuleOutputsFromLocalClasspath(
+            module = module,
+            localClasspath = listOf(
+                Path.of("/tmp/project/out/foo/compile.dest/resources"),
+                Path.of("/tmp/project/out/foo/compile.dest/classes"),
+                Path.of("/tmp/coursier/cache/lib.jar"),
+            ),
+            settings = null,
+        )
+
+        assertEquals(Path.of("/tmp/project/out/foo/compile.dest/classes"), outputs?.classesOutputDirectory)
+        assertEquals(Path.of("/tmp/project/out/foo/compile.dest/resources"), outputs?.resourcesOutputDirectory)
+    }
+
+    @Test
+    fun `resolves test module outputs from local classpath`() {
+        val module = MillDiscoveredModule(
+            "foo.test",
+            "foo.test",
+            Path.of("/tmp/project"),
+            Path.of("/tmp/project/foo/test"),
+            productionModulePrefix = "foo",
+        )
+
+        val outputs = MillModuleOutputResolver.resolveModuleOutputsFromLocalClasspath(
+            module = module,
+            localClasspath = listOf(
+                Path.of("/tmp/project/out/foo/test/compile.dest/classes"),
+                Path.of("/tmp/project/out/foo/test/compile.dest/resources"),
+            ),
+            settings = null,
+        )
+
+        assertEquals(Path.of("/tmp/project/out/foo/test/compile.dest/classes"), outputs?.classesOutputDirectory)
+        assertEquals(Path.of("/tmp/project/out/foo/test/compile.dest/resources"), outputs?.resourcesOutputDirectory)
+    }
+
+    @Test
+    fun `respects custom mill output directory from execution settings`() {
+        val settings = MillExecutionSettings().apply {
+            addEnvironmentVariable("MILL_OUTPUT_DIR", ".mill-out")
+        }
+        val module = MillDiscoveredModule("foo", "foo", Path.of("/tmp/project"), Path.of("/tmp/project/foo"))
+
+        val outputs = MillModuleOutputResolver.resolveModuleOutputsFromLocalClasspath(
+            module = module,
+            localClasspath = listOf(
+                Path.of("/tmp/project/.mill-out/foo/compile.dest/classes"),
+            ),
+            settings = settings,
+        )
+
+        assertEquals(Path.of("/tmp/project/.mill-out/foo/compile.dest/classes"), outputs?.classesOutputDirectory)
+    }
+
+    @Test
+    fun `ignores nested outputs outside the direct module compile destination`() {
+        val module = MillDiscoveredModule("foo", "foo", Path.of("/tmp/project"), Path.of("/tmp/project/foo"))
+
+        val outputs = MillModuleOutputResolver.resolveModuleOutputsFromLocalClasspath(
+            module = module,
+            localClasspath = listOf(
+                Path.of("/tmp/project/out/foo/bar/compile.dest/classes"),
+                Path.of("/tmp/project/out/foo/compile.dest/classes"),
+            ),
+            settings = null,
+        )
+
+        assertEquals(Path.of("/tmp/project/out/foo/compile.dest/classes"), outputs?.classesOutputDirectory)
+    }
+
+    @Test
+    fun `applies external compiler output for production module`() {
+        val projectRoot = Path.of("/tmp/project")
+        val module = MillProjectResolverSupport.buildModuleData(projectRoot, projectRoot.resolve("foo"), "foo")
+
+        MillModuleOutputResolver.applyModuleOutputs(
+            moduleData = module,
+            module = MillDiscoveredModule("foo", "foo", projectRoot, projectRoot.resolve("foo")),
+            outputs = MillModuleOutputs(
+                classesOutputDirectory = Path.of("/tmp/project/out/foo/compile.dest/classes"),
+                resourcesOutputDirectory = Path.of("/tmp/project/out/foo/compile.dest/resources"),
+            ),
+        )
+
+        assertEquals(false, module.isInheritProjectCompileOutputPath)
+        assertEquals(
+            "/tmp/project/out/foo/compile.dest/classes",
+            module.getCompileOutputPath(ExternalSystemSourceType.SOURCE),
+        )
+        assertEquals(
+            "/tmp/project/out/foo/compile.dest/resources",
+            module.getCompileOutputPath(ExternalSystemSourceType.RESOURCE),
+        )
+    }
+
+    @Test
+    fun `applies external compiler output for test module`() {
+        val projectRoot = Path.of("/tmp/project")
+        val module = MillProjectResolverSupport.buildModuleData(projectRoot, projectRoot.resolve("foo/test"), "foo.test")
+
+        MillModuleOutputResolver.applyModuleOutputs(
+            moduleData = module,
+            module = MillDiscoveredModule(
+                "foo.test",
+                "foo.test",
+                projectRoot,
+                projectRoot.resolve("foo/test"),
+                productionModulePrefix = "foo",
+            ),
+            outputs = MillModuleOutputs(
+                classesOutputDirectory = Path.of("/tmp/project/out/foo/test/compile.dest/classes"),
+                resourcesOutputDirectory = Path.of("/tmp/project/out/foo/test/compile.dest/resources"),
+            ),
+        )
+
+        assertEquals(false, module.isInheritProjectCompileOutputPath)
+        assertEquals(
+            "/tmp/project/out/foo/test/compile.dest/classes",
+            module.getCompileOutputPath(ExternalSystemSourceType.TEST),
+        )
+        assertEquals(
+            "/tmp/project/out/foo/test/compile.dest/resources",
+            module.getCompileOutputPath(ExternalSystemSourceType.TEST_RESOURCE),
+        )
     }
 
     @Test
