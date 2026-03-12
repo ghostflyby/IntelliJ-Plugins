@@ -40,8 +40,6 @@ import kotlin.io.path.createDirectories
 internal class MillProjectResolverSupportTest {
     @Test
     fun `recognizes supported mill project files`() {
-        assertTrue(MillProjectResolverSupport.isProjectFileName("build.sc"))
-        assertTrue(MillProjectResolverSupport.isProjectFileName("mill.sc"))
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill"))
         assertTrue(MillProjectResolverSupport.isProjectFileName("build.mill.yaml"))
     }
@@ -50,9 +48,9 @@ internal class MillProjectResolverSupportTest {
     fun `finds root from build file path`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve("build.sc"), "// mill")
+            Files.writeString(root.resolve("build.mill"), "// mill")
 
-            val resolved = MillProjectResolverSupport.findProjectRoot(root.resolve("build.sc").toString())
+            val resolved = MillProjectResolverSupport.findProjectRoot(root.resolve("build.mill").toString())
 
             assertEquals(root, resolved)
         } finally {
@@ -177,12 +175,12 @@ internal class MillProjectResolverSupportTest {
     fun `collects existing mill config files`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve("build.sc"), "// mill")
+            Files.writeString(root.resolve("build.mill"), "// mill")
             Files.writeString(root.resolve(".mill-version"), "0.12.8")
 
             val files = MillProjectResolverSupport.findAffectedExternalProjectFiles(root.toString())
 
-            assertEquals(listOf(".mill-version", "build.sc"), files.map { it.name }.sorted())
+            assertEquals(listOf(".mill-version", "build.mill"), files.map { it.name }.sorted())
         } finally {
             deleteRecursively(root)
         }
@@ -192,7 +190,7 @@ internal class MillProjectResolverSupportTest {
     fun `adds mill style source roots and excludes`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve("build.sc"), "// mill")
+            Files.writeString(root.resolve("build.mill"), "// mill")
             root.resolve("src").createDirectories()
             root.resolve("test/src").createDirectories()
             root.resolve(".bsp").createDirectories()
@@ -332,7 +330,7 @@ internal class MillProjectResolverSupportTest {
     fun `discovers modules from resolved targets and filesystem layout`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve("build.sc"), "// mill")
+            Files.writeString(root.resolve("build.mill"), "// mill")
             root.resolve("foo/src").createDirectories()
             root.resolve("foo/test/src").createDirectories()
             root.resolve("bar/src").createDirectories()
@@ -354,7 +352,7 @@ internal class MillProjectResolverSupportTest {
     fun `discovers modules from resolved targets without requiring filesystem layout`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve("build.sc"), "// mill")
+            Files.writeString(root.resolve("build.mill"), "// mill")
 
             val modules = MillModuleDiscovery.discoverModulesFromTargets(
                 root = root,
