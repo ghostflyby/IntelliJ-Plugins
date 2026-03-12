@@ -28,7 +28,7 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
-import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -68,15 +68,15 @@ internal object MillContentRootResolver {
         return sourceTargets.entries
             .asSequence()
             .flatMap { (targetName, sourceType) ->
-                MillShowTargetPathResolver.resolvePaths(
-                    root = module.projectRoot,
+                MillCommandLineUtil.showPaths(
+                    projectRoot = module.projectRoot,
                     settings = settings,
-                    taskId = taskId,
-                    listener = listener,
                     showTarget = module.queryTarget(targetName),
-                    failureContext = "content root resolution",
-                    reportFailures = false,
-                ).asSequence().map { sourceType to it }
+                ).also {
+                    if (!it.command.isSuccess) {
+                        it.command.reportFailure(taskId, listener, "content root resolution", reportFailures = false)
+                    }
+                }.value.asSequence().map { sourceType to it }
             }
             .filter { (_, path) -> Files.isDirectory(path) }
             .filter { (_, path) -> path.startsWith(module.projectRoot) }

@@ -27,8 +27,7 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
-import dev.ghostflyby.mill.command.MillPathQuerySupport
-import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 import java.nio.file.Path
 
 internal object MillExternalLibraryResolver {
@@ -43,17 +42,15 @@ internal object MillExternalLibraryResolver {
             module.queryTarget("resolvedIvyDeps"),
         )
         metadataTargets.forEach { showTarget ->
-            val paths = MillPathQuerySupport.filterBinaryLibraryPaths(
-                MillShowTargetPathResolver.resolvePaths(
-                    root = module.projectRoot,
-                    settings = settings,
-                    taskId = taskId,
-                    listener = listener,
-                    showTarget = showTarget,
-                    failureContext = "external library resolution",
-                    reportFailures = false,
-                ),
+            val result = MillCommandLineUtil.showBinaryPaths(
+                projectRoot = module.projectRoot,
+                settings = settings,
+                showTarget = showTarget,
             )
+            if (!result.command.isSuccess) {
+                result.command.reportFailure(taskId, listener, "external library resolution", reportFailures = false)
+            }
+            val paths = result.value
             if (paths.isNotEmpty()) {
                 MillImportDebugLogger.info(
                     "Module `${module.targetPrefix}` external libraries came from `$showTarget`: ${
@@ -65,16 +62,15 @@ internal object MillExternalLibraryResolver {
         }
 
         val fallbackTarget = module.queryTarget("compileClasspath")
-        val fallbackPaths = MillPathQuerySupport.filterBinaryLibraryPaths(
-            MillShowTargetPathResolver.resolvePaths(
-                root = module.projectRoot,
-                settings = settings,
-                taskId = taskId,
-                listener = listener,
-                showTarget = fallbackTarget,
-                failureContext = "compile classpath resolution",
-            ),
+        val fallbackResult = MillCommandLineUtil.showBinaryPaths(
+            projectRoot = module.projectRoot,
+            settings = settings,
+            showTarget = fallbackTarget,
         )
+        if (!fallbackResult.command.isSuccess) {
+            fallbackResult.command.reportFailure(taskId, listener, "compile classpath resolution")
+        }
+        val fallbackPaths = fallbackResult.value
         if (fallbackPaths.isNotEmpty()) {
             MillImportDebugLogger.warn(
                 "Module `${module.targetPrefix}` external libraries fell back to compileClasspath: ${

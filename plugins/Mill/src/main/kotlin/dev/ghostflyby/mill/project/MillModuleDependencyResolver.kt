@@ -25,7 +25,7 @@ package dev.ghostflyby.mill.project
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillExecutionSettings
-import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 
 internal object MillModuleDependencyResolver {
     fun resolveDependencyPrefixes(
@@ -39,15 +39,15 @@ internal object MillModuleDependencyResolver {
             return emptyList()
         }
         val knownModules = discoveredModules.associateBy { it.targetPrefix }
-        return MillShowTargetPathResolver.resolveStringValues(
-            root = module.projectRoot,
+        val result = MillCommandLineUtil.showStringValues(
+            projectRoot = module.projectRoot,
             settings = settings,
-            taskId = taskId,
-            listener = listener,
             showTarget = module.queryTarget("moduleDeps"),
-            failureContext = "module dependency resolution",
-            reportFailures = false,
-        ).asSequence()
+        )
+        if (!result.command.isSuccess) {
+            result.command.reportFailure(taskId, listener, "module dependency resolution", reportFailures = false)
+        }
+        return result.value.asSequence()
             .map(::normalizeDependencyPrefix)
             .filter(String::isNotBlank)
             .distinct()

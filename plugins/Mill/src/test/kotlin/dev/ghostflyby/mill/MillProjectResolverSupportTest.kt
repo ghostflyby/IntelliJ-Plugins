@@ -25,13 +25,10 @@ package dev.ghostflyby.mill
 import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
 import com.intellij.openapi.roots.DependencyScope
 import dev.ghostflyby.mill.command.MillCommandLineUtil
-import dev.ghostflyby.mill.command.MillPathQuerySupport
-import dev.ghostflyby.mill.command.MillShowTargetPathResolver
 import dev.ghostflyby.mill.project.MillDiscoveredModule
 import dev.ghostflyby.mill.project.MillModuleDependencyResolver
 import dev.ghostflyby.mill.project.MillModuleDiscovery
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
-import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
 import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -86,7 +83,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses java home from jvm show settings output`() {
-        val javaHome = MillModuleJdkResolver.parseJavaHome(
+        val javaHome = MillCommandLineUtil.parseJavaHome(
             """
             VM settings:
                 Max. Heap Size (Estimated): 29.97G
@@ -249,7 +246,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses compile classpath from mill show output`() {
-        val paths = MillPathQuerySupport.parsePathList(
+        val paths = MillCommandLineUtil.parsePathList(
             """["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]""",
         )
 
@@ -258,14 +255,14 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses escaped paths from mill show output`() {
-        val paths = MillPathQuerySupport.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
+        val paths = MillCommandLineUtil.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
 
         assertEquals(listOf("""C:\\Users\\me\\cache\\lib.jar"""), paths)
     }
 
     @Test
     fun `parses generic string lists from mill show output`() {
-        val values = MillShowTargetPathResolver.parseStringList(
+        val values = MillCommandLineUtil.parseStringList(
             """["foo","ref:/tmp/coursier/cache/a.jar","qux[2.13]"]""",
         )
 
@@ -274,7 +271,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses hashed path refs from mill show output`() {
-        val values = MillShowTargetPathResolver.parseStringList(
+        val values = MillCommandLineUtil.parseStringList(
             """
             ["ref:v0:8befb7a8:/tmp/coursier/cache/a.jar","qref:v1:feedbeef:C:\\Users\\me\\cache\\b.jar"]
             """.trimIndent(),
@@ -288,7 +285,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses single string mill show output`() {
-        val value = MillShowTargetPathResolver.parseSingleStringValue(""""2.13.16"""")
+        val value = MillCommandLineUtil.parseSingleStringValue(""""2.13.16"""")
 
         assertEquals("2.13.16", value)
     }
@@ -299,7 +296,7 @@ internal class MillProjectResolverSupportTest {
             ["ref:v0:70b0c2a0:/tmp/project/examples/src","qref:v1:acedc6f5:/tmp/cache/scala3-library.jar"]
         """.trimIndent()
 
-        val values = MillShowTargetPathResolver.parseStringList(output)
+        val values = MillCommandLineUtil.parseStringList(output)
 
         assertEquals(
             listOf("/tmp/project/examples/src", "/tmp/cache/scala3-library.jar"),
@@ -313,16 +310,15 @@ internal class MillProjectResolverSupportTest {
             "3.8.2"
         """.trimIndent()
 
-        val value = MillShowTargetPathResolver.parseSingleStringValue(output)
+        val value = MillCommandLineUtil.parseSingleStringValue(output)
 
         assertEquals("3.8.2", value)
     }
 
     @Test
     fun `parses resolved mill targets`() {
-        val targets = MillModuleDiscovery.parseResolvedTargets(
+        val targets = MillCommandLineUtil.parseResolvedTargets(
             """
-            [info] compiling
             foo.compile
             foo.test.compile
             bar.runBackground
