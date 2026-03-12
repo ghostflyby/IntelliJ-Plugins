@@ -22,7 +22,10 @@
 
 package dev.ghostflyby.mill
 
+import com.intellij.openapi.externalSystem.model.DataNode
+import com.intellij.openapi.externalSystem.model.ProjectKeys
 import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
+import com.intellij.openapi.externalSystem.model.task.TaskData
 import com.intellij.openapi.roots.DependencyScope
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillDiscoveredModule
@@ -580,6 +583,41 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `classifies task owner prefixes for mill task tree`() {
+        assertEquals(null, MillTaskViewStructure.ownerPrefix("__.compile"))
+        assertEquals(null, MillTaskViewStructure.ownerPrefix("show __.compileClasspath"))
+        assertEquals("foo", MillTaskViewStructure.ownerPrefix("foo.compile"))
+        assertEquals("foo.test", MillTaskViewStructure.ownerPrefix("foo.test.test"))
+        assertEquals("foo", MillTaskViewStructure.ownerPrefix("show foo.compileClasspath"))
+    }
+
+    @Test
+    fun `builds nested mill task owner tree for tool window`() {
+        val root = Path.of("/tmp/project")
+        val viewModel = MillTaskViewStructure.build(
+            projectName = "sample",
+            taskNodes = listOf(
+                taskNode(root, "__.compile", "build"),
+                taskNode(root, "foo.compile", "build"),
+                taskNode(root, "foo.test.test", "verification", isTest = true),
+                taskNode(root, "show foo.compileClasspath", "help"),
+            ),
+        )
+
+        assertEquals(listOf("__.compile"), viewModel.projectTasks.map { it.data.name })
+        assertEquals(listOf("foo"), viewModel.moduleOwners.map { it.displayName })
+        assertEquals(
+            listOf("foo.compile", "show foo.compileClasspath"),
+            viewModel.moduleOwners.single().tasks.map { it.data.name },
+        )
+        assertEquals(listOf("test"), viewModel.moduleOwners.single().children.map { it.displayName })
+        assertEquals(
+            listOf("foo.test.test"),
+            viewModel.moduleOwners.single().children.single().tasks.map { it.data.name },
+        )
+    }
+
+    @Test
     fun `builds mill command lines with jvm options before tasks`() {
         val command = MillCommandLineUtil.buildMillCommand(
             projectRoot = Path.of("/tmp/project"),
@@ -641,5 +679,26 @@ internal class MillProjectResolverSupportTest {
         Files.walk(root)
             .sorted(Comparator.reverseOrder())
             .forEach(Files::deleteIfExists)
+    }
+
+    private fun taskNode(
+        root: Path,
+        name: String,
+        group: String,
+        isTest: Boolean = false,
+    ): DataNode<TaskData> {
+        val taskData = TaskData(
+            MillConstants.systemId,
+            name,
+            root.toString(),
+            "Task $name",
+        ).apply {
+            this.group = group
+            type = "mill"
+            isJvm = true
+            setTest(isTest)
+            isJvmTest = isTest
+        }
+        return DataNode(ProjectKeys.TASK, taskData, null)
     }
 }
