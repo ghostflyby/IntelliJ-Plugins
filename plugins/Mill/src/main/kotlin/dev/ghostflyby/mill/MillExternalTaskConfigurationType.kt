@@ -22,14 +22,12 @@
 
 package dev.ghostflyby.mill
 
-import com.intellij.openapi.externalSystem.model.Key
-import com.intellij.openapi.externalSystem.model.project.AbstractExternalEntityData
+import com.intellij.openapi.externalSystem.service.execution.AbstractExternalSystemTaskConfigurationType
 
-internal class MillTasksData(
-    val projectName: String,
-) : AbstractExternalEntityData(MillConstants.systemId) {
-    companion object {
-        @JvmField
-        val key: Key<MillTasksData> = Key.create(MillTasksData::class.java, 227)
-    }
+internal class MillExternalTaskConfigurationType : AbstractExternalSystemTaskConfigurationType(MillConstants.systemId) {
+    override fun getConfigurationFactoryId(): String = "Mill"
+
+    override fun isDumbAware(): Boolean = true
+
+    override fun isEditableInDumbMode(): Boolean = true
 }

@@ -38,5 +38,7 @@
 - Fixed Mill local settings state initialization so project save no longer fails on the local settings component.
 - Added a Mill project-open processor so Mill project directories participate in the IDE project-open flow instead of
   only manual external-system linking.
+- Fixed Mill tool window task execution by registering a standard external-system task run configuration type and
+  routing imported tasks through IntelliJ's built-in `TASK` nodes.
 
 ### Security
