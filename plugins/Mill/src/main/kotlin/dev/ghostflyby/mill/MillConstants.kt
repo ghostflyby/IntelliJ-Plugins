@@ -41,7 +41,7 @@ public object MillConstants {
     public const val moduleFilesDirectory: String = ".idea/modules"
 
     @JvmField
-    public val projectFileNames: Set<String> = linkedSetOf("build.sc", "mill.sc", "build.mill", "build.mill.yaml")
+    public val projectFileNames: Set<String> = linkedSetOf("build.mill", "build.mill.yaml")
 
     @JvmField
     public val configFileNames: Set<String> = linkedSetOf(
