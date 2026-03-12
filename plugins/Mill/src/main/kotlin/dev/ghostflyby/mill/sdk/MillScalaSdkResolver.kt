@@ -28,8 +28,7 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotifica
 import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.MillScalaSdkData
-import dev.ghostflyby.mill.command.MillPathQuerySupport
-import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillDiscoveredModule
 
 internal object MillScalaSdkResolver {
@@ -39,15 +38,15 @@ internal object MillScalaSdkResolver {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): MillScalaSdkData? {
-        val scalaVersion = MillShowTargetPathResolver.resolveStringValue(
-            root = module.projectRoot,
+        val scalaVersionResult = MillCommandLineUtil.showStringValue(
+            projectRoot = module.projectRoot,
             settings = settings,
-            taskId = taskId,
-            listener = listener,
             showTarget = module.queryTarget("scalaVersion"),
-            failureContext = "Scala SDK resolution",
-            reportFailures = false,
-        ) ?: run {
+        )
+        if (!scalaVersionResult.command.isSuccess) {
+            scalaVersionResult.command.reportFailure(taskId, listener, "Scala SDK resolution", reportFailures = false)
+        }
+        val scalaVersion = scalaVersionResult.value ?: run {
             MillImportDebugLogger.info("Module `${module.targetPrefix}` has no scalaVersion metadata")
             return null
         }
@@ -84,15 +83,15 @@ internal object MillScalaSdkResolver {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
         suffix: String,
-    ) = MillPathQuerySupport.filterBinaryLibraryPaths(
-        MillShowTargetPathResolver.resolvePaths(
-            root = module.projectRoot,
+    ): List<java.nio.file.Path> {
+        val result = MillCommandLineUtil.showBinaryPaths(
+            projectRoot = module.projectRoot,
             settings = settings,
-            taskId = taskId,
-            listener = listener,
             showTarget = module.queryTarget(suffix),
-            failureContext = "Scala SDK resolution",
-            reportFailures = false,
-        ),
-    )
+        )
+        if (!result.command.isSuccess) {
+            result.command.reportFailure(taskId, listener, "Scala SDK resolution", reportFailures = false)
+        }
+        return result.value
+    }
 }

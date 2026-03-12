@@ -22,8 +22,6 @@
 
 package dev.ghostflyby.mill.project
 
-import com.intellij.execution.ExecutionException
-import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillConstants
@@ -41,61 +39,22 @@ internal object MillModuleDiscovery {
         listener: ExternalSystemTaskNotificationListener,
     ): List<String> {
         MillImportDebugLogger.info("Running `mill resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
-        val output = try {
-            MillCommandLineUtil.runCommand(root, settings, listOf("resolve", MillConstants.moduleDiscoveryQuery))
-        } catch (_: ExecutionException) {
+        val result = MillCommandLineUtil.resolveTargets(root, settings)
+        if (!result.command.isSuccess) {
             MillImportDebugLogger.warn(
-                "Mill process could not be started for `resolve ${MillConstants.moduleDiscoveryQuery}` in $root",
+                "`mill ${result.command.invocation}` failed in $root exitCode=${result.command.exitCode} " +
+                    "details=${MillImportDebugLogger.trim(result.command.failureDetails)}",
             )
-            listener.onTaskOutput(
-                taskId,
-                "Mill module discovery skipped because the Mill process could not be started.\n",
-                ProcessOutputType.STDERR,
-            )
+            result.command.reportFailure(taskId, listener, "module discovery")
             return emptyList()
         }
 
-        if (output.exitCode != 0) {
-            val details = output.stderr.ifBlank { output.stdout }.trim()
-            MillImportDebugLogger.warn(
-                "`mill resolve ${MillConstants.moduleDiscoveryQuery}` failed in $root exitCode=${output.exitCode} " +
-                    "details=${MillImportDebugLogger.trim(details)}",
-            )
-            listener.onTaskOutput(
-                taskId,
-                buildString {
-                    append(
-                        "Mill module discovery skipped because `resolve ${MillConstants.moduleDiscoveryQuery}` failed.",
-                    )
-                    if (details.isNotBlank()) {
-                        append('\n')
-                        append(details)
-                    }
-                    append('\n')
-                },
-                ProcessOutputType.STDERR,
-            )
-            return emptyList()
-        }
-
-        val targets = parseResolvedTargets(output.stdout)
         MillImportDebugLogger.warn(
-            "`mill resolve ${MillConstants.moduleDiscoveryQuery}` produced ${targets.size} target(s): " +
-                "${MillImportDebugLogger.sample(targets)}; " +
-                "raw=${MillImportDebugLogger.trim(output.stdout, 800)}",
+            "`mill ${result.command.invocation}` produced ${result.value.size} target(s): " +
+                "${MillImportDebugLogger.sample(result.value)}; " +
+                "raw=${MillImportDebugLogger.trim(result.command.stdout, 800)}",
         )
-        return targets
-    }
-
-    internal fun parseResolvedTargets(output: String): List<String> {
-        return output.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .filterNot { it.startsWith('[') }
-            .filterNot { it.startsWith("Loading") }
-            .filter { !it.contains(' ') }
-            .distinct()
-            .toList()
+        return result.value
     }
 
     internal fun discoverModulesFromTargets(
