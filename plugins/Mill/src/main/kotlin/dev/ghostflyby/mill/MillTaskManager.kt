@@ -31,6 +31,8 @@ import com.intellij.openapi.externalSystem.model.ExternalSystemException
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.task.ExternalSystemTaskManager
+import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.project.MillProjectResolverSupport
 import java.nio.file.Path
 
 internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings> {
@@ -79,26 +81,15 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
     override fun cancelTask(id: ExternalSystemTaskId, listener: ExternalSystemTaskNotificationListener): Boolean = false
 
     private fun createCommandLine(projectRoot: Path, settings: MillExecutionSettings): GeneralCommandLine {
-        val command = MillCommandLineUtil.buildMillCommand(
-            projectRoot = projectRoot,
-            executable = settings.millExecutablePath,
-            jvmOptionsText = settings.millJvmOptions,
-            arguments = settings.tasks.filter(String::isNotBlank) + settings.arguments.filter(String::isNotBlank),
-        )
-        if (command.size == 1) {
+        val arguments = settings.tasks.filter(String::isNotBlank) + settings.arguments.filter(String::isNotBlank)
+        if (arguments.isEmpty()) {
             throw ExternalSystemException("No Mill tasks were provided for execution.")
         }
-
-        return GeneralCommandLine(command)
-            .withWorkingDirectory(projectRoot)
-            .withEnvironment(settings.env)
-            .withParentEnvironmentType(
-                if (settings.isPassParentEnvs) {
-                    GeneralCommandLine.ParentEnvironmentType.CONSOLE
-                } else {
-                    GeneralCommandLine.ParentEnvironmentType.NONE
-                },
-            )
+        return MillCommandLineUtil.createCommandLine(
+            projectRoot = projectRoot,
+            settings = settings,
+            arguments = arguments,
+        )
     }
 
     private fun publishOutput(

@@ -36,6 +36,7 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Pair;
 import com.intellij.util.Function;
+import dev.ghostflyby.mill.project.MillProjectResolverSupport;
 import kotlinx.serialization.StringFormat;
 import kotlinx.serialization.json.Json;
 import org.jetbrains.annotations.NotNull;

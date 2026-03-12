@@ -32,6 +32,7 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.mill.project.MillProjectResolverSupport
 
 internal class MillReloadProjectAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {

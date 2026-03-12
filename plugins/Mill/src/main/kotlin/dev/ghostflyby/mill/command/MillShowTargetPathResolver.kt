@@ -20,14 +20,14 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.command
 
 import com.intellij.execution.ExecutionException
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.output.MillShowJsonSupport
 import java.nio.file.Path
 
@@ -104,7 +104,7 @@ internal object MillShowTargetPathResolver {
         reportFailures: Boolean,
     ) = try {
         MillImportDebugLogger.info("Running `mill show $showTarget` in $root")
-        val output = CapturingProcessHandler(createCommandLine(root, settings, showTarget)).runProcess()
+        val output = MillCommandLineUtil.runCommand(root, settings, listOf("show", showTarget))
         if (output.exitCode != 0) {
             MillImportDebugLogger.warn(
                 "`mill show $showTarget` failed in $root exitCode=${output.exitCode} details=${
@@ -141,29 +141,6 @@ internal object MillShowTargetPathResolver {
             )
         }
         null
-    }
-
-    private fun createCommandLine(
-        root: Path,
-        settings: MillExecutionSettings?,
-        showTarget: String,
-    ): GeneralCommandLine {
-        val command = MillCommandLineUtil.buildMillCommand(
-            projectRoot = root,
-            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
-            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
-            arguments = listOf("show", showTarget),
-        )
-        return GeneralCommandLine(command)
-            .withWorkingDirectory(root)
-            .withEnvironment(settings?.env ?: emptyMap())
-            .withParentEnvironmentType(
-                if (settings?.isPassParentEnvs != false) {
-                    GeneralCommandLine.ParentEnvironmentType.CONSOLE
-                } else {
-                    GeneralCommandLine.ParentEnvironmentType.NONE
-                },
-            )
     }
 
     private fun normalizeValue(value: String): String {
