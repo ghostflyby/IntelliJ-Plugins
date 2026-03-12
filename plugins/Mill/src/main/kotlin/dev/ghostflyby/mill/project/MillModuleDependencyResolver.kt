@@ -20,11 +20,12 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.project
 
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import java.nio.file.Path
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.command.MillShowTargetPathResolver
 
 internal object MillModuleDependencyResolver {
     fun resolveDependencyPrefixes(

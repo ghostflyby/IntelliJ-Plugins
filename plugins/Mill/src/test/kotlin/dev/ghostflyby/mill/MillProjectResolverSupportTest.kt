@@ -24,6 +24,15 @@ package dev.ghostflyby.mill
 
 import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
 import com.intellij.openapi.roots.DependencyScope
+import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.command.MillPathQuerySupport
+import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.project.MillDiscoveredModule
+import dev.ghostflyby.mill.project.MillModuleDependencyResolver
+import dev.ghostflyby.mill.project.MillModuleDiscovery
+import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
+import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -240,7 +249,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses compile classpath from mill show output`() {
-        val paths = MillClasspathResolver.parsePathList(
+        val paths = MillPathQuerySupport.parsePathList(
             """["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]""",
         )
 
@@ -249,7 +258,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses escaped paths from mill show output`() {
-        val paths = MillClasspathResolver.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
+        val paths = MillPathQuerySupport.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
 
         assertEquals(listOf("""C:\\Users\\me\\cache\\lib.jar"""), paths)
     }

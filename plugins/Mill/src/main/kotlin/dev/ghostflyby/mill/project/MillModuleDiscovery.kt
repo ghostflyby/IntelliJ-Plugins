@@ -20,14 +20,16 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.project
 
 import com.intellij.execution.ExecutionException
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import dev.ghostflyby.mill.MillConstants
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -40,7 +42,7 @@ internal object MillModuleDiscovery {
     ): List<String> {
         MillImportDebugLogger.info("Running `mill resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
         val output = try {
-            CapturingProcessHandler(createCommandLine(root, settings)).runProcess()
+            MillCommandLineUtil.runCommand(root, settings, listOf("resolve", MillConstants.moduleDiscoveryQuery))
         } catch (_: ExecutionException) {
             MillImportDebugLogger.warn(
                 "Mill process could not be started for `resolve ${MillConstants.moduleDiscoveryQuery}` in $root",
@@ -83,18 +85,6 @@ internal object MillModuleDiscovery {
                 "raw=${MillImportDebugLogger.trim(output.stdout, 800)}",
         )
         return targets
-    }
-
-    fun discoverModules(
-        root: Path,
-        projectName: String,
-        settings: MillExecutionSettings?,
-        taskId: ExternalSystemTaskId,
-        listener: ExternalSystemTaskNotificationListener,
-    ): List<MillDiscoveredModule> {
-        val resolvedTargets = resolveTargets(root, settings, taskId, listener)
-        val discoveredModules = discoverModulesFromTargets(root, projectName, resolvedTargets)
-        return if (discoveredModules.isEmpty()) fallbackModules(root, projectName) else discoveredModules
     }
 
     internal fun parseResolvedTargets(output: String): List<String> {
@@ -191,36 +181,6 @@ internal object MillModuleDiscovery {
         }
     }
 
-    private fun createCommandLine(root: Path, settings: MillExecutionSettings?): GeneralCommandLine {
-        val command = MillCommandLineUtil.buildMillCommand(
-            projectRoot = root,
-            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
-            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
-            arguments = listOf("resolve", MillConstants.moduleDiscoveryQuery),
-        )
-        return GeneralCommandLine(command)
-            .withWorkingDirectory(root)
-            .withEnvironment(settings?.env ?: emptyMap())
-            .withParentEnvironmentType(
-                if (settings?.isPassParentEnvs != false) {
-                    GeneralCommandLine.ParentEnvironmentType.CONSOLE
-                } else {
-                    GeneralCommandLine.ParentEnvironmentType.NONE
-                },
-            )
-    }
-
-    private fun fallbackModules(root: Path, projectName: String): List<MillDiscoveredModule> {
-        return listOf(
-            MillDiscoveredModule(
-                displayName = projectName,
-                targetPrefix = MillConstants.rootModulePrefix,
-                projectRoot = root,
-                directory = root,
-            ),
-        )
-    }
-
     private fun guessModuleDirectory(root: Path, targetPrefix: String): Path {
         val candidate = root.resolve(targetPrefix.replace('.', '/')).normalize()
         return if (candidate.startsWith(root)) candidate else root
@@ -232,20 +192,5 @@ internal object MillModuleDiscovery {
         }
 
         return MillProjectResolverSupport.moduleContentDirectoryNames.any { Files.isDirectory(directory.resolve(it)) }
-    }
-}
-
-internal data class MillDiscoveredModule(
-    val displayName: String,
-    val targetPrefix: String,
-    val projectRoot: Path,
-    val directory: Path,
-    val productionModulePrefix: String? = null,
-) {
-    val isTestModule: Boolean
-        get() = productionModulePrefix != null || targetPrefix.endsWith(".test")
-
-    fun queryTarget(suffix: String): String {
-        return if (targetPrefix == MillConstants.rootModulePrefix) suffix else "$targetPrefix.$suffix"
     }
 }

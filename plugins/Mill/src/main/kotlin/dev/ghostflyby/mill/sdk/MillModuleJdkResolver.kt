@@ -20,16 +20,13 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.sdk
 
 import com.intellij.execution.ExecutionException
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.CapturingProcessHandler
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import java.nio.file.Path
-
-internal const val MillModuleJdkHomeProperty: String = "mill.jdk.home"
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
+import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.project.MillDiscoveredModule
 
 internal object MillModuleJdkResolver {
     fun resolve(
@@ -51,15 +48,12 @@ internal object MillModuleJdkResolver {
         module: MillDiscoveredModule,
         settings: MillExecutionSettings?,
     ): String? {
-        val command = MillCommandLineUtil.buildMillCommand(
-            projectRoot = module.projectRoot,
-            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
-            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
-            arguments = listOf(module.queryTarget("java"), "-XshowSettings:properties", "-version"),
-        )
+        val arguments = listOf(module.queryTarget("java"), "-XshowSettings:properties", "-version")
         return try {
-            MillImportDebugLogger.info("Running `${command.joinToString(" ")}` in ${module.projectRoot}")
-            val output = CapturingProcessHandler(createCommandLine(module.projectRoot, settings, command)).runProcess()
+            MillImportDebugLogger.info(
+                "Running `${MillCommandLineUtil.createCommandLine(module.projectRoot, settings, arguments).commandLineString}` in ${module.projectRoot}",
+            )
+            val output = MillCommandLineUtil.runCommand(module.projectRoot, settings, arguments)
             if (output.exitCode != 0) {
                 MillImportDebugLogger.warn(
                     "Module `${module.targetPrefix}` JDK resolution failed exitCode=${output.exitCode} details=${
@@ -84,44 +78,5 @@ internal object MillModuleJdkResolver {
                     .takeIf(String::isNotBlank)
                     ?: line.substringAfter("java.home=", missingDelimiterValue = "").takeIf(String::isNotBlank)
             }
-    }
-
-    private fun createCommandLine(
-        root: Path,
-        settings: MillExecutionSettings?,
-        command: List<String>,
-    ): GeneralCommandLine {
-        return GeneralCommandLine(command)
-            .withWorkingDirectory(root)
-            .withEnvironment(settings?.env ?: emptyMap())
-            .withParentEnvironmentType(
-                if (settings?.isPassParentEnvs != false) {
-                    GeneralCommandLine.ParentEnvironmentType.CONSOLE
-                } else {
-                    GeneralCommandLine.ParentEnvironmentType.NONE
-                },
-            )
-    }
-}
-
-internal object MillModuleJdkSupport {
-    fun normalizeJdkHomePath(rawValue: String?): String? {
-        val pathValue = rawValue?.trim()?.takeIf(String::isNotBlank) ?: return null
-        return runCatching { Path.of(pathValue).toAbsolutePath().normalize().toString() }.getOrNull()
-    }
-
-    fun createUniqueSdkName(baseName: String, existingNames: Set<String>): String {
-        if (baseName !in existingNames) {
-            return baseName
-        }
-
-        var suffix = 2
-        while (true) {
-            val candidate = "$baseName ($suffix)"
-            if (candidate !in existingNames) {
-                return candidate
-            }
-            suffix += 1
-        }
     }
 }

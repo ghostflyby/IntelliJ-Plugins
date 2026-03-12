@@ -20,37 +20,21 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.command
 
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import java.nio.file.Files
 import java.nio.file.Path
 
-internal object MillClasspathResolver {
-    internal fun parsePathList(output: String): List<String> = MillShowTargetPathResolver.parsePathList(output)
-
-    fun resolveBinaryLibraryPaths(
-        root: Path,
-        settings: MillExecutionSettings?,
-        taskId: ExternalSystemTaskId,
-        listener: ExternalSystemTaskNotificationListener,
-        classpathTarget: String = "__.compileClasspath",
-    ): List<Path> {
-        return MillShowTargetPathResolver.resolvePaths(
-            root = root,
-            settings = settings,
-            taskId = taskId,
-            listener = listener,
-            showTarget = classpathTarget,
-            failureContext = "dependency resolution",
-        )
-            .asSequence()
+internal object MillPathQuerySupport {
+    internal fun filterBinaryLibraryPaths(paths: Iterable<Path>): List<Path> {
+        return paths.asSequence()
             .filter(Files::isRegularFile)
             .filter(::isBinaryLibraryPath)
             .distinct()
             .toList()
     }
+
+    internal fun parsePathList(output: String): List<String> = MillShowTargetPathResolver.parsePathList(output)
 
     private fun isBinaryLibraryPath(path: Path): Boolean {
         val fileName = path.fileName?.toString().orEmpty().lowercase()

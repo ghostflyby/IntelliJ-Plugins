@@ -20,9 +20,15 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.command
 
+import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.process.CapturingProcessHandler
+import com.intellij.execution.process.ProcessOutput
 import com.intellij.util.execution.ParametersListUtil
+import dev.ghostflyby.mill.MillConstants
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -79,6 +85,35 @@ internal object MillCommandLineUtil {
             .map(String::trim)
             .filter(String::isNotEmpty)
     }
+
+    internal fun createCommandLine(
+        projectRoot: Path,
+        settings: MillExecutionSettings?,
+        arguments: List<String>,
+    ): GeneralCommandLine {
+        val command = buildMillCommand(
+            projectRoot = projectRoot,
+            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
+            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
+            arguments = arguments,
+        )
+        return GeneralCommandLine(command)
+            .withWorkingDirectory(projectRoot)
+            .withEnvironment(settings?.env ?: emptyMap())
+            .withParentEnvironmentType(
+                if (settings?.isPassParentEnvs != false) {
+                    GeneralCommandLine.ParentEnvironmentType.CONSOLE
+                } else {
+                    GeneralCommandLine.ParentEnvironmentType.NONE
+                },
+            )
+    }
+
+    internal fun runCommand(
+        projectRoot: Path,
+        settings: MillExecutionSettings?,
+        arguments: List<String>,
+    ): ProcessOutput = CapturingProcessHandler(createCommandLine(projectRoot, settings, arguments)).runProcess()
 
     private fun discoverWrapper(projectRoot: Path): Path? {
         val candidates = buildList {

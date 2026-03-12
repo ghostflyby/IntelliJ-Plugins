@@ -20,12 +20,15 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.project
 
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import java.nio.file.Files
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
+import dev.ghostflyby.mill.command.MillPathQuerySupport
+import dev.ghostflyby.mill.command.MillShowTargetPathResolver
 import java.nio.file.Path
 
 internal object MillExternalLibraryResolver {
@@ -40,19 +43,17 @@ internal object MillExternalLibraryResolver {
             module.queryTarget("resolvedIvyDeps"),
         )
         metadataTargets.forEach { showTarget ->
-            val paths = MillShowTargetPathResolver.resolvePaths(
-                root = module.projectRoot,
-                settings = settings,
-                taskId = taskId,
-                listener = listener,
-                showTarget = showTarget,
-                failureContext = "external library resolution",
-                reportFailures = false,
-            ).asSequence()
-                .filter(Files::isRegularFile)
-                .filter(::isBinaryLibraryPath)
-                .distinct()
-                .toList()
+            val paths = MillPathQuerySupport.filterBinaryLibraryPaths(
+                MillShowTargetPathResolver.resolvePaths(
+                    root = module.projectRoot,
+                    settings = settings,
+                    taskId = taskId,
+                    listener = listener,
+                    showTarget = showTarget,
+                    failureContext = "external library resolution",
+                    reportFailures = false,
+                ),
+            )
             if (paths.isNotEmpty()) {
                 MillImportDebugLogger.info(
                     "Module `${module.targetPrefix}` external libraries came from `$showTarget`: ${
@@ -63,12 +64,16 @@ internal object MillExternalLibraryResolver {
             }
         }
 
-        val fallbackPaths = MillClasspathResolver.resolveBinaryLibraryPaths(
-            root = module.projectRoot,
-            settings = settings,
-            taskId = taskId,
-            listener = listener,
-            classpathTarget = module.queryTarget("compileClasspath"),
+        val fallbackTarget = module.queryTarget("compileClasspath")
+        val fallbackPaths = MillPathQuerySupport.filterBinaryLibraryPaths(
+            MillShowTargetPathResolver.resolvePaths(
+                root = module.projectRoot,
+                settings = settings,
+                taskId = taskId,
+                listener = listener,
+                showTarget = fallbackTarget,
+                failureContext = "compile classpath resolution",
+            ),
         )
         if (fallbackPaths.isNotEmpty()) {
             MillImportDebugLogger.warn(
@@ -85,10 +90,5 @@ internal object MillExternalLibraryResolver {
             MillImportDebugLogger.warn("Module `${module.targetPrefix}` resolved no external libraries from metadata or compileClasspath")
         }
         return fallbackPaths
-    }
-
-    private fun isBinaryLibraryPath(path: Path): Boolean {
-        val fileName = path.fileName?.toString().orEmpty().lowercase()
-        return fileName.endsWith(".jar") || fileName.endsWith(".zip")
     }
 }
