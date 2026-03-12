@@ -292,12 +292,12 @@ internal object MillCommandLineUtil {
         output = output,
         strategy = ListSerializer(String.serializer()),
     ).orEmpty()
-        .map(::normalizeValue)
+        .map(::normalizeOutputValue)
 
     internal fun parseSingleStringValue(output: String): String? = decodeOutputOrNull(
         output = output,
         strategy = String.serializer(),
-    )?.let(::normalizeValue)
+    )?.let(::normalizeOutputValue)
 
     internal fun parseJavaHome(output: String): String? {
         return output.lineSequence()
@@ -333,7 +333,7 @@ internal object MillCommandLineUtil {
         return runCatching { json.decodeFromString(strategy, trimmed) }.getOrNull()
     }
 
-    private fun normalizeValue(value: String): String {
+    internal fun normalizeOutputValue(value: String): String {
         if (value.startsWith("/") || windowsPathPattern.matches(value)) {
             return value
         }

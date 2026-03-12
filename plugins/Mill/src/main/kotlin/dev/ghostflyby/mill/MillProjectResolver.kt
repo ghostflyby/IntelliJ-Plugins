@@ -35,6 +35,7 @@ import dev.ghostflyby.mill.project.MillExternalLibraryResolver
 import dev.ghostflyby.mill.project.MillModuleDependencyResolver
 import dev.ghostflyby.mill.project.MillModuleDiscovery
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.script.MillBuildScriptModuleResolver
 import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
 import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
 import dev.ghostflyby.mill.sdk.MillScalaSdkResolver
@@ -63,6 +64,17 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             progressReporter.progress(40, "Building Mill project model")
             val projectData = MillProjectResolverSupport.buildProjectData(root)
             val projectNode = DataNode(ProjectKeys.PROJECT, projectData, null)
+            MillModuleJdkResolver.resolve(
+                module = MillDiscoveredModule(
+                    displayName = projectData.externalName,
+                    targetPrefix = MillConstants.rootModulePrefix,
+                    projectRoot = root,
+                    directory = root,
+                ),
+                settings = settings,
+            )?.let { jdkHomePath ->
+                projectNode.createChild(MillProjectJdkData.key, MillProjectJdkData(jdkHomePath))
+            }
 
             progressReporter.progress(55, "Discovering Mill modules")
             val resolvedTargets = MillModuleDiscovery.resolveTargets(root, settings, id, listener)
@@ -120,6 +132,36 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 )
             }
 
+            val buildScriptImport = MillBuildScriptModuleResolver.resolve(root)
+            val buildScriptLibraryCount = buildScriptImport?.libraryPaths?.size ?: 0
+            val buildScriptModuleNode = buildScriptImport?.let {
+                val moduleData = MillProjectResolverSupport.buildModuleData(
+                    projectRoot = root,
+                    moduleDir = it.module.directory,
+                    moduleName = it.module.displayName,
+                )
+                val moduleNode = projectNode.createChild(ProjectKeys.MODULE, moduleData)
+                moduleNode.createChild(ProjectKeys.CONTENT_ROOT, it.contentRoot)
+                it.libraryPaths.forEach { path ->
+                    moduleNode.createChild(
+                        ProjectKeys.LIBRARY_DEPENDENCY,
+                        MillProjectResolverSupport.buildLibraryDependency(moduleData, path),
+                    )
+                }
+                it.scalaSdkData?.let { scalaSdkData ->
+                    moduleNode.createChild(MillScalaSdkData.key, scalaSdkData)
+                }
+                it.jdkHomePath?.let { jdkHomePath ->
+                    moduleData.setProperty(MillModuleJdkHomeProperty, jdkHomePath)
+                }
+                MillImportDebugLogger.info(
+                    "Created build script module `${it.module.targetPrefix}` " +
+                        "with ${it.libraryPaths.size} librar" +
+                        if (it.libraryPaths.size == 1) "y" else "ies",
+                )
+                moduleNode
+            }
+
             progressReporter.progress(82, "Resolving Mill external libraries")
             var libraryCount = 0
             moduleNodes.forEach { (module, node) ->
@@ -161,6 +203,9 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     node.data.setProperty(MillModuleJdkHomeProperty, jdkHomePath)
                 }
             }
+            if (buildScriptModuleNode != null) {
+                libraryCount += buildScriptLibraryCount
+            }
 
             progressReporter.progress(90, "Collecting Mill tasks")
             val tasks = if (settings?.createPerModuleTaskNodes == false) {
@@ -182,14 +227,15 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                             root.fileName?.toString().orEmpty().ifBlank { "Mill" }
                         }.",
                     )
-                    append(" Imported ${moduleNodes.size} modules.")
+                    append(" Imported ${moduleNodes.size + if (buildScriptModuleNode == null) 0 else 1} modules.")
                     if (libraryCount > 0) append(" Imported $libraryCount external libraries.")
                     append('\n')
                 },
                 ProcessOutputType.STDOUT,
             )
             MillImportDebugLogger.info(
-                "Resolver finished successfully with modules=${moduleNodes.size} libraries=$libraryCount tasks=${tasks.size}",
+                "Resolver finished successfully with modules=${moduleNodes.size + if (buildScriptModuleNode == null) 0 else 1} " +
+                    "libraries=$libraryCount tasks=${tasks.size}",
             )
             progressReporter.finished("Mill import finished")
             projectNode

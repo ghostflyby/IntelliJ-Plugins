@@ -104,13 +104,30 @@ public object MillProjectResolverSupport {
 
     @JvmStatic
     public fun buildContentRoot(root: Path, sourceRoots: Collection<Pair<ExternalSystemSourceType, Path>>): ContentRootData {
+        return buildContentRoot(root, sourceRoots, detectExcludedRoots(root))
+    }
+
+    @JvmStatic
+    public fun buildBuildScriptContentRoot(root: Path, generatedSourceRoots: Collection<Path>): ContentRootData {
+        return buildContentRoot(
+            root = root,
+            sourceRoots = generatedSourceRoots.map { ExternalSystemSourceType.SOURCE_GENERATED to it },
+            excludedRoots = detectExcludedRoots(root, includeOutputRoot = false),
+        )
+    }
+
+    private fun buildContentRoot(
+        root: Path,
+        sourceRoots: Collection<Pair<ExternalSystemSourceType, Path>>,
+        excludedRoots: Collection<Path>,
+    ): ContentRootData {
         return ContentRootData(MillConstants.systemId, root.toString()).apply {
             sourceRoots
                 .distinct()
                 .forEach { (type, path) ->
                     storePath(type, path.toString())
                 }
-            detectExcludedRoots(root).forEach { path ->
+            excludedRoots.forEach { path ->
                 storePath(ExternalSystemSourceType.EXCLUDED, path.toString())
             }
         }
@@ -240,10 +257,22 @@ public object MillProjectResolverSupport {
             .map { it.value to it.key }
     }
 
-    private fun detectExcludedRoots(root: Path): List<Path> {
-        return listOf(".idea", ".bsp", ".mill-ammonite", "out", "target")
+    private fun detectExcludedRoots(root: Path, includeOutputRoot: Boolean = true): List<Path> {
+        return excludedRootNames(includeOutputRoot)
             .map(root::resolve)
             .filter(Files::isDirectory)
+    }
+
+    private fun excludedRootNames(includeOutputRoot: Boolean): List<String> {
+        return buildList {
+            add(".idea")
+            add(".bsp")
+            add(".mill-ammonite")
+            if (includeOutputRoot) {
+                add("out")
+            }
+            add("target")
+        }
     }
 
     private fun createDefaultTaskData(root: Path): List<TaskData> {
