@@ -34,6 +34,7 @@ import dev.ghostflyby.mill.project.MillDiscoveredModule
 import dev.ghostflyby.mill.project.MillExternalLibraryResolver
 import dev.ghostflyby.mill.project.MillModuleDependencyResolver
 import dev.ghostflyby.mill.project.MillModuleDiscovery
+import dev.ghostflyby.mill.project.MillModuleOutputResolver
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
 import dev.ghostflyby.mill.script.MillBuildScriptModuleResolver
 import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
@@ -96,6 +97,9 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     moduleDir = module.directory,
                     moduleName = module.displayName,
                 )
+                MillModuleOutputResolver.resolveModuleOutputs(module, settings, id, listener)?.let { outputs ->
+                    MillModuleOutputResolver.applyModuleOutputs(moduleData, module, outputs)
+                }
                 val moduleNode = projectNode.createChild(ProjectKeys.MODULE, moduleData)
                 moduleNode.createChild(
                     ProjectKeys.CONTENT_ROOT,
