@@ -172,8 +172,8 @@ public object MillProjectResolverSupport {
             .forEach { target ->
                 val targetPrefix = target.substringBeforeLast('.', missingDelimiterValue = "")
                 val module = modulesByPrefix[targetPrefix]
-                val (description, group, isTest) = describeTask(target, module)
-                tasks.putIfAbsent(target, task(root, target, description, group, isTest))
+                val (description, isTest) = describeTask(target, module)
+                tasks.putIfAbsent(target, task(root, target, description, isTest = isTest))
             }
 
         discoveredModules.forEach { module ->
@@ -185,7 +185,6 @@ public object MillProjectResolverSupport {
                     root = root,
                     name = "show $compileClasspathTarget",
                     description = "Print the compile classpath for $moduleLabel",
-                    group = "help",
                 ),
             )
         }
@@ -281,12 +280,11 @@ public object MillProjectResolverSupport {
                 root,
                 "resolve ${MillConstants.moduleDiscoveryQuery}",
                 "Resolve available Mill targets under ${MillConstants.moduleDiscoveryQuery}",
-                group = "help",
             ),
-            task(root, "__.compile", "Compile all Mill modules", group = "build"),
-            task(root, "__.test", "Run tests for all Mill modules", group = "verification", isTest = true),
-            task(root, "__.runBackground", "Run the default background target", group = "application"),
-            task(root, "show __.compileClasspath", "Print the aggregate compile classpath", group = "help"),
+            task(root, "__.compile", "Compile all Mill modules"),
+            task(root, "__.test", "Run tests for all Mill modules", isTest = true),
+            task(root, "__.runBackground", "Run the default background target"),
+            task(root, "show __.compileClasspath", "Print the aggregate compile classpath"),
         )
     }
 
@@ -300,15 +298,15 @@ public object MillProjectResolverSupport {
     private fun describeTask(
         target: String,
         module: MillDiscoveredModule?,
-    ): Triple<String, String, Boolean> {
+    ): Pair<String, Boolean> {
         val action = target.substringAfterLast('.', missingDelimiterValue = target)
         val moduleLabel = presentableModuleLabel(module)
         return when (action) {
-            "compile" -> Triple("Compile $moduleLabel", "build", false)
-            "test" -> Triple("Run tests for $moduleLabel", "verification", true)
-            "run", "runBackground" -> Triple("Run $moduleLabel", "application", false)
-            "assembly", "jar" -> Triple("Build an artifact for $moduleLabel", "build", false)
-            else -> Triple("Run $target", "other", false)
+            "compile" -> "Compile $moduleLabel" to false
+            "test" -> "Run tests for $moduleLabel" to true
+            "run", "runBackground" -> "Run $moduleLabel" to false
+            "assembly", "jar" -> "Build an artifact for $moduleLabel" to false
+            else -> "Run $target" to false
         }
     }
 
@@ -324,7 +322,6 @@ public object MillProjectResolverSupport {
         root: Path,
         name: String,
         description: String,
-        group: String,
         isTest: Boolean = false,
     ): TaskData {
         return TaskData(
@@ -333,7 +330,6 @@ public object MillProjectResolverSupport {
             root.toString(),
             description,
         ).apply {
-            this.group = group
             type = "mill"
             isJvm = true
             setTest(isTest)

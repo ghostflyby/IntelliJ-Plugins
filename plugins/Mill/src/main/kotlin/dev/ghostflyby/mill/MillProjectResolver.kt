@@ -218,8 +218,9 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets)
             }
             MillImportDebugLogger.info("Created ${tasks.size} task node(s)")
+            val tasksNode = projectNode.createChild(MillTasksData.key, MillTasksData)
             tasks.forEach { task ->
-                projectNode.createChild(ProjectKeys.TASK, task)
+                tasksNode.createChild(ProjectKeys.TASK, task)
             }
 
             progressReporter.progress(100, "Finalizing Mill import")

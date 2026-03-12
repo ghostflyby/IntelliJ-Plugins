@@ -39,12 +39,20 @@
         <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>
     </extensions>
     <actions>
+        <group id="dev.ghostflyby.mill.taskMenu" popup="true"/>
         <action
                 id="dev.ghostflyby.mill.linkProject"
                 class="dev.ghostflyby.mill.MillLinkProjectAction"
                 text="Link Mill Project"
                 description="Link the current Mill build into the Mill external-system tool window">
             <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+        <action
+                id="dev.ghostflyby.mill.runTask"
+                class="dev.ghostflyby.mill.MillRunTaskAction"
+                text="Run"
+                description="Run the selected Mill task">
+            <add-to-group group-id="dev.ghostflyby.mill.taskMenu" anchor="first"/>
         </action>
         <action
                 id="dev.ghostflyby.mill.reloadProject"

@@ -2,24 +2,24 @@
 
 ## Summary
 
-The Mill plugin exposes tasks through the standard IntelliJ External System
-task pipeline so the `Mill` tool window behaves like `Gradle` for task
-execution.
+The Mill plugin exposes a dedicated task tree in the `Mill` tool window while
+still running tasks through IntelliJ's external-system execution pipeline.
 
 ## What Changed
 
-- The project resolver attaches imported Mill tasks directly as
-  `ProjectKeys.TASK` children of the external project node.
-- The Mill external-system view contributor only customizes task display names;
-  task tree rendering is delegated to IntelliJ's built-in `TasksNode` /
-  `TaskNode` implementation.
-- Mill registers an external-system task run configuration type so
-  `ExternalSystem.RunTask` can create an execution environment for Mill tasks.
+- The project resolver stores imported Mill tasks under a Mill-specific
+  `MillTasksData` node.
+- The Mill tool window renders tasks by splitting the original task name on
+  `.` and building a nested path tree from the raw segments.
+- No synthetic task groups or display-name rewriting are applied.
+- Mill registers an external-system task run configuration type so both the
+  custom `Run` action and double-click execution can create an execution
+  environment for Mill tasks.
 
 ## Why
 
-- Match Gradle's execution path instead of maintaining a parallel custom task
-  tree.
-- Preserve built-in double-click and context-menu task execution.
-- Keep task execution routed through IntelliJ's standard external-system run
+- Keep the original Mill task names visible instead of inventing Gradle-like
+  groups.
+- Make long Mill task names easier to scan by using their natural dotted path.
+- Preserve task execution on top of IntelliJ's standard external-system run
   configuration flow.
