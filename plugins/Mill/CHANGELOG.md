@@ -16,8 +16,9 @@
 - Direct Mill inter-module dependency import from `show <module>.moduleDeps` where discovered modules can be matched.
 - External library import from Mill dependency metadata via `resolvedMvnDeps` / `resolvedIvyDeps`, with `compileClasspath` as fallback.
 - Scala SDK import for Scala Mill modules using Mill metadata-backed Scala classpaths.
+- `build.mill` editing support with Scala file recognition and Mill script resolve/completion roots.
 - Per-module task nodes for actionable resolved targets such as `compile`, `test`, and `runBackground`.
-- A `Reload Mill Project` action under `Tools` for refreshing linked Mill imports on demand.
+- A `Reload Mill Project` action under `Build` for refreshing linked Mill imports on demand.
 - Structured progress events for Mill project import.
 - A Mill Project Settings page under `Build Tools`.
 - Standard unlinked-project detection so Mill projects can surface the IDE import prompt after open.
