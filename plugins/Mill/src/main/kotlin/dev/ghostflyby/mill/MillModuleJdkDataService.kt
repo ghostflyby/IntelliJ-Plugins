@@ -38,6 +38,8 @@ import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFileManager
+import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
+import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import java.nio.file.Path
 import kotlin.io.path.exists
 

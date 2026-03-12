@@ -29,6 +29,15 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.project.ExternalSystemProjectResolver
+import dev.ghostflyby.mill.project.MillContentRootResolver
+import dev.ghostflyby.mill.project.MillDiscoveredModule
+import dev.ghostflyby.mill.project.MillExternalLibraryResolver
+import dev.ghostflyby.mill.project.MillModuleDependencyResolver
+import dev.ghostflyby.mill.project.MillModuleDiscovery
+import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
+import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
+import dev.ghostflyby.mill.sdk.MillScalaSdkResolver
 import java.nio.file.Path
 
 internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecutionSettings> {

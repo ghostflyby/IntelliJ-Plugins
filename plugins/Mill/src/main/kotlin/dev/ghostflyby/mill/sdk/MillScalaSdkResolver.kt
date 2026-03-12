@@ -20,12 +20,17 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.sdk
 
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import java.nio.file.Files
+import dev.ghostflyby.mill.MillExecutionSettings
+import dev.ghostflyby.mill.MillImportDebugLogger
+import dev.ghostflyby.mill.MillScalaSdkData
+import dev.ghostflyby.mill.command.MillPathQuerySupport
+import dev.ghostflyby.mill.command.MillShowTargetPathResolver
+import dev.ghostflyby.mill.project.MillDiscoveredModule
 
 internal object MillScalaSdkResolver {
     fun resolve(
@@ -79,22 +84,15 @@ internal object MillScalaSdkResolver {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
         suffix: String,
-    ) = MillShowTargetPathResolver.resolvePaths(
-        root = module.projectRoot,
-        settings = settings,
-        taskId = taskId,
-        listener = listener,
-        showTarget = module.queryTarget(suffix),
-        failureContext = "Scala SDK resolution",
-        reportFailures = false,
-    ).asSequence()
-        .filter(Files::isRegularFile)
-        .filter(::isBinaryLibraryPath)
-        .distinct()
-        .toList()
-
-    private fun isBinaryLibraryPath(path: java.nio.file.Path): Boolean {
-        val fileName = path.fileName?.toString().orEmpty().lowercase()
-        return fileName.endsWith(".jar") || fileName.endsWith(".zip")
-    }
+    ) = MillPathQuerySupport.filterBinaryLibraryPaths(
+        MillShowTargetPathResolver.resolvePaths(
+            root = module.projectRoot,
+            settings = settings,
+            taskId = taskId,
+            listener = listener,
+            showTarget = module.queryTarget(suffix),
+            failureContext = "Scala SDK resolution",
+            reportFailures = false,
+        ),
+    )
 }

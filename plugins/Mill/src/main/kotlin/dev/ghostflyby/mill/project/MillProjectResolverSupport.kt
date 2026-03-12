@@ -20,12 +20,21 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.project
 
 import com.intellij.openapi.externalSystem.model.ExternalSystemException
-import com.intellij.openapi.externalSystem.model.project.*
+import com.intellij.openapi.externalSystem.model.project.ContentRootData
+import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
+import com.intellij.openapi.externalSystem.model.project.LibraryData
+import com.intellij.openapi.externalSystem.model.project.LibraryDependencyData
+import com.intellij.openapi.externalSystem.model.project.LibraryLevel
+import com.intellij.openapi.externalSystem.model.project.LibraryPathType
+import com.intellij.openapi.externalSystem.model.project.ModuleData
+import com.intellij.openapi.externalSystem.model.project.ModuleDependencyData
+import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.model.task.TaskData
 import com.intellij.openapi.roots.DependencyScope
+import dev.ghostflyby.mill.MillConstants
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -99,8 +108,8 @@ public object MillProjectResolverSupport {
             sourceRoots
                 .distinct()
                 .forEach { (type, path) ->
-                storePath(type, path.toString())
-            }
+                    storePath(type, path.toString())
+                }
             detectExcludedRoots(root).forEach { path ->
                 storePath(ExternalSystemSourceType.EXCLUDED, path.toString())
             }
