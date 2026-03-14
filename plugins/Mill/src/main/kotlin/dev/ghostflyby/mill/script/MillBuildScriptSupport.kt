@@ -25,15 +25,10 @@ package dev.ghostflyby.mill.script
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mill.MillConstants
-import dev.ghostflyby.mill.MillSettings
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import dev.ghostflyby.mill.settings.MillSettings
+import kotlinx.serialization.json.*
 import java.nio.file.Files
 import java.nio.file.Path
 

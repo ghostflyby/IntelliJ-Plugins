@@ -28,14 +28,16 @@ import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import com.intellij.util.execution.ParametersListUtil
 import dev.ghostflyby.mill.MillConstants
-import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
+import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
+import dev.ghostflyby.mill.settings.MillExecutableSource
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -88,6 +90,18 @@ internal data class MillCommandValueResult<T>(
     val value: T,
 )
 
+internal data class MillExecutableProbeResult(
+    val resolvedExecutable: String,
+    val isValid: Boolean,
+    val version: String?,
+    val errorDetails: String?,
+)
+
+internal data class MillExecutableDiscovery(
+    val projectWrapper: Path?,
+    val pathExecutables: List<Path>,
+)
+
 internal object MillCommandLineUtil {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -96,55 +110,94 @@ internal object MillCommandLineUtil {
 
     fun buildMillCommand(
         projectRoot: Path,
-        executable: String,
-        jvmOptionsText: String,
+        executableSource: MillExecutableSource,
+        executablePath: String,
         arguments: List<String>,
     ): List<String> {
-        val resolvedExecutable = resolveExecutable(projectRoot, executable)
+        val resolvedExecutable = resolveExecutable(projectRoot, executableSource, executablePath)
         return buildList {
             add(resolvedExecutable)
-            addAll(parseOptions(jvmOptionsText))
             addAll(arguments.filter(String::isNotBlank))
         }
     }
 
-    internal fun resolveExecutable(projectRoot: Path, configuredExecutable: String): String {
-        val rawExecutable = configuredExecutable.trim()
-        if (rawExecutable.isNotEmpty()) {
-            val configuredPath = runCatching { Path.of(rawExecutable) }.getOrNull()
-            if (configuredPath != null) {
-                if (configuredPath.isAbsolute) {
-                    val resolved = configuredPath.normalize().toString()
-                    MillImportDebugLogger.info("Using configured Mill executable `$resolved`")
-                    return resolved
-                }
-                val projectRelativePath = projectRoot.resolve(configuredPath).normalize()
-                if (Files.isRegularFile(projectRelativePath)) {
-                    val resolved = projectRelativePath.toString()
-                    MillImportDebugLogger.info("Using project-relative Mill executable `$resolved`")
-                    return resolved
-                }
-            }
-            if (rawExecutable != MillConstants.defaultExecutable) {
-                MillImportDebugLogger.info("Using configured Mill executable command `$rawExecutable`")
-                return rawExecutable
-            }
-        }
-
-        discoverWrapper(projectRoot)?.let { wrapper ->
-            val resolved = wrapper.toString()
-            MillImportDebugLogger.info("Using detected Mill wrapper `$resolved`")
-            return resolved
-        }
-        val resolved = rawExecutable.ifBlank { MillConstants.defaultExecutable }
-        MillImportDebugLogger.info("Falling back to Mill executable command `$resolved`")
-        return resolved
+    internal fun discoverExecutables(projectRoot: Path): MillExecutableDiscovery {
+        return MillExecutableDiscovery(
+            projectWrapper = discoverWrapper(projectRoot),
+            pathExecutables = discoverPathExecutables(),
+        )
     }
 
-    internal fun parseOptions(rawValue: String): List<String> {
-        return ParametersListUtil.parse(rawValue.trim(), false, true)
-            .map(String::trim)
-            .filter(String::isNotEmpty)
+    internal fun resolveExecutable(
+        projectRoot: Path,
+        executableSource: MillExecutableSource,
+        configuredExecutablePath: String,
+    ): String {
+        val executableConfiguration =
+            MillExecutableConfigurationUtil.normalize(executableSource, configuredExecutablePath)
+        return when (executableConfiguration.source) {
+            MillExecutableSource.PROJECT_DEFAULT_SCRIPT -> {
+                discoverWrapper(projectRoot)?.let { wrapper ->
+                    val resolved = wrapper.toString()
+                    MillImportDebugLogger.info("Using detected Mill wrapper `$resolved`")
+                    return resolved
+                }
+                MillImportDebugLogger.info("Falling back to Mill executable command `${MillConstants.defaultExecutable}`")
+                MillConstants.defaultExecutable
+            }
+
+            MillExecutableSource.PATH -> {
+                MillImportDebugLogger.info("Using Mill executable from PATH `${MillConstants.defaultExecutable}`")
+                MillConstants.defaultExecutable
+            }
+
+            MillExecutableSource.MANUAL -> {
+                resolveManualExecutable(projectRoot, executableConfiguration.manualPath)
+            }
+        }
+    }
+
+    internal fun probeExecutable(
+        projectRoot: Path,
+        executableSource: MillExecutableSource,
+        executablePath: String,
+    ): MillExecutableProbeResult {
+        val resolvedExecutable = resolveExecutable(projectRoot, executableSource, executablePath)
+        val declaredVersion = readDeclaredMillVersion(projectRoot)
+        val probeSettings = MillExecutionSettings().apply {
+            millExecutableSource = executableSource
+            millExecutablePath = executablePath
+        }
+        var failureMessage: String? = null
+        for (arguments in executableProbeArguments) {
+            val command = runCommand(projectRoot, probeSettings, arguments)
+            if (command.isSuccess) {
+                return MillExecutableProbeResult(
+                    resolvedExecutable = resolvedExecutable,
+                    isValid = true,
+                    version = parseMillVersion(command.stdout + "\n" + command.stderr) ?: declaredVersion,
+                    errorDetails = null,
+                )
+            }
+            if (failureMessage == null) {
+                failureMessage = if (command.startupFailed) {
+                    "The Mill process could not be started."
+                } else {
+                    command.failureDetails.ifBlank {
+                        "The Mill process exited with code ${command.exitCode ?: -1}."
+                    }
+                }
+            }
+            if (command.startupFailed) {
+                break
+            }
+        }
+        return MillExecutableProbeResult(
+            resolvedExecutable = resolvedExecutable,
+            isValid = false,
+            version = null,
+            errorDetails = failureMessage,
+        )
     }
 
     internal fun createCommandLine(
@@ -152,10 +205,14 @@ internal object MillCommandLineUtil {
         settings: MillExecutionSettings?,
         arguments: List<String>,
     ): GeneralCommandLine {
+        val executableConfiguration = MillExecutableConfigurationUtil.normalize(
+            settings?.millExecutableSource,
+            settings?.millExecutablePath,
+        )
         val command = buildMillCommand(
             projectRoot = projectRoot,
-            executable = settings?.millExecutablePath ?: MillConstants.defaultExecutable,
-            jvmOptionsText = settings?.millJvmOptions.orEmpty(),
+            executableSource = executableConfiguration.source,
+            executablePath = executableConfiguration.manualPath,
             arguments = arguments,
         )
         return GeneralCommandLine(command)
@@ -168,6 +225,32 @@ internal object MillCommandLineUtil {
                     GeneralCommandLine.ParentEnvironmentType.NONE
                 },
             )
+    }
+
+    private fun resolveManualExecutable(projectRoot: Path, configuredExecutablePath: String): String {
+        val rawExecutable = configuredExecutablePath.trim()
+        if (rawExecutable.isEmpty()) {
+            MillImportDebugLogger.warn(
+                "Manual Mill executable path is blank, falling back to PATH `${MillConstants.defaultExecutable}`",
+            )
+            return MillConstants.defaultExecutable
+        }
+        val configuredPath = runCatching { Path.of(rawExecutable) }.getOrNull()
+        if (configuredPath != null) {
+            if (configuredPath.isAbsolute) {
+                val resolved = configuredPath.normalize().toString()
+                MillImportDebugLogger.info("Using manually configured Mill executable `$resolved`")
+                return resolved
+            }
+            val projectRelativePath = projectRoot.resolve(configuredPath).normalize()
+            if (Files.isRegularFile(projectRelativePath)) {
+                val resolved = projectRelativePath.toString()
+                MillImportDebugLogger.info("Using manually configured project-relative Mill executable `$resolved`")
+                return resolved
+            }
+        }
+        MillImportDebugLogger.info("Using manually configured Mill executable command `$rawExecutable`")
+        return rawExecutable
     }
 
     internal fun runCommand(
@@ -299,6 +382,26 @@ internal object MillCommandLineUtil {
         strategy = String.serializer(),
     )?.let(::normalizeOutputValue)
 
+    internal fun parseMillVersion(output: String): String? {
+        return output.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .firstNotNullOfOrNull { line ->
+                millVersionPattern.find(line)?.groupValues?.getOrNull(1)
+                    ?: standaloneVersionPattern.takeIf { it.matches(line) }
+                        ?.matchEntire(line)?.groupValues?.getOrNull(1)
+            }
+    }
+
+    internal fun readDeclaredMillVersion(projectRoot: Path): String? {
+        val versionFile = projectRoot.resolve(MillConstants.versionFileName)
+        if (!Files.isRegularFile(versionFile)) {
+            return null
+        }
+        val rawContent = runCatching { Files.readString(versionFile) }.getOrNull() ?: return null
+        return parseMillVersion(rawContent)
+    }
+
     internal fun parseJavaHome(output: String): String? {
         return output.lineSequence()
             .map(String::trim)
@@ -323,6 +426,34 @@ internal object MillCommandLineUtil {
             add(projectRoot.resolve(MillConstants.wrapperBatchName))
         }
         return candidates.firstOrNull(Files::isRegularFile)
+    }
+
+    private fun discoverPathExecutables(): List<Path> {
+        val pathValue = System.getenv("PATH").orEmpty()
+        if (pathValue.isBlank()) {
+            return emptyList()
+        }
+        val candidateNames = executableNamesForCurrentPlatform()
+        return pathValue.split(File.pathSeparatorChar)
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .flatMap { directory ->
+                candidateNames.asSequence().mapNotNull { executableName ->
+                    runCatching { Path.of(directory).resolve(executableName).toAbsolutePath().normalize() }.getOrNull()
+                }
+            }
+            .filter(Files::isRegularFile)
+            .distinct()
+            .toList()
+    }
+
+    private fun executableNamesForCurrentPlatform(): List<String> {
+        return if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+            listOf(MillConstants.wrapperBatchName, "mill.cmd", "mill.exe", MillConstants.wrapperScriptName)
+        } else {
+            listOf(MillConstants.wrapperScriptName)
+        }
     }
 
     private fun <T> decodeOutputOrNull(output: String, strategy: DeserializationStrategy<T>): T? {
@@ -357,5 +488,13 @@ internal object MillCommandLineUtil {
         return fileName.endsWith(".jar") || fileName.endsWith(".zip")
     }
 
+    private val executableProbeArguments = listOf(
+        listOf("--version"),
+        listOf("version"),
+        listOf("--help"),
+    )
+    private val millVersionPattern =
+        Regex("""(?i)\bmill(?:\s+build\s+tool)?(?:\s+version)?[: ]+v?([0-9][0-9A-Za-z.\-+_]*)""")
+    private val standaloneVersionPattern = Regex("""^v?([0-9][0-9A-Za-z.\-+_]*)$""")
     private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
 }

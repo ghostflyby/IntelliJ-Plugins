@@ -33,6 +33,8 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.settings.MillProjectSettings
+import dev.ghostflyby.mill.settings.MillSettings
 
 internal class MillLinkProjectAction : DumbAwareAction() {
     init {

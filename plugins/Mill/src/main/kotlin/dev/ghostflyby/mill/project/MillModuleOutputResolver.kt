@@ -27,8 +27,8 @@ import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillConstants
-import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import java.nio.file.Path
 
 internal data class MillModuleOutputs(
@@ -65,7 +65,7 @@ internal object MillModuleOutputResolver {
         module: MillDiscoveredModule,
         outputs: MillModuleOutputs,
     ) {
-        moduleData.setInheritProjectCompileOutputPath(false)
+        moduleData.isInheritProjectCompileOutputPath = false
         moduleData.useExternalCompilerOutput(true)
         val classesOutputPath = outputs.classesOutputDirectory.toString()
         val resourcesOutputPath = outputs.resourcesOutputDirectory?.toString() ?: classesOutputPath

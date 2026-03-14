@@ -37,6 +37,7 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Pair;
 import com.intellij.util.Function;
 import dev.ghostflyby.mill.project.MillProjectResolverSupport;
+import dev.ghostflyby.mill.settings.*;
 import kotlinx.serialization.StringFormat;
 import kotlinx.serialization.json.Json;
 import org.jetbrains.annotations.NotNull;
@@ -76,13 +77,17 @@ public final class MillExternalSystemManager implements ExternalSystemManager<
             MillProjectSettings linkedSettings = MillSettings.getInstance(pair.first).getLinkedProjectSettings(pair.second);
             MillExecutionSettings settings = new MillExecutionSettings();
             if (linkedSettings == null) {
-                settings.setMillExecutablePath(MillConstants.defaultExecutable);
-                settings.setMillJvmOptions("");
+                settings.setMillExecutableSource(MillExecutableSource.PROJECT_DEFAULT_SCRIPT);
+                settings.setMillExecutablePath("");
                 settings.setUseMillMetadataDuringImport(true);
                 settings.setCreatePerModuleTaskNodes(true);
             } else {
-                settings.setMillExecutablePath(linkedSettings.getMillExecutablePath());
-                settings.setMillJvmOptions(linkedSettings.getMillJvmOptions());
+                MillExecutableConfiguration executableConfiguration = MillExecutableConfigurationUtil.normalize(
+                        linkedSettings.getMillExecutableSource(),
+                        linkedSettings.getMillExecutablePath()
+                );
+                settings.setMillExecutableSource(executableConfiguration.getSource());
+                settings.setMillExecutablePath(executableConfiguration.getManualPath());
                 settings.setUseMillMetadataDuringImport(linkedSettings.getUseMillMetadataDuringImport());
                 settings.setCreatePerModuleTaskNodes(linkedSettings.getCreatePerModuleTaskNodes());
             }

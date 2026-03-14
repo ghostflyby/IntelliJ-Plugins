@@ -31,6 +31,8 @@
 
 - Changed the Mill tool window task tree to use the raw dotted task names as nested path segments instead of synthetic
   task groups or display-name rewriting.
+- Refined Mill project settings so executable selection is split into project script, PATH, and manual modes, with
+  project-local wrapper detection preferred by default and the unused JVM options field removed.
 
 ### Deprecated
 

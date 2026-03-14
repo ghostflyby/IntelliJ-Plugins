@@ -38,7 +38,7 @@
                 id="reference.settingsdialog.project.mill"
                 bundle="messages.Bundle"
                 key="settings.display.name"
-                instance="dev.ghostflyby.mill.MillConfigurable"/>
+                instance="dev.ghostflyby.mill.settings.MillConfigurable"/>
         <toolWindow id="Mill" anchor="right" factoryClass="dev.ghostflyby.mill.MillToolWindowFactory"/>
     </extensions>
     <extensions defaultExtensionNs="org.intellij.scala">
