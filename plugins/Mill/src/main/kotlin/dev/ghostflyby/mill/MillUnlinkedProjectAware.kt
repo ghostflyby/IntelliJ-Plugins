@@ -53,6 +53,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.settings.MillLocalSettings
+import dev.ghostflyby.mill.settings.MillProjectSettings
+import dev.ghostflyby.mill.settings.MillSettings
+import dev.ghostflyby.mill.settings.MillSettingsListener
 import java.nio.file.Path
 
 // ExternalSystemProjectLinkListener is still experimental on 2025.3, but this
