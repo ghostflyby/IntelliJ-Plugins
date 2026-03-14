@@ -32,8 +32,8 @@ import com.intellij.openapi.util.text.StringUtil
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
-import com.intellij.util.ui.GridBag
 import com.intellij.util.execution.ParametersListUtil
+import com.intellij.util.ui.GridBag
 import java.awt.GridBagConstraints
 
 internal class MillProjectSettingsControl(
@@ -52,11 +52,11 @@ internal class MillProjectSettingsControl(
         content: com.intellij.openapi.externalSystem.util.PaintAwarePanel,
         indentLevel: Int,
     ) {
-        val label = JBLabel("Mill executable")
+        val label = JBLabel(Bundle.message("settings.mill.executable.label"))
         val pathField = TextFieldWithBrowseButton().apply {
             addBrowseFolderListener(TextBrowseFolderListener(FileChooserDescriptorFactory.singleFile(), project))
         }
-        val comment = JBLabel("Leave the default value to use `mill` from PATH.")
+        val comment = JBLabel(Bundle.message("settings.mill.executable.comment"))
 
         executableLabel = label
         executablePathField = pathField
@@ -73,11 +73,11 @@ internal class MillProjectSettingsControl(
         val commentConstraints: GridBag = ExternalSystemUiUtil.getCommentConstraints(indentLevel + 1)
         content.add(comment, commentConstraints)
 
-        val jvmLabel = JBLabel("Mill JVM options")
+        val jvmLabel = JBLabel(Bundle.message("settings.mill.jvm.options.label"))
         val jvmField = JBTextField()
-        val jvmComment = JBLabel("Pass launcher JVM options such as `-J-Xmx2g -J-Dkey=value`.")
-        val metadataCheckBox = JBCheckBox("Use Mill metadata during import")
-        val perModuleTasksBox = JBCheckBox("Create per-module task nodes")
+        val jvmComment = JBLabel(Bundle.message("settings.mill.jvm.options.comment"))
+        val metadataCheckBox = JBCheckBox(Bundle.message("settings.mill.metadata.import"))
+        val perModuleTasksBox = JBCheckBox(Bundle.message("settings.mill.per.module.tasks"))
 
         jvmOptionsLabel = jvmLabel
         jvmOptionsField = jvmField
@@ -122,12 +122,14 @@ internal class MillProjectSettingsControl(
     override fun validate(settings: MillProjectSettings): Boolean {
         val path = executablePathField?.text.orEmpty().trim()
         if (path.contains('\n')) {
-            throw ConfigurationException("Mill executable path must be a single path.")
+            throw ConfigurationException(Bundle.message("settings.validation.executable.single.path"))
         }
         try {
             ParametersListUtil.parse(currentJvmOptions(), false, true)
         } catch (error: RuntimeException) {
-            throw ConfigurationException("Mill JVM options could not be parsed: ${error.message.orEmpty()}")
+            throw ConfigurationException(
+                Bundle.message("settings.validation.jvm.options.parse", error.message.orEmpty()),
+            )
         }
         return true
     }

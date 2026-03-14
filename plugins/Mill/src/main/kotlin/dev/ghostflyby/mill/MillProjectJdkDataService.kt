@@ -45,7 +45,7 @@ internal class MillProjectJdkDataService : AbstractProjectDataService<MillProjec
             return
         }
         val jdkHomePath = toImport.firstNotNullOfOrNull { dataNode -> dataNode.data.jdkHomePath.ifBlank { null } } ?: return
-        val sdk = MillModuleJdkDataService.findOrCreateSdk(jdkHomePath) ?: return
+        val sdk = findOrCreateMillSdk(jdkHomePath) ?: return
         val projectRootManager = ProjectRootManager.getInstance(project)
         val application = ApplicationManager.getApplication()
         application.invokeAndWait {
