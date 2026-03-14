@@ -12,7 +12,7 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  *
  * You should have received a copy of the GNU Lesser General Public
@@ -20,9 +20,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill;
+package dev.ghostflyby.mill
 
-import com.intellij.openapi.externalSystem.settings.ExternalSystemSettingsListener;
+import com.intellij.openapi.externalSystem.settings.ExternalSystemSettingsListener
 
-public interface MillSettingsListener extends ExternalSystemSettingsListener<MillProjectSettings> {
-}
+internal interface MillSettingsListener : ExternalSystemSettingsListener<MillProjectSettings>
