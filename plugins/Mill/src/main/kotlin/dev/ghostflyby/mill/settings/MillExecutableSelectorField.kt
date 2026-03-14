@@ -30,190 +30,316 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPanel
-import com.intellij.ui.components.JBTextField
-import com.intellij.util.ui.JBInsets
+import com.intellij.ui.components.fields.ExtendableTextComponent
+import com.intellij.ui.components.fields.ExtendableTextField
+import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.util.ui.JBUI
 import dev.ghostflyby.mill.Bundle
-import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.Dimension
-import java.awt.event.ActionListener
-import javax.swing.*
+import java.awt.Font
+import java.awt.FontMetrics
+import java.awt.Graphics
+import java.awt.geom.Rectangle2D
+import javax.swing.DefaultComboBoxModel
+import javax.swing.JTextField
 import javax.swing.event.DocumentEvent
+import javax.swing.plaf.basic.BasicComboBoxEditor
+import kotlin.math.ceil
 
-internal class MillExecutableSelectorField(
-    private val project: Project,
-    private val model: MillConfigurableViewModel,
+internal fun createMillExecutableSelectorField(
+    project: Project,
+    viewModel: MillConfigurableViewModel,
     parentDisposable: Disposable,
-) : JPanel(BorderLayout(JBUI.scale(8), 0)) {
-    private val comboBoxModel = DefaultComboBoxModel<MillExecutableChoice>()
-    private val editor = ExecutableChoiceEditor()
-    private val comboBox = ComboBox<MillExecutableChoice>(comboBoxModel).apply {
-        isEditable = true
-        editor = this@MillExecutableSelectorField.editor
-        renderer = ExecutableChoiceRenderer()
-        minimumSize = Dimension(JBUI.scale(360), preferredSize.height)
+): ComboBox<MillExecutableChoice> {
+    val comboBoxModel = DefaultComboBoxModel<MillExecutableChoice>()
+    val comboBox = ComboBox(comboBoxModel)
+    var editorField: HintOverlayTextField? = null
+    var isRefreshing = false
+    var isUpdatingEditorPresentation = false
+
+    fun choiceByKey(key: String?): MillExecutableChoice? {
+        if (key.isNullOrBlank()) {
+            return null
+        }
+        return (0 until comboBoxModel.size)
+            .asSequence()
+            .map(comboBoxModel::getElementAt)
+            .firstOrNull { it.key == key }
     }
-    private val browseButton = JButton(AllIcons.General.OpenDisk).apply {
-        toolTipText = Bundle.message("settings.mill.executable.manual.title")
-        margin = JBInsets.create(0, 4)
-        isFocusable = false
-        border = BorderFactory.createEmptyBorder(JBUI.scale(2), JBUI.scale(4), JBUI.scale(2), JBUI.scale(4))
-        addActionListener {
-            val selectedFile = FileChooser.chooseFile(
-                FileChooserDescriptorFactory.singleFile()
-                    .withTitle(Bundle.message("settings.mill.executable.manual.title")),
-                project,
-                null,
-            ) ?: return@addActionListener
-            this@MillExecutableSelectorField.model.updateExecutableInput(selectedFile.path)
+
+    fun choiceByText(text: String): MillExecutableChoice? {
+        if (text.isBlank()) {
+            return null
+        }
+        return (0 until comboBoxModel.size)
+            .asSequence()
+            .map(comboBoxModel::getElementAt)
+            .firstOrNull { choice ->
+                text == choice.editorText || text == choice.displayName || text == choice.manualPath
+            }
+    }
+
+    fun rightHintText(): String = viewModel.executableVersionTextProperty.get()
+
+    val browseExtension = ExtendableTextComponent.Extension.create(
+        AllIcons.General.OpenDisk,
+        AllIcons.General.OpenDiskHover,
+        Bundle.message("settings.mill.executable.manual.title"),
+    ) {
+        FileChooser.chooseFile(
+            FileChooserDescriptorFactory.singleFile()
+                .withTitle(Bundle.message("settings.mill.executable.manual.title")),
+            project,
+            comboBox,
+            null,
+        ) { virtualFile ->
+            comboBox.selectedItem = createInlineManualChoice(virtualFile.path)
         }
     }
-    private var isUpdatingFromModel = false
 
-    init {
-        add(comboBox, BorderLayout.CENTER)
-        add(browseButton, BorderLayout.EAST)
+    comboBox.isEditable = true
 
-        comboBox.addActionListener(
-            ActionListener {
-                if (isUpdatingFromModel) {
-                    return@ActionListener
-                }
-                val selectedChoice = comboBox.selectedItem as? MillExecutableChoice ?: return@ActionListener
-                model.selectExecutableChoice(selectedChoice)
-            },
-        )
-        editor.textField.document.addDocumentListener(
-            object : DocumentAdapter() {
-                override fun textChanged(event: DocumentEvent) {
-                    if (isUpdatingFromModel) {
-                        return
+    comboBox.editor = object : BasicComboBoxEditor() {
+        override fun createEditorComponent(): JTextField {
+            val field = HintOverlayTextField().apply {
+                addExtension(browseExtension)
+                border = null
+            }
+            editorField = field
+            return field
+        }
+
+        override fun setItem(anObject: Any?) {
+            val field = editorField ?: return
+            val item = anObject as? MillExecutableChoice
+            isUpdatingEditorPresentation = true
+            try {
+                when (item) {
+                    null -> {
+                        editor?.text = ""
+                        field.trailingHint = ""
+                        field.rightHint = ""
                     }
-                    model.updateExecutableInput(editor.textField.text)
+
+                    else -> {
+                        editor?.text = item.editorText
+                        field.trailingHint = item.editorTrailingHint
+                        field.rightHint = rightHintText()
+                        field.isRightHintError = viewModel.executableStatusIsErrorProperty.get()
+                    }
                 }
-            },
-        )
-
-        model.executableChoicesProperty.afterChange(parentDisposable) {
-            refreshFromModel()
-        }
-        model.executableInputTextProperty.afterChange(parentDisposable) {
-            refreshFromModel()
-        }
-        model.executableSelectionToolTipProperty.afterChange(parentDisposable) {
-            refreshFromModel()
-        }
-        model.executableVersionTextProperty.afterChange(parentDisposable) {
-            refreshFromModel()
-        }
-        model.executableStatusTextProperty.afterChange(parentDisposable) {
-            refreshFromModel()
-        }
-        model.executableStatusIsErrorProperty.afterChange(parentDisposable) {
-            refreshFromModel()
+            } finally {
+                isUpdatingEditorPresentation = false
+            }
         }
 
-        refreshFromModel()
+        override fun getItem(): Any {
+            val text = editor?.text.orEmpty()
+            val selected = comboBox.selectedItem as? MillExecutableChoice
+            return when {
+                selected?.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT && text == selected.editorText -> selected
+                selected?.source == MillExecutableSource.PATH && text == selected.editorText -> selected
+                else -> choiceByText(text) ?: createInlineManualChoice(text)
+            }
+        }
     }
 
-    private fun refreshFromModel() {
-        isUpdatingFromModel = true
+    comboBox.renderer = listCellRenderer {
+        text(value?.displayName.orEmpty())
+    }
+
+    val initializedEditorField = requireNotNull(editorField)
+
+    initializedEditorField.document.addDocumentListener(
+        object : DocumentAdapter() {
+            override fun textChanged(event: DocumentEvent) {
+                if (isRefreshing || isUpdatingEditorPresentation) {
+                    return
+                }
+                viewModel.updateExecutableInput(initializedEditorField.text)
+            }
+        },
+    )
+
+    comboBox.addActionListener {
+        if (isRefreshing) {
+            return@addActionListener
+        }
+        val item = comboBox.selectedItem as? MillExecutableChoice ?: return@addActionListener
+        initializedEditorField.trailingHint = item.editorTrailingHint
+        initializedEditorField.rightHint = rightHintText()
+        initializedEditorField.isRightHintError = viewModel.executableStatusIsErrorProperty.get()
+        viewModel.selectExecutableChoice(item)
+    }
+
+    fun refreshFromModel() {
+        isRefreshing = true
         try {
-            val choices = model.executableChoicesProperty.get()
+            val choices = viewModel.executableChoicesProperty.get()
             comboBoxModel.removeAllElements()
             choices.forEach(comboBoxModel::addElement)
 
-            val editorText = model.executableInputTextProperty.get()
-            val selectedChoice = choices.firstOrNull { editorText == it.editorText }
+            val selectedChoice = choiceByKey(viewModel.executableSelectedChoiceKeyProperty.get())
+                ?: createInlineManualChoice(viewModel.executableInputTextProperty.get())
             comboBox.selectedItem = selectedChoice
-            editor.textField.text = editorText
-            editor.versionLabel.text = model.executableVersionTextProperty.get()
-            editor.versionLabel.foreground = if (model.executableStatusIsErrorProperty.get()) {
-                JBColor.RED
-            } else {
-                JBColor.namedColor("Label.infoForeground", JBColor.GRAY)
+
+            isUpdatingEditorPresentation = true
+            try {
+                initializedEditorField.trailingHint = selectedChoice.editorTrailingHint
+                initializedEditorField.rightHint = rightHintText()
+                initializedEditorField.isRightHintError = viewModel.executableStatusIsErrorProperty.get()
+            } finally {
+                isUpdatingEditorPresentation = false
             }
-            val selectionTooltip = model.executableSelectionToolTipProperty.get()
-            val statusTooltip = model.executableStatusTextProperty.get()
-            comboBox.toolTipText = selectionTooltip.takeIf(String::isNotBlank) ?: statusTooltip
-            editor.textField.toolTipText = selectionTooltip.takeIf(String::isNotBlank) ?: statusTooltip
-            editor.versionLabel.toolTipText = statusTooltip
         } finally {
-            isUpdatingFromModel = false
+            isRefreshing = false
         }
     }
+
+    viewModel.executableChoicesProperty.afterChange(parentDisposable) {
+        refreshFromModel()
+    }
+    viewModel.executableSelectedChoiceKeyProperty.afterChange(parentDisposable) {
+        refreshFromModel()
+    }
+    viewModel.executableInputTextProperty.afterChange(parentDisposable) {
+        refreshFromModel()
+    }
+    viewModel.executableVersionTextProperty.afterChange(parentDisposable) {
+        refreshFromModel()
+    }
+    viewModel.executableStatusIsErrorProperty.afterChange(parentDisposable) {
+        refreshFromModel()
+    }
+
+    refreshFromModel()
+    return comboBox
 }
 
-private class ExecutableChoiceEditor : ComboBoxEditor {
-    val textField = JBTextField().apply {
-        border = BorderFactory.createEmptyBorder(JBUI.scale(2), 0, JBUI.scale(2), JBUI.scale(4))
-    }
-    val versionLabel = JBLabel().apply {
-        border = BorderFactory.createEmptyBorder(0, JBUI.scale(8), 0, 0)
-    }
-    private val panel = JBPanel<JBPanel<*>>(BorderLayout()).apply {
-        isOpaque = false
-        border = BorderFactory.createEmptyBorder(0, JBUI.scale(6), 0, JBUI.scale(6))
-        add(textField, BorderLayout.CENTER)
-        add(versionLabel, BorderLayout.EAST)
-    }
-
-    override fun getEditorComponent(): Component = panel
-
-    override fun setItem(item: Any?) {
-        if (item is MillExecutableChoice) {
-            textField.text = item.editorText
-        } else if (item is String) {
-            textField.text = item
-        }
-    }
-
-    override fun getItem(): Any = textField.text
-
-    override fun selectAll() {
-        textField.selectAll()
-    }
-
-    override fun addActionListener(listener: ActionListener?) {
-        if (listener != null) {
-            textField.addActionListener(listener)
-        }
-    }
-
-    override fun removeActionListener(listener: ActionListener?) {
-        if (listener != null) {
-            textField.removeActionListener(listener)
-        }
-    }
+private fun createInlineManualChoice(text: String): MillExecutableChoice {
+    return MillExecutableChoice(
+        key = "manual:$text",
+        displayName = text,
+        detailText = null,
+        source = MillExecutableSource.MANUAL,
+        manualPath = text,
+        tooltipText = text,
+    )
 }
 
-private class ExecutableChoiceRenderer : ListCellRenderer<MillExecutableChoice> {
-    private val nameLabel = JBLabel()
-    private val pathLabel = JBLabel()
-    private val panel = JBPanel<JBPanel<*>>(BorderLayout(JBUI.scale(8), 0)).apply {
-        border = BorderFactory.createEmptyBorder(JBUI.scale(4), JBUI.scale(8), JBUI.scale(4), JBUI.scale(8))
-        add(nameLabel, BorderLayout.WEST)
-        add(pathLabel, BorderLayout.CENTER)
+private class HintOverlayTextField : ExtendableTextField() {
+    private var trailingHintValue: String? = null
+    private var rightHintValue: String? = null
+    private var rightHintErrorValue: Boolean = false
+
+    var trailingHint: String
+        get() = trailingHintValue.orEmpty()
+        set(value) {
+            trailingHintValue = value
+            updateMargins()
+            repaint()
+        }
+
+    var rightHint: String
+        get() = rightHintValue.orEmpty()
+        set(value) {
+            rightHintValue = value
+            updateMargins()
+            repaint()
+        }
+
+    var isRightHintError: Boolean
+        get() = rightHintErrorValue
+        set(value) {
+            rightHintErrorValue = value
+            repaint()
+        }
+
+    private val gap = JBUI.scale(6)
+    private val outerGap = JBUI.scale(8)
+
+    init {
+        updateMargins()
     }
 
-    override fun getListCellRendererComponent(
-        list: JList<out MillExecutableChoice>,
-        value: MillExecutableChoice?,
-        index: Int,
-        isSelected: Boolean,
-        cellHasFocus: Boolean,
-    ): Component {
-        val background = if (isSelected) list.selectionBackground else list.background
-        val foreground = if (isSelected) list.selectionForeground else list.foreground
-        panel.background = background
-        nameLabel.foreground = foreground
-        pathLabel.foreground = if (isSelected) foreground else JBColor.namedColor("Label.infoForeground", JBColor.GRAY)
-        nameLabel.text = value?.displayName.orEmpty()
-        pathLabel.text = value?.detailText.orEmpty()
-        panel.toolTipText = value?.tooltipText
-        return panel
+    private fun textWidth(text: String): Int {
+        if (text.isEmpty()) {
+            return 0
+        }
+        val metrics = getFontMetrics(font)
+        return metrics.stringWidth(text)
+    }
+
+    private fun updateMargins() {
+        val rightText = rightHintValue.orEmpty()
+        val right = if (rightText.isEmpty()) {
+            outerGap
+        } else {
+            outerGap + textWidth(rightText) + gap
+        }
+        margin = JBUI.insets(0, outerGap, 0, right)
+    }
+
+    override fun setFont(font: Font?) {
+        super.setFont(font)
+        if (font != null) {
+            updateMargins()
+        }
+    }
+
+    override fun paintComponent(graphics: Graphics) {
+        super.paintComponent(graphics)
+
+        val trailingText = trailingHintValue.orEmpty()
+        val rightText = rightHintValue.orEmpty()
+        if (trailingText.isEmpty() && rightText.isEmpty()) {
+            return
+        }
+
+        val g2 = graphics.create()
+        try {
+            g2.font = font
+
+            val metrics: FontMetrics = g2.getFontMetrics(font)
+            val baseline = (height - metrics.height) / 2 + metrics.ascent
+
+            if (trailingText.isNotEmpty()) {
+                g2.color = JBColor.namedColor(
+                    "TextField.inactiveForeground",
+                    JBColor.namedColor("Component.infoForeground", JBColor.GRAY),
+                )
+                val endX = textEndX()
+                val hintX = endX + gap
+                val rightLimit = width - insets.right - textWidth(rightText) - gap
+
+                if (hintX < rightLimit) {
+                    g2.drawString(trailingText, hintX, baseline)
+                }
+            }
+
+            if (rightText.isNotEmpty()) {
+                g2.color = if (rightHintErrorValue) {
+                    JBColor.namedColor("Label.errorForeground", JBColor.RED)
+                } else {
+                    JBColor.namedColor(
+                        "TextField.inactiveForeground",
+                        JBColor.namedColor("Component.infoForeground", JBColor.GRAY),
+                    )
+                }
+                val textWidth = metrics.stringWidth(rightText)
+                val x = width - insets.right - textWidth
+                g2.drawString(rightText, x, baseline)
+            }
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    private fun textEndX(): Int {
+        return runCatching {
+            val shape: Rectangle2D = modelToView2D(document.length)
+            ceil(shape.x).toInt()
+        }.getOrElse {
+            insets.left + textWidth(text.orEmpty())
+        }
     }
 }
