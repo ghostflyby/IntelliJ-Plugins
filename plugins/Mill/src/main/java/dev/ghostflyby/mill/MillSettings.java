@@ -42,7 +42,9 @@ public final class MillSettings extends AbstractExternalSystemSettings<
         MillSettingsListener
         > implements PersistentStateComponent<MillSettings.State> {
 
-    private static final Topic<MillSettingsListener> TOPIC = new Topic<>("Mill settings changes", MillSettingsListener.class);
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static final Topic<MillSettingsListener> TOPIC =
+            (Topic<MillSettingsListener>) new Topic("Mill settings changes", MillSettingsListener.class);
 
     public MillSettings(@NotNull Project project) {
         super(TOPIC, project);
