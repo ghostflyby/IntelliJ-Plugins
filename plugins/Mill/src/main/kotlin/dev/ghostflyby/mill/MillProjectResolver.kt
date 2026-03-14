@@ -29,17 +29,13 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.project.ExternalSystemProjectResolver
-import dev.ghostflyby.mill.project.MillContentRootResolver
-import dev.ghostflyby.mill.project.MillDiscoveredModule
-import dev.ghostflyby.mill.project.MillExternalLibraryResolver
-import dev.ghostflyby.mill.project.MillModuleDependencyResolver
-import dev.ghostflyby.mill.project.MillModuleDiscovery
-import dev.ghostflyby.mill.project.MillModuleOutputResolver
-import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.project.*
 import dev.ghostflyby.mill.script.MillBuildScriptModuleResolver
 import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
 import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
 import dev.ghostflyby.mill.sdk.MillScalaSdkResolver
+import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import java.nio.file.Path
 
 internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecutionSettings> {
@@ -52,10 +48,15 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
     ): DataNode<ProjectData> {
         val progressReporter = MillImportProgressReporter(id, listener)
         progressReporter.started("Importing Mill project")
+        val executableConfiguration = MillExecutableConfigurationUtil.normalize(
+            settings?.millExecutableSource,
+            settings?.millExecutablePath,
+        )
         MillImportDebugLogger.info(
             "Starting resolver for projectPath=$projectPath preview=$isPreviewMode " +
                 "metadataImport=${settings?.useMillMetadataDuringImport} perModuleTasks=${settings?.createPerModuleTaskNodes} " +
-                "millExecutable=${settings?.millExecutablePath.orEmpty().ifBlank { MillConstants.defaultExecutable }}",
+                    "millExecutableSource=${executableConfiguration.source} " +
+                    "millExecutable=${executableConfiguration.manualPath.ifBlank { "<auto>" }}",
         )
         return try {
             progressReporter.progress(15, "Resolving Mill project root")

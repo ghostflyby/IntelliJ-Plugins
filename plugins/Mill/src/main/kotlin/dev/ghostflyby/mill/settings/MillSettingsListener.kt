@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.externalSystem.settings.ExternalSystemSettingsListener
 

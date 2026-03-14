@@ -33,6 +33,7 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotifica
 import com.intellij.openapi.externalSystem.task.ExternalSystemTaskManager
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import java.nio.file.Path
 
 internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings> {

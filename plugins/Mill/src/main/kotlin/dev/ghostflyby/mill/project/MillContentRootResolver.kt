@@ -26,9 +26,9 @@ import com.intellij.openapi.externalSystem.model.project.ContentRootData
 import com.intellij.openapi.externalSystem.model.project.ExternalSystemSourceType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import java.nio.file.Files
 import java.nio.file.Path
 

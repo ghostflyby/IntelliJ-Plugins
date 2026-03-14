@@ -24,8 +24,8 @@ package dev.ghostflyby.mill.project
 
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import dev.ghostflyby.mill.MillExecutionSettings
 import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 
 internal object MillModuleDependencyResolver {
     fun resolveDependencyPrefixes(

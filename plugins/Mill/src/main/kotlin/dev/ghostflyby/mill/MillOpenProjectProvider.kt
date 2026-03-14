@@ -54,6 +54,7 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.settings.MillProjectSettings
 
 // AbstractOpenProjectProvider is still experimental on 2025.3, but it is the
 // platform entry point used by external-system project opening/linking flows.

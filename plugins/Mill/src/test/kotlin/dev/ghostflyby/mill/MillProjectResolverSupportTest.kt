@@ -31,6 +31,9 @@ import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.*
 import dev.ghostflyby.mill.script.MillBuildScriptSupport
 import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
+import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
+import dev.ghostflyby.mill.settings.MillExecutableSource
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -745,16 +748,16 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
-    fun `builds mill command lines with jvm options before tasks`() {
+    fun `builds mill command lines with manual executable before tasks`() {
         val command = MillCommandLineUtil.buildMillCommand(
             projectRoot = Path.of("/tmp/project"),
-            executable = "mill",
-            jvmOptionsText = """-J-Xmx2g "-J-Dmill.profile=dev mode"""",
+            executableSource = MillExecutableSource.MANUAL,
+            executablePath = "mill",
             arguments = listOf("show", "foo.compileClasspath"),
         )
 
         assertEquals(
-            listOf("mill", "-J-Xmx2g", "-J-Dmill.profile=dev mode", "show", "foo.compileClasspath"),
+            listOf("mill", "show", "foo.compileClasspath"),
             command,
         )
     }
@@ -767,8 +770,8 @@ internal class MillProjectResolverSupportTest {
 
             val command = MillCommandLineUtil.buildMillCommand(
                 projectRoot = root,
-                executable = MillConstants.defaultExecutable,
-                jvmOptionsText = "",
+                executableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT,
+                executablePath = "",
                 arguments = listOf("resolve", MillConstants.moduleDiscoveryQuery),
             )
 
@@ -794,12 +797,43 @@ internal class MillProjectResolverSupportTest {
             Files.createDirectories(wrapper.parent)
             Files.writeString(wrapper, "#!/bin/sh\n")
 
-            val executable = MillCommandLineUtil.resolveExecutable(root, "tools/mill")
+            val executable = MillCommandLineUtil.resolveExecutable(
+                root,
+                MillExecutableSource.MANUAL,
+                "tools/mill",
+            )
 
             assertEquals(wrapper.toString(), executable)
         } finally {
             deleteRecursively(root)
         }
+    }
+
+    @Test
+    fun `falls back to path when project script mode finds no wrapper`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val executable = MillCommandLineUtil.resolveExecutable(
+                root,
+                MillExecutableSource.PROJECT_DEFAULT_SCRIPT,
+                "",
+            )
+
+            assertEquals(MillConstants.defaultExecutable, executable)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `legacy configured executable is normalized to manual mode`() {
+        val configuration = MillExecutableConfigurationUtil.normalize(
+            MillExecutableSource.PROJECT_DEFAULT_SCRIPT,
+            "tools/mill",
+        )
+
+        assertEquals(MillExecutableSource.MANUAL, configuration.source)
+        assertEquals("tools/mill", configuration.manualPath)
     }
 
     private fun deleteRecursively(root: Path) {

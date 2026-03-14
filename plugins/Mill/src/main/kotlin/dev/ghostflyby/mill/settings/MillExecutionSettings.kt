@@ -20,21 +20,21 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.externalSystem.model.settings.ExternalSystemExecutionSettings
 
 internal class MillExecutionSettings : ExternalSystemExecutionSettings {
-    var millExecutablePath: String = MillConstants.defaultExecutable
-    var millJvmOptions: String = ""
+    var millExecutableSource: MillExecutableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT
+    var millExecutablePath: String = ""
     var useMillMetadataDuringImport: Boolean = true
     var createPerModuleTaskNodes: Boolean = true
 
     constructor() : super()
 
     constructor(other: MillExecutionSettings) : super(other) {
+        millExecutableSource = other.millExecutableSource
         millExecutablePath = other.millExecutablePath
-        millJvmOptions = other.millJvmOptions
         useMillMetadataDuringImport = other.useMillMetadataDuringImport
         createPerModuleTaskNodes = other.createPerModuleTaskNodes
     }
@@ -44,15 +44,15 @@ internal class MillExecutionSettings : ExternalSystemExecutionSettings {
         if (other !is MillExecutionSettings) return false
         if (!super.equals(other)) return false
 
-        return millExecutablePath == other.millExecutablePath &&
-            millJvmOptions == other.millJvmOptions &&
-            useMillMetadataDuringImport == other.useMillMetadataDuringImport &&
-            createPerModuleTaskNodes == other.createPerModuleTaskNodes
+        return millExecutableSource == other.millExecutableSource &&
+                millExecutablePath == other.millExecutablePath &&
+                useMillMetadataDuringImport == other.useMillMetadataDuringImport &&
+                createPerModuleTaskNodes == other.createPerModuleTaskNodes
     }
 
     override fun hashCode(): Int {
-        var result = 31 * super.hashCode() + millExecutablePath.hashCode()
-        result = 31 * result + millJvmOptions.hashCode()
+        var result = 31 * super.hashCode() + millExecutableSource.hashCode()
+        result = 31 * result + millExecutablePath.hashCode()
         result = 31 * result + useMillMetadataDuringImport.hashCode()
         result = 31 * result + createPerModuleTaskNodes.hashCode()
         return result

@@ -20,21 +20,23 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.externalSystem.settings.ExternalProjectSettings
 
 internal class MillProjectSettings : ExternalProjectSettings() {
-    var millExecutablePath: String = MillConstants.defaultExecutable
-    var millJvmOptions: String = ""
+    var millExecutableSource: MillExecutableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT
+    var millExecutablePath: String = ""
     var useMillMetadataDuringImport: Boolean = true
     var createPerModuleTaskNodes: Boolean = true
 
     override fun clone(): MillProjectSettings {
+        val executableConfiguration =
+            MillExecutableConfigurationUtil.normalize(millExecutableSource, millExecutablePath)
         return MillProjectSettings().also { receiver ->
             copyTo(receiver)
-            receiver.millExecutablePath = millExecutablePath
-            receiver.millJvmOptions = millJvmOptions
+            receiver.millExecutableSource = executableConfiguration.source
+            receiver.millExecutablePath = executableConfiguration.manualPath
             receiver.useMillMetadataDuringImport = useMillMetadataDuringImport
             receiver.createPerModuleTaskNodes = createPerModuleTaskNodes
         }

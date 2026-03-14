@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mill;
+package dev.ghostflyby.mill.settings;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.components.*;
@@ -29,6 +29,7 @@ import com.intellij.openapi.externalSystem.settings.DelegatingExternalSystemSett
 import com.intellij.openapi.externalSystem.settings.ExternalSystemSettingsListener;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.messages.Topic;
+import dev.ghostflyby.mill.MillConstants;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Collections;
