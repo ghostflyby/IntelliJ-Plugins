@@ -22,22 +22,16 @@
 
 package dev.ghostflyby.mill.settings
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.observable.util.bind
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.SimpleListCellRenderer
-import com.intellij.ui.components.fields.ExtendableTextComponent
-import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.mill.Bundle
-import javax.swing.JTextField
-import javax.swing.plaf.basic.BasicComboBoxEditor
 
 internal fun millConfigurableView(
     project: Project,
@@ -70,11 +64,9 @@ internal fun millConfigurableView(
     }
 
     row(Bundle.message("settings.mill.executable.label")) {
-        cell(createMillExecutableComboBox("<project>", "mill"))
+        cell(createMillExecutableSelectorField(project, model, parentDisposable))
+            .resizableColumn()
             .align(Align.FILL)
-            .validationOnInput { component ->
-                model.currentManualPathValidationMessage()?.let { ValidationInfo(it, component) }
-            }
             .validationOnApply { component ->
                 model.currentManualPathValidationMessage()?.let { ValidationInfo(it, component) }
             }
@@ -89,29 +81,4 @@ internal fun millConfigurableView(
         checkBox(Bundle.message("settings.mill.per.module.tasks"))
             .bindSelected(model.createPerModuleTaskNodesProperty)
     }.contextHelp(Bundle.message("settings.mill.per.module.tasks.tooltip"))
-}
-
-
-private fun <T> createMillExecutableComboBox(vararg args: T): ComboBox<T> {
-    val extComboBox = ComboBox(args)
-    val browseExtension = ExtendableTextComponent.Extension.create(
-        AllIcons.General.OpenDisk,
-        AllIcons.General.OpenDiskHover,
-        "Open file",
-    ) {
-
-    }
-    extComboBox.isEditable = true
-    extComboBox.setEditor(
-        object : BasicComboBoxEditor() {
-            override fun createEditorComponent(): JTextField {
-                val ecbEditor = ExtendableTextField()
-                ecbEditor.addExtension(browseExtension)
-                ecbEditor.setBorder(null)
-                return ecbEditor
-            }
-        },
-    )
-
-    return extComboBox
 }
