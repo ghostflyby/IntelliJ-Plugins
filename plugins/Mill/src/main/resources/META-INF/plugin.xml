@@ -5,6 +5,7 @@
     <id>dev.ghostflyby.mill</id>
     <name>Mill</name>
     <vendor>ghostflyby</vendor>
+    <resource-bundle>messages.Bundle</resource-bundle>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.externalSystem</depends>
@@ -12,7 +13,11 @@
     <depends>org.intellij.scala</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="Mill Import" displayType="BALLOON"/>
+        <notificationGroup
+                id="dev.ghostflyby.mill.import"
+                bundle="messages.Bundle"
+                key="notification.group.display.name"
+                displayType="BALLOON"/>
         <fileTypeOverrider implementation="dev.ghostflyby.mill.script.MillBuildScriptFileTypeOverrider"/>
         <additionalLibraryRootsProvider implementation="dev.ghostflyby.mill.script.MillBuildScriptLibraryRootsProvider"/>
         <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
@@ -31,7 +36,8 @@
                 groupId="build.tools"
                 groupWeight="115"
                 id="reference.settingsdialog.project.mill"
-                displayName="Mill"
+                bundle="messages.Bundle"
+                key="settings.display.name"
                 instance="dev.ghostflyby.mill.MillConfigurable"/>
         <toolWindow id="Mill" anchor="right" factoryClass="dev.ghostflyby.mill.MillToolWindowFactory"/>
     </extensions>
@@ -42,23 +48,17 @@
         <group id="dev.ghostflyby.mill.taskMenu" popup="true"/>
         <action
                 id="dev.ghostflyby.mill.linkProject"
-                class="dev.ghostflyby.mill.MillLinkProjectAction"
-                text="Link Mill Project"
-                description="Link the current Mill build into the Mill external-system tool window">
+                class="dev.ghostflyby.mill.MillLinkProjectAction">
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>
         <action
                 id="dev.ghostflyby.mill.runTask"
-                class="dev.ghostflyby.mill.MillRunTaskAction"
-                text="Run"
-                description="Run the selected Mill task">
+                class="dev.ghostflyby.mill.MillRunTaskAction">
             <add-to-group group-id="dev.ghostflyby.mill.taskMenu" anchor="first"/>
         </action>
         <action
                 id="dev.ghostflyby.mill.reloadProject"
-                class="dev.ghostflyby.mill.MillReloadProjectAction"
-                text="Reload Mill Project"
-                description="Reload the linked Mill project for the current context">
+                class="dev.ghostflyby.mill.MillReloadProjectAction">
             <add-to-group group-id="BuildMenu" anchor="last"/>
         </action>
     </actions>
