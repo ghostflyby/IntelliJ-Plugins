@@ -60,15 +60,21 @@ internal class MillImportRefreshCallback(
                 val moduleCountAfter = moduleManager.modules.size
 
                 val content = buildString {
-                    append("Resolved ")
-                    append(resolvedModuleCount)
-                    append(" module(s) and ")
-                    append(resolvedLibraryCount)
-                    append(" library dependenc")
-                    append(if (resolvedLibraryCount == 1) "y" else "ies")
-                    append(". IDE currently has ")
-                    append(moduleCountAfter)
-                    append(" module(s).")
+                    append(
+                        Bundle.message(
+                            "import.finished.content",
+                            resolvedModuleCount,
+                            resolvedLibraryCount,
+                            Bundle.message(
+                                if (resolvedLibraryCount == 1) {
+                                    "import.finished.dependency.singular"
+                                } else {
+                                    "import.finished.dependency.plural"
+                                },
+                            ),
+                            moduleCountAfter,
+                        ),
+                    )
                 }
                 MillImportDebugLogger.info(
                     "Refresh callback completed task=${externalTaskId.id} beforeModules=$moduleCountBefore afterModules=$moduleCountAfter",
@@ -76,7 +82,7 @@ internal class MillImportRefreshCallback(
                 thisLogger().warn("Mill import result: $content")
                 NotificationGroupManager.getInstance()
                     .getNotificationGroup(MillConstants.notificationGroupId)
-                    .createNotification("Mill import finished", content, NotificationType.INFORMATION)
+                    .createNotification(Bundle.message("import.finished.title"), content, NotificationType.INFORMATION)
                     .notify(project)
             },
             project.disposed,
@@ -97,7 +103,7 @@ internal class MillImportRefreshCallback(
         thisLogger().warn("Mill import failed: $content")
         NotificationGroupManager.getInstance()
             .getNotificationGroup(MillConstants.notificationGroupId)
-            .createNotification("Mill import failed", content, NotificationType.ERROR)
+            .createNotification(Bundle.message("import.failed.title"), content, NotificationType.ERROR)
             .notify(project)
     }
 

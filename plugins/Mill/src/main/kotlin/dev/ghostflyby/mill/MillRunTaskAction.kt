@@ -31,7 +31,12 @@ import javax.swing.JPopupMenu
 import javax.swing.JTree
 import javax.swing.SwingUtilities
 
-internal class MillRunTaskAction : DumbAwareAction("Run") {
+internal class MillRunTaskAction : DumbAwareAction() {
+    init {
+        templatePresentation.text = Bundle.message("action.run.task.text")
+        templatePresentation.description = Bundle.message("action.run.task.description")
+    }
+
     override fun actionPerformed(event: AnActionEvent) {
         val taskNode = selectedTaskNode(event) ?: return
         taskNode.runTask(taskNode.taskData)
@@ -61,6 +66,6 @@ internal class MillRunTaskAction : DumbAwareAction("Run") {
 
         val popupMenu = SwingUtilities.getAncestorOfClass(JPopupMenu::class.java, contextComponent) as? JPopupMenu ?: return null
         val invoker = popupMenu.invoker ?: return null
-        return if (invoker is JTree) invoker else SwingUtilities.getAncestorOfClass(JTree::class.java, invoker) as? JTree
+        return (invoker as? JTree) ?: SwingUtilities.getAncestorOfClass(JTree::class.java, invoker) as? JTree
     }
 }

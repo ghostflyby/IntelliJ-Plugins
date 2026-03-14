@@ -35,6 +35,11 @@ import com.intellij.openapi.project.Project
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
 
 internal class MillReloadProjectAction : DumbAwareAction() {
+    init {
+        templatePresentation.text = Bundle.message("action.reload.project.text")
+        templatePresentation.description = Bundle.message("action.reload.project.description")
+    }
+
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.getData(CommonDataKeys.PROJECT) ?: return
         val linkedProjects = linkedProjectPaths(project)
@@ -42,8 +47,8 @@ internal class MillReloadProjectAction : DumbAwareAction() {
         if (linkedProjects.isEmpty()) {
             notify(
                 project = project,
-                title = "No linked Mill project",
-                content = "Link a Mill project before reloading it.",
+                title = Bundle.message("action.reload.project.notify.no.linked.title"),
+                content = Bundle.message("action.reload.project.notify.no.linked.content"),
             )
             return
         }
@@ -52,8 +57,8 @@ internal class MillReloadProjectAction : DumbAwareAction() {
         if (externalProjectPath == null) {
             notify(
                 project = project,
-                title = "Cannot determine Mill project to reload",
-                content = "Open a file inside the Mill project you want to reload, or keep only one linked Mill project in this window.",
+                title = Bundle.message("action.reload.project.notify.undetermined.title"),
+                content = Bundle.message("action.reload.project.notify.undetermined.content"),
             )
             return
         }

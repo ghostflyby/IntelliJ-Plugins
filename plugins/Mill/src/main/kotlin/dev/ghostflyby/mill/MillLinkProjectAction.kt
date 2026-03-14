@@ -35,21 +35,26 @@ import com.intellij.openapi.project.Project
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
 
 internal class MillLinkProjectAction : DumbAwareAction() {
+    init {
+        templatePresentation.text = Bundle.message("action.link.project.text")
+        templatePresentation.description = Bundle.message("action.link.project.description")
+    }
+
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.getData(CommonDataKeys.PROJECT) ?: return
         val externalProjectPath = findLinkTargetPath(project, event)
         if (externalProjectPath == null) {
             notify(
                 project = project,
-                title = "No Mill project found",
-                content = "Open a Mill project root or a file under a Mill project before linking.",
+                title = Bundle.message("action.link.project.notify.missing.title"),
+                content = Bundle.message("action.link.project.notify.missing.content"),
             )
             return
         }
         if (MillSettings.getInstance(project).getLinkedProjectSettings(externalProjectPath) != null) {
             notify(
                 project = project,
-                title = "Mill project already linked",
+                title = Bundle.message("action.link.project.notify.already.linked.title"),
                 content = externalProjectPath,
             )
             return

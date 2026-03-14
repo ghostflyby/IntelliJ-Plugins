@@ -43,6 +43,8 @@ import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import java.nio.file.Path
 import kotlin.io.path.exists
 
+private val LOG: Logger = Logger.getInstance(MillModuleJdkDataService::class.java)
+
 internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData, Module>() {
     override fun getTargetDataKey(): Key<ModuleData> = ProjectKeys.MODULE
 
@@ -71,8 +73,8 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData,
             return
         }
 
-        val projectSdk = ProjectRootManager.getInstance(module.project).getProjectSdk()
-        val sdk = findOrCreateSdk(jdkHomePath)
+        val projectSdk = ProjectRootManager.getInstance(module.project).projectSdk
+        val sdk = findOrCreateMillSdk(jdkHomePath)
         when {
             sdk == null -> modifiableRootModel.inheritSdk()
             sameSdkHome(projectSdk, sdk) -> modifiableRootModel.inheritSdk()
@@ -81,56 +83,52 @@ internal class MillModuleJdkDataService : AbstractProjectDataService<ModuleData,
     }
 
     private fun sameSdkHome(projectSdk: Sdk?, moduleSdk: Sdk): Boolean = sameSdkHomePath(projectSdk?.homePath, moduleSdk.homePath)
+}
 
-    companion object {
-        private val LOG: Logger = Logger.getInstance(MillModuleJdkDataService::class.java)
+internal fun findOrCreateMillSdk(jdkHomePath: String): Sdk? {
+    val sdkTable = ProjectJdkTable.getInstance()
+    val javaSdk = JavaSdk.getInstance()
+    val existingSdk = sdkTable.getSdksOfType(javaSdk)
+        .firstOrNull { sdk -> sameSdkHomePath(sdk.homePath, jdkHomePath) }
+    if (existingSdk != null) {
+        return existingSdk
+    }
 
-        internal fun findOrCreateSdk(jdkHomePath: String): Sdk? {
-            val sdkTable = ProjectJdkTable.getInstance()
-            val javaSdk = JavaSdk.getInstance()
-            val existingSdk = sdkTable.getSdksOfType(javaSdk)
-                .firstOrNull { sdk -> sameSdkHomePath(sdk.homePath, jdkHomePath) }
-            if (existingSdk != null) {
-                return existingSdk
-            }
+    if (!isValidJavaHome(javaSdk, jdkHomePath)) {
+        LOG.warn("Skipping Mill module JDK import because `$jdkHomePath` is not a valid JDK home")
+        return null
+    }
 
-            if (!isValidJavaHome(javaSdk, jdkHomePath)) {
-                LOG.warn("Skipping Mill module JDK import because `$jdkHomePath` is not a valid JDK home")
-                return null
-            }
-
-            val createdSdk = createSdk(javaSdk, jdkHomePath)
-            val application = ApplicationManager.getApplication()
-            application.invokeAndWait {
-                application.runWriteAction {
-                    sdkTable.addJdk(createdSdk)
-                }
-            }
-            return createdSdk
-        }
-
-        private fun createSdk(javaSdk: JavaSdk, jdkHomePath: String): Sdk {
-            VirtualFileManager.getInstance().refreshAndFindFileByNioPath(Path.of(jdkHomePath))
-            val existingNames = ProjectJdkTable.getInstance()
-                .getSdksOfType(javaSdk)
-                .mapTo(linkedSetOf(), Sdk::getName)
-            val baseName = javaSdk.suggestSdkName(null, jdkHomePath).ifBlank { "Mill JDK" }
-            val uniqueName = MillModuleJdkSupport.createUniqueSdkName(baseName, existingNames)
-            return javaSdk.createJdk(uniqueName, jdkHomePath)
-        }
-
-        private fun isValidJavaHome(javaSdk: JavaSdk, jdkHomePath: String): Boolean {
-            val path = runCatching { Path.of(jdkHomePath) }.getOrNull() ?: return false
-            if (!path.exists()) {
-                return false
-            }
-            return javaSdk.isValidSdkHome(jdkHomePath)
-        }
-
-        private fun sameSdkHomePath(left: String?, right: String?): Boolean {
-            val leftPath = MillModuleJdkSupport.normalizeJdkHomePath(left)
-            val rightPath = MillModuleJdkSupport.normalizeJdkHomePath(right)
-            return leftPath != null && leftPath == rightPath
+    val createdSdk = createMillSdk(javaSdk, jdkHomePath)
+    val application = ApplicationManager.getApplication()
+    application.invokeAndWait {
+        application.runWriteAction {
+            sdkTable.addJdk(createdSdk)
         }
     }
+    return createdSdk
+}
+
+private fun createMillSdk(javaSdk: JavaSdk, jdkHomePath: String): Sdk {
+    VirtualFileManager.getInstance().refreshAndFindFileByNioPath(Path.of(jdkHomePath))
+    val existingNames = ProjectJdkTable.getInstance()
+        .getSdksOfType(javaSdk)
+        .mapTo(linkedSetOf(), Sdk::getName)
+    val baseName = javaSdk.suggestSdkName(null, jdkHomePath).ifBlank { "Mill JDK" }
+    val uniqueName = MillModuleJdkSupport.createUniqueSdkName(baseName, existingNames)
+    return javaSdk.createJdk(uniqueName, jdkHomePath)
+}
+
+private fun isValidJavaHome(javaSdk: JavaSdk, jdkHomePath: String): Boolean {
+    val path = runCatching { Path.of(jdkHomePath) }.getOrNull() ?: return false
+    if (!path.exists()) {
+        return false
+    }
+    return javaSdk.isValidSdkHome(jdkHomePath)
+}
+
+private fun sameSdkHomePath(left: String?, right: String?): Boolean {
+    val leftPath = MillModuleJdkSupport.normalizeJdkHomePath(left)
+    val rightPath = MillModuleJdkSupport.normalizeJdkHomePath(right)
+    return leftPath != null && leftPath == rightPath
 }
