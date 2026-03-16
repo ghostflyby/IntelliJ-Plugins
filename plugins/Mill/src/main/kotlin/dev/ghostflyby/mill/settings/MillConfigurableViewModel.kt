@@ -23,7 +23,7 @@
 package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.UI
 import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
 import com.intellij.openapi.observable.properties.PropertyGraph
@@ -43,7 +43,7 @@ internal class MillConfigurableViewModel(
     parentDisposable: Disposable,
 ) {
     private val graph = PropertyGraph("MillConfigurableViewModel")
-    private val scope = CoroutineScope(Dispatchers.EDT + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val originalSettingsByPath = linkedProjectSettings
         .map(MillProjectSettings::clone)
         .associateBy(MillProjectSettings::getExternalProjectPath)
@@ -57,6 +57,7 @@ internal class MillConfigurableViewModel(
     private val executableDiscoveriesByPath = mutableMapOf<String, MillExecutableDiscovery>()
     private val checkingProjectPaths = linkedSetOf<String>()
     private var isSynchronizing = false
+    private var isDisposed = false
 
     val linkedProjectPaths: List<String> = projectStatesByPath.keys.sorted()
     val hasLinkedProjects: Boolean = linkedProjectPaths.isNotEmpty()
@@ -72,13 +73,6 @@ internal class MillConfigurableViewModel(
     val executableInputTextProperty: ObservableMutableProperty<String> = graph.property("")
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = graph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = graph.property("")
-    val executableStatusTextProperty: ObservableMutableProperty<String> = graph.property(
-        if (hasLinkedProjects) {
-            Bundle.message("settings.mill.executable.status.idle")
-        } else {
-            ""
-        },
-    )
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = graph.property(false)
     val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = graph.property(
         currentSelectedState()?.useMillMetadataDuringImport ?: true,
@@ -89,6 +83,7 @@ internal class MillConfigurableViewModel(
 
     init {
         Disposer.register(parentDisposable) {
+            isDisposed = true
             scope.cancel()
         }
 
@@ -447,18 +442,24 @@ internal class MillConfigurableViewModel(
     private fun scheduleDiscovery(projectPath: String, debounceMillis: Long = 0) {
         discoveryJobsByPath.remove(projectPath)?.cancel()
         discoveryJobsByPath[projectPath] = scope.launch {
-            if (debounceMillis > 0) {
-                delay(debounceMillis)
-            }
-            val discovery = withContext(Dispatchers.IO) {
-                MillCommandLineUtil.discoverExecutables(Path.of(projectPath))
-            }
-            if (!isActive) {
-                return@launch
-            }
-            executableDiscoveriesByPath[projectPath] = discovery
-            if (selectedProjectPathProperty.get() == projectPath) {
-                refreshExecutableSelector()
+            try {
+                if (debounceMillis > 0) {
+                    delay(debounceMillis)
+                }
+                val discovery = withContext(Dispatchers.IO) {
+                    MillCommandLineUtil.discoverExecutables(Path.of(projectPath))
+                }
+                withContext(Dispatchers.UI) {
+                    if (!scope.isActive || isDisposed) {
+                        return@withContext
+                    }
+                    executableDiscoveriesByPath[projectPath] = discovery
+                    if (selectedProjectPathProperty.get() == projectPath) {
+                        refreshExecutableSelector()
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             }
         }
     }
@@ -467,12 +468,11 @@ internal class MillConfigurableViewModel(
         val state = projectStatesByPath[projectPath] ?: return
         val localValidationMessage = manualPathValidationMessage(state)
         probeJobsByPath.remove(projectPath)?.cancel()
-        probeResultsByPath.remove(projectPath)
 
         if (localValidationMessage != null) {
             checkingProjectPaths.remove(projectPath)
             if (selectedProjectPathProperty.get() == projectPath) {
-                updateDisplayedProbeStatus(localValidationMessage, isError = true, versionText = "!")
+                updateDisplayedProbeStatus(isError = true, versionText = "!")
             }
             return
         }
@@ -480,33 +480,38 @@ internal class MillConfigurableViewModel(
         checkingProjectPaths += projectPath
         if (selectedProjectPathProperty.get() == projectPath) {
             updateDisplayedProbeStatus(
-                Bundle.message("settings.mill.executable.status.checking"),
                 isError = false,
-                versionText = "…",
+                versionText = checkingVersionText(projectPath, state),
             )
         }
 
         probeJobsByPath[projectPath] = scope.launch {
-            if (debounceMillis > 0) {
-                delay(debounceMillis)
-            }
-            val probeResult = withContext(Dispatchers.IO) {
-                MillCommandLineUtil.probeExecutable(
-                    projectRoot = Path.of(projectPath),
-                    executableSource = state.executableSource,
-                    executablePath = state.manualExecutablePath,
-                )
-            }
-            if (!isActive) {
-                return@launch
-            }
-            if (projectStatesByPath[projectPath] != state) {
-                return@launch
-            }
-            checkingProjectPaths.remove(projectPath)
-            probeResultsByPath[projectPath] = MillCachedExecutableProbe(state, probeResult)
-            if (selectedProjectPathProperty.get() == projectPath) {
-                refreshDisplayedProbeStatus()
+            try {
+                if (debounceMillis > 0) {
+                    delay(debounceMillis)
+                }
+                val probeResult = withContext(Dispatchers.IO) {
+                    MillCommandLineUtil.probeExecutable(
+                        projectRoot = Path.of(projectPath),
+                        executableSource = state.executableSource,
+                        executablePath = state.manualExecutablePath,
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    if (!scope.isActive || isDisposed) {
+                        return@withContext
+                    }
+                    if (projectStatesByPath[projectPath] != state) {
+                        return@withContext
+                    }
+                    checkingProjectPaths.remove(projectPath)
+                    probeResultsByPath[projectPath] = MillCachedExecutableProbe(state, probeResult)
+                    if (selectedProjectPathProperty.get() == projectPath) {
+                        refreshDisplayedProbeStatus()
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             }
         }
     }
@@ -514,66 +519,47 @@ internal class MillConfigurableViewModel(
     private fun refreshDisplayedProbeStatus() {
         val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
         if (projectPath == null) {
-            updateDisplayedProbeStatus("", isError = false, versionText = "")
+            updateDisplayedProbeStatus(isError = false, versionText = "")
             return
         }
         val state = projectStatesByPath[projectPath]
         if (state == null) {
-            updateDisplayedProbeStatus(
-                Bundle.message("settings.mill.executable.status.idle"),
-                isError = false,
-                versionText = "",
-            )
+            updateDisplayedProbeStatus(isError = false, versionText = "")
             return
         }
         manualPathValidationMessage(state)?.let {
-            updateDisplayedProbeStatus(it, isError = true, versionText = "!")
+            updateDisplayedProbeStatus(isError = true, versionText = "!")
             return
         }
         if (projectPath in checkingProjectPaths) {
             updateDisplayedProbeStatus(
-                Bundle.message("settings.mill.executable.status.checking"),
                 isError = false,
-                versionText = "…",
+                versionText = checkingVersionText(projectPath, state),
             )
             return
         }
         val cachedProbe = probeResultsByPath[projectPath]
         if (cachedProbe != null && cachedProbe.settingsState == state) {
             updateDisplayedProbeStatus(
-                text = formatProbeStatus(cachedProbe.probeResult),
                 isError = !cachedProbe.probeResult.isValid,
                 versionText = formatProbeVersion(cachedProbe.probeResult),
             )
             return
         }
-        updateDisplayedProbeStatus(
-            Bundle.message("settings.mill.executable.status.idle"),
-            isError = false,
-            versionText = "",
-        )
+        updateDisplayedProbeStatus(isError = false, versionText = "")
     }
 
-    private fun updateDisplayedProbeStatus(text: String, isError: Boolean, versionText: String) {
-        executableStatusTextProperty.set(text)
+    private fun checkingVersionText(projectPath: String, state: MillLinkedProjectSettingsState): String {
+        val cachedProbe = probeResultsByPath[projectPath] ?: return ""
+        if (cachedProbe.settingsState != state) {
+            return ""
+        }
+        return formatProbeVersion(cachedProbe.probeResult).takeUnless { it == "!" } ?: ""
+    }
+
+    private fun updateDisplayedProbeStatus(isError: Boolean, versionText: String) {
         executableStatusIsErrorProperty.set(isError)
         executableVersionTextProperty.set(versionText)
-    }
-
-    private fun formatProbeStatus(probeResult: MillExecutableProbeResult): String {
-        if (!probeResult.isValid) {
-            return Bundle.message(
-                "settings.mill.executable.status.invalid",
-                probeResult.resolvedExecutable,
-                cleanProbeMessage(probeResult.errorDetails),
-            )
-        }
-        val version = probeResult.version
-        return if (version.isNullOrBlank()) {
-            Bundle.message("settings.mill.executable.status.valid.unknown", probeResult.resolvedExecutable)
-        } else {
-            Bundle.message("settings.mill.executable.status.valid", version, probeResult.resolvedExecutable)
-        }
     }
 
     private fun formatProbeVersion(probeResult: MillExecutableProbeResult): String {
