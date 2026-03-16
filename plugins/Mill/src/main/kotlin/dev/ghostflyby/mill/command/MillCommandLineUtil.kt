@@ -24,7 +24,6 @@ package dev.ghostflyby.mill.command
 
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.CapturingProcessHandler
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
@@ -38,8 +37,12 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 internal data class MillCommandResult(
     val projectRoot: Path,
@@ -49,15 +52,22 @@ internal data class MillCommandResult(
     val stderr: String,
     val exitCode: Int?,
     val startupFailed: Boolean,
+    val timedOut: Boolean,
 ) {
     val invocation: String
         get() = arguments.joinToString(" ")
 
     val isSuccess: Boolean
-        get() = !startupFailed && exitCode == 0
+        get() = !startupFailed && !timedOut && exitCode == 0
 
     val failureDetails: String
-        get() = stderr.ifBlank { stdout }.trim()
+        get() = stderr.ifBlank { stdout }.trim().ifBlank {
+            when {
+                timedOut -> "The Mill process timed out."
+                startupFailed -> "The Mill process could not be started."
+                else -> ""
+            }
+        }
 
     fun reportFailure(
         taskId: ExternalSystemTaskId,
@@ -71,6 +81,8 @@ internal data class MillCommandResult(
 
         val output = if (startupFailed) {
             "Mill $failureContext skipped because the Mill process could not be started for `$invocation`.\n"
+        } else if (timedOut) {
+            "Mill $failureContext skipped because `$invocation` timed out.\n"
         } else {
             buildString {
                 append("Mill $failureContext skipped because `$invocation` failed.")
@@ -170,7 +182,12 @@ internal object MillCommandLineUtil {
         }
         var failureMessage: String? = null
         for (arguments in executableProbeArguments) {
-            val command = runCommand(projectRoot, probeSettings, arguments)
+            val command = runCommand(
+                projectRoot = projectRoot,
+                settings = probeSettings,
+                arguments = arguments,
+                timeoutMillis = executableProbeTimeoutMillis,
+            )
             if (command.isSuccess) {
                 return MillExecutableProbeResult(
                     resolvedExecutable = resolvedExecutable,
@@ -182,13 +199,15 @@ internal object MillCommandLineUtil {
             if (failureMessage == null) {
                 failureMessage = if (command.startupFailed) {
                     "The Mill process could not be started."
+                } else if (command.timedOut) {
+                    "The Mill process timed out after ${executableProbeTimeoutMillis / 1000} seconds."
                 } else {
                     command.failureDetails.ifBlank {
                         "The Mill process exited with code ${command.exitCode ?: -1}."
                     }
                 }
             }
-            if (command.startupFailed) {
+            if (command.startupFailed || command.timedOut) {
                 break
             }
         }
@@ -257,18 +276,39 @@ internal object MillCommandLineUtil {
         projectRoot: Path,
         settings: MillExecutionSettings?,
         arguments: List<String>,
+        timeoutMillis: Int = 0,
     ): MillCommandResult {
         val commandLine = createCommandLine(projectRoot, settings, arguments)
         return try {
-            val output = CapturingProcessHandler(commandLine).runProcess()
+            val processBuilder = commandLine.toProcessBuilder()
+            val process = processBuilder.start()
+            val charset = commandLine.charset
+            val stdoutReader = readStreamAsync(process.inputStream, charset)
+            val stderrReader = readStreamAsync(process.errorStream, charset)
+            val finished = if (timeoutMillis > 0) {
+                process.waitFor(timeoutMillis.toLong(), TimeUnit.MILLISECONDS)
+            } else {
+                process.waitFor()
+                true
+            }
+            if (!finished) {
+                process.destroyForcibly()
+                process.waitFor(1, TimeUnit.SECONDS)
+                closeQuietly(process.inputStream)
+                closeQuietly(process.errorStream)
+            }
+            val stdout = awaitStreamText(stdoutReader)
+            val stderr = awaitStreamText(stderrReader)
+            val exitCode = if (finished) process.exitValue() else null
             MillCommandResult(
                 projectRoot = projectRoot,
                 arguments = arguments,
                 commandLineString = commandLine.commandLineString,
-                stdout = output.stdout,
-                stderr = output.stderr,
-                exitCode = output.exitCode,
+                stdout = stdout,
+                stderr = stderr,
+                exitCode = exitCode,
                 startupFailed = false,
+                timedOut = !finished,
             )
         } catch (_: ExecutionException) {
             MillCommandResult(
@@ -279,8 +319,46 @@ internal object MillCommandLineUtil {
                 stderr = "",
                 exitCode = null,
                 startupFailed = true,
+                timedOut = false,
+            )
+        } catch (_: java.io.IOException) {
+            MillCommandResult(
+                projectRoot = projectRoot,
+                arguments = arguments,
+                commandLineString = commandLine.commandLineString,
+                stdout = "",
+                stderr = "",
+                exitCode = null,
+                startupFailed = true,
+                timedOut = false,
             )
         }
+    }
+
+    private fun readStreamAsync(stream: InputStream, charset: java.nio.charset.Charset): FutureTask<String> {
+        val task = FutureTask<String> {
+            stream.bufferedReader(charset).use { it.readText() }
+        }
+        Thread(task, "MillCommandLineUtil-stream-reader").apply {
+            isDaemon = true
+            start()
+        }
+        return task
+    }
+
+    private fun awaitStreamText(task: FutureTask<String>): String {
+        return try {
+            task.get(1, TimeUnit.SECONDS)
+        } catch (_: TimeoutException) {
+            task.cancel(true)
+            ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun closeQuietly(stream: InputStream) {
+        runCatching(stream::close)
     }
 
     internal fun resolveTargets(
@@ -493,6 +571,7 @@ internal object MillCommandLineUtil {
         listOf("version"),
         listOf("--help"),
     )
+    private const val executableProbeTimeoutMillis = 10_000
     private val millVersionPattern =
         Regex("""(?i)\bmill(?:\s+build\s+tool)?(?:\s+version)?[: ]+v?([0-9][0-9A-Za-z.\-+_]*)""")
     private val standaloneVersionPattern = Regex("""^v?([0-9][0-9A-Za-z.\-+_]*)$""")
