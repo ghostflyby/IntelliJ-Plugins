@@ -35,6 +35,7 @@ import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.util.ui.JBUI
 import dev.ghostflyby.mill.Bundle
+import java.awt.Dimension
 import java.awt.Font
 import java.awt.FontMetrics
 import java.awt.Graphics
@@ -231,11 +232,14 @@ private class HintOverlayTextField : ExtendableTextField() {
     private var rightHintValue: String? = null
     private var rightHintErrorValue: Boolean = false
 
+    private val gap = JBUI.scale(6)
+    private val outerGap = JBUI.scale(8)
+
     var trailingHint: String
         get() = trailingHintValue.orEmpty()
         set(value) {
             trailingHintValue = value
-            updateMargins()
+            revalidate()
             repaint()
         }
 
@@ -244,6 +248,7 @@ private class HintOverlayTextField : ExtendableTextField() {
         set(value) {
             rightHintValue = value
             updateMargins()
+            revalidate()
             repaint()
         }
 
@@ -254,11 +259,14 @@ private class HintOverlayTextField : ExtendableTextField() {
             repaint()
         }
 
-    private val gap = JBUI.scale(6)
-    private val outerGap = JBUI.scale(8)
-
     init {
         updateMargins()
+    }
+
+    override fun getPreferredSize(): Dimension {
+        val size = super.getPreferredSize()
+        val extra = textWidth(trailingHint) + textWidth(rightHint) + gap * 3 + rightExtensionReservedWidth()
+        return Dimension(size.width + extra, size.height)
     }
 
     private fun textWidth(text: String): Int {
@@ -270,13 +278,27 @@ private class HintOverlayTextField : ExtendableTextField() {
     }
 
     private fun updateMargins() {
-        val rightText = rightHintValue.orEmpty()
-        val right = if (rightText.isEmpty()) {
-            outerGap
+        val rightText = rightHint
+        val rightExtensionWidth = rightExtensionReservedWidth()
+        val rightReserved = if (rightText.isEmpty()) {
+            outerGap + rightExtensionWidth
         } else {
-            outerGap + textWidth(rightText) + gap
+            outerGap + rightExtensionWidth + gap + textWidth(rightText)
         }
-        margin = JBUI.insets(0, outerGap, 0, right)
+        margin = JBUI.insets(0, outerGap, 0, rightReserved)
+    }
+
+    private fun rightExtensionReservedWidth(): Int {
+        val extensions = runCatching { extensions }
+            .getOrNull()
+            .orEmpty()
+            .filterNot { it.isIconBeforeText }
+        if (extensions.isEmpty()) {
+            return 0
+        }
+        return extensions.sumOf { extension ->
+            extension.buttonSize?.width ?: extension.preferredSpace
+        }
     }
 
     override fun setFont(font: Font?) {
@@ -301,6 +323,12 @@ private class HintOverlayTextField : ExtendableTextField() {
 
             val metrics: FontMetrics = g2.getFontMetrics(font)
             val baseline = (height - metrics.height) / 2 + metrics.ascent
+            val rightExtensionWidth = rightExtensionReservedWidth()
+            val rightHintX = if (rightText.isEmpty()) {
+                Int.MIN_VALUE
+            } else {
+                width - outerGap - rightExtensionWidth - textWidth(rightText)
+            }
 
             if (trailingText.isNotEmpty()) {
                 g2.color = JBColor.namedColor(
@@ -309,7 +337,11 @@ private class HintOverlayTextField : ExtendableTextField() {
                 )
                 val endX = textEndX()
                 val hintX = endX + gap
-                val rightLimit = width - insets.right - textWidth(rightText) - gap
+                val rightLimit = if (rightText.isEmpty()) {
+                    width - outerGap - rightExtensionWidth - gap
+                } else {
+                    rightHintX - gap
+                }
 
                 if (hintX < rightLimit) {
                     g2.drawString(trailingText, hintX, baseline)
@@ -325,9 +357,7 @@ private class HintOverlayTextField : ExtendableTextField() {
                         JBColor.namedColor("Component.infoForeground", JBColor.GRAY),
                     )
                 }
-                val textWidth = metrics.stringWidth(rightText)
-                val x = width - insets.right - textWidth
-                g2.drawString(rightText, x, baseline)
+                g2.drawString(rightText, rightHintX, baseline)
             }
         } finally {
             g2.dispose()
