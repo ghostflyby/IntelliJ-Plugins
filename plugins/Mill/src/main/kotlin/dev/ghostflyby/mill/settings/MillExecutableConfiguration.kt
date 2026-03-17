@@ -26,7 +26,6 @@ import dev.ghostflyby.mill.MillConstants
 
 internal enum class MillExecutableSource {
     PROJECT_DEFAULT_SCRIPT,
-    PATH,
     MANUAL,
 }
 

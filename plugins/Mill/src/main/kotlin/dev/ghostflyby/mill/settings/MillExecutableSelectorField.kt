@@ -37,9 +37,12 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtilities
 import dev.ghostflyby.mill.Bundle
 import java.awt.*
+import java.awt.event.FocusAdapter
+import java.awt.event.FocusEvent
 import java.awt.geom.Rectangle2D
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JTextField
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.plaf.basic.BasicComboBoxEditor
 import kotlin.math.ceil
@@ -54,6 +57,10 @@ internal fun createMillExecutableSelectorField(
     var editorField: HintOverlayTextField? = null
     var isRefreshing = false
     var isUpdatingEditorPresentation = false
+    var hasPendingInputSync = false
+    var isUserEditingText = false
+    var hasDeferredRefresh = false
+    lateinit var refreshFromModel: () -> Unit
 
     fun choiceByKey(key: String?): MillExecutableChoice? {
         if (key.isNullOrBlank()) {
@@ -73,7 +80,7 @@ internal fun createMillExecutableSelectorField(
             .asSequence()
             .map(comboBoxModel::getElementAt)
             .firstOrNull { choice ->
-                text == choice.editorText || text == choice.displayName || text == choice.manualPath
+                text == choice.editorText
             }
     }
 
@@ -135,8 +142,7 @@ internal fun createMillExecutableSelectorField(
             val text = editor?.text.orEmpty()
             val selected = comboBox.selectedItem as? MillExecutableChoice
             return when {
-                selected?.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT && text == selected.editorText -> selected
-                selected?.source == MillExecutableSource.PATH && text == selected.editorText -> selected
+                selected != null && text == selected.editorText -> selected
                 else -> choiceByText(text) ?: createInlineManualChoice(text)
             }
         }
@@ -148,13 +154,34 @@ internal fun createMillExecutableSelectorField(
 
     val initializedEditorField = requireNotNull(editorField)
 
+    initializedEditorField.addFocusListener(
+        object : FocusAdapter() {
+            override fun focusLost(event: FocusEvent?) {
+                isUserEditingText = false
+                hasDeferredRefresh = false
+                refreshFromModel()
+            }
+        },
+    )
+
     initializedEditorField.document.addDocumentListener(
         object : DocumentAdapter() {
             override fun textChanged(event: DocumentEvent) {
                 if (isRefreshing || isUpdatingEditorPresentation) {
                     return
                 }
-                viewModel.updateExecutableInput(initializedEditorField.text)
+                isUserEditingText = true
+                if (hasPendingInputSync) {
+                    return
+                }
+                hasPendingInputSync = true
+                SwingUtilities.invokeLater {
+                    hasPendingInputSync = false
+                    if (isRefreshing || isUpdatingEditorPresentation) {
+                        return@invokeLater
+                    }
+                    viewModel.updateExecutableInput(initializedEditorField.text)
+                }
             }
         },
     )
@@ -163,6 +190,8 @@ internal fun createMillExecutableSelectorField(
         if (isRefreshing) {
             return@addActionListener
         }
+        isUserEditingText = false
+        hasDeferredRefresh = false
         val item = comboBox.selectedItem as? MillExecutableChoice ?: return@addActionListener
         initializedEditorField.trailingHint = item.editorTrailingHint
         initializedEditorField.rightHint = rightHintText()
@@ -170,7 +199,22 @@ internal fun createMillExecutableSelectorField(
         viewModel.selectExecutableChoice(item)
     }
 
-    fun refreshFromModel() {
+    refreshFromModel = refresh@{
+        if (initializedEditorField.hasFocus() && isUserEditingText) {
+            hasDeferredRefresh = true
+            val selectedChoice = viewModel.executableChoicesProperty.get()
+                .firstOrNull { it.key == viewModel.executableSelectedChoiceKeyProperty.get() }
+                ?: createInlineManualChoice(viewModel.executableInputTextProperty.get())
+            isUpdatingEditorPresentation = true
+            try {
+                initializedEditorField.trailingHint = selectedChoice.editorTrailingHint
+                initializedEditorField.rightHint = rightHintText()
+                initializedEditorField.isRightHintError = viewModel.executableStatusIsErrorProperty.get()
+            } finally {
+                isUpdatingEditorPresentation = false
+            }
+            return@refresh
+        }
         isRefreshing = true
         try {
             val choices = viewModel.executableChoicesProperty.get()
@@ -198,9 +242,6 @@ internal fun createMillExecutableSelectorField(
         refreshFromModel()
     }
     viewModel.executableSelectedChoiceKeyProperty.afterChange(parentDisposable) {
-        refreshFromModel()
-    }
-    viewModel.executableInputTextProperty.afterChange(parentDisposable) {
         refreshFromModel()
     }
     viewModel.executableVersionTextProperty.afterChange(parentDisposable) {

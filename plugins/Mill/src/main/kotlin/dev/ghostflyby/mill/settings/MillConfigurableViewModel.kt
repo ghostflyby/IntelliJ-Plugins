@@ -42,7 +42,14 @@ internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
 ) {
-    private val graph = PropertyGraph("MillConfigurableViewModel")
+    private val selectionGraph = PropertyGraph("MillConfigurableViewModel.selection")
+    private val executableChoicesGraph = PropertyGraph("MillConfigurableViewModel.executableChoices")
+    private val executableSelectedChoiceGraph = PropertyGraph("MillConfigurableViewModel.executableSelectedChoice")
+    private val executableInputGraph = PropertyGraph("MillConfigurableViewModel.executableInput")
+    private val executableTooltipGraph = PropertyGraph("MillConfigurableViewModel.executableTooltip")
+    private val executableVersionGraph = PropertyGraph("MillConfigurableViewModel.executableVersion")
+    private val executableStatusGraph = PropertyGraph("MillConfigurableViewModel.executableStatus")
+    private val optionsGraph = PropertyGraph("MillConfigurableViewModel.options")
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val originalSettingsByPath = linkedProjectSettings
         .map(MillProjectSettings::clone)
@@ -64,20 +71,22 @@ internal class MillConfigurableViewModel(
     val hasMultipleLinkedProjects: Boolean = linkedProjectPaths.size > 1
 
     val selectedProjectPathProperty: ObservableMutableProperty<String> =
-        graph.property(linkedProjectPaths.firstOrNull().orEmpty())
+        selectionGraph.property(linkedProjectPaths.firstOrNull().orEmpty())
     val selectedProjectDisplayNameProperty: ObservableProperty<String> = selectedProjectPathProperty.transform { path ->
         path.takeUnless(String::isBlank)?.let(::presentableProjectName).orEmpty()
     }
-    val executableChoicesProperty: ObservableMutableProperty<List<MillExecutableChoice>> = graph.property(emptyList())
-    val executableSelectedChoiceKeyProperty: ObservableMutableProperty<String?> = graph.property(null)
-    val executableInputTextProperty: ObservableMutableProperty<String> = graph.property("")
-    val executableSelectionToolTipProperty: ObservableMutableProperty<String> = graph.property("")
-    val executableVersionTextProperty: ObservableMutableProperty<String> = graph.property("")
-    val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = graph.property(false)
-    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = graph.property(
+    val executableChoicesProperty: ObservableMutableProperty<List<MillExecutableChoice>> =
+        executableChoicesGraph.property(emptyList())
+    val executableSelectedChoiceKeyProperty: ObservableMutableProperty<String?> =
+        executableSelectedChoiceGraph.property(null)
+    val executableInputTextProperty: ObservableMutableProperty<String> = executableInputGraph.property("")
+    val executableSelectionToolTipProperty: ObservableMutableProperty<String> = executableTooltipGraph.property("")
+    val executableVersionTextProperty: ObservableMutableProperty<String> = executableVersionGraph.property("")
+    val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = executableStatusGraph.property(false)
+    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = optionsGraph.property(
         currentSelectedState()?.useMillMetadataDuringImport ?: true,
     )
-    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> = graph.property(
+    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> = optionsGraph.property(
         currentSelectedState()?.createPerModuleTaskNodes ?: true,
     )
 
@@ -332,6 +341,9 @@ internal class MillConfigurableViewModel(
         val expectedProjectWrapper = projectRoot.resolve(MillConstants.wrapperScriptName).normalize().toString()
         val projectWrapper = discovery?.projectWrapper?.toString()
         val pathExecutables = discovery?.pathExecutables.orEmpty().map(Path::toString)
+        val cachedProbe = probeResultsByPath[projectPath]
+            ?.takeIf { it.settingsState == state && it.probeResult.isValid }
+            ?.probeResult
         val choices = linkedMapOf<String, MillExecutableChoice>()
 
         val projectChoice = MillExecutableChoice(
@@ -346,16 +358,20 @@ internal class MillConfigurableViewModel(
                 pathExecutables = pathExecutables,
                 discoveryCompleted = discoveryCompleted,
             ),
+            editorTextOverride = Bundle.message("settings.mill.executable.choice.project"),
         )
         choices[projectChoice.key] = projectChoice
 
         val pathChoice = MillExecutableChoice(
             key = "path",
             displayName = Bundle.message("settings.mill.executable.choice.path"),
-            detailText = pathExecutables.firstOrNull() ?: Bundle.message("settings.mill.executable.tooltip.path.empty"),
-            source = MillExecutableSource.PATH,
-            manualPath = "",
+            detailText = pathExecutables.firstOrNull()
+                ?: cachedProbe?.resolvedExecutable?.takeUnless { it == MillConstants.defaultExecutable },
+            source = MillExecutableSource.MANUAL,
+            manualPath = MillConstants.defaultExecutable,
             tooltipText = buildPathTooltip(pathExecutables),
+            editorTextOverride = Bundle.message("settings.mill.executable.choice.path"),
+            inputMatchText = MillConstants.defaultExecutable,
         )
         choices[pathChoice.key] = pathChoice
 
@@ -421,8 +437,8 @@ internal class MillConfigurableViewModel(
     ): MillExecutableChoice? {
         return when (state.executableSource) {
             MillExecutableSource.PROJECT_DEFAULT_SCRIPT -> choices.firstOrNull { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
-            MillExecutableSource.PATH -> choices.firstOrNull { it.source == MillExecutableSource.PATH }
-            MillExecutableSource.MANUAL -> choices.firstOrNull { it.source == MillExecutableSource.MANUAL && it.manualPath == state.manualExecutablePath }
+            MillExecutableSource.MANUAL,
+                -> choices.firstOrNull { it.source == MillExecutableSource.MANUAL && it.manualPath == state.manualExecutablePath }
         }
     }
 
@@ -430,12 +446,11 @@ internal class MillConfigurableViewModel(
         if (text.isBlank()) {
             return null
         }
-        executableChoicesProperty.get().firstOrNull { choice ->
-            choice.source != MillExecutableSource.MANUAL &&
-                    (text == choice.displayName || text == choice.manualPath)
-        }?.let { return it }
         return executableChoicesProperty.get().firstOrNull { choice ->
-            choice.source == MillExecutableSource.MANUAL && text == choice.manualPath
+            text == choice.inputMatchText ||
+                    (choice.source == MillExecutableSource.MANUAL &&
+                            choice.inputMatchText == null &&
+                            text == choice.manualPath)
         }
     }
 
@@ -507,6 +522,7 @@ internal class MillConfigurableViewModel(
                     checkingProjectPaths.remove(projectPath)
                     probeResultsByPath[projectPath] = MillCachedExecutableProbe(state, probeResult)
                     if (selectedProjectPathProperty.get() == projectPath) {
+                        refreshExecutableSelector()
                         refreshDisplayedProbeStatus()
                     }
                 }
@@ -658,9 +674,11 @@ internal data class MillExecutableChoice(
     val source: MillExecutableSource,
     val manualPath: String,
     val tooltipText: String,
+    val editorTextOverride: String? = null,
+    val inputMatchText: String? = null,
 ) {
     val editorText: String
-        get() = when (source) {
+        get() = editorTextOverride ?: when (source) {
             MillExecutableSource.MANUAL -> manualPath
             else -> displayName
         }

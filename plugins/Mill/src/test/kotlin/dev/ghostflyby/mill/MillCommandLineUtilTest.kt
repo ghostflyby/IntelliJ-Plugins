@@ -23,6 +23,7 @@
 package dev.ghostflyby.mill
 
 import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.settings.MillExecutableSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -58,6 +59,24 @@ internal class MillCommandLineUtilTest {
             Files.writeString(root.resolve(MillConstants.versionFileName), "0.12.8\n")
 
             assertEquals("0.12.8", MillCommandLineUtil.readDeclaredMillVersion(root))
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `resolves bare manual mill command via path even when project wrapper exists`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            Files.writeString(root.resolve(MillConstants.wrapperScriptName), "#!/bin/sh\n")
+
+            val resolved = MillCommandLineUtil.resolveExecutable(
+                projectRoot = root,
+                executableSource = MillExecutableSource.MANUAL,
+                configuredExecutablePath = MillConstants.defaultExecutable,
+            )
+
+            assertEquals(MillConstants.defaultExecutable, resolved)
         } finally {
             deleteRecursively(root)
         }
