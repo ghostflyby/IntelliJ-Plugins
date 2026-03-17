@@ -24,6 +24,7 @@ package dev.ghostflyby.mill.command
 
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
@@ -36,7 +37,6 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
-import java.io.File
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -158,11 +158,6 @@ internal object MillCommandLineUtil {
                 MillConstants.defaultExecutable
             }
 
-            MillExecutableSource.PATH -> {
-                MillImportDebugLogger.info("Using Mill executable from PATH `${MillConstants.defaultExecutable}`")
-                MillConstants.defaultExecutable
-            }
-
             MillExecutableSource.MANUAL -> {
                 resolveManualExecutable(projectRoot, executableConfiguration.manualPath)
             }
@@ -175,6 +170,7 @@ internal object MillCommandLineUtil {
         executablePath: String,
     ): MillExecutableProbeResult {
         val resolvedExecutable = resolveExecutable(projectRoot, executableSource, executablePath)
+        val displayResolvedExecutable = resolveDisplayExecutable(executableSource, executablePath, resolvedExecutable)
         val declaredVersion = readDeclaredMillVersion(projectRoot)
         val probeSettings = MillExecutionSettings().apply {
             millExecutableSource = executableSource
@@ -190,7 +186,7 @@ internal object MillCommandLineUtil {
             )
             if (command.isSuccess) {
                 return MillExecutableProbeResult(
-                    resolvedExecutable = resolvedExecutable,
+                    resolvedExecutable = displayResolvedExecutable,
                     isValid = true,
                     version = parseMillVersion(command.stdout + "\n" + command.stderr) ?: declaredVersion,
                     errorDetails = null,
@@ -212,11 +208,60 @@ internal object MillCommandLineUtil {
             }
         }
         return MillExecutableProbeResult(
-            resolvedExecutable = resolvedExecutable,
+            resolvedExecutable = displayResolvedExecutable,
             isValid = false,
             version = null,
             errorDetails = failureMessage,
         )
+    }
+
+    private fun resolveDisplayExecutable(
+        executableSource: MillExecutableSource,
+        executablePath: String,
+        resolvedExecutable: String,
+    ): String {
+        if (resolvedExecutable != MillConstants.defaultExecutable) {
+            return resolvedExecutable
+        }
+        if (executableSource != MillExecutableSource.MANUAL || executablePath.trim() != MillConstants.defaultExecutable) {
+            return resolvedExecutable
+        }
+        return PathEnvironmentVariableUtil.findInPath(MillConstants.defaultExecutable)
+            ?.toPath()
+            ?.toAbsolutePath()
+            ?.normalize()
+            ?.toString()
+            ?: findExecutableByCommandLookup(MillConstants.defaultExecutable)
+            ?: resolvedExecutable
+    }
+
+    private fun findExecutableByCommandLookup(commandName: String): String? {
+        val locatorCommand = when {
+            System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> listOf("where.exe", commandName)
+            else -> listOf("/usr/bin/env", "which", commandName)
+        }
+        val commandLine = GeneralCommandLine(locatorCommand)
+            .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
+        return try {
+            val process = commandLine.toProcessBuilder().start()
+            val stdoutReader = readStreamAsync(process.inputStream, commandLine.charset)
+            val stderrReader = readStreamAsync(process.errorStream, commandLine.charset)
+            val finished = process.waitFor(2, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                process.waitFor(1, TimeUnit.SECONDS)
+                closeQuietly(process.inputStream)
+                closeQuietly(process.errorStream)
+                return null
+            }
+            val stdout = awaitStreamText(stdoutReader)
+            awaitStreamText(stderrReader)
+            stdout.lineSequence()
+                .map(String::trim)
+                .firstOrNull(String::isNotEmpty)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     internal fun createCommandLine(
@@ -261,11 +306,13 @@ internal object MillCommandLineUtil {
                 MillImportDebugLogger.info("Using manually configured Mill executable `$resolved`")
                 return resolved
             }
-            val projectRelativePath = projectRoot.resolve(configuredPath).normalize()
-            if (Files.isRegularFile(projectRelativePath)) {
-                val resolved = projectRelativePath.toString()
-                MillImportDebugLogger.info("Using manually configured project-relative Mill executable `$resolved`")
-                return resolved
+            if (rawExecutable.any { it == '/' || it == '\\' }) {
+                val projectRelativePath = projectRoot.resolve(configuredPath).normalize()
+                if (Files.isRegularFile(projectRelativePath)) {
+                    val resolved = projectRelativePath.toString()
+                    MillImportDebugLogger.info("Using manually configured project-relative Mill executable `$resolved`")
+                    return resolved
+                }
             }
         }
         MillImportDebugLogger.info("Using manually configured Mill executable command `$rawExecutable`")
@@ -507,21 +554,15 @@ internal object MillCommandLineUtil {
     }
 
     private fun discoverPathExecutables(): List<Path> {
-        val pathValue = System.getenv("PATH").orEmpty()
-        if (pathValue.isBlank()) {
-            return emptyList()
-        }
-        val candidateNames = executableNamesForCurrentPlatform()
-        return pathValue.split(File.pathSeparatorChar)
+        return executableNamesForCurrentPlatform()
             .asSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .flatMap { directory ->
-                candidateNames.asSequence().mapNotNull { executableName ->
-                    runCatching { Path.of(directory).resolve(executableName).toAbsolutePath().normalize() }.getOrNull()
-                }
+            .flatMap { executableName ->
+                PathEnvironmentVariableUtil.findAllExeFilesInPath(executableName)
+                    .asSequence()
+                    .map(java.io.File::toPath)
             }
-            .filter(Files::isRegularFile)
+            .map(Path::toAbsolutePath)
+            .map(Path::normalize)
             .distinct()
             .toList()
     }

@@ -7,7 +7,8 @@ System API.
 Current implementation provides:
 
 - Mill project root detection from `build.mill`, `build.mill.yaml`, and `.mill-version`
-- Project Settings controls for executable source selection (project script, PATH, or manual path), metadata-backed
+- Project Settings controls for executable source selection (project script or manual command/path, including a PATH
+  shortcut suggestion), metadata-backed
   import, and per-module task nodes
 - Best-effort multi-module import from Mill target resolution
 - Mill metadata-backed source, resource, and generated-root import where `show <module>.*` is available
