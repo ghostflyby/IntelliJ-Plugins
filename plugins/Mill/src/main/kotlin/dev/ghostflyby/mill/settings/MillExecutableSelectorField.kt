@@ -34,11 +34,9 @@ import com.intellij.ui.components.fields.ExtendableTextComponent
 import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtilities
 import dev.ghostflyby.mill.Bundle
-import java.awt.Dimension
-import java.awt.Font
-import java.awt.FontMetrics
-import java.awt.Graphics
+import java.awt.*
 import java.awt.geom.Rectangle2D
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JTextField
@@ -317,7 +315,7 @@ private class HintOverlayTextField : ExtendableTextField() {
             return
         }
 
-        val g2 = graphics.create()
+        val g2 = graphics.create() as? Graphics2D ?: return
         try {
             g2.font = font
 
@@ -329,6 +327,7 @@ private class HintOverlayTextField : ExtendableTextField() {
             } else {
                 width - outerGap - rightExtensionWidth - textWidth(rightText)
             }
+
 
             if (trailingText.isNotEmpty()) {
                 g2.color = JBColor.namedColor(
@@ -344,7 +343,7 @@ private class HintOverlayTextField : ExtendableTextField() {
                 }
 
                 if (hintX < rightLimit) {
-                    g2.drawString(trailingText, hintX, baseline)
+                    UIUtilities.drawString(this, g2, trailingText, hintX, baseline)
                 }
             }
 
@@ -357,7 +356,7 @@ private class HintOverlayTextField : ExtendableTextField() {
                         JBColor.namedColor("Component.infoForeground", JBColor.GRAY),
                     )
                 }
-                g2.drawString(rightText, rightHintX, baseline)
+                UIUtilities.drawString(this, g2, rightText, rightHintX, baseline)
             }
         } finally {
             g2.dispose()
