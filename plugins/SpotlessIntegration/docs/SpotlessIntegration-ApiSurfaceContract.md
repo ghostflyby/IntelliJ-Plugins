@@ -18,7 +18,9 @@ Contract notes:
 
 - `format(...)` is the main integration entry point and returns `SpotlessFormatResult`.
 - `canFormat(...)` is a strict daemon-backed dry-run check.
-- `canFormatSync(...)` intentionally preserves the same strict semantics for synchronous formatter-selection paths.
+- `canFormatSync(...)` is a conservative synchronous bridge:
+  it returns cached strict results when available and otherwise schedules a bounded async probe, returning `false`
+  until that probe completes.
 - `releaseDaemon(...)` remains public for provider implementations that need explicit daemon cleanup.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonProvider`

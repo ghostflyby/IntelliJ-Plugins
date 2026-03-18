@@ -49,6 +49,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         val host: SpotlessDaemonHost,
     )
 
+    private data class CachedCanFormat(
+        val isStrictlyFormattable: Boolean,
+        val virtualFileModificationStamp: Long,
+        val externalProjectPath: String?,
+    )
+
     private data class FormatTarget(
         val provider: SpotlessDaemonProvider,
         val externalProject: Path,
@@ -65,6 +71,8 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
 
     internal var http: HttpClient = HttpClient(CIO)
     private val hosts = ConcurrentHashMap<String, DaemonEntry>()
+    private val canFormatCache = ConcurrentHashMap<String, CachedCanFormat>()
+    private val canFormatRefreshes = ConcurrentHashMap.newKeySet<String>()
     private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal var daemonProviderLookup: (Project) -> SpotlessDaemonProvider? =
         { project -> EP_NAME.findFirstSafe { it.isApplicableTo(project) } }
@@ -80,6 +88,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
                 return current.host
             }
             if (hosts.remove(pathString, current)) {
+                invalidateCanFormatCacheForExternalProject(pathString)
                 scheduleStop(current, "provider switched")
             }
         }
@@ -96,9 +105,11 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     override fun releaseDaemon(host: SpotlessDaemonHost) {
         val entries = hosts.entries
             .filter { it.value.host === host }
+        val externalProjects = entries.map { it.key }
         entries.forEach { (key, entry) ->
             hosts.remove(key, entry)
         }
+        externalProjects.forEach(::invalidateCanFormatCacheForExternalProject)
         if (entries.isEmpty()) {
             return
         }
@@ -112,6 +123,9 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
             stopDaemonEntry(entry, reason)
         }
     }
+
+    private fun cacheKey(virtualFile: VirtualFile): String? =
+        virtualFile.toNioPathOrNull()?.normalize()?.absolutePathString()
 
     private fun resolveFormatTarget(project: Project, virtualFile: VirtualFile): FormatTarget? {
         val filePath = virtualFile.toNioPathOrNull() ?: return null
@@ -134,17 +148,82 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         }
     }
 
+    private fun updateCanFormatCache(
+        virtualFile: VirtualFile,
+        externalProject: Path?,
+        result: SpotlessFormatResult,
+    ) {
+        val key = cacheKey(virtualFile) ?: return
+        val externalProjectPath = externalProject?.normalize()?.absolutePathString()
+        when (result) {
+            Clean -> {
+                canFormatCache[key] = CachedCanFormat(
+                    isStrictlyFormattable = true,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            is Dirty, NotCovered -> {
+                canFormatCache[key] = CachedCanFormat(
+                    isStrictlyFormattable = false,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            is Error -> canFormatCache.remove(key)
+        }
+    }
+
+    private fun invalidateCanFormatCacheForExternalProject(externalProjectPath: String) {
+        val keysToRemove = canFormatCache.entries
+            .filter { (_, cached) -> cached.externalProjectPath == externalProjectPath }
+            .map { it.key }
+        keysToRemove.forEach { key ->
+            canFormatCache.remove(key)
+            canFormatRefreshes.remove(key)
+        }
+    }
+
+    private fun scheduleCanFormatRefresh(
+        project: Project,
+        virtualFile: VirtualFile,
+        timeout: Duration,
+    ) {
+        val key = cacheKey(virtualFile) ?: return
+        if (!canFormatRefreshes.add(key)) {
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                withTimeoutOrNull(timeout) {
+                    format(project, virtualFile, "")
+                }
+            } finally {
+                canFormatRefreshes.remove(key)
+            }
+        }
+    }
+
     override suspend fun format(
         project: Project,
         virtualFile: VirtualFile,
         content: CharSequence,
     ): SpotlessFormatResult {
-        val target = resolveFormatTarget(project, virtualFile) ?: return NotCovered
-        val daemon = target.provider.getDaemon(project, target.externalProject)
-        if (!http.healthCheck(daemon)) {
-            return Error("Spotless Daemon is not responding")
+        val target = resolveFormatTarget(project, virtualFile)
+        if (target == null) {
+            updateCanFormatCache(virtualFile, externalProject = null, result = NotCovered)
+            return NotCovered
         }
-        return http.format(daemon, target.filePath, content)
+        val daemon = target.provider.getDaemon(project, target.externalProject)
+        val result = if (!http.healthCheck(daemon)) {
+            Error("Spotless Daemon is not responding")
+        } else {
+            http.format(daemon, target.filePath, content)
+        }
+        updateCanFormatCache(virtualFile, target.externalProject, result)
+        return result
     }
 
     override suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean =
@@ -154,15 +233,21 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         project: Project,
         virtualFile: VirtualFile,
         timeout: Duration,
-    ): Boolean = runBlocking {
-        withTimeoutOrNull(timeout) {
-            canFormat(project, virtualFile)
-        } ?: false
+    ): Boolean {
+        val key = cacheKey(virtualFile) ?: return false
+        val cached = canFormatCache[key]
+        if (cached != null && cached.virtualFileModificationStamp == virtualFile.modificationStamp) {
+            return cached.isStrictlyFormattable
+        }
+        scheduleCanFormatRefresh(project, virtualFile, timeout)
+        return false
     }
 
     override fun dispose() {
         val entries = hosts.values.toSet()
         hosts.clear()
+        canFormatCache.clear()
+        canFormatRefreshes.clear()
         cleanupScope.launch {
             entries.forEach { entry ->
                 stopDaemonEntry(entry, "service disposed")

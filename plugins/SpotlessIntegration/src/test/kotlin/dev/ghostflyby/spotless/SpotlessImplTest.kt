@@ -75,12 +75,42 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/Test.kt", "unformatted-content")
 
+        assertFalse(spotless.canFormatSync(project, virtualFile))
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
         assertTrue(runBlocking { spotless.canFormat(project, virtualFile) })
         assertEquals(
             SpotlessFormatResult.Dirty("formatted-content"),
             runBlocking { spotless.format(project, virtualFile, "unformatted-content") },
         )
         assertEquals(1, provider.startCount)
+
+        releaseDaemon(provider)
+    }
+
+    fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
+        spotless.http = testHttpClient(
+            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+            format = { query ->
+                if (query.contains("dryrun=")) {
+                    DaemonResponse(HttpStatusCode.OK)
+                } else {
+                    DaemonResponse(HttpStatusCode.OK, "formatted-content")
+                }
+            },
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("src/Cached.kt", "content")
+
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+
+        spotless.releaseDaemon(provider.host)
+        assertFalse(spotless.canFormatSync(project, virtualFile))
+        assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
 
         releaseDaemon(provider)
     }
@@ -141,6 +171,17 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
     private fun releaseDaemon(provider: TestDaemonProvider) {
         spotless.releaseDaemon(provider.host)
         assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+    }
+
+    private fun waitUntil(condition: () -> Boolean): Boolean {
+        val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(2_000)
+        while (System.nanoTime() < deadlineNanos) {
+            if (condition()) {
+                return true
+            }
+            Thread.sleep(25)
+        }
+        return condition()
     }
 
     private fun testHttpClient(
