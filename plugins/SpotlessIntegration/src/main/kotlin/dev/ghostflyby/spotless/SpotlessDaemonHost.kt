@@ -24,12 +24,18 @@ package dev.ghostflyby.spotless
 
 import java.nio.file.Path
 
+/**
+ * Public daemon address contract used by [Spotless] and provider implementations.
+ *
+ * These types remain public because they cross the application service and extension-point
+ * boundary exposed in plugin XML.
+ */
 public sealed interface SpotlessDaemonHost {
-    public data class Localhost(val port: Int) : SpotlessDaemonHost
+    public data class Localhost(public val port: Int) : SpotlessDaemonHost
 
     public data class Unix(
-        val path: Path,
-        val workingDirectory: Path,
+        public val path: Path,
+        public val workingDirectory: Path,
     ) : SpotlessDaemonHost
 
 }

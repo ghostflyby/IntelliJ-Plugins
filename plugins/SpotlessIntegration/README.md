@@ -10,4 +10,11 @@ integrates with Spotless.
 2. Act as a formatter for covered files
 3. On-the-fly formatting just in the IDE
 
+## Public API
+
+This plugin exposes a public `Spotless` application service and a public `SpotlessDaemonProvider`
+extension point. Their contract notes are documented in:
+
+`plugins/SpotlessIntegration/docs/SpotlessIntegration-ApiSurfaceContract.md`
+
 <!-- Plugin description end -->
