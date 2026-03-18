@@ -49,6 +49,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         val host: SpotlessDaemonHost,
     )
 
+    private data class FormatTarget(
+        val provider: SpotlessDaemonProvider,
+        val externalProject: Path,
+        val filePath: Path,
+    )
+
     companion object {
         @JvmField
         val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
@@ -57,9 +63,11 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
 
     private val logger = logger<SpotlessImpl>()
 
-    internal val http = HttpClient(CIO)
-
+    internal var http: HttpClient = HttpClient(CIO)
     private val hosts = ConcurrentHashMap<String, DaemonEntry>()
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    internal var daemonProviderLookup: (Project) -> SpotlessDaemonProvider? =
+        { project -> EP_NAME.findFirstSafe { it.isApplicableTo(project) } }
 
     private suspend fun SpotlessDaemonProvider.getDaemon(
         project: Project,
@@ -100,9 +108,16 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     }
 
     private fun scheduleStop(entry: DaemonEntry, reason: String) {
-        runBlocking(NonCancellable + Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             stopDaemonEntry(entry, reason)
         }
+    }
+
+    private fun resolveFormatTarget(project: Project, virtualFile: VirtualFile): FormatTarget? {
+        val filePath = virtualFile.toNioPathOrNull() ?: return null
+        val provider = daemonProviderLookup(project) ?: return null
+        val externalProject = provider.findExternalProjectPath(project, virtualFile) ?: return null
+        return FormatTarget(provider, externalProject, filePath)
     }
 
     private suspend fun stopDaemonEntry(entry: DaemonEntry, reason: String) {
@@ -123,16 +138,14 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         project: Project,
         virtualFile: VirtualFile,
         content: CharSequence,
-    ): SpotlessFormatResult = scope.async {
-        val filePath = virtualFile.toNioPathOrNull() ?: return@async NotCovered
-        val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
-        val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
-        val daemon = extension.getDaemon(project, externalProject)
+    ): SpotlessFormatResult {
+        val target = resolveFormatTarget(project, virtualFile) ?: return NotCovered
+        val daemon = target.provider.getDaemon(project, target.externalProject)
         if (!http.healthCheck(daemon)) {
-            return@async Error("Spotless Daemon is not responding")
+            return Error("Spotless Daemon is not responding")
         }
-        http.format(daemon, filePath, content)
-    }.await()
+        return http.format(daemon, target.filePath, content)
+    }
 
     override suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean =
         format(project, virtualFile, "") == Clean
@@ -148,9 +161,9 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     }
 
     override fun dispose() {
-        val entries = hosts.values.toList()
+        val entries = hosts.values.toSet()
         hosts.clear()
-        runBlocking(NonCancellable + Dispatchers.IO) {
+        cleanupScope.launch {
             entries.forEach { entry ->
                 stopDaemonEntry(entry, "service disposed")
             }

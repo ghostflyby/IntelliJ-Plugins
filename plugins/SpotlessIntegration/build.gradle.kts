@@ -40,4 +40,9 @@ dependencies {
         excludeKotlinStdlib()
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
+    testImplementation("io.ktor:ktor-client-mock:${libs.versions.ktor.get()}") {
+        excludeCoroutines()
+        excludeKotlinStdlib()
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
 }
