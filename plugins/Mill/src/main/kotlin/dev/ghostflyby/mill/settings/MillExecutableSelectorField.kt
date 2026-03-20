@@ -26,16 +26,18 @@ import com.intellij.icons.AllIcons
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.ListSeparator
+import com.intellij.ui.GroupedComboBoxRenderer
 import com.intellij.ui.components.fields.ExtendableTextComponent
 import dev.ghostflyby.intellij.ui.EditableHintedComboBox
+import dev.ghostflyby.intellij.ui.EditableHintedComboBoxInputResolver
 import dev.ghostflyby.intellij.ui.EditableHintedComboBoxPresentation
 import dev.ghostflyby.intellij.ui.createEditableHintedComboBox
 import dev.ghostflyby.mill.Bundle
 
 private val millExecutableChoicePresentation = EditableHintedComboBoxPresentation<MillExecutableChoice>(
-    popupTextOf = { it.displayName },
     editorTextOf = { it.editorText },
-    leftHintOf = { it?.trailingHint.orEmpty() },
+    editorLeftHintOf = { it?.editorHintText.orEmpty() },
 )
 
 internal fun createMillExecutableSelectorField(
@@ -45,10 +47,21 @@ internal fun createMillExecutableSelectorField(
     val selector = createEditableHintedComboBox(
         presentation = millExecutableChoicePresentation,
     )
-        .configureInputResolution(
-            createInlineItem = ::createInlineManualChoice,
-            findItemByInput = { _, text -> viewModel.findExecutableChoiceByInput(text) },
+        .configureInputResolver(
+            EditableHintedComboBoxInputResolver(
+                createInlineValue = ::createInlineManualChoice,
+                findValueByEditorText = { _, text -> viewModel.findExecutableChoiceByInput(text) },
+            ),
         )
+    selector.renderer = object : GroupedComboBoxRenderer<MillExecutableChoice>(selector) {
+        override fun getText(item: MillExecutableChoice): String {
+            return item.displayName
+        }
+
+        override fun separatorFor(value: MillExecutableChoice): ListSeparator? {
+            return null
+        }
+    }
     selector.addExtension(
         ExtendableTextComponent.Extension.create(
             AllIcons.General.OpenDisk,
@@ -73,7 +86,7 @@ private fun createInlineManualChoice(text: String): MillExecutableChoice {
     return MillExecutableChoice(
         key = "manual:$text",
         displayName = text,
-        detailText = null,
+        editorHintText = null,
         source = MillExecutableSource.MANUAL,
         manualPath = text,
         tooltipText = text,

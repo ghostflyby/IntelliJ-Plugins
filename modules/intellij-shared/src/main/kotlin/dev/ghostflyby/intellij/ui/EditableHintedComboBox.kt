@@ -29,7 +29,6 @@ import com.intellij.ui.DocumentAdapter
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.fields.ExtendableTextComponent
 import com.intellij.ui.components.fields.ExtendableTextField
-import com.intellij.ui.dsl.listCellRenderer.listCellRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtilities
 import java.awt.*
@@ -44,9 +43,13 @@ import javax.swing.plaf.basic.BasicComboBoxEditor
 import kotlin.math.ceil
 
 public class EditableHintedComboBoxPresentation<T>(
-    public val popupTextOf: (T) -> String,
     public val editorTextOf: (T) -> String,
-    public val leftHintOf: (T?) -> String = { "" },
+    public val editorLeftHintOf: (T?) -> String = { "" },
+)
+
+public class EditableHintedComboBoxInputResolver<T>(
+    public val findValueByEditorText: (List<T>, String) -> T? = { _, _ -> null },
+    public val createInlineValue: ((String) -> T)? = null,
 )
 
 public class EditableHintedComboBox<T> internal constructor(
@@ -58,10 +61,11 @@ public class EditableHintedComboBox<T> internal constructor(
     private val editorTextListeners = mutableListOf<(String) -> Unit>()
 
     private var comboBoxEditorDelegate: BasicComboBoxEditor? = null
-    private var createInlineItemHandler: ((String) -> T)? = null
-    private var findItemByInputHandler: (List<T>, String) -> T? = { items, text ->
-        items.firstOrNull { presentation.editorTextOf(it) == text }
-    }
+    private var inputResolver: EditableHintedComboBoxInputResolver<T> = EditableHintedComboBoxInputResolver(
+        findValueByEditorText = { items, text ->
+            items.firstOrNull { presentation.editorTextOf(it) == text }
+        },
+    )
 
     public var items: List<T> = emptyList()
         set(value) {
@@ -102,6 +106,7 @@ public class EditableHintedComboBox<T> internal constructor(
 
 
     init {
+        setSwingPopup(false)
         hintOverlayTextField.border = null
 
         comboBoxEditorDelegate = object : BasicComboBoxEditor() {
@@ -114,7 +119,7 @@ public class EditableHintedComboBox<T> internal constructor(
                 isUpdatingEditorPresentation = true
                 try {
                     editor?.text = item?.let(presentation.editorTextOf).orEmpty()
-                    leftHint = presentation.leftHintOf(item)
+                    leftHint = presentation.editorLeftHintOf(item)
                 } finally {
                     isUpdatingEditorPresentation = false
                 }
@@ -132,7 +137,6 @@ public class EditableHintedComboBox<T> internal constructor(
 
         super.setEditor(comboBoxEditorDelegate)
         isEditable = true
-        renderer = createRenderer()
 
         hintOverlayTextField.addFocusListener(
             object : FocusAdapter() {
@@ -171,7 +175,7 @@ public class EditableHintedComboBox<T> internal constructor(
             }
             isUserEditingText = false
             val item = selectedItem as? T ?: return@addActionListener
-            leftHint = presentation.leftHintOf(item)
+            leftHint = presentation.editorLeftHintOf(item)
             notifySelectedValueChanged(item)
             notifyEditorTextChanged(presentation.editorTextOf(item))
         }
@@ -191,14 +195,10 @@ public class EditableHintedComboBox<T> internal constructor(
         reinstallComboEditorIfNeeded()
     }
 
-    public fun configureInputResolution(
-        createInlineItem: (String) -> T,
-        findItemByInput: (List<T>, String) -> T? = { items, text ->
-            items.firstOrNull { presentation.editorTextOf(it) == text }
-        },
+    public fun configureInputResolver(
+        resolver: EditableHintedComboBoxInputResolver<T>,
     ): EditableHintedComboBox<T> {
-        createInlineItemHandler = createInlineItem
-        findItemByInputHandler = findItemByInput
+        inputResolver = resolver
         refreshFromState()
         return this
     }
@@ -230,13 +230,13 @@ public class EditableHintedComboBox<T> internal constructor(
     }
 
     private fun resolveItemByInput(text: String): T? {
-        return findItemByInputHandler(items, text)
-            ?: createInlineItemHandler?.invoke(text)
+        return inputResolver.findValueByEditorText(items, text)
+            ?: inputResolver.createInlineValue?.invoke(text)
     }
 
     private fun resolveSelectedValue(): T? {
         return selectedValue
-            ?: createInlineItemHandler?.invoke(editorText)
+            ?: inputResolver.createInlineValue?.invoke(editorText)
     }
 
     private fun reinstallComboEditorIfNeeded() {
@@ -289,7 +289,7 @@ public class EditableHintedComboBox<T> internal constructor(
             val selectedItem = resolveSelectedValue()
             isUpdatingEditorPresentation = true
             try {
-                leftHint = presentation.leftHintOf(selectedItem)
+                leftHint = presentation.editorLeftHintOf(selectedItem)
             } finally {
                 isUpdatingEditorPresentation = false
             }
@@ -306,19 +306,13 @@ public class EditableHintedComboBox<T> internal constructor(
 
             isUpdatingEditorPresentation = true
             try {
-                leftHint = presentation.leftHintOf(selectedItem)
+                leftHint = presentation.editorLeftHintOf(selectedItem)
             } finally {
                 isUpdatingEditorPresentation = false
             }
         } finally {
             isRefreshing = false
         }
-    }
-
-    @Suppress("UnstableApiUsage")
-    private fun createRenderer() = listCellRenderer<T> {
-        // The popup only needs the display name, and the DSL renderer keeps this concise.
-        text(value.let(presentation.popupTextOf))
     }
 }
 
@@ -366,8 +360,7 @@ internal class HintOverlayTextField : ExtendableTextField() {
 
     override fun getPreferredSize(): Dimension {
         val size = super.getPreferredSize()
-        val extra = textWidth(trailingHint) + textWidth(rightHint) + gap * 3 + rightExtensionReservedWidth()
-        return Dimension(size.width + extra, size.height)
+        return Dimension(size.width, size.height)
     }
 
     private fun textWidth(text: String): Int {
