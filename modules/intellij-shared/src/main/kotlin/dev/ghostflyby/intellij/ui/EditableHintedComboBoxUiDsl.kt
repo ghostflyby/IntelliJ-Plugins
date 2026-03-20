@@ -29,48 +29,48 @@ import com.intellij.ui.dsl.builder.MutableProperty
 import com.intellij.ui.dsl.builder.toMutableProperty
 import kotlin.reflect.KMutableProperty0
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindItems(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindItems(
     property: ObservableProperty<List<T>>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
     bindItemsInternal(property)
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindSelectedItemKey(
-    property: ObservableMutableProperty<String?>,
+public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
+    property: ObservableMutableProperty<T?>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
-    bindSelectedItemKeyInternal(property)
+    bindSelectedValueInternal(property)
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindSelectedItemKey(
-    prop: MutableProperty<String?>,
+public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
+    prop: MutableProperty<T?>,
 ): Cell<EditableHintedComboBox<T>> {
     return bind(
-        componentGet = { it.selectedItemKey },
-        componentSet = { component, value -> component.selectedItemKey = value },
+        componentGet = { it.selectedValue },
+        componentSet = { component, value -> component.selectedValue = value },
         prop = prop,
     )
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindSelectedItemKey(
-    prop: KMutableProperty0<String?>,
+public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
+    prop: KMutableProperty0<T?>,
 ): Cell<EditableHintedComboBox<T>> {
-    return bindSelectedItemKey(prop.toMutableProperty())
+    return bindSelectedValue(prop.toMutableProperty())
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindSelectedItemKey(
-    getter: () -> String?,
-    setter: (String?) -> Unit,
+public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
+    getter: () -> T?,
+    setter: (T?) -> Unit,
 ): Cell<EditableHintedComboBox<T>> {
-    return bindSelectedItemKey(MutableProperty(getter, setter))
+    return bindSelectedValue(MutableProperty(getter, setter))
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindEditorText(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindEditorText(
     property: ObservableMutableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
     bindEditorTextInternal(property)
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindEditorText(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindEditorText(
     prop: MutableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> {
     return bind(
@@ -80,32 +80,32 @@ public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bind
     )
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindEditorText(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindEditorText(
     prop: KMutableProperty0<String>,
 ): Cell<EditableHintedComboBox<T>> {
     return bindEditorText(prop.toMutableProperty())
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindEditorText(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindEditorText(
     getter: () -> String,
     setter: (String) -> Unit,
 ): Cell<EditableHintedComboBox<T>> {
     return bindEditorText(MutableProperty(getter, setter))
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindLeftHint(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindLeftHint(
     property: ObservableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
     bindLeftHintInternal(property)
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindRightHint(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindRightHint(
     property: ObservableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
     bindRightHintInternal(property)
 }
 
-public fun <T : EditableHintedComboBoxItem> Cell<EditableHintedComboBox<T>>.bindRightHintError(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindRightHintError(
     property: ObservableProperty<Boolean>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
     bindRightHintErrorInternal(property)

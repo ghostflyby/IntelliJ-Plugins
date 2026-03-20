@@ -30,7 +30,6 @@ import com.intellij.openapi.observable.properties.PropertyGraph
 import com.intellij.openapi.observable.util.transform
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.util.Disposer
-import dev.ghostflyby.intellij.ui.EditableHintedComboBoxItem
 import dev.ghostflyby.mill.Bundle
 import dev.ghostflyby.mill.MillConstants
 import dev.ghostflyby.mill.command.MillCommandLineUtil
@@ -71,11 +70,11 @@ internal class MillConfigurableViewModel(
     }
     val executableChoicesProperty: ObservableMutableProperty<List<MillExecutableChoice>> =
         propertyGraph.property(emptyList())
-    val executableSelectedChoiceKeyProperty: ObservableMutableProperty<String?> =
+    val executableSelectedChoiceProperty: ObservableMutableProperty<MillExecutableChoice?> =
         propertyGraph.property(null)
     val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableSelectedChoiceKeyBindingProperty: ObservableMutableProperty<String?> =
-        createBindingProperty(executableSelectedChoiceKeyProperty, ::selectExecutableChoiceByKey)
+    val executableSelectedChoiceBindingProperty: ObservableMutableProperty<MillExecutableChoice?> =
+        createBindingProperty(executableSelectedChoiceProperty, ::selectExecutableChoice)
     val executableInputTextBindingProperty: ObservableMutableProperty<String> =
         createBindingProperty(executableInputTextProperty, ::updateExecutableInput)
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
@@ -205,11 +204,11 @@ internal class MillConfigurableViewModel(
         }.getOrNull().takeUnless(String?::isNullOrBlank) ?: projectPath
     }
 
-    fun selectExecutableChoiceByKey(selectedKey: String?) {
+    fun selectExecutableChoice(selectedChoice: MillExecutableChoice?) {
         if (isSynchronizing) {
             return
         }
-        val selectedChoice = executableChoicesProperty.get().firstOrNull { it.key == selectedKey } ?: return
+        selectedChoice ?: return
         applyExecutableSelection(selectedChoice.source, selectedChoice.manualPath)
     }
 
@@ -323,7 +322,7 @@ internal class MillConfigurableViewModel(
             val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
             if (projectPath == null) {
                 executableChoicesProperty.set(emptyList())
-                executableSelectedChoiceKeyProperty.set(null)
+                executableSelectedChoiceProperty.set(null)
                 executableInputTextProperty.set("")
                 executableSelectionToolTipProperty.set("")
                 return
@@ -331,7 +330,7 @@ internal class MillConfigurableViewModel(
             val state = projectStatesByPath[projectPath]
             if (state == null) {
                 executableChoicesProperty.set(emptyList())
-                executableSelectedChoiceKeyProperty.set(null)
+                executableSelectedChoiceProperty.set(null)
                 executableInputTextProperty.set("")
                 executableSelectionToolTipProperty.set("")
                 return
@@ -340,7 +339,7 @@ internal class MillConfigurableViewModel(
             val choices = buildExecutableChoices(projectPath, state)
             val selectedChoice = findChoiceForState(state, choices)
             executableChoicesProperty.set(choices)
-            executableSelectedChoiceKeyProperty.set(selectedChoice?.key)
+            executableSelectedChoiceProperty.set(selectedChoice)
             executableInputTextProperty.set(
                 selectedChoice?.editorText ?: createManualEditorText(
                     projectPath,
@@ -695,22 +694,22 @@ internal data class MillLinkedProjectSettingsState(
 }
 
 internal data class MillExecutableChoice(
-    override val key: String,
-    override val displayName: String,
+    val key: String,
+    val displayName: String,
     val detailText: String?,
     val source: MillExecutableSource,
     val manualPath: String,
     val tooltipText: String,
     val editorTextOverride: String? = null,
     val inputMatchText: String? = null,
-) : EditableHintedComboBoxItem {
-    override val editorText: String
+) {
+    val editorText: String
         get() = editorTextOverride ?: when (source) {
             MillExecutableSource.MANUAL -> manualPath
             else -> displayName
         }
 
-    override val trailingHint: String
+    val trailingHint: String
         get() = when {
             source != MillExecutableSource.MANUAL -> detailText.orEmpty()
             detailText.isNullOrBlank() || detailText == manualPath -> ""

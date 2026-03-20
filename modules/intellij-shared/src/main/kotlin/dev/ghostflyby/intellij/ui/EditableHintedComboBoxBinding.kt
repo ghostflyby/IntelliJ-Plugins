@@ -25,7 +25,7 @@ package dev.ghostflyby.intellij.ui
 import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindItemsInternal(
+internal fun <T> EditableHintedComboBox<T>.bindItemsInternal(
     property: ObservableProperty<List<T>>,
 ): EditableHintedComboBox<T> {
     items = property.get()
@@ -35,18 +35,18 @@ internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindItem
     return this
 }
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindSelectedItemKeyInternal(
-    property: ObservableMutableProperty<String?>,
+internal fun <T> EditableHintedComboBox<T>.bindSelectedValueInternal(
+    property: ObservableMutableProperty<T?>,
 ): EditableHintedComboBox<T> {
-    selectedItemKey = property.get()
+    selectedValue = property.get()
     property.afterChange {
-        selectedItemKey = it
+        selectedValue = it
     }
-    whenSelectedItemKeyChanged { property.set(it) }
+    whenSelectedValueChanged { property.set(it) }
     return this
 }
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindEditorTextInternal(
+internal fun <T> EditableHintedComboBox<T>.bindEditorTextInternal(
     property: ObservableMutableProperty<String>,
 ): EditableHintedComboBox<T> {
     editorText = property.get()
@@ -57,7 +57,7 @@ internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindEdit
     return this
 }
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindLeftHintInternal(
+internal fun <T> EditableHintedComboBox<T>.bindLeftHintInternal(
     property: ObservableProperty<String>,
 ): EditableHintedComboBox<T> {
     leftHint = property.get()
@@ -67,7 +67,7 @@ internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindLeft
     return this
 }
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindRightHintInternal(
+internal fun <T> EditableHintedComboBox<T>.bindRightHintInternal(
     property: ObservableProperty<String>,
 ): EditableHintedComboBox<T> {
     rightHint = property.get()
@@ -77,7 +77,7 @@ internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindRigh
     return this
 }
 
-internal fun <T : EditableHintedComboBoxItem> EditableHintedComboBox<T>.bindRightHintErrorInternal(
+internal fun <T> EditableHintedComboBox<T>.bindRightHintErrorInternal(
     property: ObservableProperty<Boolean>,
 ): EditableHintedComboBox<T> {
     isRightHintError = property.get()
