@@ -316,23 +316,27 @@ internal class MillConfigurableViewModel(
         return null
     }
 
-    private fun refreshExecutableSelector() {
+    private fun refreshExecutableSelector(updateEditorPresentation: Boolean = true) {
         isSynchronizing = true
         try {
             val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
             if (projectPath == null) {
                 executableChoicesProperty.set(emptyList())
-                executableSelectedChoiceProperty.set(null)
-                executableInputTextProperty.set("")
-                executableSelectionToolTipProperty.set("")
+                if (updateEditorPresentation) {
+                    executableSelectedChoiceProperty.set(null)
+                    executableInputTextProperty.set("")
+                    executableSelectionToolTipProperty.set("")
+                }
                 return
             }
             val state = projectStatesByPath[projectPath]
             if (state == null) {
                 executableChoicesProperty.set(emptyList())
-                executableSelectedChoiceProperty.set(null)
-                executableInputTextProperty.set("")
-                executableSelectionToolTipProperty.set("")
+                if (updateEditorPresentation) {
+                    executableSelectedChoiceProperty.set(null)
+                    executableInputTextProperty.set("")
+                    executableSelectionToolTipProperty.set("")
+                }
                 return
             }
 
@@ -340,18 +344,20 @@ internal class MillConfigurableViewModel(
             val selectedChoice = findChoiceForState(state, choices)
             executableChoicesProperty.set(choices)
             executableSelectedChoiceProperty.set(selectedChoice)
-            executableInputTextProperty.set(
-                selectedChoice?.editorText ?: createManualEditorText(
-                    projectPath,
-                    state.manualExecutablePath,
-                ),
-            )
-            executableSelectionToolTipProperty.set(
-                selectedChoice?.tooltipText ?: createManualTooltip(
-                    projectPath,
-                    state.manualExecutablePath,
-                ),
-            )
+            if (updateEditorPresentation) {
+                executableInputTextProperty.set(
+                    selectedChoice?.editorText ?: createManualEditorText(
+                        projectPath,
+                        state.manualExecutablePath,
+                    ),
+                )
+                executableSelectionToolTipProperty.set(
+                    selectedChoice?.tooltipText ?: createManualTooltip(
+                        projectPath,
+                        state.manualExecutablePath,
+                    ),
+                )
+            }
         } finally {
             isSynchronizing = false
         }
@@ -367,7 +373,7 @@ internal class MillConfigurableViewModel(
         val expectedProjectWrapper = projectRoot.resolve(MillConstants.wrapperScriptName).normalize().toString()
         val projectWrapper = discovery?.projectWrapper?.toString()
         val pathExecutables = discovery?.pathExecutables.orEmpty().map(Path::toString)
-        val cachedProbe = probeResultsByPath[projectPath]
+        val selectedProbe = probeResultsByPath[projectPath]
             ?.takeIf { it.settingsState == state && it.probeResult.isValid }
             ?.probeResult
         val choices = linkedMapOf<String, MillExecutableChoice>()
@@ -375,7 +381,7 @@ internal class MillConfigurableViewModel(
         val projectChoice = MillExecutableChoice(
             key = "project",
             displayName = Bundle.message("settings.mill.executable.choice.project"),
-            detailText = projectWrapper ?: expectedProjectWrapper,
+            editorHintText = projectWrapper ?: expectedProjectWrapper,
             source = MillExecutableSource.PROJECT_DEFAULT_SCRIPT,
             manualPath = "",
             tooltipText = buildProjectTooltip(
@@ -391,8 +397,15 @@ internal class MillConfigurableViewModel(
         val pathChoice = MillExecutableChoice(
             key = "path",
             displayName = Bundle.message("settings.mill.executable.choice.path"),
-            detailText = pathExecutables.firstOrNull()
-                ?: cachedProbe?.resolvedExecutable?.takeUnless { it == MillConstants.defaultExecutable },
+            editorHintText = pathExecutables.firstOrNull()
+                ?: selectedProbe
+                    ?.takeIf {
+                        state.executableSource == MillExecutableSource.MANUAL &&
+                                state.manualExecutablePath == MillConstants.defaultExecutable
+                    }
+                    ?.resolvedExecutable
+                    ?.takeUnless { it == MillConstants.defaultExecutable }
+                ?: pathExecutables.firstOrNull(),
             source = MillExecutableSource.MANUAL,
             manualPath = MillConstants.defaultExecutable,
             tooltipText = buildPathTooltip(pathExecutables),
@@ -415,11 +428,11 @@ internal class MillConfigurableViewModel(
         val displayName = runCatching { Path.of(trimmedPath).fileName?.toString() }.getOrNull()
             .takeUnless(String?::isNullOrBlank)
             ?: Bundle.message("settings.mill.executable.manual")
-        val detailText = resolvedPath ?: trimmedPath.ifBlank { null }
+        val hintText = resolvedPath ?: trimmedPath.ifBlank { null }
         return MillExecutableChoice(
             key = "manual:$trimmedPath",
             displayName = displayName,
-            detailText = detailText,
+            editorHintText = hintText,
             source = MillExecutableSource.MANUAL,
             manualPath = trimmedPath,
             tooltipText = createManualTooltip(projectRoot.toString(), trimmedPath),
@@ -696,7 +709,7 @@ internal data class MillLinkedProjectSettingsState(
 internal data class MillExecutableChoice(
     val key: String,
     val displayName: String,
-    val detailText: String?,
+    val editorHintText: String?,
     val source: MillExecutableSource,
     val manualPath: String,
     val tooltipText: String,
@@ -707,12 +720,5 @@ internal data class MillExecutableChoice(
         get() = editorTextOverride ?: when (source) {
             MillExecutableSource.MANUAL -> manualPath
             else -> displayName
-        }
-
-    val trailingHint: String
-        get() = when {
-            source != MillExecutableSource.MANUAL -> detailText.orEmpty()
-            detailText.isNullOrBlank() || detailText == manualPath -> ""
-            else -> detailText
         }
 }
