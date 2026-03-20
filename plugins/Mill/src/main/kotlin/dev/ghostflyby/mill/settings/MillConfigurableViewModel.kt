@@ -43,14 +43,7 @@ internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
 ) {
-    private val selectionGraph = PropertyGraph("MillConfigurableViewModel.selection")
-    private val executableChoicesGraph = PropertyGraph("MillConfigurableViewModel.executableChoices")
-    private val executableSelectedChoiceGraph = PropertyGraph("MillConfigurableViewModel.executableSelectedChoice")
-    private val executableInputGraph = PropertyGraph("MillConfigurableViewModel.executableInput")
-    private val executableTooltipGraph = PropertyGraph("MillConfigurableViewModel.executableTooltip")
-    private val executableVersionGraph = PropertyGraph("MillConfigurableViewModel.executableVersion")
-    private val executableStatusGraph = PropertyGraph("MillConfigurableViewModel.executableStatus")
-    private val optionsGraph = PropertyGraph("MillConfigurableViewModel.options")
+    private val propertyGraph = PropertyGraph("MillConfigurableViewModel")
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val originalSettingsByPath = linkedProjectSettings
         .map(MillProjectSettings::clone)
@@ -72,26 +65,26 @@ internal class MillConfigurableViewModel(
     val hasMultipleLinkedProjects: Boolean = linkedProjectPaths.size > 1
 
     val selectedProjectPathProperty: ObservableMutableProperty<String> =
-        selectionGraph.property(linkedProjectPaths.firstOrNull().orEmpty())
+        propertyGraph.property(linkedProjectPaths.firstOrNull().orEmpty())
     val selectedProjectDisplayNameProperty: ObservableProperty<String> = selectedProjectPathProperty.transform { path ->
         path.takeUnless(String::isBlank)?.let(::presentableProjectName).orEmpty()
     }
     val executableChoicesProperty: ObservableMutableProperty<List<MillExecutableChoice>> =
-        executableChoicesGraph.property(emptyList())
+        propertyGraph.property(emptyList())
     val executableSelectedChoiceKeyProperty: ObservableMutableProperty<String?> =
-        executableSelectedChoiceGraph.property(null)
-    val executableInputTextProperty: ObservableMutableProperty<String> = executableInputGraph.property("")
+        propertyGraph.property(null)
+    val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableSelectedChoiceKeyBindingProperty: ObservableMutableProperty<String?> =
         createBindingProperty(executableSelectedChoiceKeyProperty, ::selectExecutableChoiceByKey)
     val executableInputTextBindingProperty: ObservableMutableProperty<String> =
         createBindingProperty(executableInputTextProperty, ::updateExecutableInput)
-    val executableSelectionToolTipProperty: ObservableMutableProperty<String> = executableTooltipGraph.property("")
-    val executableVersionTextProperty: ObservableMutableProperty<String> = executableVersionGraph.property("")
-    val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = executableStatusGraph.property(false)
-    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = optionsGraph.property(
+    val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
+    val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
+    val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
+    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(
         currentSelectedState()?.useMillMetadataDuringImport ?: true,
     )
-    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> = optionsGraph.property(
+    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(
         currentSelectedState()?.createPerModuleTaskNodes ?: true,
     )
 
