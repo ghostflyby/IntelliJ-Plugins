@@ -65,7 +65,7 @@ internal fun millConfigurableView(
     row(Bundle.message("settings.mill.executable.label")) {
         cell(createMillExecutableSelectorField(project, model))
             .bindItems(model.executableChoicesProperty)
-            .bindSelectedItemKey(model.executableSelectedChoiceKeyBindingProperty)
+            .bindSelectedValue(model.executableSelectedChoiceBindingProperty)
             .bindEditorText(model.executableInputTextBindingProperty)
             .bindRightHint(model.executableVersionTextProperty)
             .bindRightHintError(model.executableStatusIsErrorProperty)

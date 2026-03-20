@@ -43,24 +43,24 @@ import javax.swing.event.DocumentEvent
 import javax.swing.plaf.basic.BasicComboBoxEditor
 import kotlin.math.ceil
 
-public interface EditableHintedComboBoxItem {
-    public val key: String
-    public val displayName: String
-    public val editorText: String
-    public val trailingHint: String
-}
+public class EditableHintedComboBoxPresentation<T>(
+    public val popupTextOf: (T) -> String,
+    public val editorTextOf: (T) -> String,
+    public val leftHintOf: (T?) -> String = { "" },
+)
 
-public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal constructor(
+public class EditableHintedComboBox<T> internal constructor(
+    private val presentation: EditableHintedComboBoxPresentation<T>,
     private val hintOverlayTextField: HintOverlayTextField = HintOverlayTextField(),
     private val comboBoxModel: DefaultComboBoxModel<T> = DefaultComboBoxModel(),
 ) : ComboBox<T>(comboBoxModel), ExtendableTextComponent by hintOverlayTextField {
-    private val selectedItemKeyListeners = mutableListOf<(String?) -> Unit>()
+    private val selectedValueListeners = mutableListOf<(T?) -> Unit>()
     private val editorTextListeners = mutableListOf<(String) -> Unit>()
 
     private var comboBoxEditorDelegate: BasicComboBoxEditor? = null
     private var createInlineItemHandler: ((String) -> T)? = null
     private var findItemByInputHandler: (List<T>, String) -> T? = { items, text ->
-        items.firstOrNull { it.editorText == text }
+        items.firstOrNull { presentation.editorTextOf(it) == text }
     }
 
     public var items: List<T> = emptyList()
@@ -72,7 +72,7 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
             refreshFromState()
         }
 
-    public var selectedItemKey: String? = null
+    public var selectedValue: T? = null
         set(value) {
             if (field == value) {
                 return
@@ -113,17 +113,8 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
                 val item = anObject as? T
                 isUpdatingEditorPresentation = true
                 try {
-                    when (item) {
-                        null -> {
-                            editor?.text = ""
-                            leftHint = ""
-                        }
-
-                        else -> {
-                            editor?.text = item.editorText
-                            leftHint = item.trailingHint
-                        }
-                    }
+                    editor?.text = item?.let(presentation.editorTextOf).orEmpty()
+                    leftHint = presentation.leftHintOf(item)
                 } finally {
                     isUpdatingEditorPresentation = false
                 }
@@ -133,7 +124,7 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
                 val text = editor?.text.orEmpty()
                 val selected = selectedItem as? T
                 return when {
-                    selected != null && text == selected.editorText -> selected
+                    selected != null && text == presentation.editorTextOf(selected) -> selected
                     else -> resolveItemByInput(text) ?: selected ?: text
                 }
             }
@@ -180,9 +171,9 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
             }
             isUserEditingText = false
             val item = selectedItem as? T ?: return@addActionListener
-            leftHint = item.trailingHint
-            notifySelectedItemKeyChanged(item.key)
-            notifyEditorTextChanged(item.editorText)
+            leftHint = presentation.leftHintOf(item)
+            notifySelectedValueChanged(item)
+            notifyEditorTextChanged(presentation.editorTextOf(item))
         }
 
         SwingUtilities.invokeLater {
@@ -203,7 +194,7 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
     public fun configureInputResolution(
         createInlineItem: (String) -> T,
         findItemByInput: (List<T>, String) -> T? = { items, text ->
-            items.firstOrNull { it.editorText == text }
+            items.firstOrNull { presentation.editorTextOf(it) == text }
         },
     ): EditableHintedComboBox<T> {
         createInlineItemHandler = createInlineItem
@@ -212,14 +203,14 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
         return this
     }
 
-    public fun whenSelectedItemKeyChanged(
+    public fun whenSelectedValueChanged(
         parentDisposable: Disposable? = null,
-        listener: (String?) -> Unit,
+        listener: (T?) -> Unit,
     ): EditableHintedComboBox<T> {
-        selectedItemKeyListeners += listener
+        selectedValueListeners += listener
         parentDisposable?.let {
             Disposer.register(it) {
-                selectedItemKeyListeners.remove(listener)
+                selectedValueListeners.remove(listener)
             }
         }
         return this
@@ -238,20 +229,13 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
         return this
     }
 
-    private fun itemByKey(key: String?): T? {
-        if (key.isNullOrBlank()) {
-            return null
-        }
-        return items.firstOrNull { it.key == key }
-    }
-
     private fun resolveItemByInput(text: String): T? {
         return findItemByInputHandler(items, text)
             ?: createInlineItemHandler?.invoke(text)
     }
 
-    private fun resolveSelectedItem(): T? {
-        return itemByKey(selectedItemKey)
+    private fun resolveSelectedValue(): T? {
+        return selectedValue
             ?: createInlineItemHandler?.invoke(editorText)
     }
 
@@ -280,12 +264,12 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
         }
     }
 
-    private fun notifySelectedItemKeyChanged(value: String?) {
-        if (selectedItemKey == value) {
+    private fun notifySelectedValueChanged(value: T?) {
+        if (selectedValue == value) {
             return
         }
-        selectedItemKey = value
-        selectedItemKeyListeners.toList().forEach { listener ->
+        selectedValue = value
+        selectedValueListeners.toList().forEach { listener ->
             listener(value)
         }
     }
@@ -302,10 +286,10 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
 
     private fun refreshFromState() {
         if (hintOverlayTextField.hasFocus() && isUserEditingText) {
-            val selectedItem = resolveSelectedItem()
+            val selectedItem = resolveSelectedValue()
             isUpdatingEditorPresentation = true
             try {
-                leftHint = selectedItem?.trailingHint.orEmpty()
+                leftHint = presentation.leftHintOf(selectedItem)
             } finally {
                 isUpdatingEditorPresentation = false
             }
@@ -317,12 +301,12 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
             comboBoxModel.removeAllElements()
             items.forEach(comboBoxModel::addElement)
 
-            val selectedItem = resolveSelectedItem()
+            val selectedItem = resolveSelectedValue()
             this.selectedItem = selectedItem
 
             isUpdatingEditorPresentation = true
             try {
-                leftHint = selectedItem?.trailingHint.orEmpty()
+                leftHint = presentation.leftHintOf(selectedItem)
             } finally {
                 isUpdatingEditorPresentation = false
             }
@@ -334,13 +318,14 @@ public class EditableHintedComboBox<T : EditableHintedComboBoxItem> internal con
     @Suppress("UnstableApiUsage")
     private fun createRenderer() = listCellRenderer<T> {
         // The popup only needs the display name, and the DSL renderer keeps this concise.
-        text(value.displayName)
+        text(value.let(presentation.popupTextOf))
     }
 }
 
-public fun <T : EditableHintedComboBoxItem> createEditableHintedComboBox(
+public fun <T> createEditableHintedComboBox(
+    presentation: EditableHintedComboBoxPresentation<T>,
 ): EditableHintedComboBox<T> {
-    return EditableHintedComboBox()
+    return EditableHintedComboBox(presentation = presentation)
 }
 
 internal class HintOverlayTextField : ExtendableTextField() {
