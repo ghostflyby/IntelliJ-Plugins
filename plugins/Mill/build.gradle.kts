@@ -27,6 +27,8 @@ plugins {
 version = "0.0.1"
 
 dependencies {
+    implementation(project(":modules:intellij-shared"))
+
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         compatiblePlugin("org.intellij.scala")

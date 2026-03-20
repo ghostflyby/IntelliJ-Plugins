@@ -49,7 +49,7 @@ internal class MillConfigurable(
                 linkedProjectSettings = MillSettings.getInstance(project).linkedProjectsSettings,
                 parentDisposable = currentDisposable,
             )
-            val currentPanel = millConfigurableView(project, currentViewModel, currentDisposable)
+            val currentPanel = millConfigurableView(project, currentViewModel)
             currentPanel.registerValidators(currentDisposable)
 
             disposable = currentDisposable
