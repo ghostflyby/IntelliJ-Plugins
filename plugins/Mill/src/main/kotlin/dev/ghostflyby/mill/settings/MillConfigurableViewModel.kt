@@ -30,6 +30,7 @@ import com.intellij.openapi.observable.properties.PropertyGraph
 import com.intellij.openapi.observable.util.transform
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.util.Disposer
+import dev.ghostflyby.intellij.ui.EditableHintedComboBoxItem
 import dev.ghostflyby.mill.Bundle
 import dev.ghostflyby.mill.MillConstants
 import dev.ghostflyby.mill.command.MillCommandLineUtil
@@ -80,6 +81,10 @@ internal class MillConfigurableViewModel(
     val executableSelectedChoiceKeyProperty: ObservableMutableProperty<String?> =
         executableSelectedChoiceGraph.property(null)
     val executableInputTextProperty: ObservableMutableProperty<String> = executableInputGraph.property("")
+    val executableSelectedChoiceKeyBindingProperty: ObservableMutableProperty<String?> =
+        createBindingProperty(executableSelectedChoiceKeyProperty, ::selectExecutableChoiceByKey)
+    val executableInputTextBindingProperty: ObservableMutableProperty<String> =
+        createBindingProperty(executableInputTextProperty, ::updateExecutableInput)
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = executableTooltipGraph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = executableVersionGraph.property("")
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = executableStatusGraph.property(false)
@@ -207,8 +212,12 @@ internal class MillConfigurableViewModel(
         }.getOrNull().takeUnless(String?::isNullOrBlank) ?: projectPath
     }
 
-    fun selectExecutableChoice(choice: MillExecutableChoice) {
-        applyExecutableSelection(choice.source, choice.manualPath)
+    fun selectExecutableChoiceByKey(selectedKey: String?) {
+        if (isSynchronizing) {
+            return
+        }
+        val selectedChoice = executableChoicesProperty.get().firstOrNull { it.key == selectedKey } ?: return
+        applyExecutableSelection(selectedChoice.source, selectedChoice.manualPath)
     }
 
     fun updateExecutableInput(text: String) {
@@ -216,12 +225,29 @@ internal class MillConfigurableViewModel(
             return
         }
         val trimmedText = text.trim()
-        val matchedChoice = findChoiceByInput(trimmedText)
+        val matchedChoice = findExecutableChoiceByInput(trimmedText)
         if (matchedChoice != null) {
             applyExecutableSelection(matchedChoice.source, matchedChoice.manualPath)
             return
         }
         applyExecutableSelection(MillExecutableSource.MANUAL, trimmedText)
+    }
+
+    private fun <T> createBindingProperty(
+        delegate: ObservableMutableProperty<T>,
+        setter: (T) -> Unit,
+    ): ObservableMutableProperty<T> {
+        return object : ObservableMutableProperty<T> {
+            override fun get(): T = delegate.get()
+
+            override fun set(value: T) {
+                setter(value)
+            }
+
+            override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
+                delegate.afterChange(parentDisposable, listener)
+            }
+        }
     }
 
     private fun currentSelectedState(): MillLinkedProjectSettingsState? {
@@ -256,6 +282,9 @@ internal class MillConfigurableViewModel(
     private fun applyExecutableSelection(source: MillExecutableSource, manualPath: String) {
         val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return
         val currentState = projectStatesByPath[projectPath] ?: return
+        if (currentState.executableSource == source && currentState.manualExecutablePath == manualPath) {
+            return
+        }
         projectStatesByPath[projectPath] = MillLinkedProjectSettingsState.create(
             externalProjectPath = projectPath,
             executableSource = source,
@@ -296,39 +325,44 @@ internal class MillConfigurableViewModel(
     }
 
     private fun refreshExecutableSelector() {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
-        if (projectPath == null) {
-            executableChoicesProperty.set(emptyList())
-            executableSelectedChoiceKeyProperty.set(null)
-            executableInputTextProperty.set("")
-            executableSelectionToolTipProperty.set("")
-            return
-        }
-        val state = projectStatesByPath[projectPath]
-        if (state == null) {
-            executableChoicesProperty.set(emptyList())
-            executableSelectedChoiceKeyProperty.set(null)
-            executableInputTextProperty.set("")
-            executableSelectionToolTipProperty.set("")
-            return
-        }
+        isSynchronizing = true
+        try {
+            val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
+            if (projectPath == null) {
+                executableChoicesProperty.set(emptyList())
+                executableSelectedChoiceKeyProperty.set(null)
+                executableInputTextProperty.set("")
+                executableSelectionToolTipProperty.set("")
+                return
+            }
+            val state = projectStatesByPath[projectPath]
+            if (state == null) {
+                executableChoicesProperty.set(emptyList())
+                executableSelectedChoiceKeyProperty.set(null)
+                executableInputTextProperty.set("")
+                executableSelectionToolTipProperty.set("")
+                return
+            }
 
-        val choices = buildExecutableChoices(projectPath, state)
-        val selectedChoice = findChoiceForState(state, choices)
-        executableChoicesProperty.set(choices)
-        executableSelectedChoiceKeyProperty.set(selectedChoice?.key)
-        executableInputTextProperty.set(
-            selectedChoice?.editorText ?: createManualEditorText(
-                projectPath,
-                state.manualExecutablePath,
-            ),
-        )
-        executableSelectionToolTipProperty.set(
-            selectedChoice?.tooltipText ?: createManualTooltip(
-                projectPath,
-                state.manualExecutablePath,
-            ),
-        )
+            val choices = buildExecutableChoices(projectPath, state)
+            val selectedChoice = findChoiceForState(state, choices)
+            executableChoicesProperty.set(choices)
+            executableSelectedChoiceKeyProperty.set(selectedChoice?.key)
+            executableInputTextProperty.set(
+                selectedChoice?.editorText ?: createManualEditorText(
+                    projectPath,
+                    state.manualExecutablePath,
+                ),
+            )
+            executableSelectionToolTipProperty.set(
+                selectedChoice?.tooltipText ?: createManualTooltip(
+                    projectPath,
+                    state.manualExecutablePath,
+                ),
+            )
+        } finally {
+            isSynchronizing = false
+        }
     }
 
     private fun buildExecutableChoices(
@@ -442,7 +476,7 @@ internal class MillConfigurableViewModel(
         }
     }
 
-    private fun findChoiceByInput(text: String): MillExecutableChoice? {
+    internal fun findExecutableChoiceByInput(text: String): MillExecutableChoice? {
         if (text.isBlank()) {
             return null
         }
@@ -668,22 +702,22 @@ internal data class MillLinkedProjectSettingsState(
 }
 
 internal data class MillExecutableChoice(
-    val key: String,
-    val displayName: String,
+    override val key: String,
+    override val displayName: String,
     val detailText: String?,
     val source: MillExecutableSource,
     val manualPath: String,
     val tooltipText: String,
     val editorTextOverride: String? = null,
     val inputMatchText: String? = null,
-) {
-    val editorText: String
+) : EditableHintedComboBoxItem {
+    override val editorText: String
         get() = editorTextOverride ?: when (source) {
             MillExecutableSource.MANUAL -> manualPath
             else -> displayName
         }
 
-    val editorTrailingHint: String
+    override val trailingHint: String
         get() = when {
             source != MillExecutableSource.MANUAL -> detailText.orEmpty()
             detailText.isNullOrBlank() || detailText == manualPath -> ""

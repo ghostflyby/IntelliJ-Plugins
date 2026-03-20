@@ -22,7 +22,6 @@
 
 package dev.ghostflyby.mill.settings
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.observable.util.bind
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
@@ -31,12 +30,12 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
+import dev.ghostflyby.intellij.ui.*
 import dev.ghostflyby.mill.Bundle
 
 internal fun millConfigurableView(
     project: Project,
     model: MillConfigurableViewModel,
-    parentDisposable: Disposable,
 ) = panel {
     if (!model.hasLinkedProjects) {
         row {
@@ -64,7 +63,12 @@ internal fun millConfigurableView(
     }
 
     row(Bundle.message("settings.mill.executable.label")) {
-        cell(createMillExecutableSelectorField(project, model, parentDisposable))
+        cell(createMillExecutableSelectorField(project, model))
+            .bindItems(model.executableChoicesProperty)
+            .bindSelectedItemKey(model.executableSelectedChoiceKeyBindingProperty)
+            .bindEditorText(model.executableInputTextBindingProperty)
+            .bindRightHint(model.executableVersionTextProperty)
+            .bindRightHintError(model.executableStatusIsErrorProperty)
             .resizableColumn()
             .align(Align.FILL)
             .validationOnApply { component ->
