@@ -28,14 +28,22 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.project.Project
 import com.intellij.ui.components.fields.ExtendableTextComponent
 import dev.ghostflyby.intellij.ui.EditableHintedComboBox
+import dev.ghostflyby.intellij.ui.EditableHintedComboBoxPresentation
 import dev.ghostflyby.intellij.ui.createEditableHintedComboBox
 import dev.ghostflyby.mill.Bundle
+
+private val millExecutableChoicePresentation = EditableHintedComboBoxPresentation<MillExecutableChoice>(
+    popupTextOf = { it.displayName },
+    editorTextOf = { it.editorText },
+    leftHintOf = { it?.trailingHint.orEmpty() },
+)
 
 internal fun createMillExecutableSelectorField(
     project: Project,
     viewModel: MillConfigurableViewModel,
 ): EditableHintedComboBox<MillExecutableChoice> {
-    val selector = createEditableHintedComboBox<MillExecutableChoice>(
+    val selector = createEditableHintedComboBox(
+        presentation = millExecutableChoicePresentation,
     )
         .configureInputResolution(
             createInlineItem = ::createInlineManualChoice,
@@ -54,7 +62,7 @@ internal fun createMillExecutableSelectorField(
                 selector,
                 null,
             ) { virtualFile ->
-                selector.selectedItem = createInlineManualChoice(virtualFile.path)
+                selector.selectedValue = createInlineManualChoice(virtualFile.path)
             }
         },
     )
