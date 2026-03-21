@@ -142,6 +142,41 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         releaseDaemon(provider)
     }
 
+    fun testCanFormatSyncRevalidatesCachedTrueAfterDaemonFailure() {
+        spotless.http = testHttpClient(
+            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+            format = { query ->
+                if (query.contains("dryrun=")) {
+                    DaemonResponse(HttpStatusCode.OK)
+                } else {
+                    DaemonResponse(HttpStatusCode.OK, "formatted-content")
+                }
+            },
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("src/Revalidate.kt", "content")
+
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+
+        spotless.http = testHttpClient(
+            healthCheck = { throw IOException("connection refused") },
+            format = { DaemonResponse(HttpStatusCode.OK, "formatted-content") },
+        )
+
+        assertTrue(spotless.canFormatSync(project, virtualFile))
+        assertEquals(
+            SpotlessFormatResult.Error("Spotless Daemon is not responding"),
+            runBlocking { spotless.format(project, virtualFile, "content") },
+        )
+        assertTrue(waitUntil { !spotless.canFormatSync(project, virtualFile) })
+
+        releaseDaemon(provider)
+    }
+
     fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
         spotless.http = testHttpClient(
             healthCheck = { DaemonResponse(HttpStatusCode.OK) },

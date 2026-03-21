@@ -207,6 +207,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         }
     }
 
+    private fun invalidateCanFormatCache(project: Project, virtualFile: VirtualFile) {
+        val key = cacheKey(project, virtualFile) ?: return
+        canFormatCache.remove(key)
+        canFormatRefreshes.remove(key)
+    }
+
     private fun scheduleCanFormatRefresh(
         project: Project,
         virtualFile: VirtualFile,
@@ -249,6 +255,9 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         } else {
             http.format(daemon, target.filePath, content)
         }
+        if (!content.isEmpty() && result is Error) {
+            invalidateCanFormatCache(project, virtualFile)
+        }
         updateCanFormatCache(
             project,
             virtualFile,
@@ -271,7 +280,10 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         val cached = canFormatCache[key]
         if (cached != null && cached.virtualFileModificationStamp == virtualFile.modificationStamp) {
             return when (cached.state) {
-                CachedCanFormatState.StrictlyFormattable -> true
+                CachedCanFormatState.StrictlyFormattable -> {
+                    scheduleCanFormatRefresh(project, virtualFile, timeout)
+                    true
+                }
                 CachedCanFormatState.StrictlyNotFormattable -> false
                 CachedCanFormatState.RetryableMiss -> {
                     scheduleCanFormatRefresh(project, virtualFile, timeout)

@@ -55,20 +55,29 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
         override fun run() {
             val spotless = service<Spotless>()
             job = scope.launch {
-                val result = spotless.format(
-                    project,
-                    virtualFile,
-                    formattingRequest.documentText,
-                )
-                when (result) {
-                    SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> formattingRequest.onTextReady(
-                        null,
+                try {
+                    val result = spotless.format(
+                        project,
+                        virtualFile,
+                        formattingRequest.documentText,
                     )
+                    when (result) {
+                        SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> formattingRequest.onTextReady(
+                            null,
+                        )
 
-                    is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
-                    is SpotlessFormatResult.Error -> formattingRequest.onError(
+                        is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
+                        is SpotlessFormatResult.Error -> formattingRequest.onError(
+                            Bundle.message("spotless.format.notification.error.title"),
+                            result.message,
+                        )
+                    }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    formattingRequest.onError(
                         Bundle.message("spotless.format.notification.error.title"),
-                        result.message,
+                        error.message ?: error.javaClass.simpleName,
                     )
                 }
             }
