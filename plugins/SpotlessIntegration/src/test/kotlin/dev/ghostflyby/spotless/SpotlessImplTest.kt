@@ -87,6 +87,29 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         releaseDaemon(provider)
     }
 
+    fun testCanFormatSyncRefreshesRetryableMissesWithoutFileEdits() {
+        spotless.http = testHttpClient(
+            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+            format = { DaemonResponse(HttpStatusCode.OK) },
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        var currentProvider: SpotlessDaemonProvider? = null
+        spotless.daemonProviderLookup = { currentProvider }
+        val virtualFile = createProjectFile("src/RetryableMiss.kt", "content")
+
+        assertFalse(spotless.canFormatSync(project, virtualFile))
+
+        Thread.sleep(100)
+        currentProvider = provider
+
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+
+        releaseDaemon(provider)
+    }
+
     fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
         spotless.http = testHttpClient(
             healthCheck = { DaemonResponse(HttpStatusCode.OK) },

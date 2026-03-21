@@ -44,13 +44,19 @@ import kotlin.time.Duration
 internal const val spotlessNotificationGroupId = "Spotless Notifications"
 
 internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Disposable.Default {
+    private enum class CachedCanFormatState {
+        StrictlyFormattable,
+        StrictlyNotFormattable,
+        RetryableMiss,
+    }
+
     private data class DaemonEntry(
         val provider: SpotlessDaemonProvider,
         val host: SpotlessDaemonHost,
     )
 
     private data class CachedCanFormat(
-        val isStrictlyFormattable: Boolean,
+        val state: CachedCanFormatState,
         val virtualFileModificationStamp: Long,
         val externalProjectPath: String?,
     )
@@ -158,15 +164,23 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         when (result) {
             Clean -> {
                 canFormatCache[key] = CachedCanFormat(
-                    isStrictlyFormattable = true,
+                    state = CachedCanFormatState.StrictlyFormattable,
                     virtualFileModificationStamp = virtualFile.modificationStamp,
                     externalProjectPath = externalProjectPath,
                 )
             }
 
-            is Dirty, NotCovered -> {
+            is Dirty -> {
                 canFormatCache[key] = CachedCanFormat(
-                    isStrictlyFormattable = false,
+                    state = CachedCanFormatState.StrictlyNotFormattable,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            NotCovered -> {
+                canFormatCache[key] = CachedCanFormat(
+                    state = CachedCanFormatState.RetryableMiss,
                     virtualFileModificationStamp = virtualFile.modificationStamp,
                     externalProjectPath = externalProjectPath,
                 )
@@ -237,7 +251,14 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         val key = cacheKey(virtualFile) ?: return false
         val cached = canFormatCache[key]
         if (cached != null && cached.virtualFileModificationStamp == virtualFile.modificationStamp) {
-            return cached.isStrictlyFormattable
+            return when (cached.state) {
+                CachedCanFormatState.StrictlyFormattable -> true
+                CachedCanFormatState.StrictlyNotFormattable -> false
+                CachedCanFormatState.RetryableMiss -> {
+                    scheduleCanFormatRefresh(project, virtualFile, timeout)
+                    false
+                }
+            }
         }
         scheduleCanFormatRefresh(project, virtualFile, timeout)
         return false

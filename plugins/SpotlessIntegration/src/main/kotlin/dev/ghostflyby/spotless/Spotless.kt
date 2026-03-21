@@ -59,8 +59,9 @@ public interface Spotless {
      * Synchronous bridge for formatter-selection code paths that cannot suspend.
      *
      * Positive results preserve the strict [canFormat] semantics. When no fresh strict result is
-     * cached yet, this method schedules an asynchronous probe bounded by [timeout] and returns
-     * `false` conservatively so formatter selection never steals files from other services.
+     * cached yet, or the latest probe ended in a retryable miss such as `NotCovered`, this method
+     * schedules an asynchronous probe bounded by [timeout] and returns `false` conservatively so
+     * formatter selection never steals files from other services.
      *
      * Prefer the suspending API for non-selection callers.
      */
