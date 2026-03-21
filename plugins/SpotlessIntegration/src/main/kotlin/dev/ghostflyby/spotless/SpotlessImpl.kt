@@ -130,8 +130,10 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         }
     }
 
-    private fun cacheKey(virtualFile: VirtualFile): String? =
-        virtualFile.toNioPathOrNull()?.normalize()?.absolutePathString()
+    private fun cacheKey(project: Project, virtualFile: VirtualFile): String? {
+        val filePath = virtualFile.toNioPathOrNull()?.normalize()?.absolutePathString() ?: return null
+        return "${project.locationHash}:$filePath"
+    }
 
     private fun resolveFormatTarget(project: Project, virtualFile: VirtualFile): FormatTarget? {
         val filePath = virtualFile.toNioPathOrNull() ?: return null
@@ -155,6 +157,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     }
 
     private fun updateCanFormatCache(
+        project: Project,
         virtualFile: VirtualFile,
         externalProject: Path?,
         result: SpotlessFormatResult,
@@ -163,7 +166,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         if (!strictProbe) {
             return
         }
-        val key = cacheKey(virtualFile) ?: return
+        val key = cacheKey(project, virtualFile) ?: return
         val externalProjectPath = externalProject?.normalize()?.absolutePathString()
         when (result) {
             Clean -> {
@@ -209,7 +212,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         virtualFile: VirtualFile,
         timeout: Duration,
     ) {
-        val key = cacheKey(virtualFile) ?: return
+        val key = cacheKey(project, virtualFile) ?: return
         if (!canFormatRefreshes.add(key)) {
             return
         }
@@ -232,6 +235,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         val target = resolveFormatTarget(project, virtualFile)
         if (target == null) {
             updateCanFormatCache(
+                project,
                 virtualFile,
                 externalProject = null,
                 result = NotCovered,
@@ -246,6 +250,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
             http.format(daemon, target.filePath, content)
         }
         updateCanFormatCache(
+            project,
             virtualFile,
             target.externalProject,
             result,
@@ -262,7 +267,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         virtualFile: VirtualFile,
         timeout: Duration,
     ): Boolean {
-        val key = cacheKey(virtualFile) ?: return false
+        val key = cacheKey(project, virtualFile) ?: return false
         val cached = canFormatCache[key]
         if (cached != null && cached.virtualFileModificationStamp == virtualFile.modificationStamp) {
             return when (cached.state) {

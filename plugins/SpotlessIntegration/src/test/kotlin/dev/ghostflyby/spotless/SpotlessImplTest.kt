@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.spotless
 
+import com.intellij.mock.MockProjectEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -107,6 +108,36 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         currentProvider = provider
 
         assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+
+        releaseDaemon(provider)
+    }
+
+    fun testCanFormatSyncCacheIsScopedPerProject() {
+        spotless.http = testHttpClient(
+            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+            format = { DaemonResponse(HttpStatusCode.OK) },
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        val otherProject = object : MockProjectEx(testRootDisposable) {
+            override fun getLocationHash(): String = "spotless-other-project"
+
+            override fun getName(): String = "spotless-other-project"
+
+            override fun getBasePath(): String? = project.basePath
+        }
+        spotless.daemonProviderLookup = { currentProject ->
+            when (currentProject) {
+                project -> provider
+                else -> null
+            }
+        }
+        val virtualFile = createProjectFile("src/ScopedCache.kt", "content")
+
+        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+        assertFalse(spotless.canFormatSync(otherProject, virtualFile))
 
         releaseDaemon(provider)
     }
