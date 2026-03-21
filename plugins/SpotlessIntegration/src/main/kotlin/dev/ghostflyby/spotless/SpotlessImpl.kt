@@ -158,7 +158,11 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         virtualFile: VirtualFile,
         externalProject: Path?,
         result: SpotlessFormatResult,
+        strictProbe: Boolean,
     ) {
+        if (!strictProbe) {
+            return
+        }
         val key = cacheKey(virtualFile) ?: return
         val externalProjectPath = externalProject?.normalize()?.absolutePathString()
         when (result) {
@@ -227,7 +231,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     ): SpotlessFormatResult {
         val target = resolveFormatTarget(project, virtualFile)
         if (target == null) {
-            updateCanFormatCache(virtualFile, externalProject = null, result = NotCovered)
+            updateCanFormatCache(
+                virtualFile,
+                externalProject = null,
+                result = NotCovered,
+                strictProbe = content.isEmpty(),
+            )
             return NotCovered
         }
         val daemon = target.provider.getDaemon(project, target.externalProject)
@@ -236,7 +245,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         } else {
             http.format(daemon, target.filePath, content)
         }
-        updateCanFormatCache(virtualFile, target.externalProject, result)
+        updateCanFormatCache(
+            virtualFile,
+            target.externalProject,
+            result,
+            strictProbe = content.isEmpty(),
+        )
         return result
     }
 

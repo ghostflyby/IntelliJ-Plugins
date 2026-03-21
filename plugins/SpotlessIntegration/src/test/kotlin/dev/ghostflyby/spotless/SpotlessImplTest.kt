@@ -82,6 +82,7 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
             SpotlessFormatResult.Dirty("formatted-content"),
             runBlocking { spotless.format(project, virtualFile, "unformatted-content") },
         )
+        assertTrue(spotless.canFormatSync(project, virtualFile))
         assertEquals(1, provider.startCount)
 
         releaseDaemon(provider)
