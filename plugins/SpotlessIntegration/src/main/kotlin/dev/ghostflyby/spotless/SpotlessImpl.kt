@@ -79,7 +79,6 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     private val hosts = ConcurrentHashMap<String, DaemonEntry>()
     private val canFormatCache = ConcurrentHashMap<String, CachedCanFormat>()
     private val canFormatRefreshes = ConcurrentHashMap.newKeySet<String>()
-    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     internal var daemonProviderLookup: (Project) -> SpotlessDaemonProvider? =
         { project -> EP_NAME.findFirstSafe { it.isApplicableTo(project) } }
 
@@ -300,14 +299,18 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         hosts.clear()
         canFormatCache.clear()
         canFormatRefreshes.clear()
-        cleanupScope.launch {
-            entries.forEach { entry ->
-                stopDaemonEntry(entry, "service disposed")
-            }
-            runCatching {
-                http.close()
-            }.onFailure { error ->
-                logger.warn("Failed to close Spotless HTTP client", error)
+        runBlocking(Dispatchers.IO) {
+            withContext(NonCancellable) {
+                entries.map { entry ->
+                    async {
+                        stopDaemonEntry(entry, "service disposed")
+                    }
+                }.awaitAll()
+                runCatching {
+                    http.close()
+                }.onFailure { error ->
+                    logger.warn("Failed to close Spotless HTTP client", error)
+                }
             }
         }
     }
