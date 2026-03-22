@@ -53,7 +53,7 @@ internal class VitePressSyntaxHighlighterLexer :
     LayeredLexer(InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor)) {
     init {
         registerSelfStoppingLayer(
-            MarkdownMergingLexer(), MarkdownTokenTypeSets.INLINE_HOLDING_ELEMENT_TYPES.getTypes(),
+            MarkdownMergingLexer(), MarkdownTokenTypeSets.INLINE_HOLDING_ELEMENT_TYPES.types,
             emptyArray(),
         )
     }

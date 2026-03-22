@@ -23,6 +23,7 @@
 package dev.ghostflyby.vitepress.markdown
 
 import com.intellij.lexer.LexerBase
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.tree.TokenSet
 import org.intellij.markdown.flavours.MarkdownFlavourDescriptor
@@ -42,7 +43,6 @@ internal class InlineHtmlAwareToplevelLexer(
 ) : LexerBase() {
 
     private val delegate = MarkdownToplevelLexer(flavourDescriptor)
-    private val patterns = VitePressHtmlPatterns
 
     private var buffer: CharSequence = ""
     private var startOffset: Int = 0
@@ -118,9 +118,9 @@ internal class InlineHtmlAwareToplevelLexer(
 
             val htmlRange = findInlineHtmlRange(nextLt, tokenEnd)
             if (htmlRange != null) {
-                val end = htmlRange.end.coerceAtMost(tokenEnd)
-                if (end > htmlRange.start) {
-                    segments += Segment(htmlRange.start, end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
+                val end = htmlRange.endOffset.coerceAtMost(tokenEnd)
+                if (end > htmlRange.startOffset) {
+                    segments += Segment(htmlRange.startOffset, end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
                     pos = end
                 } else {
                     // Fallback: avoid infinite loop on malformed ranges.
@@ -139,71 +139,30 @@ internal class InlineHtmlAwareToplevelLexer(
     private fun appendTopLevelHtmlSegment(tokenStart: Int, tokenEnd: Int) {
         val expandedRange = findTopLevelHtmlRange(tokenStart)
         if (expandedRange != null) {
-            segments += Segment(expandedRange.start, expandedRange.end, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
-            consumedTopLevelHtmlEndOffset = expandedRange.end
+            segments += Segment(
+                expandedRange.startOffset,
+                expandedRange.endOffset,
+                MarkdownTokenTypes.HTML_BLOCK_CONTENT,
+            )
+            consumedTopLevelHtmlEndOffset = expandedRange.endOffset
         } else {
             segments += Segment(tokenStart, tokenEnd, MarkdownTokenTypes.HTML_BLOCK_CONTENT)
         }
     }
 
-    private fun findTopLevelHtmlRange(start: Int): Range? {
-        return findHtmlRange(start, endOffset)?.takeIf { it.start == start }
+    private fun findTopLevelHtmlRange(start: Int): TextRange? {
+        return findHtmlRange(start, endOffset)?.takeIf { it.startOffset == start }
     }
 
-    private fun findInlineHtmlRange(start: Int, tokenEnd: Int): Range? {
+    private fun findInlineHtmlRange(start: Int, tokenEnd: Int): TextRange? {
         return findHtmlRange(start, tokenEnd)
     }
 
-    private fun findHtmlRange(start: Int, searchEnd: Int): Range? {
-        if (start + 1 >= searchEnd) return null
-
-        // Match using the same permissive start patterns as VitePressHtmlBlockProvider (line-based).
-        val lineEndExclusive = buffer.indexOf('\n', start).let { newlineIndex ->
-            if (newlineIndex == -1 || newlineIndex > searchEnd) searchEnd else newlineIndex
-        }
-        val lineSlice = buffer.subSequence(start, lineEndExclusive).toString()
-
-        val inlineSelfClosing = patterns.INLINE_SELF_CLOSING_REGEX.find(lineSlice)
-            ?.takeIf { it.range.first == 0 }
-        if (inlineSelfClosing != null) {
-            return Range(start, start + inlineSelfClosing.range.last + 1)
-        }
-
-        val match = patterns.FIND_START_REGEX.find(lineSlice) ?: return null
-        val matchedGroupIndex = match.groups.drop(2).indexOfFirst { it != null }
-        if (matchedGroupIndex == -1) return null
-
-        val afterStart = if (matchedGroupIndex == patterns.OPEN_TAG_BLOCK_GROUP_INDEX) {
-            val gtIndex = lineSlice.indexOf('>')
-            if (gtIndex >= 0) start + gtIndex + 1 else start + match.range.last + 1
-        } else {
-            start + match.range.last + 1
-        }
-
-        // Immediate tags (e.g., "<tag", "<tag />") are considered complete at the end of the line.
-        if (matchedGroupIndex == patterns.IMMEDIATE_TAG_GROUP_INDEX) {
-            return Range(start, lineEndExclusive)
-        }
-
-        if (matchedGroupIndex == patterns.ENTITY_GROUP_INDEX) {
-            return Range(start, afterStart)
-        }
-
-        val closeRegex = patterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return Range(start, afterStart)
-
-        val searchSlice = buffer.subSequence(afterStart, searchEnd).toString()
-        val closeMatch = closeRegex.find(searchSlice)
-        val end = if (closeMatch != null) {
-            afterStart + closeMatch.range.last + 1
-        } else {
-            searchEnd
-        }
-
-        return Range(start, end)
+    private fun findHtmlRange(start: Int, searchEnd: Int): TextRange? {
+        return findVitePressHtmlRange(buffer, start, searchEnd)
     }
 
     private data class Segment(val start: Int, val end: Int, val type: IElementType)
-    private data class Range(val start: Int, val end: Int)
 
     private companion object {
         private val SPLITTABLE_TOKEN_TYPES: TokenSet = TokenSet.orSet(
