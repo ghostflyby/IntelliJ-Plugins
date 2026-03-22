@@ -30,9 +30,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 
 internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
@@ -46,16 +44,18 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
         val virtualFile: VirtualFile,
         val formattingRequest: AsyncFormattingRequest,
     ) : FormattingTask {
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var job: Job? = null
+
         override fun cancel(): Boolean {
             job?.cancel()
             return true
         }
 
         override fun run() {
-            runBlocking {
-                val spotless = service<Spotless>()
-                job = launch {
+            val spotless = service<Spotless>()
+            job = scope.launch {
+                try {
                     val result = spotless.format(
                         project,
                         virtualFile,
@@ -63,7 +63,7 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
                     )
                     when (result) {
                         SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> formattingRequest.onTextReady(
-                            null
+                            null,
                         )
 
                         is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
@@ -72,14 +72,17 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
                             result.message,
                         )
                     }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    formattingRequest.onError(
+                        Bundle.message("spotless.format.notification.error.title"),
+                        error.message ?: error.javaClass.simpleName,
+                    )
                 }
-                job?.join()
             }
         }
-
-
     }
-
 
     override fun getNotificationGroupId(): String {
         return spotlessNotificationGroupId

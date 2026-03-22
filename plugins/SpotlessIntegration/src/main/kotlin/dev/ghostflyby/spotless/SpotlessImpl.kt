@@ -44,9 +44,27 @@ import kotlin.time.Duration
 internal const val spotlessNotificationGroupId = "Spotless Notifications"
 
 internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Disposable.Default {
+    private enum class CachedCanFormatState {
+        StrictlyFormattable,
+        StrictlyNotFormattable,
+        RetryableMiss,
+    }
+
     private data class DaemonEntry(
         val provider: SpotlessDaemonProvider,
         val host: SpotlessDaemonHost,
+    )
+
+    private data class CachedCanFormat(
+        val state: CachedCanFormatState,
+        val virtualFileModificationStamp: Long,
+        val externalProjectPath: String?,
+    )
+
+    private data class FormatTarget(
+        val provider: SpotlessDaemonProvider,
+        val externalProject: Path,
+        val filePath: Path,
     )
 
     companion object {
@@ -57,9 +75,12 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
 
     private val logger = logger<SpotlessImpl>()
 
-    internal val http = HttpClient(CIO)
-
+    internal var http: HttpClient = HttpClient(CIO)
     private val hosts = ConcurrentHashMap<String, DaemonEntry>()
+    private val canFormatCache = ConcurrentHashMap<String, CachedCanFormat>()
+    private val canFormatRefreshes = ConcurrentHashMap.newKeySet<String>()
+    internal var daemonProviderLookup: (Project) -> SpotlessDaemonProvider? =
+        { project -> EP_NAME.findFirstSafe { it.isApplicableTo(project) } }
 
     private suspend fun SpotlessDaemonProvider.getDaemon(
         project: Project,
@@ -72,6 +93,7 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
                 return current.host
             }
             if (hosts.remove(pathString, current)) {
+                invalidateCanFormatCacheForExternalProject(pathString)
                 scheduleStop(current, "provider switched")
             }
         }
@@ -88,9 +110,11 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     override fun releaseDaemon(host: SpotlessDaemonHost) {
         val entries = hosts.entries
             .filter { it.value.host === host }
+        val externalProjects = entries.map { it.key }
         entries.forEach { (key, entry) ->
             hosts.remove(key, entry)
         }
+        externalProjects.forEach(::invalidateCanFormatCacheForExternalProject)
         if (entries.isEmpty()) {
             return
         }
@@ -100,9 +124,21 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
     }
 
     private fun scheduleStop(entry: DaemonEntry, reason: String) {
-        runBlocking(NonCancellable + Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             stopDaemonEntry(entry, reason)
         }
+    }
+
+    private fun cacheKey(project: Project, virtualFile: VirtualFile): String? {
+        val filePath = virtualFile.toNioPathOrNull()?.normalize()?.absolutePathString() ?: return null
+        return "${project.locationHash}:$filePath"
+    }
+
+    private fun resolveFormatTarget(project: Project, virtualFile: VirtualFile): FormatTarget? {
+        val filePath = virtualFile.toNioPathOrNull() ?: return null
+        val provider = daemonProviderLookup(project) ?: return null
+        val externalProject = provider.findExternalProjectPath(project, virtualFile) ?: return null
+        return FormatTarget(provider, externalProject, filePath)
     }
 
     private suspend fun stopDaemonEntry(entry: DaemonEntry, reason: String) {
@@ -119,20 +155,117 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         }
     }
 
+    private fun updateCanFormatCache(
+        project: Project,
+        virtualFile: VirtualFile,
+        externalProject: Path?,
+        result: SpotlessFormatResult,
+        strictProbe: Boolean,
+    ) {
+        if (!strictProbe) {
+            return
+        }
+        val key = cacheKey(project, virtualFile) ?: return
+        val externalProjectPath = externalProject?.normalize()?.absolutePathString()
+        when (result) {
+            Clean -> {
+                canFormatCache[key] = CachedCanFormat(
+                    state = CachedCanFormatState.StrictlyFormattable,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            is Dirty -> {
+                canFormatCache[key] = CachedCanFormat(
+                    state = CachedCanFormatState.StrictlyNotFormattable,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            NotCovered -> {
+                canFormatCache[key] = CachedCanFormat(
+                    state = CachedCanFormatState.RetryableMiss,
+                    virtualFileModificationStamp = virtualFile.modificationStamp,
+                    externalProjectPath = externalProjectPath,
+                )
+            }
+
+            is Error -> canFormatCache.remove(key)
+        }
+    }
+
+    private fun invalidateCanFormatCacheForExternalProject(externalProjectPath: String) {
+        val keysToRemove = canFormatCache.entries
+            .filter { (_, cached) -> cached.externalProjectPath == externalProjectPath }
+            .map { it.key }
+        keysToRemove.forEach { key ->
+            canFormatCache.remove(key)
+            canFormatRefreshes.remove(key)
+        }
+    }
+
+    private fun invalidateCanFormatCache(project: Project, virtualFile: VirtualFile) {
+        val key = cacheKey(project, virtualFile) ?: return
+        canFormatCache.remove(key)
+        canFormatRefreshes.remove(key)
+    }
+
+    private fun scheduleCanFormatRefresh(
+        project: Project,
+        virtualFile: VirtualFile,
+        timeout: Duration,
+    ) {
+        val key = cacheKey(project, virtualFile) ?: return
+        if (!canFormatRefreshes.add(key)) {
+            return
+        }
+        scope.launch(Dispatchers.IO) {
+            try {
+                withTimeoutOrNull(timeout) {
+                    format(project, virtualFile, "")
+                }
+            } finally {
+                canFormatRefreshes.remove(key)
+            }
+        }
+    }
+
     override suspend fun format(
         project: Project,
         virtualFile: VirtualFile,
         content: CharSequence,
-    ): SpotlessFormatResult = scope.async {
-        val filePath = virtualFile.toNioPathOrNull() ?: return@async NotCovered
-        val extension = EP_NAME.findFirstSafe { it.isApplicableTo(project) }
-        val externalProject = extension?.findExternalProjectPath(project, virtualFile) ?: return@async NotCovered
-        val daemon = extension.getDaemon(project, externalProject)
-        if (!http.healthCheck(daemon)) {
-            return@async Error("Spotless Daemon is not responding")
+    ): SpotlessFormatResult {
+        val target = resolveFormatTarget(project, virtualFile)
+        if (target == null) {
+            updateCanFormatCache(
+                project,
+                virtualFile,
+                externalProject = null,
+                result = NotCovered,
+                strictProbe = content.isEmpty(),
+            )
+            return NotCovered
         }
-        http.format(daemon, filePath, content)
-    }.await()
+        val daemon = target.provider.getDaemon(project, target.externalProject)
+        val result = if (!http.healthCheck(daemon)) {
+            Error("Spotless Daemon is not responding")
+        } else {
+            http.format(daemon, target.filePath, content)
+        }
+        if (!content.isEmpty() && result is Error) {
+            invalidateCanFormatCache(project, virtualFile)
+        }
+        updateCanFormatCache(
+            project,
+            virtualFile,
+            target.externalProject,
+            result,
+            strictProbe = content.isEmpty(),
+        )
+        return result
+    }
 
     override suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean =
         format(project, virtualFile, "") == Clean
@@ -141,23 +274,43 @@ internal class SpotlessImpl(private val scope: CoroutineScope) : Spotless, Dispo
         project: Project,
         virtualFile: VirtualFile,
         timeout: Duration,
-    ): Boolean = runBlocking {
-        withTimeoutOrNull(timeout) {
-            canFormat(project, virtualFile)
-        } ?: false
+    ): Boolean {
+        val key = cacheKey(project, virtualFile) ?: return false
+        val cached = canFormatCache[key]
+        if (cached != null && cached.virtualFileModificationStamp == virtualFile.modificationStamp) {
+            return when (cached.state) {
+                CachedCanFormatState.StrictlyFormattable -> {
+                    scheduleCanFormatRefresh(project, virtualFile, timeout)
+                    true
+                }
+                CachedCanFormatState.StrictlyNotFormattable -> false
+                CachedCanFormatState.RetryableMiss -> {
+                    scheduleCanFormatRefresh(project, virtualFile, timeout)
+                    false
+                }
+            }
+        }
+        scheduleCanFormatRefresh(project, virtualFile, timeout)
+        return false
     }
 
     override fun dispose() {
-        val entries = hosts.values.toList()
+        val entries = hosts.values.toSet()
         hosts.clear()
-        runBlocking(NonCancellable + Dispatchers.IO) {
-            entries.forEach { entry ->
-                stopDaemonEntry(entry, "service disposed")
-            }
-            runCatching {
-                http.close()
-            }.onFailure { error ->
-                logger.warn("Failed to close Spotless HTTP client", error)
+        canFormatCache.clear()
+        canFormatRefreshes.clear()
+        runBlocking(Dispatchers.IO) {
+            withContext(NonCancellable) {
+                entries.map { entry ->
+                    async {
+                        stopDaemonEntry(entry, "service disposed")
+                    }
+                }.awaitAll()
+                runCatching {
+                    http.close()
+                }.onFailure { error ->
+                    logger.warn("Failed to close Spotless HTTP client", error)
+                }
             }
         }
     }

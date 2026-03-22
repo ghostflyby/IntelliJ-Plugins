@@ -33,14 +33,39 @@ public interface Spotless {
      */
     public fun releaseDaemon(host: SpotlessDaemonHost)
 
+    /**
+     * Formats [content] using the applicable Spotless daemon for [virtualFile].
+     *
+     * The original file on disk is not modified. Consumers must inspect [SpotlessFormatResult]
+     * to distinguish between successful formatting, unsupported files, and daemon failures.
+     */
     public suspend fun format(
         project: Project,
         virtualFile: VirtualFile,
         content: CharSequence,
     ): SpotlessFormatResult
 
+    /**
+     * Strict capability check backed by Spotless daemon dry-run semantics.
+     *
+     * This returns `true` only when the daemon is reachable and reports the file as covered
+     * without requiring content changes. It is intentionally stricter than a simple
+     * provider/external-project lookup so formatter selection does not steal files from
+     * other formatting services.
+     */
     public suspend fun canFormat(project: Project, virtualFile: VirtualFile): Boolean
 
+    /**
+     * Synchronous bridge for formatter-selection code paths that cannot suspend.
+     *
+     * Positive results preserve the strict [canFormat] semantics. Cached positives are also
+     * revalidated asynchronously so daemon failures eventually evict stale entries. When no fresh
+     * strict result is cached yet, or the latest probe ended in a retryable miss such as
+     * `NotCovered`, this method schedules an asynchronous probe bounded by [timeout] and returns
+     * `false` conservatively so formatter selection never steals files from other services.
+     *
+     * Prefer the suspending API for non-selection callers.
+     */
     public fun canFormatSync(
         project: Project,
         virtualFile: VirtualFile,

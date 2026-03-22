@@ -8,6 +8,9 @@
 
 ### Changed
 
+- refined the config UI layout [#184](https://github.com/ghostflyby/IntelliJ-Plugins/pull/184)
+- documented plugin API [#184](https://github.com/ghostflyby/IntelliJ-Plugins/pull/184)
+
 ### Deprecated
 
 ### Removed
