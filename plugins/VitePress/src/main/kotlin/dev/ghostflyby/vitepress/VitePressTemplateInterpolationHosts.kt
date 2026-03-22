@@ -29,7 +29,7 @@ import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
-import dev.ghostflyby.vitepress.markdown.VitePressHtmlPatterns
+import dev.ghostflyby.vitepress.markdown.findVitePressHtmlRange
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
@@ -182,43 +182,7 @@ private fun findHtmlGuestRange(
     startOffset: Int,
     endOffset: Int,
 ): TextRange? {
-    if (startOffset + 1 >= endOffset) return null
-
-    val lineEndExclusive = sourceCode.indexOf('\n', startOffset).let { newlineIndex ->
-        if (newlineIndex == -1 || newlineIndex > endOffset) endOffset else newlineIndex
-    }
-    val lineSlice = sourceCode.subSequence(startOffset, lineEndExclusive).toString()
-
-    val inlineSelfClosing = VitePressHtmlPatterns.INLINE_SELF_CLOSING_REGEX.find(lineSlice)
-        ?.takeIf { it.range.first == 0 }
-    if (inlineSelfClosing != null) {
-        return TextRange(startOffset, startOffset + inlineSelfClosing.range.last + 1)
-    }
-
-    val match = VitePressHtmlPatterns.FIND_START_REGEX.find(lineSlice) ?: return null
-    val matchedGroupIndex = match.groups.drop(2).indexOfFirst { it != null }
-    if (matchedGroupIndex == -1) return null
-
-    val afterStart = if (matchedGroupIndex == VitePressHtmlPatterns.OPEN_TAG_BLOCK_GROUP_INDEX) {
-        val gtIndex = lineSlice.indexOf('>')
-        if (gtIndex >= 0) startOffset + gtIndex + 1 else startOffset + match.range.last + 1
-    } else {
-        startOffset + match.range.last + 1
-    }
-
-    if (matchedGroupIndex == VitePressHtmlPatterns.IMMEDIATE_TAG_GROUP_INDEX) {
-        return TextRange(startOffset, lineEndExclusive)
-    }
-    if (matchedGroupIndex == VitePressHtmlPatterns.ENTITY_GROUP_INDEX) {
-        return TextRange(startOffset, afterStart)
-    }
-
-    val closeRegex =
-        VitePressHtmlPatterns.OPEN_CLOSE_REGEXES[matchedGroupIndex].second ?: return TextRange(startOffset, afterStart)
-    val searchSlice = sourceCode.subSequence(afterStart, endOffset).toString()
-    val closeMatch = closeRegex.find(searchSlice)
-    val rangeEnd = if (closeMatch != null) afterStart + closeMatch.range.last + 1 else endOffset
-    return TextRange(startOffset, rangeEnd)
+    return findVitePressHtmlRange(sourceCode, startOffset, endOffset)
 }
 
 private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {

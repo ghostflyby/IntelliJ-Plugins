@@ -114,14 +114,6 @@ internal class VitePressRootTracker(
         return file in stateRef.get().current
     }
 
-    internal fun add(root: VirtualFile) {
-        addAll(setOf(root))
-    }
-
-    internal fun remove(root: VirtualFile) {
-        removeAll(setOf(root))
-    }
-
     internal fun addAll(roots: Collection<VirtualFile>) {
         if (updateCurrent(roots, isAdd = true)) {
             scheduleReparseFlush()
