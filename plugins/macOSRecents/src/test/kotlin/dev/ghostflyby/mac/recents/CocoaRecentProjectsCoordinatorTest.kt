@@ -22,12 +22,7 @@
 
 package dev.ghostflyby.mac.recents
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.net.URI
@@ -92,6 +87,19 @@ internal class CocoaRecentProjectsCoordinatorTest {
             ),
             bridge.operations,
         )
+    }
+
+    @Test
+    fun `sync forces first empty replace before enabling skip`() {
+        val bridge = RecordingBridge()
+        val coordinator = coordinator(bridge)
+
+        runBlocking {
+            coordinator.sync(emptyList())
+            coordinator.sync(emptyList())
+        }
+
+        assertEquals(listOf("replace:"), bridge.operations)
     }
 
     @Test

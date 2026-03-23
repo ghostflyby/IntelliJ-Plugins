@@ -24,13 +24,7 @@ package dev.ghostflyby.mac.recents
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -67,6 +61,7 @@ internal class CocoaRecentProjectsCoordinator(
     private var scheduledSyncAtNanos: Long = 0L
     private var workerJob: Job? = null
     private var syncedUris: List<URI> = emptyList()
+    private var hasSynced: Boolean = false
     private val skippedSyncCount = AtomicInteger()
     private val appendSyncCount = AtomicInteger()
     private val replaceSyncCount = AtomicInteger()
@@ -93,7 +88,7 @@ internal class CocoaRecentProjectsCoordinator(
 
     internal suspend fun sync(targetUris: List<URI>) {
         val desiredUris = normalizeRecentUris(targetUris)
-        if (desiredUris == syncedUris) {
+        if (hasSynced && desiredUris == syncedUris) {
             logSyncDecision(
                 mode = "skip",
                 modeCount = skippedSyncCount.incrementAndGet(),
@@ -107,6 +102,7 @@ internal class CocoaRecentProjectsCoordinator(
             val appendedUris = desiredUris.drop(syncedUris.size)
             documentsBridge.appendRecentDocuments(appendedUris)
             syncedUris = desiredUris
+            hasSynced = true
             logSyncDecision(
                 mode = "append",
                 modeCount = appendSyncCount.incrementAndGet(),
@@ -116,6 +112,7 @@ internal class CocoaRecentProjectsCoordinator(
         } else {
             documentsBridge.replaceRecentDocuments(desiredUris)
             syncedUris = desiredUris
+            hasSynced = true
             logSyncDecision(
                 mode = "replace",
                 modeCount = replaceSyncCount.incrementAndGet(),
