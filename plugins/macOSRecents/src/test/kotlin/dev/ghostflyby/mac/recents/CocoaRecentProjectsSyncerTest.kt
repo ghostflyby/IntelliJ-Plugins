@@ -166,6 +166,37 @@ internal class CocoaRecentProjectsSyncerTest {
         }
     }
 
+    @Test
+    fun `scheduler clears directory based startup path when recent projects uses project root`() = runBlocking {
+        val startupPath = "/tmp/directory-project/.idea/misc.xml"
+        val recentProjectPath = "/tmp/directory-project"
+        val bridge = RecordingBridge()
+        val schedulerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val scheduler = CocoaRecentProjectsSyncScheduler(
+            coroutineScope = schedulerScope,
+            syncer = CocoaRecentProjectsSyncer(bridge),
+            debounceMillis = 50L,
+        )
+
+        try {
+            scheduler.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
+            delay(150L)
+            assertEquals(listOf("replace:file:///tmp/directory-project/.idea/misc.xml"), bridge.operations)
+
+            bridge.operations.clear()
+            scheduler.scheduleSync(recentPaths = listOf(recentProjectPath))
+            delay(150L)
+            assertEquals(listOf("replace:file:///tmp/directory-project"), bridge.operations)
+
+            bridge.operations.clear()
+            scheduler.scheduleSync(recentPaths = listOf(recentProjectPath))
+            delay(150L)
+            assertEquals(emptyList<String>(), bridge.operations)
+        } finally {
+            schedulerScope.cancel()
+        }
+    }
+
     private fun uri(path: String): URI = Path(path).toUri()
 
     private class RecordingBridge : CocoaRecentDocumentsBridge {

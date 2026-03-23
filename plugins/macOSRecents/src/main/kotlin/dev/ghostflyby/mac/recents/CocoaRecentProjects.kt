@@ -81,17 +81,22 @@ internal class CocoaRecentProjectsSyncScheduler(
     private val onFailure: (Throwable) -> Unit = {},
 ) {
     private val stateLock = Any()
-    private val pendingStartupProjectPaths = LinkedHashSet<String>()
+    private val pendingStartupProjects = LinkedHashMap<String, String>()
     private var pendingRecentPaths: List<String>? = null
     private var scheduledSyncAtNanos: Long = 0L
     private var workerJob: Job? = null
 
     internal fun scheduleSync(recentPaths: List<String>, startupProjectPath: String? = null) {
         val recentPathsSnapshot = recentPaths.toList()
+        val recentProjectKeys = recentPathsSnapshot.asSequence()
+            .mapNotNull(::projectIdentityKeyOrNull)
+            .toSet()
         synchronized(stateLock) {
             pendingRecentPaths = recentPathsSnapshot
-            startupProjectPath?.let(pendingStartupProjectPaths::add)
-            recentPathsSnapshot.forEach(pendingStartupProjectPaths::remove)
+            startupProjectPath?.let(::startupProjectPathToEntryOrNull)?.let { (projectKey, projectPath) ->
+                pendingStartupProjects[projectKey] = projectPath
+            }
+            recentProjectKeys.forEach(pendingStartupProjects::remove)
             scheduledSyncAtNanos = System.nanoTime() + debounceMillis * NANOS_PER_MILLISECOND
             if (workerJob?.isActive != true) {
                 workerJob = coroutineScope.launch {
@@ -135,7 +140,7 @@ internal class CocoaRecentProjectsSyncScheduler(
                     WorkerStep.Sync(
                         PendingSyncRequest(
                             recentPaths = recentPaths,
-                            startupProjectPaths = pendingStartupProjectPaths.toSet(),
+                            startupProjectPaths = pendingStartupProjects.values.toSet(),
                         ),
                     )
                 }
@@ -281,6 +286,37 @@ private fun pathToUriOrNull(path: String): URI? {
     return runCatching { Path(path).toUri() }.getOrNull()
 }
 
+private fun startupProjectPathToEntryOrNull(path: String): Pair<String, String>? {
+    val projectKey = projectIdentityKeyOrNull(path) ?: return null
+    return projectKey to path
+}
+
+private fun projectIdentityKeyOrNull(path: String): String? {
+    val rawPath = runCatching { Path(path) }.getOrNull() ?: return null
+    return normalizeProjectIdentityPath(rawPath).toSystemIndependentPath()
+}
+
+private fun normalizeProjectIdentityPath(path: java.nio.file.Path): java.nio.file.Path {
+    val absolutePath = path.toAbsolutePath().normalize()
+    val projectRootPath = absolutePath.toDirectoryBasedProjectRootOrSelf()
+    return runCatching { projectRootPath.toRealPath() }.getOrElse { projectRootPath }
+}
+
+private fun java.nio.file.Path.toDirectoryBasedProjectRootOrSelf(): java.nio.file.Path {
+    if (fileName?.toString() != DIRECTORY_BASED_PROJECT_FILE_NAME) {
+        return this
+    }
+    val ideaDirectory = parent ?: return this
+    if (ideaDirectory.fileName?.toString() != IDEA_DIRECTORY_NAME) {
+        return this
+    }
+    return ideaDirectory.parent ?: this
+}
+
+private fun java.nio.file.Path.toSystemIndependentPath(): String {
+    return toString().replace('\\', '/')
+}
+
 private fun normalizeRecentUris(rawUris: List<URI>): List<URI> {
     val deduplicatedUris = LinkedHashSet<URI>()
     rawUris.forEach(deduplicatedUris::add)
@@ -296,3 +332,6 @@ private fun canAppendIncrementally(currentUris: List<URI>, desiredUris: List<URI
     }
     return desiredUris.subList(0, currentUris.size) == currentUris
 }
+
+private const val DIRECTORY_BASED_PROJECT_FILE_NAME = "misc.xml"
+private const val IDEA_DIRECTORY_NAME = ".idea"
