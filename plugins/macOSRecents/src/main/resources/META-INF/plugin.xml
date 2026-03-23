@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2025-2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
@@ -7,6 +7,7 @@
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.os.mac</depends>
 
     <applicationListeners>
         <listener class="dev.ghostflyby.mac.recents.CocoaRecentProjectsListener"
