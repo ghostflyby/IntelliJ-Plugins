@@ -23,89 +23,80 @@
 
 package dev.ghostflyby.mill
 
-import com.intellij.build.events.BuildEvents
-import com.intellij.build.events.impl.FailureResultImpl
-import com.intellij.build.events.impl.SuccessResultImpl
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import com.intellij.openapi.externalSystem.model.task.event.ExternalSystemBuildEvent
+import com.intellij.openapi.externalSystem.model.task.event.*
 
-// BuildEvents is still experimental on 2025.3, but it is the public way to
-// surface structured progress in the External System import flow.
-// External resolvers may run in a remote process where no IDE application is
-// available, so progress reporting must degrade gracefully there.
+// These external-system progress DTOs are stable contracts. The IDE already
+// converts them into build view events, so they avoid direct use of the
+// experimental BuildEvents service in the remote resolver process.
 internal class MillImportProgressReporter(
     private val taskId: ExternalSystemTaskId,
     private val listener: ExternalSystemTaskNotificationListener,
 ) {
-    private val events: BuildEvents? = runCatching {
-        val application = ApplicationManager.getApplication() ?: return@runCatching null
-        application.getService(BuildEvents::class.java)
-    }.getOrNull()
     private val eventId: String = "mill-import:${taskId.id}"
+    private val startedAt: Long = System.currentTimeMillis()
 
     fun started(message: String) {
-        val events = events ?: return
         listener.onStatusChange(
-            ExternalSystemBuildEvent(
+            ExternalSystemTaskExecutionEvent(
                 taskId,
-                events.start()
-                    .withId(eventId)
-                    .withParentId(taskId)
-                    .withTime(System.currentTimeMillis())
-                    .withMessage(message)
-                    .build(),
+                ExternalSystemStartEvent(
+                    eventId,
+                    null,
+                    OperationDescriptor(message, System.currentTimeMillis()),
+                ),
             ),
         )
     }
 
     fun progress(progress: Long, message: String) {
-        val events = events ?: return
         listener.onStatusChange(
-            ExternalSystemBuildEvent(
+            ExternalSystemTaskExecutionEvent(
                 taskId,
-                events.progress()
-                    .withStartId(eventId)
-                    .withParentId(taskId)
-                    .withTime(System.currentTimeMillis())
-                    .withMessage(message)
-                    .withTotal(100)
-                    .withProgress(progress.coerceIn(0, 100))
-                    .withUnit("%")
-                    .build(),
+                ExternalSystemStatusEvent(
+                    eventId,
+                    null,
+                    OperationDescriptor(message, System.currentTimeMillis()),
+                    100,
+                    progress.coerceIn(0, 100),
+                    "%",
+                    message,
+                ),
             ),
         )
     }
 
     fun finished(message: String) {
-        val events = events ?: return
+        val finishedAt = System.currentTimeMillis()
         listener.onStatusChange(
-            ExternalSystemBuildEvent(
+            ExternalSystemTaskExecutionEvent(
                 taskId,
-                events.finish()
-                    .withStartId(eventId)
-                    .withParentId(taskId)
-                    .withTime(System.currentTimeMillis())
-                    .withMessage(message)
-                    .withResult(SuccessResultImpl())
-                    .build(),
+                ExternalSystemFinishEvent(
+                    eventId,
+                    null,
+                    OperationDescriptor(message, finishedAt),
+                    SuccessResult(startedAt, finishedAt, false),
+                ),
             ),
         )
     }
 
     fun failed(message: String, error: Throwable) {
-        val events = events ?: return
+        val finishedAt = System.currentTimeMillis()
         listener.onStatusChange(
-            ExternalSystemBuildEvent(
+            ExternalSystemTaskExecutionEvent(
                 taskId,
-                events.finish()
-                    .withStartId(eventId)
-                    .withParentId(taskId)
-                    .withTime(System.currentTimeMillis())
-                    .withMessage(message)
-                    .withResult(FailureResultImpl(message, error))
-                    .build(),
+                ExternalSystemFinishEvent(
+                    eventId,
+                    null,
+                    OperationDescriptor(message, finishedAt),
+                    FailureResult(
+                        startedAt,
+                        finishedAt,
+                        listOf(Failure(message, error.stackTraceToString(), emptyList())),
+                    ),
+                ),
             ),
         )
     }
