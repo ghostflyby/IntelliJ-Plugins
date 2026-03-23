@@ -7,7 +7,6 @@
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.os.mac</depends>
 
     <applicationListeners>
         <listener class="dev.ghostflyby.mac.recents.CocoaRecentProjectsListener"
