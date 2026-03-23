@@ -113,7 +113,7 @@ internal class CocoaRecentProjectsSyncScheduler(
                 is WorkerStep.Stop -> return
                 is WorkerStep.Sync -> {
                     try {
-                        syncer.sync(collectTargetUris(step.request.recentPaths, step.request.startupProjectPaths))
+                        syncPendingRequest(step.request)
                     } catch (throwable: Throwable) {
                         if (throwable is CancellationException) {
                             throw throwable
@@ -123,6 +123,26 @@ internal class CocoaRecentProjectsSyncScheduler(
                 }
             }
         }
+    }
+
+    private suspend fun syncPendingRequest(request: PendingSyncRequest) {
+        val startupProjectsToRemove = withContext(Dispatchers.IO) {
+            findStartupProjectsToRemove(
+                recentPaths = request.recentPaths,
+                startupProjects = request.startupProjectPaths,
+            )
+        }
+        if (startupProjectsToRemove.isNotEmpty()) {
+            synchronized(stateLock) {
+                startupProjectsToRemove.forEach(pendingStartupProjects::remove)
+            }
+        }
+
+        val effectiveStartupProjects = request.startupProjectPaths
+            .filterKeys { it !in startupProjectsToRemove }
+            .values
+            .toSet()
+        syncer.sync(collectTargetUris(request.recentPaths, effectiveStartupProjects))
     }
 
     private fun nextWorkerStep(): WorkerStep {
@@ -140,7 +160,7 @@ internal class CocoaRecentProjectsSyncScheduler(
                     WorkerStep.Sync(
                         PendingSyncRequest(
                             recentPaths = recentPaths,
-                            startupProjectPaths = pendingStartupProjects.values.toSet(),
+                            startupProjectPaths = LinkedHashMap(pendingStartupProjects),
                         ),
                     )
                 }
@@ -150,7 +170,7 @@ internal class CocoaRecentProjectsSyncScheduler(
 
     private data class PendingSyncRequest(
         val recentPaths: List<String>,
-        val startupProjectPaths: Set<String>,
+        val startupProjectPaths: Map<String, String>,
     )
 
     private sealed interface WorkerStep {
@@ -298,8 +318,33 @@ private fun projectIdentityKeyOrNull(path: String): String? {
 
 private fun normalizeProjectIdentityPath(path: java.nio.file.Path): java.nio.file.Path {
     val absolutePath = path.toAbsolutePath().normalize()
-    val projectRootPath = absolutePath.toDirectoryBasedProjectRootOrSelf()
-    return runCatching { projectRootPath.toRealPath() }.getOrElse { projectRootPath }
+    return absolutePath.toDirectoryBasedProjectRootOrSelf()
+}
+
+private fun canonicalProjectIdentityKeyOrNull(path: String): String? {
+    val rawPath = runCatching { Path(path) }.getOrNull() ?: return null
+    val projectPath = normalizeProjectIdentityPath(rawPath)
+    val canonicalPath = runCatching { projectPath.toRealPath() }.getOrElse { projectPath }
+    return canonicalPath.toSystemIndependentPath()
+}
+
+private fun findStartupProjectsToRemove(
+    recentPaths: List<String>,
+    startupProjects: Map<String, String>,
+): Set<String> {
+    val recentProjectKeys = recentPaths.asSequence()
+        .mapNotNull(::canonicalProjectIdentityKeyOrNull)
+        .toSet()
+    if (recentProjectKeys.isEmpty()) {
+        return emptySet()
+    }
+
+    return startupProjects.asSequence()
+        .filter { (_, startupProjectPath) ->
+            canonicalProjectIdentityKeyOrNull(startupProjectPath) in recentProjectKeys
+        }
+        .map { (projectKey, _) -> projectKey }
+        .toSet()
 }
 
 private fun java.nio.file.Path.toDirectoryBasedProjectRootOrSelf(): java.nio.file.Path {
