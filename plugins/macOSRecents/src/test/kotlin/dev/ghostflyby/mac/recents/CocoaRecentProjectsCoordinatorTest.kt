@@ -22,21 +22,26 @@
 
 package dev.ghostflyby.mac.recents
 
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.net.URI
 import kotlin.io.path.Path
 
-internal class CocoaRecentProjectsSyncerTest {
+internal class CocoaRecentProjectsCoordinatorTest {
 
     @Test
     fun `sync keeps order and removes duplicates`() {
         val bridge = RecordingBridge()
-        val syncer = CocoaRecentProjectsSyncer(bridge)
+        val coordinator = coordinator(bridge)
 
         runBlocking {
-            syncer.sync(
+            coordinator.sync(
                 listOf(
                     uri("/tmp/recent-c"),
                     uri("/tmp/recent-b"),
@@ -57,13 +62,13 @@ internal class CocoaRecentProjectsSyncerTest {
     @Test
     fun `sync appends incrementally for new head item`() {
         val bridge = RecordingBridge()
-        val syncer = CocoaRecentProjectsSyncer(bridge)
+        val coordinator = coordinator(bridge)
 
         runBlocking {
-            syncer.sync(listOf(uri("/tmp/recent-b"), uri("/tmp/recent-a")))
+            coordinator.sync(listOf(uri("/tmp/recent-b"), uri("/tmp/recent-a")))
             bridge.operations.clear()
 
-            syncer.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-b"), uri("/tmp/recent-a")))
+            coordinator.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-b"), uri("/tmp/recent-a")))
         }
 
         assertEquals(listOf("append:file:///tmp/recent-c"), bridge.operations)
@@ -72,13 +77,13 @@ internal class CocoaRecentProjectsSyncerTest {
     @Test
     fun `sync rebuilds when removal happens`() {
         val bridge = RecordingBridge()
-        val syncer = CocoaRecentProjectsSyncer(bridge)
+        val coordinator = coordinator(bridge)
 
         runBlocking {
-            syncer.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-b"), uri("/tmp/recent-a")))
+            coordinator.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-b"), uri("/tmp/recent-a")))
             bridge.operations.clear()
 
-            syncer.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-a")))
+            coordinator.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-a")))
         }
 
         assertEquals(
@@ -108,17 +113,13 @@ internal class CocoaRecentProjectsSyncerTest {
     @Test
     fun `scheduler resets debounce window for the latest snapshot`() = runBlocking {
         val bridge = RecordingBridge()
-        val schedulerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val scheduler = CocoaRecentProjectsSyncScheduler(
-            coroutineScope = schedulerScope,
-            syncer = CocoaRecentProjectsSyncer(bridge),
-            debounceMillis = 100L,
-        )
+        val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 100L)
 
         try {
-            scheduler.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
+            coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
             delay(80L)
-            scheduler.scheduleSync(recentPaths = listOf("/tmp/recent-c", "/tmp/recent-b"))
+            coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-c", "/tmp/recent-b"))
             delay(60L)
             assertEquals(emptyList<String>(), bridge.operations)
 
@@ -129,7 +130,7 @@ internal class CocoaRecentProjectsSyncerTest {
                 bridge.operations,
             )
         } finally {
-            schedulerScope.cancel()
+            coordinatorScope.cancel()
         }
     }
 
@@ -137,32 +138,28 @@ internal class CocoaRecentProjectsSyncerTest {
     fun `scheduler keeps startup path until recent projects catches up`() = runBlocking {
         val startupPath = "/tmp/startup-project.ipr"
         val bridge = RecordingBridge()
-        val schedulerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val scheduler = CocoaRecentProjectsSyncScheduler(
-            coroutineScope = schedulerScope,
-            syncer = CocoaRecentProjectsSyncer(bridge),
-            debounceMillis = 50L,
-        )
+        val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 50L)
 
         try {
-            scheduler.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
+            coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
             delay(150L)
             assertEquals(listOf("replace:file:///tmp/startup-project.ipr"), bridge.operations)
 
             bridge.operations.clear()
-            scheduler.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
+            coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
             delay(150L)
             assertEquals(listOf("append:file:///tmp/recent-a"), bridge.operations)
 
             bridge.operations.clear()
-            scheduler.scheduleSync(recentPaths = listOf(startupPath, "/tmp/recent-a"))
+            coordinator.scheduleSync(recentPaths = listOf(startupPath, "/tmp/recent-a"))
             delay(150L)
             assertEquals(
                 listOf("replace:file:///tmp/recent-a,file:///tmp/startup-project.ipr"),
                 bridge.operations,
             )
         } finally {
-            schedulerScope.cancel()
+            coordinatorScope.cancel()
         }
     }
 
@@ -171,30 +168,38 @@ internal class CocoaRecentProjectsSyncerTest {
         val startupPath = "/tmp/directory-project/.idea/misc.xml"
         val recentProjectPath = "/tmp/directory-project"
         val bridge = RecordingBridge()
-        val schedulerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val scheduler = CocoaRecentProjectsSyncScheduler(
-            coroutineScope = schedulerScope,
-            syncer = CocoaRecentProjectsSyncer(bridge),
-            debounceMillis = 50L,
-        )
+        val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 50L)
 
         try {
-            scheduler.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
+            coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
             delay(150L)
             assertEquals(listOf("replace:file:///tmp/directory-project/.idea/misc.xml"), bridge.operations)
 
             bridge.operations.clear()
-            scheduler.scheduleSync(recentPaths = listOf(recentProjectPath))
+            coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
             delay(150L)
             assertEquals(listOf("replace:file:///tmp/directory-project"), bridge.operations)
 
             bridge.operations.clear()
-            scheduler.scheduleSync(recentPaths = listOf(recentProjectPath))
+            coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
             delay(150L)
             assertEquals(emptyList<String>(), bridge.operations)
         } finally {
-            schedulerScope.cancel()
+            coordinatorScope.cancel()
         }
+    }
+
+    private fun coordinator(
+        bridge: RecordingBridge,
+        coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        debounceMillis: Long = 250L,
+    ): CocoaRecentProjectsCoordinator {
+        return CocoaRecentProjectsCoordinator(
+            coroutineScope = coroutineScope,
+            documentsBridge = bridge,
+            debounceMillis = debounceMillis,
+        )
     }
 
     private fun uri(path: String): URI = Path(path).toUri()
