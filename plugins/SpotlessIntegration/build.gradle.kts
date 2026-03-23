@@ -27,7 +27,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "1.0.0"
+version = "1.1.0"
 
 dependencies {
     intellijPlatform {
@@ -36,6 +36,11 @@ dependencies {
     }
     implementation(project("ModelBuilderService"))
     implementation(libs.ktor.client.cio) {
+        excludeCoroutines()
+        excludeKotlinStdlib()
+        exclude(group = "org.slf4j", module = "slf4j-api")
+    }
+    testImplementation("io.ktor:ktor-client-mock:${libs.versions.ktor.get()}") {
         excludeCoroutines()
         excludeKotlinStdlib()
         exclude(group = "org.slf4j", module = "slf4j-api")

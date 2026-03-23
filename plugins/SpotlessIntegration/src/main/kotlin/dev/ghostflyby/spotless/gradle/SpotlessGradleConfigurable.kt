@@ -26,6 +26,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
+import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.spotless.Bundle
@@ -39,8 +40,10 @@ internal class SpotlessGradleConfigurable(private val project: Project) :
         row(Bundle.message("spotless.configuration.daemonVersion.label")) {
             textField()
                 .bindText(settings::gradleDaemonVersion)
-                .comment(Bundle.message("spotless.configuration.daemonVersion.comment"))
-        }
+                .resizableColumn()
+                .align(Align.FILL)
+
+        }.rowComment(Bundle.message("spotless.configuration.daemonVersion.comment"))
         row(Bundle.message("spotless.configuration.daemonJar.label")) {
             @Suppress("UnstableApiUsage")
             textFieldWithBrowseButton(
@@ -49,7 +52,9 @@ internal class SpotlessGradleConfigurable(private val project: Project) :
                     .withTitle(Bundle.message("spotless.configuration.daemonJar.title")),
             )
                 .bindText(settings::gradleDaemonJar)
-                .comment(Bundle.message("spotless.configuration.daemonJar.comment"))
-        }
+                .resizableColumn()
+                .align(Align.FILL)
+
+        }.rowComment(Bundle.message("spotless.configuration.daemonJar.comment"))
     }
 }

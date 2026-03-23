@@ -27,7 +27,7 @@ public sealed interface SpotlessFormatResult {
      * Formatted successfully with the file on disk untouched
      * @property content The formatted output
      */
-    public data class Dirty(val content: String) : SpotlessFormatResult
+    public data class Dirty(public val content: String) : SpotlessFormatResult
 
     /**
      * Untouched as already formatted
@@ -42,7 +42,7 @@ public sealed interface SpotlessFormatResult {
     /**
      * Error occurred during formatting, see `message` for details
      */
-    public data class Error(val message: String) : SpotlessFormatResult
+    public data class Error(public val message: String) : SpotlessFormatResult
 
 
 }
