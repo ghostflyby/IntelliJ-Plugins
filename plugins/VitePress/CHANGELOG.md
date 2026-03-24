@@ -12,6 +12,9 @@
 
 ### Fixed
 
+- Markdown files now switch to the `VitePress` file type immediately after being moved or copied into a recognized
+  VitePress content tree.
+
 ### Security
 
 ## [1.0.0] - 2026-03-09
