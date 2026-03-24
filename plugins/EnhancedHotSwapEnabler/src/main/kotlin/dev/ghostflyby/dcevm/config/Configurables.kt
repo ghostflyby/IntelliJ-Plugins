@@ -26,6 +26,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
+import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.dcevm.Bundle
 import javax.swing.JComponent
@@ -70,22 +71,21 @@ internal class AppDCEVMConfigurable : SingleLayerDCEVMConfigurable() {
 }
 
 internal class ProjectDCEVMConfigurable(project: Project) : Configurable {
+    private val applicationPersistent: HotswapPersistent = service<AppSettings>()
     private val sharedPersistent: HotswapPersistent = project.service<ProjectSharedSettings>()
     private val workspacePersistent: HotswapPersistent = project.service<ProjectUserSettings>()
-    private val sharedState = HotswapConfigViewModel()
-    private val workspaceState = HotswapConfigViewModel()
+    private val state = ProjectDCEVMConfigViewModel(applicationPersistent)
 
     override fun getDisplayName(): @NlsContexts.ConfigurableName String {
         return Bundle.message("configuration.title.project")
     }
 
     override fun isModified(): Boolean {
-        return isModified(sharedPersistent, sharedState) || isModified(workspacePersistent, workspaceState)
+        return state.isModified(sharedPersistent, workspacePersistent)
     }
 
     override fun reset() {
-        sharedState.setFrom(sharedPersistent)
-        workspaceState.setFrom(workspacePersistent)
+        state.reset(sharedPersistent, workspacePersistent)
     }
 
     override fun createComponent(): JComponent {
@@ -93,27 +93,31 @@ internal class ProjectDCEVMConfigurable(project: Project) : Configurable {
         return panel {
             group(Bundle.message("configuration.group.project")) {
                 hotswapConfigRows(
-                    model = sharedState,
+                    model = state.sharedState,
                     comment = Bundle.message("configuration.group.project.comment"),
                 )
             }
             group(Bundle.message("configuration.group.workspace")) {
                 hotswapConfigRows(
-                    model = workspaceState,
+                    model = state.workspaceState,
                     comment = Bundle.message("configuration.group.workspace.comment"),
                 )
+            }
+            group(Bundle.message("configuration.group.summary")) {
+                row(Bundle.message("configuration.summary.source")) {
+                    label("").bindText(state.summarySourceProperty)
+                }.rowComment(Bundle.message("configuration.group.summary.comment"))
+                row(Bundle.message("configuration.summary.enable")) {
+                    label("").bindText(state.summaryEnableProperty)
+                }
+                row(Bundle.message("configuration.summary.hotswapAgent")) {
+                    label("").bindText(state.summaryEnableHotswapAgentProperty)
+                }
             }
         }
     }
 
     override fun apply() {
-        sharedPersistent.setFrom(sharedState)
-        workspacePersistent.setFrom(workspaceState)
+        state.apply(sharedPersistent, workspacePersistent)
     }
-}
-
-private fun isModified(persistent: HotswapPersistent, state: HotswapConfig): Boolean {
-    return persistent.enable != state.enable ||
-            persistent.enableHotswapAgent != state.enableHotswapAgent ||
-            persistent.inherit != state.inherit
 }
