@@ -7,7 +7,7 @@ Last Updated: 2026-02-27
 
 1. Add a docs-generation workflow to keep tool inventories synchronized between code and docs.
 2. Isolate scope-provider compatibility/reflection behavior behind a dedicated compatibility layer.
-3. Add contract regression tests for quick presets, `@JsonNames` aliases, and descriptor compatibility.
+3. Add contract regression tests for quick presets, canonical enum values, and descriptor compatibility.
 4. Continue reducing duplicated validation/activity text by expanding shared common helpers.
 
 ## Done Criteria

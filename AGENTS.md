@@ -12,11 +12,12 @@
    or `CoroutineScope` to ensure proper cleanup on unload.
 5. clean data in `UserDataHolder` with `Disposable` or `CoroutineScope` to prevent memory leaks.
 6. DO NOT run blocking operations on UI Thread.
-7. use explicit visibility modifiers, mostly should use `internal`
-8. DO NOT use `@ApiStatus.Internal` APIs, which will be prevented on marketplace, check before writing
-9. Use `@ApiStatus.Experimental` APIs with caution, as they may change without deprecation.
-   If you must use them, `Suppress` the `UnstableApiUsage` warning and document the usage clearly in code comments,
-   so future maintainers understand the risks and can track API changes in IntelliJ releases.
+7. `Dispatchers.EDT` means UI thread and `writeAction`, use `Dispatchers.UI` if no write access needed
+8. use explicit visibility modifiers, mostly should use `internal`
+9. DO NOT use `@ApiStatus.Internal` APIs, which will be prevented on marketplace, check before writing
+10. Use `@ApiStatus.Experimental` APIs with caution, as they may change without deprecation.
+    If you must use them, `Suppress` the `UnstableApiUsage` warning and document the usage clearly in code comments,
+    so future maintainers understand the risks and can track API changes in IntelliJ releases.
 
 ## Project Structure
 
@@ -42,10 +43,9 @@
    using a descriptive filename (for example `<PluginName>-<Topic>.md`), then refresh `TODO.md`
    with the next active plan items.
 
-## Tooling
+## Tooling and MCP
 
-1. MUST use MCP tools if available for the task, as they provide better performance,
-   reliability, and agent-friendly semantics than direct PSI/VFS access.
+1. MUST use domain specific MCP tools if available instead of using terminal/shell tools
 2. for API lookup, prioritize MCP flow: search to get VFS URL, use VFS tools for content,
    and use navigation/symbol tools for documentation whenever possible.
 
@@ -83,18 +83,18 @@
 ## Serialization Compatibility
 
 1. treat tool DTOs/enums as external contracts once released.
-2. when renaming enum values, keep backward-compatible aliases using `@JsonNames`.
+2. when renaming enum values, keep backward-compatible aliases using `@JsonNames`, except when for MCP tools, where
+   AGENTS can understand the changes without notice.
 3. prefer additive changes over breaking removals; if removal is required, document migration.
 4. keep quick presets and scope/token contracts backward-compatible across versions.
 
-## Build
+## Build and Gradle
 
-1. use Gradle for build
-2. you don't need to run `verifyPlugin`, which can be done on CI
-3. a single Gradle sync takes about 1.5-2 minutes
-4. a single `buildPlugin` Gradle task may take about 2 minutes
-5. update the kotlin ABI file when changing public APIs
-6. after MCP tool changes, run project compile and plugin packaging (`buildPlugin`) before commit.
+1. NEVER run `verifyPlugin`, which is time-consuming and can be done on CI
+2. a single Gradle sync takes about 1.5-2 minutes
+3. a single `buildPlugin` Gradle task may take about 2 minutes
+4. update the kotlin ABI file when changing public APIs
+5. use delicated MCP tools instead of commandline whenever possible
 
 ## Diagnostics and Docs
 
