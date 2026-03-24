@@ -16,12 +16,8 @@
         <applicationConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.application"
                                  instance="dev.ghostflyby.dcevm.config.AppDCEVMConfigurable" key="configuration.title"
                                  parentId="build"/>
-        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectUser"
-                             instance="dev.ghostflyby.dcevm.config.ProjectUserDCEVMConfigurable"
-                             key="configuration.title.workspace"
-                             parentId="build"/>
-        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.projectShared"
-                             instance="dev.ghostflyby.dcevm.config.ProjectSharedDCEVMConfigurable"
+        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.project"
+                             instance="dev.ghostflyby.dcevm.config.ProjectDCEVMConfigurable"
                              key="configuration.title.project"
                              parentId="build"/>
     </extensions>

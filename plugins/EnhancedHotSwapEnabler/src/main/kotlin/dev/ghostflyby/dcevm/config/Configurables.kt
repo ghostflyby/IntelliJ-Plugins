@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -26,10 +26,11 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
+import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.dcevm.Bundle
 import javax.swing.JComponent
 
-internal sealed class DCEVMConfigurable : Configurable {
+internal sealed class SingleLayerDCEVMConfigurable : Configurable {
 
     abstract val persistent: HotswapPersistent
     protected val state = HotswapConfigViewModel()
@@ -60,7 +61,7 @@ internal sealed class DCEVMConfigurable : Configurable {
 }
 
 
-internal class AppDCEVMConfigurable : DCEVMConfigurable() {
+internal class AppDCEVMConfigurable : SingleLayerDCEVMConfigurable() {
     override val persistent: HotswapPersistent = service<AppSettings>()
     override fun createComponent(): JComponent {
         state.setFrom(persistent)
@@ -68,12 +69,51 @@ internal class AppDCEVMConfigurable : DCEVMConfigurable() {
     }
 }
 
-internal class ProjectUserDCEVMConfigurable(project: Project) :
-    DCEVMConfigurable() {
-    override val persistent: HotswapPersistent = project.service<ProjectUserSettings>()
+internal class ProjectDCEVMConfigurable(project: Project) : Configurable {
+    private val sharedPersistent: HotswapPersistent = project.service<ProjectSharedSettings>()
+    private val workspacePersistent: HotswapPersistent = project.service<ProjectUserSettings>()
+    private val sharedState = HotswapConfigViewModel()
+    private val workspaceState = HotswapConfigViewModel()
+
+    override fun getDisplayName(): @NlsContexts.ConfigurableName String {
+        return Bundle.message("configuration.title.project")
+    }
+
+    override fun isModified(): Boolean {
+        return isModified(sharedPersistent, sharedState) || isModified(workspacePersistent, workspaceState)
+    }
+
+    override fun reset() {
+        sharedState.setFrom(sharedPersistent)
+        workspaceState.setFrom(workspacePersistent)
+    }
+
+    override fun createComponent(): JComponent {
+        reset()
+        return panel {
+            group(Bundle.message("configuration.group.project")) {
+                hotswapConfigRows(
+                    model = sharedState,
+                    comment = Bundle.message("configuration.group.project.comment"),
+                )
+            }
+            group(Bundle.message("configuration.group.workspace")) {
+                hotswapConfigRows(
+                    model = workspaceState,
+                    comment = Bundle.message("configuration.group.workspace.comment"),
+                )
+            }
+        }
+    }
+
+    override fun apply() {
+        sharedPersistent.setFrom(sharedState)
+        workspacePersistent.setFrom(workspaceState)
+    }
 }
 
-internal class ProjectSharedDCEVMConfigurable(project: Project) :
-    DCEVMConfigurable() {
-    override val persistent: HotswapPersistent = project.service<ProjectSharedSettings>()
+private fun isModified(persistent: HotswapPersistent, state: HotswapConfig): Boolean {
+    return persistent.enable != state.enable ||
+            persistent.enableHotswapAgent != state.enableHotswapAgent ||
+            persistent.inherit != state.inherit
 }
