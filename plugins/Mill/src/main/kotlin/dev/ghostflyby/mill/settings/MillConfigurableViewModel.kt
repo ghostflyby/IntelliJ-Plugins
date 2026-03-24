@@ -74,9 +74,9 @@ internal class MillConfigurableViewModel(
         propertyGraph.property(null)
     val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableSelectedChoiceBindingProperty: ObservableMutableProperty<MillExecutableChoice?> =
-        createBindingProperty(executableSelectedChoiceProperty, ::selectExecutableChoice)
+        createBindingProperty(executableSelectedChoiceProperty, parentDisposable, ::selectExecutableChoice)
     val executableInputTextBindingProperty: ObservableMutableProperty<String> =
-        createBindingProperty(executableInputTextProperty, ::updateExecutableInput)
+        createBindingProperty(executableInputTextProperty, parentDisposable, ::updateExecutableInput)
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
@@ -227,19 +227,38 @@ internal class MillConfigurableViewModel(
 
     private fun <T> createBindingProperty(
         delegate: ObservableMutableProperty<T>,
+        parentDisposable: Disposable,
         setter: (T) -> Unit,
     ): ObservableMutableProperty<T> {
-        return object : ObservableMutableProperty<T> {
-            override fun get(): T = delegate.get()
+        val binding = propertyGraph.property(delegate.get())
+        var updatingFromDelegate = false
+        var updatingFromBinding = false
 
-            override fun set(value: T) {
-                setter(value)
+        delegate.afterChange(parentDisposable) { value ->
+            if (updatingFromBinding || binding.get() == value) {
+                return@afterChange
             }
-
-            override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
-                delegate.afterChange(parentDisposable, listener)
+            updatingFromDelegate = true
+            try {
+                binding.set(value)
+            } finally {
+                updatingFromDelegate = false
             }
         }
+
+        binding.afterChange(parentDisposable) { value ->
+            if (updatingFromDelegate || delegate.get() == value) {
+                return@afterChange
+            }
+            updatingFromBinding = true
+            try {
+                setter(value)
+            } finally {
+                updatingFromBinding = false
+            }
+        }
+
+        return binding
     }
 
     private fun currentSelectedState(): MillLinkedProjectSettingsState? {
