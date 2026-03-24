@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [1.1.0] - 2026-03-24
+
 ### Changed
 
 - Refactored recents synchronization to use diff-based updates with debounced scheduling.
@@ -16,5 +30,6 @@
 
 - Initial implementation of the MacOSRecents plugin.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.0
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/macOSRecents-v1.1.0...HEAD
+[1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/macOSRecents-v1.0.0...macOSRecents-v1.1.0
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/macOSRecents-v1.0.0
