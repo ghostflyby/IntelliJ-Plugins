@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -24,53 +24,23 @@ package dev.ghostflyby.mac.recents
 
 import com.intellij.ide.RecentProjectsManager
 import com.intellij.ide.RecentProjectsManagerBase
-import com.intellij.openapi.application.runInEdt
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
-import com.intellij.ui.mac.foundation.Foundation
-import java.net.URI
-import kotlin.io.path.Path
 
 internal class CocoaRecentProjectsListener : RecentProjectsManager.RecentProjectsChange {
     override fun change() {
-
-        clearDocuments()
-
-        val recentsManager = RecentProjectsManagerBase.getInstanceEx()
-
-        recentsManager.getRecentPaths()
-            .map { Path(it).toUri() }
-            .asReversed()
-            .forEach {
-                addDocuments(it)
-            }
-
+        val recentPaths = RecentProjectsManagerBase.getInstanceEx().getRecentPaths()
+        service<CocoaRecentProjectsSyncService>().scheduleSync(recentPaths = recentPaths)
     }
 }
 
 internal class StartUp : ProjectActivity {
     override suspend fun execute(project: Project) {
-        project.projectFilePath?.let {
-            addDocuments(Path(it).toUri())
-        }
-    }
-
-}
-
-private fun addDocuments(url: URI) {
-    runInEdt {
-        val controllerClass = Foundation.getObjcClass("NSDocumentController")
-        val controller = Foundation.invoke(controllerClass, "sharedDocumentController")
-        val nsUrlClass = Foundation.getObjcClass("NSURL")
-        val url = Foundation.invoke(nsUrlClass, "URLWithString:", Foundation.nsString(url.toString()))
-        Foundation.invoke(controller, "noteNewRecentDocumentURL:", url)
-    }
-}
-
-private fun clearDocuments() {
-    runInEdt {
-        val controllerClass = Foundation.getObjcClass("NSDocumentController")
-        val controller = Foundation.invoke(controllerClass, "sharedDocumentController")
-        Foundation.invoke(controller, "clearRecentDocuments:", null)
+        val recentPaths = RecentProjectsManagerBase.getInstanceEx().getRecentPaths()
+        service<CocoaRecentProjectsSyncService>().scheduleSync(
+            recentPaths = recentPaths,
+            startupProjectPath = project.projectFilePath,
+        )
     }
 }
