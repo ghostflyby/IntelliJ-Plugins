@@ -54,9 +54,7 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.scope.*
 import kotlinx.coroutines.*
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonNames
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -70,11 +68,8 @@ private const val GLOBAL_AND_LOCAL_UNION_LOCAL_FIELD = "myLocalScope"
 internal class ScopeSymbolSearchMcpTools : McpToolset {
 
     @Serializable
-    @OptIn(ExperimentalSerializationApi::class)
     enum class ScopeSymbolQuickPreset {
         PROJECT_FILES,
-
-        @JsonNames("ALL")
         ALL_PLACES,
     }
 
