@@ -166,7 +166,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result-${{ matrix.module }}
+          name: tests-result-${{ steps.modpath.outputs.namesegment }}
           path: ${{ github.workspace }}/**/build/reports/tests
       - name: Upload Code Coverage Report
         uses: codecov/codecov-action@v5
