@@ -12,8 +12,6 @@
 
 ### Fixed
 
-- wrong enum names for AI agents in tool calling [#194](https://github.com/ghostflyby/IntelliJ-Plugins/pull/194)
-
 ### Security
 
 ## [1.0.0] - 2026-03-09
