@@ -34,7 +34,7 @@ internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 
     override fun editorCreated(event: EditorFactoryEvent) =
         event.editor.run {
-            if (isViewer || document.listenerAttached) return
+            if (isViewer || document.listenerAttached) return@run
             document.listenerAttached = true
             if (selectionModel.hasSelection()) {
                 document.previousSelection = selectionModel.selectedText
@@ -59,7 +59,7 @@ private object MySelectionListener : SelectionListener {
     override fun selectionChanged(e: SelectionEvent) = e.editor.run {
         if (!selectionModel.hasSelection()) {
             document.replacedSelection = null
-            return
+            return@run
         }
         document.previousSelection = selectionModel.selectedText
     }
