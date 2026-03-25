@@ -117,6 +117,11 @@ public operator fun <H : UserDataHolder, K : NotNullLazyKey<T, H>, T> AutoCleanK
     return property.run { key.getValue(thisRef) }
 }
 
+@Deprecated(
+    message = "service usage on cinit causes exception frequently",
+    replaceWith = ReplaceWith("this.toAutoCleanKey{ disposable }"),
+    level = DeprecationLevel.HIDDEN,
+)
 public fun <K : Key<T>, T> K.toAutoCleanKey(disposable: Disposable): AutoCleanKey<K, T> {
     return AutoCleanKey(disposable, this)
 }

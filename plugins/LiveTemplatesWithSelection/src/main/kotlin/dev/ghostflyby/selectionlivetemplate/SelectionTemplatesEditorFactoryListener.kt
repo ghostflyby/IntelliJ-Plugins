@@ -45,11 +45,11 @@ internal class SelectionTemplatesEditorFactoryListener : EditorFactoryListener {
 
 }
 
-private val previousSelectionKey = Key<String>("previousSelection").toAutoCleanKey(PluginDisposable)
-private val replacedSelectionKey = Key<String>("replacedSelection").toAutoCleanKey(PluginDisposable)
+private val previousSelectionKey = Key<String>("previousSelection").toAutoCleanKey { PluginDisposable }
+private val replacedSelectionKey = Key<String>("replacedSelection").toAutoCleanKey { PluginDisposable }
 
 private val listenerAttachedKey =
-    KeyWithDefaultValue<Boolean>.create("selectionTemplateListenerAttached", false).toAutoCleanKey(PluginDisposable)
+    KeyWithDefaultValue<Boolean>.create("selectionTemplateListenerAttached", false).toAutoCleanKey { PluginDisposable }
 
 private var Document.previousSelection by previousSelectionKey
 internal var Document.replacedSelection by replacedSelectionKey

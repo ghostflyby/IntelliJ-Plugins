@@ -147,7 +147,7 @@ class AutoCleanKeyTest {
     fun toDisposableKeyWithDisposableCleansOnDispose() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.toDisposableKey.disposable")
-        val cleaner = key.toAutoCleanKey(disposable)
+        val cleaner = key.toAutoCleanKey { disposable }
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -213,7 +213,7 @@ class AutoCleanKeyTest {
     fun toDisposableKeyExposesOriginalKey() {
         val disposable: Disposable = Disposer.newDisposable()
         val key = Key.create<String>("key.toDisposableKey.property")
-        val cleaner = key.toAutoCleanKey(disposable)
+        val cleaner = key.toAutoCleanKey { disposable }
 
         assertEquals(key, cleaner.key)
 
