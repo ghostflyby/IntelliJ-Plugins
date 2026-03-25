@@ -14,13 +14,16 @@
 
 ### Fixed
 
+- wrong enum names for AI agents in tool calling [#194](https://github.com/ghostflyby/IntelliJ-Plugins/pull/194)
+
 ### Security
 
 ## [1.0.1] - 2026-03-03
 
 ### Fixed
 
-- Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly sequential progress reporting, avoiding read-access assertion crashes in background search.
+- Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly
+  sequential progress reporting, avoiding read-access assertion crashes in background search.
 
 ## [1.0.0] - 2026-02-27
 
