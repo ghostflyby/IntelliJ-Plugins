@@ -95,7 +95,6 @@ changelog {
 tasks {
     prepareSandbox {
         disabledPlugins.add("org.jetbrains.completion.full.line")
-        this.sandboxSystemDirectory = rootProject.layout.buildDirectory.dir("idea-sandbox/system")
     }
     publishPlugin { dependsOn(patchChangelog) }
 
@@ -158,4 +157,3 @@ intellijPlatformTesting {
         }
     }
 }
-
