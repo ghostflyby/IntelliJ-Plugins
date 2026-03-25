@@ -14,6 +14,8 @@
 
 ### Fixed
 
+- Lazy Disposable for AutoCleanKey to avoid eager service initialization causing exception
+
 ### Security
 
 ## [1.4.7] - 2026-02-27
