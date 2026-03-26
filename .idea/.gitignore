@@ -7,3 +7,4 @@
 !.gitignore
 !encodings.xml
 !vcs.xml
+!externalDependencies.xml
