@@ -24,44 +24,35 @@ package dev.ghostflyby.mill
 
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.settings.MillExecutableSource
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
 
 internal class MillCommandLineUtilTest {
     @Test
-    fun `parses mill version from verbose version output`() {
-        val version = MillCommandLineUtil.parseMillVersion("Mill Build Tool version 0.12.8")
-
-        assertEquals("0.12.8", version)
+    fun `accepts minimum supported mill version`() {
+        assertNull(MillCommandLineUtil.validateSupportedMillVersion("1.1.5"))
+        assertNull(MillCommandLineUtil.validateSupportedMillVersion("1.1.6"))
     }
 
     @Test
-    fun `parses mill version from bare version output`() {
-        val version = MillCommandLineUtil.parseMillVersion("0.11.7")
-
-        assertEquals("0.11.7", version)
+    fun `accepts mill versions with semver build metadata`() {
+        assertNull(MillCommandLineUtil.validateSupportedMillVersion("1.1.5+12"))
     }
 
     @Test
-    fun `returns null when output does not include a version`() {
-        val version = MillCommandLineUtil.parseMillVersion("Usage: mill [options] [targets]")
+    fun `rejects mill versions older than minimum supported version`() {
+        val validationMessage = MillCommandLineUtil.validateSupportedMillVersion("1.1.4")
 
-        assertNull(version)
+        assertNotNull(validationMessage)
     }
 
     @Test
-    fun `reads declared mill version from version file`() {
-        val root = Files.createTempDirectory("mill-project")
-        try {
-            Files.writeString(root.resolve(MillConstants.versionFileName), "0.12.8\n")
+    fun `rejects mill versions with semver prerelease lower than minimum`() {
+        val validationMessage = MillCommandLineUtil.validateSupportedMillVersion("1.1.5-RC1")
 
-            assertEquals("0.12.8", MillCommandLineUtil.readDeclaredMillVersion(root))
-        } finally {
-            deleteRecursively(root)
-        }
+        assertNotNull(validationMessage)
     }
 
     @Test

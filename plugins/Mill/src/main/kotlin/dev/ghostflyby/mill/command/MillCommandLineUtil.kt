@@ -28,6 +28,8 @@ import com.intellij.execution.configurations.PathEnvironmentVariableUtil
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
+import com.intellij.util.text.SemVer
+import dev.ghostflyby.mill.Bundle
 import dev.ghostflyby.mill.MillConstants
 import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
@@ -37,6 +39,8 @@ import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -171,40 +175,33 @@ internal object MillCommandLineUtil {
     ): MillExecutableProbeResult {
         val resolvedExecutable = resolveExecutable(projectRoot, executableSource, executablePath)
         val displayResolvedExecutable = resolveDisplayExecutable(executableSource, executablePath, resolvedExecutable)
-        val declaredVersion = readDeclaredMillVersion(projectRoot)
         val probeSettings = MillExecutionSettings().apply {
             millExecutableSource = executableSource
             millExecutablePath = executablePath
         }
-        var failureMessage: String? = null
-        for (arguments in executableProbeArguments) {
-            val command = runCommand(
-                projectRoot = projectRoot,
-                settings = probeSettings,
-                arguments = arguments,
-                timeoutMillis = executableProbeTimeoutMillis,
+        val command = runCommand(
+            projectRoot = projectRoot,
+            settings = probeSettings,
+            arguments = executableProbeArguments,
+            timeoutMillis = executableProbeTimeoutMillis,
+        )
+        if (command.isSuccess) {
+            val version = parseSingleStringValue(command.stdout)
+            val versionError = validateSupportedMillVersion(version)
+            return MillExecutableProbeResult(
+                resolvedExecutable = displayResolvedExecutable,
+                isValid = versionError == null,
+                version = version,
+                errorDetails = versionError,
             )
-            if (command.isSuccess) {
-                return MillExecutableProbeResult(
-                    resolvedExecutable = displayResolvedExecutable,
-                    isValid = true,
-                    version = parseMillVersion(command.stdout + "\n" + command.stderr) ?: declaredVersion,
-                    errorDetails = null,
-                )
-            }
-            if (failureMessage == null) {
-                failureMessage = if (command.startupFailed) {
-                    "The Mill process could not be started."
-                } else if (command.timedOut) {
-                    "The Mill process timed out after ${executableProbeTimeoutMillis / 1000} seconds."
-                } else {
-                    command.failureDetails.ifBlank {
-                        "The Mill process exited with code ${command.exitCode ?: -1}."
-                    }
-                }
-            }
-            if (command.startupFailed || command.timedOut) {
-                break
+        }
+        val failureMessage = if (command.startupFailed) {
+            "The Mill process could not be started."
+        } else if (command.timedOut) {
+            "The Mill process timed out after ${executableProbeTimeoutMillis / 1000} seconds."
+        } else {
+            command.failureDetails.ifBlank {
+                "The Mill process exited with code ${command.exitCode ?: -1}."
             }
         }
         return MillExecutableProbeResult(
@@ -412,8 +409,8 @@ internal object MillCommandLineUtil {
         projectRoot: Path,
         settings: MillExecutionSettings?,
     ): MillCommandValueResult<List<String>> {
-        val command = runCommand(projectRoot, settings, listOf("resolve", MillConstants.moduleDiscoveryQuery))
-        val values = if (command.isSuccess) parseResolvedTargets(command.stdout) else emptyList()
+        val command = runCommand(projectRoot, settings, listOf("show", "resolve", MillConstants.moduleDiscoveryQuery))
+        val values = if (command.isSuccess) parseStringList(command.stdout).filter(String::isNotBlank) else emptyList()
         MillImportDebugLogger.info(
             "`mill ${command.invocation}` parsed ${values.size} target(s): ${MillImportDebugLogger.sample(values)}",
         )
@@ -487,15 +484,6 @@ internal object MillCommandLineUtil {
         return MillCommandValueResult(command, value)
     }
 
-    internal fun parseResolvedTargets(output: String): List<String> {
-        return output.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .toList()
-    }
-
-    internal fun parsePathList(output: String): List<String> = parseStringList(output)
-
     internal fun parseStringList(output: String): List<String> = decodeOutputOrNull(
         output = output,
         strategy = ListSerializer(String.serializer()),
@@ -507,24 +495,26 @@ internal object MillCommandLineUtil {
         strategy = String.serializer(),
     )?.let(::normalizeOutputValue)
 
-    internal fun parseMillVersion(output: String): String? {
-        return output.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .firstNotNullOfOrNull { line ->
-                millVersionPattern.find(line)?.groupValues?.getOrNull(1)
-                    ?: standaloneVersionPattern.takeIf { it.matches(line) }
-                        ?.matchEntire(line)?.groupValues?.getOrNull(1)
-            }
-    }
-
-    internal fun readDeclaredMillVersion(projectRoot: Path): String? {
-        val versionFile = projectRoot.resolve(MillConstants.versionFileName)
-        if (!Files.isRegularFile(versionFile)) {
-            return null
+    internal fun validateSupportedMillVersion(version: String?): String? {
+        val normalizedVersion = version?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: return Bundle.message(
+                "settings.mill.executable.status.invalid.minimum.unknown",
+                minimumSupportedMillVersion,
+            )
+        val parsedVersion = SemVer.parseFromText(normalizedVersion)
+            ?: return Bundle.message(
+                "settings.mill.executable.status.invalid.minimum.unknown",
+                minimumSupportedMillVersion,
+            )
+        return if (parsedVersion < minimumSupportedMillSemVer) {
+            Bundle.message(
+                "settings.mill.executable.status.invalid.minimum",
+                minimumSupportedMillVersion,
+                normalizedVersion,
+            )
+        } else {
+            null
         }
-        val rawContent = runCatching { Files.readString(versionFile) }.getOrNull() ?: return null
-        return parseMillVersion(rawContent)
     }
 
     internal fun parseJavaHome(output: String): String? {
@@ -576,11 +566,18 @@ internal object MillCommandLineUtil {
     }
 
     private fun <T> decodeOutputOrNull(output: String, strategy: DeserializationStrategy<T>): T? {
+        return extractJsonValueElement(output)?.let { element ->
+            runCatching { json.decodeFromJsonElement(strategy, element) }.getOrNull()
+        }
+    }
+
+    private fun extractJsonValueElement(output: String): JsonElement? {
         val trimmed = output.trim()
         if (trimmed.isEmpty()) {
             return null
         }
-        return runCatching { json.decodeFromString(strategy, trimmed) }.getOrNull()
+        val parsed = runCatching { json.parseToJsonElement(trimmed) }.getOrNull() ?: return null
+        return (parsed as? JsonObject)?.get(jsonValueFieldName) ?: parsed
     }
 
     internal fun normalizeOutputValue(value: String): String {
@@ -607,14 +604,10 @@ internal object MillCommandLineUtil {
         return fileName.endsWith(".jar") || fileName.endsWith(".zip")
     }
 
-    private val executableProbeArguments = listOf(
-        listOf("--version"),
-        listOf("version"),
-        listOf("--help"),
-    )
+    private val executableProbeArguments = listOf("show", "version")
     private const val executableProbeTimeoutMillis = 10_000
-    private val millVersionPattern =
-        Regex("""(?i)\bmill(?:\s+build\s+tool)?(?:\s+version)?[: ]+v?([0-9][0-9A-Za-z.\-+_]*)""")
-    private val standaloneVersionPattern = Regex("""^v?([0-9][0-9A-Za-z.\-+_]*)$""")
+    private const val minimumSupportedMillVersion = "1.1.5"
+    private val minimumSupportedMillSemVer = requireNotNull(SemVer.parseFromText(minimumSupportedMillVersion))
+    private const val jsonValueFieldName = "value"
     private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
 }

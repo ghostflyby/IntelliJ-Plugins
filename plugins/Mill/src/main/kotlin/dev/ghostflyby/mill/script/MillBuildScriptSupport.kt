@@ -143,11 +143,7 @@ internal object MillBuildScriptSupport {
         if (!Files.isRegularFile(path)) {
             return emptyList()
         }
-        return readValuePathList(path).ifEmpty {
-            val output = runCatching { Files.readString(path) }.getOrNull() ?: return@ifEmpty emptyList()
-            normalizePaths(MillCommandLineUtil.parseStringList(output))
-                .filter(Files::exists)
-        }
+        return readValuePathList(path)
     }
 
     private fun readValuePathList(path: Path): List<Path> {
