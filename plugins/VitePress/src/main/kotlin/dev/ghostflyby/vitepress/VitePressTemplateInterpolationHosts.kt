@@ -30,6 +30,9 @@ import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import dev.ghostflyby.vitepress.markdown.findVitePressHtmlRange
+import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.flavours.gfm.GFMTokenTypes
+import org.intellij.markdown.parser.MarkdownParser
 import org.intellij.plugins.markdown.lang.MarkdownElementTypes
 import org.intellij.plugins.markdown.lang.MarkdownTokenTypes
 import org.intellij.plugins.markdown.lang.lexer.MarkdownToplevelLexer
@@ -39,6 +42,7 @@ internal enum class VitePressTemplateHostKind {
     AtxHeading,
     SetextHeading,
     LinkText,
+    TableCell,
 }
 
 internal data class VitePressTemplateInterpolationHost(
@@ -73,26 +77,13 @@ internal fun collectTemplateInterpolationHosts(
             }
         if (kind != null) {
             val hostRange = TextRange.create(hostLexer.tokenStart, hostLexer.tokenEnd)
-            if (isPlainTextTemplateHost(sourceCode, hostRange)) {
-                val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
-                val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
-                val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
-                if (guestRanges.isNotEmpty()) {
-                    result +=
-                        VitePressTemplateInterpolationHost(
-                            kind = kind,
-                            hostRange = hostRange,
-                            interpolationRanges = interpolationRanges,
-                            htmlGuestRanges = htmlGuestRanges,
-                            guestRanges = guestRanges,
-                        )
-                }
-            }
+            buildTemplateInterpolationHost(kind, sourceCode, hostRange)?.let { host -> result += host }
         }
         hostLexer.advance()
     }
 
     result += collectLinkTextInterpolationHosts(sourceCode)
+    result += collectTableCellInterpolationHosts(sourceCode)
     return result
 }
 
@@ -207,22 +198,60 @@ private fun collectLinkTextInterpolationHosts(
     sourceCode: CharSequence,
 ): List<VitePressTemplateInterpolationHost> {
     return collectInlineLinkTextRanges(sourceCode).mapNotNull { hostRange ->
-        if (isPlainTextTemplateHost(sourceCode, hostRange)) {
-            val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
-            val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
-            val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
-            if (guestRanges.isNotEmpty()) {
-                return@mapNotNull VitePressTemplateInterpolationHost(
-                    kind = VitePressTemplateHostKind.LinkText,
-                    hostRange = hostRange,
-                    interpolationRanges = interpolationRanges,
-                    htmlGuestRanges = htmlGuestRanges,
-                    guestRanges = guestRanges,
-                )
-            }
-        }
-        null
+        buildTemplateInterpolationHost(VitePressTemplateHostKind.LinkText, sourceCode, hostRange)
     }
+}
+
+private fun collectTableCellInterpolationHosts(
+    sourceCode: CharSequence,
+): List<VitePressTemplateInterpolationHost> {
+    val root = MarkdownParser(VitePressFlavourDescriptor).buildMarkdownTreeFromString(sourceCode.toString())
+    val result = mutableListOf<VitePressTemplateInterpolationHost>()
+    collectTableCellInterpolationHosts(root, sourceCode, result)
+    return result
+}
+
+private fun collectTableCellInterpolationHosts(
+    node: ASTNode,
+    sourceCode: CharSequence,
+    result: MutableList<VitePressTemplateInterpolationHost>,
+) {
+    if (node.type == GFMTokenTypes.CELL) {
+        val hostRange = TextRange(node.startOffset, node.endOffset)
+        buildTemplateInterpolationHost(VitePressTemplateHostKind.TableCell, sourceCode, hostRange)?.let { host ->
+            result += host
+        }
+        return
+    }
+
+    node.children.forEach { child ->
+        collectTableCellInterpolationHosts(child, sourceCode, result)
+    }
+}
+
+private fun buildTemplateInterpolationHost(
+    kind: VitePressTemplateHostKind,
+    sourceCode: CharSequence,
+    hostRange: TextRange,
+): VitePressTemplateInterpolationHost? {
+    if (!isPlainTextTemplateHost(sourceCode, hostRange)) {
+        return null
+    }
+
+    val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
+    val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
+    val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
+    if (guestRanges.isEmpty()) {
+        return null
+    }
+
+    return VitePressTemplateInterpolationHost(
+        kind = kind,
+        hostRange = hostRange,
+        interpolationRanges = interpolationRanges,
+        htmlGuestRanges = htmlGuestRanges,
+        guestRanges = guestRanges,
+    )
 }
 
 private fun collectInlineLinkTextRanges(sourceCode: CharSequence): List<TextRange> {

@@ -84,19 +84,13 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
         return modifications
     }
 
-    internal fun buildTemplateDataText(sourceCode: String): CharSequence {
-        val modifications =
-            collectTemplateModifications(
-                sourceCode,
-                InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor),
-            )
-        val applied = modifications.applyToText(sourceCode, this)
-        return applied.first
+    internal fun collectTemplateDataModificationsForTests(sourceCode: String): TemplateDataModifications {
+        return collectTemplateModifications(
+            sourceCode,
+            InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor),
+        )
     }
-}
 
-internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
-    return VitePressTemplateDataElementType.buildTemplateDataText(sourceCode)
 }
 private const val TEMPLATE_BLOCK_PREFIX: String = "<template>"
 private const val TEMPLATE_BLOCK_SUFFIX: String = "</template>"
