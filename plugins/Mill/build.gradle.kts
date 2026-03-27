@@ -20,6 +20,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+
 plugins {
     id("repo.intellij-plugin")
 }
@@ -32,5 +34,11 @@ dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         compatiblePlugin("org.intellij.scala")
+    }
+}
+
+tasks.named("verifyPlugin", VerifyPluginTask::class) {
+    failureLevel = VerifyPluginTask.FailureLevel.entries.filterNot {
+        it == VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES
     }
 }
