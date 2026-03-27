@@ -12,6 +12,9 @@
 
 ### Fixed
 
+- Vue template interpolations inside plain Markdown table cells are now recognized and injected
+  correctly. [#204](https://github.com/ghostflyby/IntelliJ-Plugins/pull/204)
+
 ### Security
 
 ## [1.0.1] - 2026-03-24
