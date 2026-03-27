@@ -38,7 +38,7 @@ internal object MillModuleDiscovery {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): List<String> {
-        MillImportDebugLogger.info("Running `mill resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
+        MillImportDebugLogger.info("Running `mill show resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
         val result = MillCommandLineUtil.resolveTargets(root, settings)
         if (!result.command.isSuccess) {
             MillImportDebugLogger.warn(

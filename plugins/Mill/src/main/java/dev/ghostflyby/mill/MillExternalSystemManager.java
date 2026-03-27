@@ -38,6 +38,7 @@ import com.intellij.openapi.util.Pair;
 import com.intellij.util.Function;
 import dev.ghostflyby.mill.project.MillProjectResolverSupport;
 import dev.ghostflyby.mill.settings.*;
+import kotlinx.coroutines.Deferred;
 import kotlinx.serialization.StringFormat;
 import kotlinx.serialization.json.Json;
 import org.jetbrains.annotations.NotNull;
@@ -149,8 +150,10 @@ public final class MillExternalSystemManager implements ExternalSystemManager<
     public void enhanceRemoteProcessing(@NotNull SimpleJavaParameters parameters) {
         String json = PathManager.getJarPathForClass(Json.class);
         String core = PathManager.getJarPathForClass(StringFormat.class);
+        String coroutines = PathManager.getJarPathForClass(Deferred.class);
 
         parameters.getClassPath().add(json);
         parameters.getClassPath().add(core);
+        parameters.getClassPath().add(coroutines);
     }
 }

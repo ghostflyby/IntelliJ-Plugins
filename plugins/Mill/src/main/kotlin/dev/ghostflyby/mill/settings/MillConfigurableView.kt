@@ -69,10 +69,24 @@ internal fun millConfigurableView(
             .bindEditorText(model.executableInputTextBindingProperty)
             .bindRightHint(model.executableVersionTextProperty)
             .bindRightHintError(model.executableStatusIsErrorProperty)
+            .applyToComponent {
+                fun updateExecutableValidation(message: String?) {
+                    val outline = if (message == null) null else "error"
+                    putClientProperty("JComponent.outline", outline)
+                    editorTextField.putClientProperty("JComponent.outline", outline)
+                    toolTipText = message
+                    editorTextField.toolTipText = message
+                    repaint()
+                    editorTextField.repaint()
+                }
+
+                updateExecutableValidation(model.executableValidationMessageProperty.get())
+                model.executableValidationMessageProperty.afterChange(::updateExecutableValidation)
+            }
             .resizableColumn()
             .align(Align.FILL)
             .validationOnApply { component ->
-                model.currentManualPathValidationMessage()?.let { ValidationInfo(it, component) }
+                model.currentExecutableValidationMessage()?.let { ValidationInfo(it, component) }
             }
     }.contextHelp(Bundle.message("settings.mill.executable.section.tooltip"))
 

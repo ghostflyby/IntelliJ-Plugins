@@ -34,8 +34,7 @@ import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
 import dev.ghostflyby.mill.settings.MillExecutableSource
 import dev.ghostflyby.mill.settings.MillExecutionSettings
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
@@ -272,7 +271,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses compile classpath from mill show output`() {
-        val paths = MillCommandLineUtil.parsePathList(
+        val paths = MillCommandLineUtil.parseStringList(
             """["/tmp/coursier/cache/a.jar","/tmp/coursier/cache/b.jar"]""",
         )
 
@@ -303,7 +302,7 @@ internal class MillProjectResolverSupportTest {
 
     @Test
     fun `parses escaped paths from mill show output`() {
-        val paths = MillCommandLineUtil.parsePathList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
+        val paths = MillCommandLineUtil.parseStringList("""["C:\\\\Users\\\\me\\\\cache\\\\lib.jar"]""")
 
         assertEquals(listOf("""C:\\Users\\me\\cache\\lib.jar"""), paths)
     }
@@ -413,6 +412,24 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `requires wrapped json export for build script compile classpath`() {
+        val root = Files.createTempDirectory("mill-script")
+        try {
+            val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory).createDirectories()
+            Files.writeString(
+                outputRoot.resolve(MillConstants.buildScriptClasspathFileName),
+                """["/tmp/coursier/cache/mill-core.jar"]""",
+            )
+
+            val model = MillBuildScriptSupport.loadModel(root)
+
+            assertNull(model)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
     fun `filters mill build output paths from displayed script dependencies`() {
         val root = Path.of("/tmp/project")
         val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory)
@@ -441,6 +458,22 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `parses show string list from wrapped json stdout`() {
+        val output = """
+            {
+              "value": ["ref:v0:70b0c2a0:/tmp/project/examples/src","qref:v1:acedc6f5:/tmp/cache/scala3-library.jar"]
+            }
+        """.trimIndent()
+
+        val values = MillCommandLineUtil.parseStringList(output)
+
+        assertEquals(
+            listOf("/tmp/project/examples/src", "/tmp/cache/scala3-library.jar"),
+            values,
+        )
+    }
+
+    @Test
     fun `parses show string value from pure json stdout`() {
         val output = """
             "3.8.2"
@@ -452,12 +485,23 @@ internal class MillProjectResolverSupportTest {
     }
 
     @Test
+    fun `parses show string value from wrapped json stdout`() {
+        val output = """
+            {
+              "value": "3.8.2"
+            }
+        """.trimIndent()
+
+        val value = MillCommandLineUtil.parseSingleStringValue(output)
+
+        assertEquals("3.8.2", value)
+    }
+
+    @Test
     fun `parses resolved mill targets`() {
-        val targets = MillCommandLineUtil.parseResolvedTargets(
+        val targets = MillCommandLineUtil.parseStringList(
             """
-            foo.compile
-            foo.test.compile
-            bar.runBackground
+            ["foo.compile","foo.test.compile","bar.runBackground"]
             """.trimIndent(),
         )
 

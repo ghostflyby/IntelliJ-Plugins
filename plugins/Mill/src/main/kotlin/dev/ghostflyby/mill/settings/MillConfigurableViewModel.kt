@@ -80,6 +80,7 @@ internal class MillConfigurableViewModel(
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
+    val executableValidationMessageProperty: ObservableMutableProperty<String?> = propertyGraph.property(null)
     val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(
         currentSelectedState()?.useMillMetadataDuringImport ?: true,
     )
@@ -196,6 +197,19 @@ internal class MillConfigurableViewModel(
             .takeUnless(String::isBlank)
             ?.let(projectStatesByPath::get)
             ?.let(::manualPathValidationMessage)
+    }
+
+    fun currentExecutableValidationMessage(): String? {
+        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return null
+        val state = projectStatesByPath[projectPath] ?: return null
+        manualPathValidationMessage(state)?.let { return it }
+        val cachedProbe = probeResultsByPath[projectPath]
+        if (cachedProbe == null || cachedProbe.settingsState != state) {
+            return null
+        }
+        return cachedProbe.probeResult.errorDetails
+            ?.takeIf { !cachedProbe.probeResult.isValid }
+            ?.let(::cleanProbeMessage)
     }
 
     fun presentableProjectName(projectPath: String): String {
@@ -634,6 +648,7 @@ internal class MillConfigurableViewModel(
     private fun updateDisplayedProbeStatus(isError: Boolean, versionText: String) {
         executableStatusIsErrorProperty.set(isError)
         executableVersionTextProperty.set(versionText)
+        executableValidationMessageProperty.set(currentExecutableValidationMessage())
     }
 
     private fun formatProbeVersion(probeResult: MillExecutableProbeResult): String {

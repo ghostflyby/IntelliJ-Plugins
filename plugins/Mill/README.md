@@ -4,13 +4,16 @@
 Integrates the Mill build system into IntelliJ IDEA through the External
 System API.
 
+Mill 1.1.5 or newer is required for the plugin's `show`-based metadata import
+and `build.mill` script model loading.
+
 Current implementation provides:
 
 - Mill project root detection from `build.mill`, `build.mill.yaml`, and `.mill-version`
 - Project Settings controls for executable source selection (project script or manual command/path, including a PATH
   shortcut suggestion), metadata-backed
   import, and per-module task nodes
-- Best-effort multi-module import from Mill target resolution
+- Best-effort multi-module import from Mill JSON target resolution via `show resolve`
 - Mill metadata-backed source, resource, and generated-root import where `show <module>.*` is available
 - Explicit test-to-production module dependencies for discovered `*.test` modules
 - Direct Mill module dependency import from `show <module>.moduleDeps` where discovered modules can be matched

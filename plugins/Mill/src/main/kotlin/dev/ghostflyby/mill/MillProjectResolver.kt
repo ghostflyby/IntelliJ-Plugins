@@ -29,6 +29,7 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.project.ExternalSystemProjectResolver
+import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.*
 import dev.ghostflyby.mill.script.MillBuildScriptModuleResolver
 import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
@@ -62,6 +63,23 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             progressReporter.progress(15, "Resolving Mill project root")
             val root = MillProjectResolverSupport.findProjectRoot(projectPath)
             MillImportDebugLogger.info("Resolved Mill root to $root")
+
+            progressReporter.progress(28, "Checking Mill executable")
+            val executableProbe = MillCommandLineUtil.probeExecutable(
+                projectRoot = root,
+                executableSource = executableConfiguration.source,
+                executablePath = executableConfiguration.manualPath,
+            )
+            if (!executableProbe.isValid) {
+                val errorMessage = executableProbe.errorDetails
+                    ?: Bundle.message("settings.mill.executable.status.invalid.generic")
+                listener.onTaskOutput(
+                    id,
+                    "Mill import failed because `${executableProbe.resolvedExecutable}` is not supported: $errorMessage\n",
+                    ProcessOutputType.STDERR,
+                )
+                error(errorMessage)
+            }
 
             progressReporter.progress(40, "Building Mill project model")
             val projectData = MillProjectResolverSupport.buildProjectData(root)

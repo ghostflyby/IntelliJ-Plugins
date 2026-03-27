@@ -34,6 +34,9 @@
 - Refined Mill project settings so executable selection is split into project script and manual command/path modes,
   while still offering a PATH shortcut suggestion, with project-local wrapper detection preferred by default and the
   unused JVM options field removed.
+- Require Mill 1.1.5 or newer for `show`-based metadata import and `build.mill` script model loading, and only accept
+  JSON-based exported script metadata.
+- Switched module discovery from plain-text `mill resolve` parsing to the JSON output of `mill show resolve`.
 
 ### Deprecated
 
