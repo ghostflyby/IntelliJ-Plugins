@@ -106,7 +106,7 @@ public class EditableHintedComboBox<T> internal constructor(
 
 
     init {
-        setSwingPopup(false)
+        this.isSwingPopup = false
         hintOverlayTextField.border = null
 
         comboBoxEditorDelegate = object : BasicComboBoxEditor() {
