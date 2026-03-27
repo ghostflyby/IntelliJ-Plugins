@@ -29,7 +29,7 @@ plugins {
     java // Java support
     alias(libs.plugins.kotlin) // Kotlin support
     alias(libs.plugins.intellij.module) // IntelliJ Platform Gradle Plugin
-    alias(libs.plugins.kover) // Gradle Kover Plugin}
+    alias(libs.plugins.kover) // Gradle Kover Plugin
 }
 
 
