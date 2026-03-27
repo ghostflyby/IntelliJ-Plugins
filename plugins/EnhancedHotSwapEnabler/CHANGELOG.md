@@ -16,6 +16,12 @@
 
 ### Security
 
+## [1.5.7] - 2026-03-25
+
+### Fixed
+
+- Lazy Disposable for AutoCleanKey to avoid eager service initialization causing exception
+
 ## [1.4.7] - 2026-02-27
 
 ### Added
@@ -124,7 +130,8 @@
 - Not editing parameters for non-debug starts
 - Wrong Gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.4.7...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.5.7...HEAD
+[1.5.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.4.7...EnhancedHotSwapEnabler-v1.5.7
 [1.4.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...EnhancedHotSwapEnabler-v1.4.7
 [1.3.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.6...EnhancedHotSwapEnabler-v1.3.7
 [1.3.6]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.5...EnhancedHotSwapEnabler-v1.3.6

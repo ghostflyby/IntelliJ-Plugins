@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.dcevm.config
 
+import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.dcevm.Bundle
@@ -35,22 +36,32 @@ internal fun hotswapConfigView(
     model: HotswapConfigViewModel,
 ) =
     panel {
+        hotswapConfigRows(model)
+    }
+
+internal fun Panel.hotswapConfigRows(
+    model: HotswapConfigViewModel,
+    comment: String? = null,
+) {
+    val inheritRow = row {
+        checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
+    }.visible(model.inheritEnable)
+    if (comment != null) {
+        inheritRow.rowComment(comment)
+    }
+    (if (model.inheritEnable) ::indent else {
+        {
+            this.it()
+        }
+    }) {
         row {
-            checkBox(Bundle.message("checkbox.settings.inherit.parent")).bindSelected(model.inheritProperty)
-        }.visible(model.inheritEnable)
-        (if (model.inheritEnable) ::indent else {
-            {
-                this.it()
-            }
-        }) {
-            row {
-                checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
-                    .enabledIf(model.enableEditableProperty)
-            }
-            row {
-                checkBox(Bundle.message("checkbox.hotswapAgent"))
-                    .bindSelected(model.enableHotswapAgentProperty)
-                    .enabledIf(model.enableHotswapAgentEditableProperty)
-            }
+            checkBox(Bundle.message("checkbox.enable")).bindSelected(model.enableProperty)
+                .enabledIf(model.enableEditableProperty)
+        }
+        row {
+            checkBox(Bundle.message("checkbox.hotswapAgent"))
+                .bindSelected(model.enableHotswapAgentProperty)
+                .enabledIf(model.enableHotswapAgentEditableProperty)
         }
     }
+}

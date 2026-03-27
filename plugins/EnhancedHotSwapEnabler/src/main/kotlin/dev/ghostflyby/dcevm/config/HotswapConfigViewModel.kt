@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2025 ghostflyby
- * SPDX-FileCopyrightText: 2025 ghostflyby
+ * Copyright (c) 2025-2026 ghostflyby
+ * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
@@ -52,7 +52,6 @@ internal class HotswapConfigViewModel(
 
     override var enable by enableProperty
     override var enableHotswapAgent by enableHotswapAgentProperty
-
     /**
      * for top-level configuration, this should be `false`,
      * as Application level settings have no parent to inherit from.

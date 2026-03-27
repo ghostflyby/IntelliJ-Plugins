@@ -14,6 +14,13 @@
 
 ### Security
 
+## [1.0.1] - 2026-03-24
+
+### Fixed
+
+- Markdown files now switch to the `VitePress` file type immediately after being moved or copied into a recognized
+  VitePress content tree.
+
 ## [1.0.0] - 2026-03-09
 
 ### Added
@@ -38,5 +45,6 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...HEAD
+[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...VitePress-v1.0.1
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/VitePress-v1.0.0

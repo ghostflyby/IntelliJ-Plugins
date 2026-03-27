@@ -24,7 +24,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "1.4.7"
+version = "1.5.7"
 
 val hotswapAgentDistribution by configurations.creating {
     isCanBeResolved = true

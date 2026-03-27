@@ -29,5 +29,5 @@ import dev.ghostflyby.intellij.getValue
 import dev.ghostflyby.intellij.setValue
 import dev.ghostflyby.intellij.toAutoCleanKey
 
-private val hotswapDataKey = Key.create<HotswapConfigState>("HotSwapEnabler.State").toAutoCleanKey(PluginDisposable)
+private val hotswapDataKey = Key.create<HotswapConfigState>("HotSwapEnabler.State").toAutoCleanKey { PluginDisposable }
 internal var UserDataHolder.hotswapState: HotswapConfigState? by hotswapDataKey

@@ -16,6 +16,12 @@
 
 ### Security
 
+## [1.1.2] - 2026-03-25
+
+### Fixed
+
+- wrong enum names for AI agents in tool calling [#194](https://github.com/ghostflyby/IntelliJ-Plugins/pull/194)
+
 ## [1.1.1] - 2026-03-03
 
 ### Changed
@@ -35,6 +41,7 @@
 - Gradle task and project operations now report MCP activity updates for better runtime observability.
 - `run_gradle_tasks` now uses IDE background progress so task runs are visible and cancelable from the IDE.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.2...HEAD
+[1.1.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.1...GradleMcpTools-v1.1.2
 [1.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.0...GradleMcpTools-v1.1.1
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/GradleMcpTools-v1.1.0
