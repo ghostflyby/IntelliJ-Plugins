@@ -51,6 +51,8 @@ import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.intellij.plugins.markdown.lang.MarkdownFileType
 import org.jetbrains.vuejs.lang.html.VueFileType
@@ -242,6 +244,7 @@ private fun createWorkaroundDescriptionPane(): JEditorPane {
 internal class VitePressWorkaroundNotificationService(
     private val scope: CoroutineScope,
 ) : SerializablePersistentStateComponent<VitePressWorkaroundNotificationService.State>(State()) {
+    private val notificationMutex = Mutex()
 
     internal fun notifyAboutUnconfiguredRoots(
         project: Project,
@@ -265,8 +268,19 @@ internal class VitePressWorkaroundNotificationService(
             if (!hasRelevantRoots) {
                 return@launch
             }
-            updateState { current ->
-                current.copy(hasShownNotification = true)
+            val shouldShowNotification =
+                notificationMutex.withLock {
+                    if (state.hasShownNotification) {
+                        false
+                    } else {
+                        updateState { current ->
+                            current.copy(hasShownNotification = true)
+                        }
+                        true
+                    }
+                }
+            if (!shouldShowNotification) {
+                return@launch
             }
             withContext(Dispatchers.UI) {
                 showWorkaroundNotification(project)
