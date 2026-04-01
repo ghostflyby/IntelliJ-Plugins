@@ -45,6 +45,9 @@ import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
 import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_QUICK_PRESET_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
@@ -99,15 +102,15 @@ internal class ScopeTextSearchMcpTools : McpToolset {
     suspend fun scope_search_text_quick(
         @McpDescription("Text or regex pattern to search.")
         query: String,
-        @McpDescription("Search mode.")
+        @McpDescription(SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION)
         mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
-        @McpDescription("Preset scope for quick text search.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @McpDescription("Whether to search in a case-sensitive manner.")
         caseSensitive: Boolean = true,
         @McpDescription("Whether to match whole words only.")
         wholeWordsOnly: Boolean = false,
-        @McpDescription("Search context filter.")
+        @McpDescription(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION)
         searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
         @McpDescription("Optional file mask filter, e.g. '*.kt, !*Test.kt'.")
         fileMask: String? = null,
@@ -161,7 +164,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         caseSensitive: Boolean = true,
         @McpDescription("Whether to match whole words only.")
         wholeWordsOnly: Boolean = false,
-        @McpDescription("Search context filter.")
+        @McpDescription(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION)
         searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
         @McpDescription("Optional file mask filter, e.g. '*.kt, !*Test.kt'.")
         fileMask: String? = null,
@@ -199,7 +202,7 @@ internal class ScopeTextSearchMcpTools : McpToolset {
         caseSensitive: Boolean = true,
         @McpDescription("Whether to match whole words only.")
         wholeWordsOnly: Boolean = false,
-        @McpDescription("Search context filter.")
+        @McpDescription(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION)
         searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
         @McpDescription("Optional file mask filter, e.g. '*.kt, !*Test.kt'.")
         fileMask: String? = null,

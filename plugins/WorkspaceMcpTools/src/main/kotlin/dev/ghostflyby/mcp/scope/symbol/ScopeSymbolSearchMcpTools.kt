@@ -301,7 +301,7 @@ internal class ScopeSymbolSearchMcpTools : McpToolset {
     suspend fun scope_search_symbols_quick(
         @McpDescription("Symbol query string.")
         query: String,
-        @McpDescription("Preset scope for quick search.")
+        @McpDescription(SCOPE_SYMBOL_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeSymbolQuickPreset = ScopeSymbolQuickPreset.PROJECT_FILES,
         @McpDescription("Maximum number of symbol items to return.")
         maxResultCount: Int = 50,

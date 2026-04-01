@@ -24,6 +24,7 @@ package dev.ghostflyby.mcp.vfs
 
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX
+import dev.ghostflyby.mcp.common.VFS_READ_MODE_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.reportActivity
@@ -268,6 +269,7 @@ internal class VfsMcpTools : McpToolset {
     @Serializable
     class VfsReadRequest(
         val url: String,
+        @McpDescription(VFS_READ_MODE_PARAM_DESCRIPTION)
         val mode: ReadMode = ReadMode.FULL,
         val startChar: Int = 0,
         val endCharExclusive: Int? = null,
@@ -438,7 +440,7 @@ internal class VfsMcpTools : McpToolset {
     suspend fun vfs_read_file(
         @McpDescription(VFS_URL_PARAM_DESCRIPTION)
         url: String,
-        @McpDescription("Read strategy: FULL, CHAR_RANGE, or LINE_RANGE.")
+        @McpDescription(VFS_READ_MODE_PARAM_DESCRIPTION)
         mode: ReadMode = ReadMode.FULL,
         @McpDescription("Character range start offset (inclusive) for CHAR_RANGE mode.")
         startChar: Int = 0,

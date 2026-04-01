@@ -22,6 +22,13 @@
 
 package dev.ghostflyby.mcp.scope
 
+import com.intellij.mcpserver.annotations.McpDescription
+import dev.ghostflyby.mcp.common.MODULE_SCOPE_FLAVOR_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_ATOM_FAILURE_MODE_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_ATOM_KIND_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_PROGRAM_OP_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION
+import dev.ghostflyby.mcp.common.SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -68,10 +75,12 @@ internal enum class ScopeAtomFailureMode {
 @Serializable
 internal data class ScopeAtomDto(
     val atomId: String,
+    @McpDescription(SCOPE_ATOM_KIND_PARAM_DESCRIPTION)
     val kind: ScopeAtomKind,
     val scopeRefId: String? = null,
     val standardScopeId: String? = null,
     val moduleName: String? = null,
+    @McpDescription(MODULE_SCOPE_FLAVOR_PARAM_DESCRIPTION)
     val moduleFlavor: ModuleScopeFlavor? = null,
     val namedScopeName: String? = null,
     val namedScopeHolderId: String? = null,
@@ -80,11 +89,13 @@ internal data class ScopeAtomDto(
     val directoryWithSubdirectories: Boolean = true,
     val fileUrls: List<String> = emptyList(),
     val providerScopeId: String? = null,
+    @McpDescription(SCOPE_ATOM_FAILURE_MODE_PARAM_DESCRIPTION)
     val onResolveFailure: ScopeAtomFailureMode? = null,
 )
 
 @Serializable
 internal data class ScopeProgramTokenDto(
+    @McpDescription(SCOPE_PROGRAM_OP_PARAM_DESCRIPTION)
     val op: ScopeProgramOp,
     val atomId: String? = null,
 )
@@ -95,6 +106,7 @@ internal data class ScopeResolveRequestDto(
     val tokens: List<ScopeProgramTokenDto>,
     val strict: Boolean = true,
     val allowUiInteractiveScopes: Boolean = false,
+    @McpDescription(SCOPE_ATOM_FAILURE_MODE_PARAM_DESCRIPTION)
     val nonStrictDefaultFailureMode: ScopeAtomFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
 )
 
@@ -245,9 +257,11 @@ internal enum class ScopeTextSearchContextDto {
 @Serializable
 internal data class ScopeTextSearchRequestDto(
     val query: String,
+    @McpDescription(SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION)
     val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
     val caseSensitive: Boolean = true,
     val wholeWordsOnly: Boolean = false,
+    @McpDescription(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION)
     val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
     val fileMask: String? = null,
     val scope: ScopeProgramDescriptorDto,

@@ -35,6 +35,43 @@ internal const val AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX =
 internal const val ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION =
     "Whether UI-interactive scopes are allowed during descriptor resolution."
 
+internal const val SCOPE_QUICK_PRESET_PARAM_DESCRIPTION =
+    "Preset scope to use. One of: PROJECT_FILES, ALL_PLACES, OPEN_FILES, PROJECT_AND_LIBRARIES, " +
+        "PROJECT_PRODUCTION_FILES, PROJECT_TEST_FILES."
+
+internal const val SCOPE_SYMBOL_QUICK_PRESET_PARAM_DESCRIPTION =
+    "Preset scope for quick symbol search. One of: PROJECT_FILES, ALL_PLACES."
+
+internal const val SCOPE_CATALOG_INTENT_PARAM_DESCRIPTION =
+    "Selection intent for reducing catalog candidates. One of: PROJECT_ONLY, WITH_LIBRARIES, " +
+        "CHANGED_FILES, OPEN_FILES, CURRENT_FILE."
+
+internal const val SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION =
+    "Search mode. One of: PLAIN, REGEX."
+
+internal const val SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION =
+    "Search context filter. One of: ANY, IN_STRING_LITERALS, IN_COMMENTS, EXCEPT_STRING_LITERALS, " +
+        "EXCEPT_COMMENTS, EXCEPT_COMMENTS_AND_STRING_LITERALS."
+
+internal const val QUALITY_SEVERITY_THRESHOLD_PARAM_DESCRIPTION =
+    "Minimum severity threshold for returned problems. One of: ERROR, WARNING, WEAK_WARNING, INFORMATION, OTHER."
+
+internal const val VFS_READ_MODE_PARAM_DESCRIPTION =
+    "Read strategy. One of: FULL, CHAR_RANGE, LINE_RANGE."
+
+internal const val SCOPE_ATOM_KIND_PARAM_DESCRIPTION =
+    "Scope atom kind. One of: STANDARD, MODULE, NAMED_SCOPE, PATTERN, DIRECTORY, FILES, PROVIDER_SCOPE."
+
+internal const val MODULE_SCOPE_FLAVOR_PARAM_DESCRIPTION =
+    "Module scope flavor. One of: MODULE, MODULE_WITH_DEPENDENCIES, MODULE_WITH_LIBRARIES, " +
+        "MODULE_WITH_DEPENDENCIES_AND_LIBRARIES."
+
+internal const val SCOPE_ATOM_FAILURE_MODE_PARAM_DESCRIPTION =
+    "Failure handling mode for atom resolution. One of: FAIL, EMPTY_SCOPE, SKIP."
+
+internal const val SCOPE_PROGRAM_OP_PARAM_DESCRIPTION =
+    "Program token operation in RPN order. One of: PUSH_ATOM, AND, OR, NOT."
+
 internal const val MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX =
     " ## MCP-first Policy\n" +
         "- Any code/symbol/IDE API lookup should use `functions.mcp__idea__*` tools first.\n" +
