@@ -340,7 +340,7 @@ internal class VitePressRootTrackerActivity : ProjectActivity {
                 }
             }
         tracker.addAll(initialRoots)
-        notifyAboutVitePressRoots(project, initialRoots)
+        notifyAboutVitePressRoots(project, initialRoots, rootsKnownInProject = true)
     }
 }
 

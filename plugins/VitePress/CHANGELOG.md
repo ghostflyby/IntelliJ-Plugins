@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Vue language service workaround prompting is now shown once at the application level instead of tracking per-project
+  notifications, matching the global `.md` file association that the workaround changes.
+
 ### Deprecated
 
 ### Removed

@@ -129,69 +129,58 @@ private fun createWorkaroundDescriptionPane(): JEditorPane {
     }
 }
 
-@Service(Service.Level.PROJECT)
+@Service(Service.Level.APP)
 @State(
     name = "VitePressWorkaroundNotificationState",
-    storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
+    storages = [Storage("vitepress.xml", roamingType = RoamingType.DISABLED)],
 )
 internal class VitePressWorkaroundNotificationService(
-    private val project: Project,
     private val scope: CoroutineScope,
 ) : SerializablePersistentStateComponent<VitePressWorkaroundNotificationService.State>(State()) {
 
-    internal fun notifyAboutUnconfiguredRoots(roots: Collection<VirtualFile>) {
+    internal fun notifyAboutUnconfiguredRoots(
+        project: Project,
+        roots: Collection<VirtualFile>,
+        rootsKnownInProject: Boolean = false,
+    ) {
         if (roots.isEmpty()) {
             return
         }
         scope.launch {
             val settings = service<VitePressMdFileTypeWorkaroundSettings>()
-            if (project.isDisposed || settings.isVueLanguageServiceWorkaroundEnabled) {
+            if (project.isDisposed || settings.isVueLanguageServiceWorkaroundEnabled || state.hasShownNotification) {
                 return@launch
             }
-            val rootsInProject = readAction { collectRootsInProject(roots) }
-            if (rootsInProject.isEmpty()) {
-                return@launch
-            }
-            val newRoots = rootsInProject.filterNot { it.url in state.notifiedRootUrls }
-            if (newRoots.isEmpty()) {
+            val hasRelevantRoots =
+                if (rootsKnownInProject) {
+                    readAction { roots.any(VirtualFile::isValid) }
+                } else {
+                    readAction { hasRootsInProject(project, roots) }
+                }
+            if (!hasRelevantRoots) {
                 return@launch
             }
             updateState { current ->
-                current.copy(
-                    notifiedRootUrls = LinkedHashSet(current.notifiedRootUrls).apply {
-                        addAll(newRoots.map(RootPresentation::url))
-                    },
-                )
+                current.copy(hasShownNotification = true)
             }
             withContext(Dispatchers.UI) {
-                showWorkaroundNotification(newRoots)
+                showWorkaroundNotification(project)
             }
         }
     }
 
-    private fun collectRootsInProject(roots: Collection<VirtualFile>): List<RootPresentation> {
+    private fun hasRootsInProject(project: Project, roots: Collection<VirtualFile>): Boolean {
         val fileIndex = ProjectFileIndex.getInstance(project)
-        return roots.asSequence()
-            .filter { root -> root.isValid && fileIndex.isInContent(root) }
-            .map { root -> RootPresentation(root.url, root.presentableUrl) }
-            .distinctBy(RootPresentation::url)
-            .sortedBy(RootPresentation::presentablePath)
-            .toList()
+        return roots.any { root -> root.isValid && fileIndex.isInContent(root) }
     }
 
-    private fun showWorkaroundNotification(roots: List<RootPresentation>) {
-        val content =
-            if (roots.size == 1) {
-                Bundle.message("notification.vueLsp.content.single", roots.single().presentablePath)
-            } else {
-                Bundle.message("notification.vueLsp.content.multiple", roots.size)
-            }
+    private fun showWorkaroundNotification(project: Project) {
         val notification =
             NotificationGroupManager.getInstance()
                 .getNotificationGroup(VITEPRESS_NOTIFICATION_GROUP_ID)
                 .createNotification(
                     Bundle.message("notification.vueLsp.title"),
-                    content,
+                    Bundle.message("notification.vueLsp.content"),
                     NotificationType.INFORMATION,
                 )
         notification.addAction(
@@ -208,17 +197,17 @@ internal class VitePressWorkaroundNotificationService(
     }
 
     internal data class State(
-        @JvmField val notifiedRootUrls: MutableSet<String> = linkedSetOf(),
-    )
-
-    private data class RootPresentation(
-        val url: String,
-        val presentablePath: String,
+        @JvmField val hasShownNotification: Boolean = false,
     )
 }
 
-internal fun notifyAboutVitePressRoots(project: Project, roots: Collection<VirtualFile>) {
-    project.service<VitePressWorkaroundNotificationService>().notifyAboutUnconfiguredRoots(roots)
+internal fun notifyAboutVitePressRoots(
+    project: Project,
+    roots: Collection<VirtualFile>,
+    rootsKnownInProject: Boolean = false,
+) {
+    service<VitePressWorkaroundNotificationService>()
+        .notifyAboutUnconfiguredRoots(project, roots, rootsKnownInProject)
 }
 
 private fun FileTypeManager.isVueMdAssociationEnabled(): Boolean {
