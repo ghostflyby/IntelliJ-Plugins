@@ -37,6 +37,8 @@ jobs:
         with:
           distribution: jetbrains
           java-version: 21
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Setup Gradle
       - name: Setup Gradle
