@@ -22,19 +22,32 @@
 
 package dev.ghostflyby.vitepress
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.impl.FileTypeOverrider
 import com.intellij.openapi.vfs.VirtualFile
+import org.intellij.plugins.markdown.lang.MarkdownFileType
 
 internal class VitePressFileTypeOverrider : FileTypeOverrider {
     override fun getOverriddenFileType(file: VirtualFile): FileType? {
         if (!file.extension.equals("md", ignoreCase = true)) {
             return null
         }
-        if (file.isUnderVitePressRoot.value) {
-            return VitePressFiletype
-        }
-        return null
+        val workaroundEnabled = service<VitePressMdFileTypeWorkaroundSettings>().isVueLanguageServiceWorkaroundEnabled
+        return overriddenMarkdownFileType(
+            isUnderVitePressRoot = file.isUnderVitePressRoot.value,
+            isVueLanguageServiceWorkaroundEnabled = workaroundEnabled,
+        )
     }
+}
 
+internal fun overriddenMarkdownFileType(
+    isUnderVitePressRoot: Boolean,
+    isVueLanguageServiceWorkaroundEnabled: Boolean,
+): FileType? {
+    return when {
+        isUnderVitePressRoot -> VitePressFiletype
+        isVueLanguageServiceWorkaroundEnabled -> MarkdownFileType.INSTANCE
+        else -> null
+    }
 }

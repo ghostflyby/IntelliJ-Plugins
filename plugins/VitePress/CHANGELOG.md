@@ -4,6 +4,12 @@
 
 ### Added
 
+- Application-level opt-in workaround for cases where Vue language service does not start on VitePress Markdown files.
+  The workaround switches the global `.md` association to `Vue`, keeps VitePress roots on the dedicated `VitePress`
+  file type, and forces other Markdown files back to `Markdown` through dynamic file type overrides.
+- Notification and settings entry points for enabling the Vue language service workaround after VitePress roots are
+  first detected in a project.
+
 ### Changed
 
 ### Deprecated

@@ -340,6 +340,7 @@ internal class VitePressRootTrackerActivity : ProjectActivity {
                 }
             }
         tracker.addAll(initialRoots)
+        notifyAboutVitePressRoots(project, initialRoots)
     }
 }
 
@@ -461,6 +462,11 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
                 tracker.removeAll(toRemove)
                 tracker.addAll(toAdd)
                 tracker.queueFilesForReparse(reparseResolvers.flatMapTo(LinkedHashSet()) { it() })
+                ProjectManager.getInstance().openProjects.forEach { project ->
+                    if (!project.isDisposed) {
+                        notifyAboutVitePressRoots(project, toAdd)
+                    }
+                }
             }
         }
     }

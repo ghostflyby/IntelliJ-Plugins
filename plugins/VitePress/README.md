@@ -9,5 +9,7 @@ Adds VitePress-aware editing for Markdown files inside a VitePress site.
 2. mixed Markdown and Vue editing, including top-level Vue tags and interpolations.
 3. Vue template support inside plain text, headings, link text, and Markdown table cells, with Vue highlighting
    preserved
+4. optional application-level workaround for cases where Vue language service only starts from file extension
+   associations and does not attach to VitePress Markdown files by default
 
 <!-- Plugin description end -->
