@@ -22,8 +22,6 @@
 
 package dev.ghostflyby.vitepress
 
-import com.intellij.ide.plugins.DynamicPluginListener
-import com.intellij.ide.plugins.IdeaPluginDescriptor
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -79,17 +77,6 @@ internal class VitePressMdFileTypeWorkaroundSettings :
                 }
             },
         )
-        connection.subscribe(
-            DynamicPluginListener.TOPIC,
-            object : DynamicPluginListener {
-                override fun beforePluginUnload(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
-                    if (isUpdate || pluginDescriptor.pluginId.idString != VITEPRESS_PLUGIN_ID) {
-                        return
-                    }
-                    restoreTrackedAssociationForPluginUnload()
-                }
-            },
-        )
     }
 
     var isVueLanguageServiceWorkaroundEnabled: Boolean
@@ -130,7 +117,7 @@ internal class VitePressMdFileTypeWorkaroundSettings :
 
     override fun dispose() = Unit
 
-    private fun restoreTrackedAssociationForPluginUnload() {
+    internal fun restoreTrackedAssociationForPluginUnload() {
         if (!isVueLanguageServiceWorkaroundEnabled || !hasTrackedAssociation()) {
             return
         }
@@ -350,5 +337,5 @@ private fun FileTypeManager.setMdAssociation(targetFileType: FileType): Boolean 
 }
 
 private const val MARKDOWN_EXTENSION: String = "md"
-private const val VITEPRESS_PLUGIN_ID: String = "dev.ghostflyby.vitepress"
+internal const val VITEPRESS_PLUGIN_ID: String = "dev.ghostflyby.vitepress"
 internal const val VITEPRESS_NOTIFICATION_GROUP_ID: String = "VitePress"

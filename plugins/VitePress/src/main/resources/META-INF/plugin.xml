@@ -11,6 +11,11 @@
     <depends>org.intellij.plugins.markdown</depends>
     <depends>org.jetbrains.plugins.vue</depends>
 
+    <applicationListeners>
+        <listener class="dev.ghostflyby.vitepress.VitePressDynamicPluginListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="VitePress"
                            displayType="BALLOON"
