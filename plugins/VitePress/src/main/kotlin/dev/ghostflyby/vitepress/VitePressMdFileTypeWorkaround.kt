@@ -39,6 +39,7 @@ import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
@@ -50,6 +51,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.intellij.plugins.markdown.lang.MarkdownFileType
 import org.jetbrains.vuejs.lang.html.VueFileType
+import javax.swing.JEditorPane
+import javax.swing.event.HyperlinkEvent
 
 @Service(Service.Level.APP)
 internal class VitePressMdFileTypeWorkaroundSettings : Disposable.Default {
@@ -87,7 +90,10 @@ internal class VitePressApplicationConfigurable : BoundConfigurable(Bundle.messa
             checkBox(Bundle.message("configuration.vueLsp.checkbox"))
                 .bindSelected(settings::isVueLanguageServiceWorkaroundEnabled)
                 .also { checkBoxComponent = it.component }
-        }.rowComment(Bundle.message("configuration.vueLsp.comment"))
+        }
+        row {
+            cell(createWorkaroundDescriptionPane())
+        }
 
         val uiDisposable = requireNotNull(disposable)
         @Suppress("USELESS_CAST")
@@ -101,6 +107,20 @@ internal class VitePressApplicationConfigurable : BoundConfigurable(Bundle.messa
                 }
             },
         )
+    }
+}
+
+private fun createWorkaroundDescriptionPane(): JEditorPane {
+    return JEditorPane("text/html", Bundle.message("configuration.vueLsp.description.html")).apply {
+        isEditable = false
+        isOpaque = false
+        background = JBColor.background()
+        putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, true)
+        addHyperlinkListener { event ->
+            if (event.eventType == HyperlinkEvent.EventType.ACTIVATED) {
+                event.url?.let { com.intellij.ide.BrowserUtil.browse(it) }
+            }
+        }
     }
 }
 
