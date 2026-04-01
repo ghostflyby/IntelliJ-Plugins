@@ -20,8 +20,12 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.gradle.api.artifacts.ResolutionStrategy
+import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.kotlin.dsl.*
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
@@ -41,6 +45,7 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget = JvmTarget.fromTarget("21")
+        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
     }
     explicitApi()
     @OptIn(ExperimentalAbiValidation::class)
@@ -100,4 +105,3 @@ tasks {
     }
 
 }
-
