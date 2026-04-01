@@ -29,6 +29,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.UI
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.*
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeListener
@@ -74,7 +75,11 @@ internal class VitePressMdFileTypeWorkaroundSettings : Disposable.Default {
             } else {
                 MarkdownFileType.INSTANCE
             }
-        if (!fileTypeManager.setMdAssociation(targetFileType)) {
+        val changed =
+            runWriteAction {
+                fileTypeManager.setMdAssociation(targetFileType)
+            }
+        if (!changed) {
             return
         }
         FileContentUtil.reparseOpenedFiles()
