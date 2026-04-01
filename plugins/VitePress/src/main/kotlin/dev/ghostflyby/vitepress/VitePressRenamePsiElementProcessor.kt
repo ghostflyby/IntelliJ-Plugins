@@ -71,13 +71,13 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
         allRenames: Map<PsiElement, String>,
         elementListener: RefactoringElementListener,
     ): Runnable? {
+        val (vitePressUsages, otherUsages) = usages.partition(::isVitePressInjectedUsage)
         val delegate =
             allForElement(element)
                 .firstOrNull { it !== this }
         val delegateCallback =
-            delegate?.getPostRenameCallback(element, newName, usages, allRenames, elementListener)
-                ?: super.getPostRenameCallback(element, newName, usages, allRenames, elementListener)
-        val vitePressUsages = usages.filter(::isVitePressInjectedUsage)
+            delegate?.getPostRenameCallback(element, newName, otherUsages, allRenames, elementListener)
+                ?: super.getPostRenameCallback(element, newName, otherUsages, allRenames, elementListener)
         if (vitePressUsages.isEmpty()) {
             return delegateCallback
         }
