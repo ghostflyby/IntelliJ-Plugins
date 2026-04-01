@@ -24,13 +24,14 @@ package dev.ghostflyby.vitepress
 
 import com.intellij.injected.editor.DocumentWindow
 import com.intellij.lang.injection.InjectedLanguageManager
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.RangeMarker
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiReference
+import com.intellij.psi.SmartPointerManager
+import com.intellij.psi.SmartPsiFileRange
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.refactoring.listeners.RefactoringElementListener
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
@@ -81,12 +82,13 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
         if (vitePressUsages.isEmpty()) {
             return delegateCallback
         }
-        val hostRenameMarkers = createHostRenameMarkers(vitePressUsages)
+        val hostRenamePointers = createHostRenamePointers(vitePressUsages)
         val vitePressCallback = Runnable {
             try {
-                applyHostRenameMarkers(element.project, hostRenameMarkers, newName)
+                applyHostRenamePointers(element.project, hostRenamePointers, newName)
             } finally {
-                hostRenameMarkers.forEach { marker -> marker.rangeMarker.dispose() }
+                val smartPointerManager = SmartPointerManager.getInstance(element.project)
+                hostRenamePointers.forEach(smartPointerManager::removePointer)
             }
         }
         if (delegateCallback == null) {
@@ -117,40 +119,74 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
                 (viewProvider.baseLanguage == VitePressLanguage || topLevelFile.fileType == VitePressFiletype)
     }
 
-    private fun createHostRenameMarkers(usages: List<UsageInfo>): List<HostRenameMarker> {
+    private fun createHostRenamePointers(usages: List<UsageInfo>): List<SmartPsiFileRange> {
         return usages
             .mapNotNull(::toHostRenameTarget)
             .distinctBy { target -> target.file.virtualFile?.path to target.range }
             .map { target ->
-                val psiDocumentManager = PsiDocumentManager.getInstance(target.file.project)
-                val document = requireNotNull(psiDocumentManager.getDocument(target.file))
-                HostRenameMarker(
-                    document = document,
-                    rangeMarker = document.createRangeMarker(target.range),
-                )
+                SmartPointerManager.getInstance(target.file.project)
+                    .createSmartPsiFileRangePointer(target.file, target.range)
             }
     }
 
-    private fun applyHostRenameMarkers(
+    private fun applyHostRenamePointers(
         project: com.intellij.openapi.project.Project,
-        markers: List<HostRenameMarker>,
+        pointers: List<SmartPsiFileRange>,
         newName: String,
     ) {
         val psiDocumentManager = PsiDocumentManager.getInstance(project)
-        val documentsToCommit = LinkedHashSet<Document>()
-        markers
-            .filter { marker -> marker.rangeMarker.isValid }
-            .sortedByDescending { marker -> marker.rangeMarker.startOffset }
-            .forEach { marker ->
-                psiDocumentManager.doPostponedOperationsAndUnblockDocument(marker.document)
-                marker.document.replaceString(marker.rangeMarker.startOffset, marker.rangeMarker.endOffset, newName)
-                documentsToCommit += marker.document
+        val injectedLanguageManager = InjectedLanguageManager.getInstance(project)
+        runWriteAction {
+            pointers.forEach { pointer ->
+                val hostFile = pointer.containingFile ?: return@forEach
+                val hostRange = pointer.psiRange ?: pointer.range ?: return@forEach
+                val document = psiDocumentManager.getDocument(hostFile)
+                if (document != null) {
+                    psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
+                    psiDocumentManager.commitDocument(document)
+                }
+                val reference = findReferenceAtHostRange(hostFile, TextRange.create(hostRange), injectedLanguageManager)
+                    ?: return@forEach
+                reference.handleElementRename(newName)
+                if (document != null) {
+                    psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
+                    psiDocumentManager.commitDocument(document)
+                }
             }
-
-        documentsToCommit.forEach { document ->
-            psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
-            psiDocumentManager.commitDocument(document)
         }
+    }
+
+    private fun findReferenceAtHostRange(
+        hostFile: PsiFile,
+        hostRange: TextRange,
+        injectedLanguageManager: InjectedLanguageManager,
+    ): PsiReference? {
+        val injectedElement = injectedLanguageManager.findInjectedElementAt(hostFile, hostRange.startOffset)
+        if (injectedElement != null) {
+            findReferenceInParents(injectedElement, hostFile, hostRange)?.let { return it }
+        }
+        return hostFile.findReferenceAt(hostRange.startOffset)
+            ?.takeIf { reference -> matchesHostRange(reference, hostFile, hostRange) }
+    }
+
+    private fun findReferenceInParents(
+        startElement: PsiElement,
+        hostFile: PsiFile,
+        hostRange: TextRange,
+    ): PsiReference? {
+        var current: PsiElement? = startElement
+        while (current != null && current != hostFile) {
+            current.references
+                .firstOrNull { reference -> matchesHostRange(reference, hostFile, hostRange) }
+                ?.let { return it }
+            current = current.parent
+        }
+        return null
+    }
+
+    private fun matchesHostRange(reference: PsiReference, hostFile: PsiFile, hostRange: TextRange): Boolean {
+        val target = toHostRenameTarget(reference) ?: return false
+        return target.file.virtualFile == hostFile.virtualFile && target.range == hostRange
     }
 
     private fun toHostRenameTarget(usage: UsageInfo): HostRenameTarget? {
@@ -186,9 +222,4 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
 private data class HostRenameTarget(
     val file: PsiFile,
     val range: TextRange,
-)
-
-private data class HostRenameMarker(
-    val document: Document,
-    val rangeMarker: RangeMarker,
 )
