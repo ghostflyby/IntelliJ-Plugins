@@ -42,6 +42,9 @@
                    order="last"
                    implementationClass="dev.ghostflyby.vitepress.VitePressHeadingInterpolationAnnotator"/>
         <daemon.highlightInfoFilter implementation="dev.ghostflyby.vitepress.VitePressHeadingHighlightInfoFilter"/>
+        <renamePsiElementProcessor
+                implementation="dev.ghostflyby.vitepress.VitePressRenamePsiElementProcessor"
+                order="first"/>
     </extensions>
     <projectListeners>
         <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"

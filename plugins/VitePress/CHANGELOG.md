@@ -18,6 +18,8 @@
 
 ### Fixed
 
+- Renaming `script setup` symbols and VitePress interpolation references now updates usages inside injected heading,
+  link text, and table cell template regions without triggering refactoring errors.
 - Vue template interpolations inside plain Markdown table cells are now recognized and injected
   correctly. [#204](https://github.com/ghostflyby/IntelliJ-Plugins/pull/204)
 
