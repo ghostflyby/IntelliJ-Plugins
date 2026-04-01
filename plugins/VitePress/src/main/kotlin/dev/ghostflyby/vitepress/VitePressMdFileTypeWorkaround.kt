@@ -56,7 +56,24 @@ import javax.swing.JEditorPane
 import javax.swing.event.HyperlinkEvent
 
 @Service(Service.Level.APP)
-internal class VitePressMdFileTypeWorkaroundSettings : Disposable.Default {
+@State(
+    name = "VitePressMdFileTypeWorkaroundSettings",
+    storages = [Storage("vitepress.xml", roamingType = RoamingType.DISABLED)],
+)
+internal class VitePressMdFileTypeWorkaroundSettings :
+    SerializablePersistentStateComponent<VitePressMdFileTypeWorkaroundSettings.State>(State()),
+    Disposable {
+
+    init {
+        ApplicationManager.getApplication().messageBus.connect(this).subscribe(
+            FileTypeManager.TOPIC,
+            object : FileTypeListener {
+                override fun fileTypesChanged(event: com.intellij.openapi.fileTypes.FileTypeEvent) {
+                    clearTrackedAssociationIfWorkaroundInactive()
+                }
+            },
+        )
+    }
 
     var isVueLanguageServiceWorkaroundEnabled: Boolean
         get() = FileTypeManager.getInstance().isVueMdAssociationEnabled()
@@ -69,21 +86,92 @@ internal class VitePressMdFileTypeWorkaroundSettings : Disposable.Default {
 
     private fun setMdAssociationEnabled(enabled: Boolean) {
         val fileTypeManager = FileTypeManager.getInstance()
-        val targetFileType =
-            if (enabled) {
-                VueFileType
-            } else {
-                MarkdownFileType.INSTANCE
-            }
+        val targetFileType = if (enabled) VueFileType else resolveRestoreFileType(fileTypeManager)
+        val previousAssociation = currentMdAssociation(fileTypeManager)
         val changed =
             runWriteAction {
                 fileTypeManager.setMdAssociation(targetFileType)
             }
         if (!changed) {
+            if (!enabled) {
+                clearTrackedAssociation()
+            }
             return
+        }
+        if (enabled) {
+            updateState {
+                it.copy(
+                    previousMdAssociationName = previousAssociation.fileTypeName,
+                    previousMdAssociationWasUnknown = previousAssociation.isUnknown,
+                )
+            }
+        } else {
+            clearTrackedAssociation()
         }
         FileContentUtil.reparseOpenedFiles()
     }
+
+    override fun dispose() {
+        if (!isVueLanguageServiceWorkaroundEnabled || !hasTrackedAssociation()) {
+            return
+        }
+
+        val fileTypeManager = FileTypeManager.getInstance()
+        val restoreFileType = resolveRestoreFileType(fileTypeManager)
+        val changed =
+            runWriteAction {
+                fileTypeManager.setMdAssociation(restoreFileType)
+            }
+        clearTrackedAssociation()
+        if (changed) {
+            FileContentUtil.reparseOpenedFiles()
+        }
+    }
+
+    private fun clearTrackedAssociationIfWorkaroundInactive() {
+        if (!isVueLanguageServiceWorkaroundEnabled && hasTrackedAssociation()) {
+            clearTrackedAssociation()
+        }
+    }
+
+    private fun clearTrackedAssociation() {
+        if (!hasTrackedAssociation()) {
+            return
+        }
+        updateState { it.copy(previousMdAssociationName = null, previousMdAssociationWasUnknown = false) }
+    }
+
+    private fun hasTrackedAssociation(): Boolean {
+        return state.previousMdAssociationName != null || state.previousMdAssociationWasUnknown
+    }
+
+    private fun resolveRestoreFileType(fileTypeManager: FileTypeManager): FileType {
+        if (state.previousMdAssociationWasUnknown) {
+            return UnknownFileType.INSTANCE
+        }
+
+        val previousName = state.previousMdAssociationName ?: return MarkdownFileType.INSTANCE
+        return fileTypeManager.findFileTypeByName(previousName) ?: MarkdownFileType.INSTANCE
+    }
+
+    private fun currentMdAssociation(fileTypeManager: FileTypeManager): MdAssociationSnapshot {
+        val currentFileType = fileTypeManager.getFileTypeByExtension(MARKDOWN_EXTENSION)
+        return if (currentFileType == UnknownFileType.INSTANCE) {
+            MdAssociationSnapshot(fileTypeName = null, isUnknown = true)
+        } else {
+            MdAssociationSnapshot(fileTypeName = currentFileType.name, isUnknown = false)
+        }
+    }
+
+    internal data class State(
+        @JvmField val previousMdAssociationName: String? = null,
+        @JvmField val previousMdAssociationWasUnknown: Boolean = false,
+    )
+
+    private data class MdAssociationSnapshot(
+        val fileTypeName: String?,
+        val isUnknown: Boolean,
+    )
 }
 
 internal class VitePressApplicationConfigurable : BoundConfigurable(Bundle.message("configuration.title")) {
@@ -221,6 +309,9 @@ private fun FileTypeManager.setMdAssociation(targetFileType: FileType): Boolean 
     }
     if (currentFileType != UnknownFileType.INSTANCE) {
         removeAssociatedExtension(currentFileType, MARKDOWN_EXTENSION)
+    }
+    if (targetFileType == UnknownFileType.INSTANCE) {
+        return currentFileType != UnknownFileType.INSTANCE
     }
     removeAssociatedExtension(targetFileType, MARKDOWN_EXTENSION)
     associateExtension(targetFileType, MARKDOWN_EXTENSION)

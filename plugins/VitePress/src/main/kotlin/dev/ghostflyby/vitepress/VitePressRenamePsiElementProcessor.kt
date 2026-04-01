@@ -71,17 +71,30 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
         allRenames: Map<PsiElement, String>,
         elementListener: RefactoringElementListener,
     ): Runnable? {
+        val delegate =
+            allForElement(element)
+                .firstOrNull { it !== this }
+        val delegateCallback =
+            delegate?.getPostRenameCallback(element, newName, usages, allRenames, elementListener)
+                ?: super.getPostRenameCallback(element, newName, usages, allRenames, elementListener)
         val vitePressUsages = usages.filter(::isVitePressInjectedUsage)
         if (vitePressUsages.isEmpty()) {
-            return null
+            return delegateCallback
         }
         val hostRenameMarkers = createHostRenameMarkers(vitePressUsages)
-        return Runnable {
+        val vitePressCallback = Runnable {
             try {
                 applyHostRenameMarkers(element.project, hostRenameMarkers, newName)
             } finally {
                 hostRenameMarkers.forEach { marker -> marker.rangeMarker.dispose() }
             }
+        }
+        if (delegateCallback == null) {
+            return vitePressCallback
+        }
+        return Runnable {
+            delegateCallback.run()
+            vitePressCallback.run()
         }
     }
 
