@@ -4,16 +4,12 @@
 
 ### Added
 
-- Application-level opt-in workaround for cases where Vue language service does not start on VitePress Markdown files.
-  The workaround switches the global `.md` association to `Vue`, keeps VitePress roots on the dedicated `VitePress`
-  file type, and forces other Markdown files back to `Markdown` through dynamic file type overrides.
-- Notification and settings entry points for enabling the Vue language service workaround after VitePress roots are
-  first detected in a project.
+- Optional Vue language service workaround for VitePress Markdown files, with a settings entry and a one-time
+  application-level notification. The workaround switches the global `.md` association to `Vue`, keeps detected
+  VitePress pages on the dedicated `VitePress` file type, and forces other Markdown files back to `Markdown` through
+  dynamic file type overrides. [#208](https://github.com/ghostflyby/IntelliJ-Plugins/pull/208)
 
 ### Changed
-
-- Vue language service workaround prompting is now shown once at the application level instead of tracking per-project
-  notifications, matching the global `.md` file association that the workaround changes.
 
 ### Deprecated
 
