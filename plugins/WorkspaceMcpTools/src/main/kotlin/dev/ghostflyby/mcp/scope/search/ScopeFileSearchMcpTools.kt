@@ -213,7 +213,7 @@ internal class ScopeFileSearchMcpTools : McpToolset {
         query: String = "",
         @McpDescription("Optional explicit ordered keywords for text modes; all keywords must match in order.")
         keywords: List<String> = emptyList(),
-        @McpDescription("Preset scope for quick file search.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @McpDescription("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
         matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,

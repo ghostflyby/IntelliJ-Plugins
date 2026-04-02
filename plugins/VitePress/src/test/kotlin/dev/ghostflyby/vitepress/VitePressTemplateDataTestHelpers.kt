@@ -20,18 +20,9 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.vitepress
 
-version = "1.1.0"
-
-dependencies {
-    implementation(project(":modules:intellij-shared"))
-}
-
-dependencies.intellijPlatform {
-    bundledPlugin("org.intellij.plugins.markdown")
-    bundledPlugin("org.jetbrains.plugins.vue")
+internal fun buildVitePressTemplateDataText(sourceCode: String): CharSequence {
+    val modifications = VitePressTemplateDataElementType.collectTemplateDataModificationsForTests(sourceCode)
+    return modifications.applyToText(sourceCode, VitePressTemplateDataElementType).first as CharSequence
 }

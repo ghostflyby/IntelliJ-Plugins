@@ -262,7 +262,7 @@ internal class CodeQualityMcpTools : McpToolset {
             AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_get_scope_problems_quick(
-        @McpDescription("Preset scope for quick analysis.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @McpDescription("Whether to include only errors or include both errors and warnings.")
         errorsOnly: Boolean = true,
@@ -410,7 +410,7 @@ internal class CodeQualityMcpTools : McpToolset {
     )
     suspend fun quality_get_scope_problems_by_severity(
         scope: ScopeProgramDescriptorDto,
-        @McpDescription("Minimum severity threshold for returned problems.")
+        @McpDescription(QUALITY_SEVERITY_THRESHOLD_PARAM_DESCRIPTION)
         minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
         @McpDescription("Maximum number of files to analyze from the matched scope.")
         maxFileCount: Int = 200,
@@ -490,9 +490,9 @@ internal class CodeQualityMcpTools : McpToolset {
             AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_get_scope_problems_by_severity_quick(
-        @McpDescription("Preset scope for quick analysis.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-        @McpDescription("Minimum severity threshold for returned problems.")
+        @McpDescription(QUALITY_SEVERITY_THRESHOLD_PARAM_DESCRIPTION)
         minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
         @McpDescription("Maximum number of files to analyze from the matched scope.")
         maxFileCount: Int = 200,
@@ -719,7 +719,7 @@ internal class CodeQualityMcpTools : McpToolset {
             AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun quality_fix_scope_quick_by_preset(
-        @McpDescription("Preset scope for quick fix.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @McpDescription("Maximum number of files to process from matched scope.")
         maxFileCount: Int = 200,

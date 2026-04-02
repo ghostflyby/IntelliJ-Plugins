@@ -16,6 +16,13 @@
 
 ### Security
 
+## [1.0.3] - 2026-04-02
+
+### Changed
+
+- Input-side MCP signatures now explicitly document accepted enum values for quick shortcut parameters and nested
+  request DTO fields, reducing the need for agents to infer valid inputs from output echoes or trial-and-error.
+
 ## [1.0.2] - 2026-03-25
 
 ### Fixed
@@ -92,7 +99,8 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.2...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.3...HEAD
+[1.0.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.2...WorkspaceMcpTools-v1.0.3
 [1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.1...WorkspaceMcpTools-v1.0.2
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.0...WorkspaceMcpTools-v1.0.1
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/WorkspaceMcpTools-v1.0.0

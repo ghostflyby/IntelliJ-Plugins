@@ -71,7 +71,7 @@ internal class ScopeDescriptorMcpTools : McpToolset {
             AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
     )
     suspend fun scope_get_default_descriptor(
-        @McpDescription("Preset scope to use.")
+        @McpDescription(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION)
         preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @McpDescription(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION)
         allowUiInteractiveScopes: Boolean = false,
@@ -113,7 +113,7 @@ internal class ScopeDescriptorMcpTools : McpToolset {
             "to reduce first-call catalog payload.",
     )
     suspend fun scope_catalog_find_by_intent(
-        @McpDescription("Selection intent for reducing catalog candidates.")
+        @McpDescription(SCOPE_CATALOG_INTENT_PARAM_DESCRIPTION)
         intent: ScopeCatalogIntent,
         @McpDescription("Maximum number of catalog items to return.")
         maxResults: Int = 20,

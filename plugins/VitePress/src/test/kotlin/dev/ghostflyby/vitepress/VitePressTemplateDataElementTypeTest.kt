@@ -93,6 +93,13 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
         )
     }
 
+    fun testExtractsMustacheInsideTableCell() {
+        assertEquals(
+            "<template>{{a*2}}</template>",
+            buildVitePressTemplateDataText("| head |\n| --- |\n| {{a*2}} |").toString(),
+        )
+    }
+
     fun testKeepsHtmlGuestRangeInsideHeading() {
         assertEquals(
             "<Comp>{{x}}</Comp>",
@@ -162,8 +169,32 @@ internal class VitePressTemplateDataElementTypeTest : BasePlatformTestCase() {
         )
     }
 
+    fun testCachesTableCellInterpolationHostsOnPsiFile() {
+        val psiFile = myFixture.configureByText("docs.md", "| head |\n| --- |\n| {{a*2}} |")
+
+        assertEquals(
+            listOf(
+                VitePressTemplateInterpolationHost(
+                    kind = VitePressTemplateHostKind.TableCell,
+                    hostRange = TextRange(18, 27),
+                    interpolationRanges = listOf(TextRange(19, 26)),
+                    htmlGuestRanges = emptyList(),
+                    guestRanges = listOf(TextRange(19, 26)),
+                ),
+            ),
+            psiFile.getVitePressTemplateInterpolationHosts(),
+        )
+    }
+
     fun testIgnoresMustacheInsideInlineCode() {
         assertEquals("", buildVitePressTemplateDataText("`{{a*2}}`").toString())
+    }
+
+    fun testKeepsLinkTextInterpolationInsideRichTableCell() {
+        assertEquals(
+            "<template>{{a*2}}</template>",
+            buildVitePressTemplateDataText("| head |\n| --- |\n| [{{a*2}}](#demo) |").toString(),
+        )
     }
 
     fun testCachesInterpolationHostsOnPsiFile() {
