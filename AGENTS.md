@@ -107,6 +107,11 @@
 6. changelog entries should describe the final user-visible or integrator-visible outcome of a change.
    do not list internal refactor steps, test-only work, or implementation mechanics unless they change external
    behavior.
+7. manually add changelog entries only under the `Unreleased` section.
+   do not manually convert `Unreleased` entries into a dated version section unless the release automation itself is
+   being changed.
+8. version bumps are still required when preparing a release-oriented change.
+   CI owns the changelog rollover, but it does not replace updating the plugin version in Gradle metadata.
 
 ## Common Pattern
 
