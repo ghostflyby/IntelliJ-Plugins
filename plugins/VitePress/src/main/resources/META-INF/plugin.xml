@@ -7,11 +7,25 @@
     <name>VitePress</name>
     <vendor>ghostflyby</vendor>
 
-    <depends>com.intellij.modules.ultimate</depends>
+    <depends>com.intellij.modules.platform</depends>
     <depends>org.intellij.plugins.markdown</depends>
     <depends>org.jetbrains.plugins.vue</depends>
 
+    <applicationListeners>
+        <listener class="dev.ghostflyby.vitepress.VitePressDynamicPluginListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="VitePress"
+                           displayType="BALLOON"
+                           bundle="messages.Bundle"
+                           key="notification.group"/>
+        <applicationConfigurable bundle="messages.Bundle"
+                                 id="dev.ghostflyby.vitepress.application"
+                                 instance="dev.ghostflyby.vitepress.VitePressApplicationConfigurable"
+                                 key="configuration.title"
+                                 parentId="editor"/>
         <lang.parserDefinition
                 language="VitePress"
                 implementationClass="dev.ghostflyby.vitepress.VitePressParserDefinition"/>
@@ -33,6 +47,9 @@
                    order="last"
                    implementationClass="dev.ghostflyby.vitepress.VitePressHeadingInterpolationAnnotator"/>
         <daemon.highlightInfoFilter implementation="dev.ghostflyby.vitepress.VitePressHeadingHighlightInfoFilter"/>
+        <renamePsiElementProcessor
+                implementation="dev.ghostflyby.vitepress.VitePressRenamePsiElementProcessor"
+                order="first"/>
     </extensions>
     <projectListeners>
         <listener class="dev.ghostflyby.vitepress.preview.PreviewNpmListener"

@@ -20,18 +20,18 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.vitepress
 
-version = "1.1.0"
+import com.intellij.ide.plugins.DynamicPluginListener
+import com.intellij.ide.plugins.IdeaPluginDescriptor
+import com.intellij.openapi.components.service
 
-dependencies {
-    implementation(project(":modules:intellij-shared"))
-}
+internal class VitePressDynamicPluginListener : DynamicPluginListener {
+    override fun beforePluginUnload(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
+        if (isUpdate || pluginDescriptor.pluginId.idString != VITEPRESS_PLUGIN_ID) {
+            return
+        }
 
-dependencies.intellijPlatform {
-    bundledPlugin("org.intellij.plugins.markdown")
-    bundledPlugin("org.jetbrains.plugins.vue")
+        service<VitePressMdFileTypeWorkaroundSettings>().restoreTrackedAssociationForPluginUnload()
+    }
 }

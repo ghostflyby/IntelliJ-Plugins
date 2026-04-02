@@ -20,18 +20,17 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.vitepress
 
-version = "1.1.0"
+import com.intellij.DynamicBundle
+import org.jetbrains.annotations.Nls
+import org.jetbrains.annotations.PropertyKey
 
-dependencies {
-    implementation(project(":modules:intellij-shared"))
-}
+private const val BUNDLE: String = "messages.Bundle"
 
-dependencies.intellijPlatform {
-    bundledPlugin("org.intellij.plugins.markdown")
-    bundledPlugin("org.jetbrains.plugins.vue")
+internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
+    @JvmStatic
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String {
+        return getMessage(key, *params)
+    }
 }

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Optional Vue language service workaround for VitePress Markdown files, with a settings entry and a one-time
+  application-level notification. The workaround switches the global `.md` association to `Vue`, keeps detected
+  VitePress pages on the dedicated `VitePress` file type, and forces other Markdown files back to `Markdown` through
+  dynamic file type overrides. [#208](https://github.com/ghostflyby/IntelliJ-Plugins/pull/208)
+
 ### Changed
 
 ### Deprecated
@@ -12,6 +17,8 @@
 
 ### Fixed
 
+- Renaming `script setup` symbols and VitePress interpolation references now updates usages inside injected heading,
+  link text, and table cell template regions without triggering refactoring errors.
 - Vue template interpolations inside plain Markdown table cells are now recognized and injected
   correctly. [#204](https://github.com/ghostflyby/IntelliJ-Plugins/pull/204)
 
