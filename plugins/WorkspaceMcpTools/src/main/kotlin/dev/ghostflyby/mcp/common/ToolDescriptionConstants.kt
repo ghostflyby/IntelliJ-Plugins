@@ -54,7 +54,7 @@ internal const val SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION =
         "EXCEPT_COMMENTS, EXCEPT_COMMENTS_AND_STRING_LITERALS."
 
 internal const val QUALITY_SEVERITY_THRESHOLD_PARAM_DESCRIPTION =
-    "Minimum severity threshold for returned problems. One of: ERROR, WARNING, WEAK_WARNING, INFORMATION, OTHER."
+    "Minimum severity threshold for returned problems. One of: ERROR, WARNING, WEAK_WARNING, INFO."
 
 internal const val VFS_READ_MODE_PARAM_DESCRIPTION =
     "Read strategy. One of: FULL, CHAR_RANGE, LINE_RANGE."
