@@ -41,10 +41,8 @@ import java.nio.file.Path
 // extension is the public way to surface external-system import guidance after
 // a project is opened.
 //
-// JvmDefaultWithoutCompatibility prevents Kotlin from emitting the deprecated
 // sync bridge for linkAndLoadProject(Project, String), which Marketplace counts
 // as a deprecated API usage in the generated classfile.
-@JvmDefaultWithoutCompatibility
 internal class MillUnlinkedProjectAware : ExternalSystemUnlinkedProjectAware {
     override val systemId = MillConstants.systemId
 
