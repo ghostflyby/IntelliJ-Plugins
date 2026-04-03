@@ -4,11 +4,6 @@
 
 ### Added
 
-- Optional Vue language service workaround for VitePress Markdown files, with a settings entry and a one-time
-  application-level notification. The workaround switches the global `.md` association to `Vue`, keeps detected
-  VitePress pages on the dedicated `VitePress` file type, and forces other Markdown files back to `Markdown` through
-  dynamic file type overrides. [#208](https://github.com/ghostflyby/IntelliJ-Plugins/pull/208)
-
 ### Changed
 
 ### Deprecated
@@ -17,12 +12,23 @@
 
 ### Fixed
 
+### Security
+
+## [1.1.0] - 2026-04-02
+
+### Added
+
+- Optional Vue language service workaround for VitePress Markdown files, with a settings entry and a one-time
+  application-level notification. The workaround switches the global `.md` association to `Vue`, keeps detected
+  VitePress pages on the dedicated `VitePress` file type, and forces other Markdown files back to `Markdown` through
+  dynamic file type overrides. [#208](https://github.com/ghostflyby/IntelliJ-Plugins/pull/208)
+
+### Fixed
+
 - Renaming `script setup` symbols and VitePress interpolation references now updates usages inside injected heading,
   link text, and table cell template regions without triggering refactoring errors.
 - Vue template interpolations inside plain Markdown table cells are now recognized and injected
   correctly. [#204](https://github.com/ghostflyby/IntelliJ-Plugins/pull/204)
-
-### Security
 
 ## [1.0.1] - 2026-03-24
 
@@ -55,6 +61,7 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.0...HEAD
+[1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...VitePress-v1.1.0
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...VitePress-v1.0.1
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/VitePress-v1.0.0
