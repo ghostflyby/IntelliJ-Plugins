@@ -35,15 +35,12 @@ public final class dev/ghostflyby/intellij/ui/EditableHintedComboBox : com/intel
 	public final fun isRightHintError ()Z
 	public final fun getLeftHint ()Ljava/lang/String;
 	public final fun getRightHint ()Ljava/lang/String;
-	public final fun getSelectedValue ()Ljava/lang/Object;
 	public final fun setEditorText (Ljava/lang/String;)V
 	public final fun setItems (Ljava/util/List;)V
 	public final fun setRightHintError (Z)V
 	public final fun setLeftHint (Ljava/lang/String;)V
 	public final fun setRightHint (Ljava/lang/String;)V
-	public final fun setSelectedValue (Ljava/lang/Object;)V
 	public final fun whenEditorTextChanged (Lcom/intellij/openapi/Disposable;Lkotlin/jvm/functions/Function1;)Ldev/ghostflyby/intellij/ui/EditableHintedComboBox;
-	public final fun whenSelectedValueChanged (Lcom/intellij/openapi/Disposable;Lkotlin/jvm/functions/Function1;)Ldev/ghostflyby/intellij/ui/EditableHintedComboBox;
 }
 
 public class dev/ghostflyby/intellij/ui/HintOverlayTextField : com/intellij/ui/components/fields/ExtendableTextField {
@@ -63,8 +60,4 @@ public final class dev/ghostflyby/intellij/ui/EditableHintedComboBoxUiDslKt {
 	public static final fun bindLeftHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
 	public static final fun bindRightHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
 	public static final fun bindRightHintError (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
-	public static final fun bindSelectedValue (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableMutableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
-	public static final fun bindSelectedValue (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/ui/dsl/builder/MutableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
-	public static final fun bindSelectedValue (Lcom/intellij/ui/dsl/builder/Cell;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;)Lcom/intellij/ui/dsl/builder/Cell;
-	public static final fun bindSelectedValue (Lcom/intellij/ui/dsl/builder/Cell;Lkotlin/reflect/KMutableProperty0;)Lcom/intellij/ui/dsl/builder/Cell;
 }

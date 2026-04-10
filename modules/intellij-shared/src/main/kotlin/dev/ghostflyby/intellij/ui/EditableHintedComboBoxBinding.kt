@@ -35,17 +35,6 @@ internal fun <T> EditableHintedComboBox<T>.bindItemsInternal(
     return this
 }
 
-internal fun <T> EditableHintedComboBox<T>.bindSelectedValueInternal(
-    property: ObservableMutableProperty<T?>,
-): EditableHintedComboBox<T> {
-    selectedValue = property.get()
-    property.afterChange {
-        selectedValue = it
-    }
-    whenSelectedValueChanged { property.set(it) }
-    return this
-}
-
 internal fun <T> EditableHintedComboBox<T>.bindEditorTextInternal(
     property: ObservableMutableProperty<String>,
 ): EditableHintedComboBox<T> {
