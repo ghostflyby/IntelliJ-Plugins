@@ -35,35 +35,6 @@ public fun <T> Cell<EditableHintedComboBox<T>>.bindItems(
     bindItemsInternal(property)
 }
 
-public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
-    property: ObservableMutableProperty<T?>,
-): Cell<EditableHintedComboBox<T>> = applyToComponent {
-    bindSelectedValueInternal(property)
-}
-
-public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
-    prop: MutableProperty<T?>,
-): Cell<EditableHintedComboBox<T>> {
-    return bind(
-        componentGet = { it.selectedValue },
-        componentSet = { component, value -> component.selectedValue = value },
-        prop = prop,
-    )
-}
-
-public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
-    prop: KMutableProperty0<T?>,
-): Cell<EditableHintedComboBox<T>> {
-    return bindSelectedValue(prop.toMutableProperty())
-}
-
-public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedValue(
-    getter: () -> T?,
-    setter: (T?) -> Unit,
-): Cell<EditableHintedComboBox<T>> {
-    return bindSelectedValue(MutableProperty(getter, setter))
-}
-
 public fun <T> Cell<EditableHintedComboBox<T>>.bindEditorText(
     property: ObservableMutableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {

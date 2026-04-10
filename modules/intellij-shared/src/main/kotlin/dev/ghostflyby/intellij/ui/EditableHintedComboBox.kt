@@ -57,7 +57,7 @@ public class EditableHintedComboBox<T> internal constructor(
     private val hintOverlayTextField: HintOverlayTextField = HintOverlayTextField(),
     private val comboBoxModel: DefaultComboBoxModel<T> = DefaultComboBoxModel(),
 ) : ComboBox<T>(comboBoxModel), ExtendableTextComponent by hintOverlayTextField {
-    private val selectedValueListeners = mutableListOf<(T?) -> Unit>()
+    private val selectedItemListeners = mutableListOf<(T?) -> Unit>()
     private val editorTextListeners = mutableListOf<(String) -> Unit>()
 
     private var comboBoxEditorDelegate: BasicComboBoxEditor? = null
@@ -73,30 +73,25 @@ public class EditableHintedComboBox<T> internal constructor(
                 return
             }
             field = value
-            refreshFromState()
+            replaceModelItems()
+            syncSelectionFromCurrentState(
+                preserveEditorText = hintOverlayTextField.hasFocus() && isUserEditingText,
+                keepCurrentSelectionWhenUnresolved = true,
+            )
         }
 
-    public var selectedValue: T? = null
+    public var editorText: String
+        get() = hintOverlayTextField.text
         set(value) {
-            if (field == value) {
+            if (hintOverlayTextField.text == value) {
                 return
             }
-            field = value
-            refreshFromState()
+            isUserEditingText = false
+            applyEditorText(value)
         }
 
-    public var editorText: String = ""
-        set(value) {
-            if (field == value) {
-                return
-            }
-            field = value
-            refreshFromState()
-        }
-
-    private var isRefreshing = false
-    private var isUpdatingEditorPresentation = false
-    private var hasPendingInputSync = false
+    private var isSyncingState = false
+    private var hasPendingEditorSync = false
     private var isUserEditingText = false
 
     public val editorTextField: ExtendableTextField get() = hintOverlayTextField
@@ -115,19 +110,19 @@ public class EditableHintedComboBox<T> internal constructor(
             }
 
             override fun setItem(anObject: Any?) {
-                val item = anObject as? T
-                isUpdatingEditorPresentation = true
+                val item = asItem(anObject)
+                isSyncingState = true
                 try {
                     editor?.text = item?.let(presentation.editorTextOf).orEmpty()
                     leftHint = presentation.editorLeftHintOf(item)
                 } finally {
-                    isUpdatingEditorPresentation = false
+                    isSyncingState = false
                 }
             }
 
             override fun getItem(): Any {
                 val text = editor?.text.orEmpty()
-                val selected = selectedItem as? T
+                val selected = asItem(selectedItem)
                 return when {
                     selected != null && text == presentation.editorTextOf(selected) -> selected
                     else -> resolveItemByInput(text) ?: selected ?: text
@@ -141,8 +136,11 @@ public class EditableHintedComboBox<T> internal constructor(
         hintOverlayTextField.addFocusListener(
             object : FocusAdapter() {
                 override fun focusLost(event: FocusEvent?) {
+                    if (!isUserEditingText) {
+                        return
+                    }
                     isUserEditingText = false
-                    refreshFromState()
+                    commitEditorText()
                 }
             },
         )
@@ -150,19 +148,23 @@ public class EditableHintedComboBox<T> internal constructor(
         hintOverlayTextField.document.addDocumentListener(
             object : DocumentAdapter() {
                 override fun textChanged(event: DocumentEvent) {
-                    if (isRefreshing || isUpdatingEditorPresentation) {
+                    if (isSyncingState) {
                         return
                     }
                     isUserEditingText = true
-                    if (hasPendingInputSync) {
+                    if (hasPendingEditorSync) {
                         return
                     }
-                    hasPendingInputSync = true
+                    hasPendingEditorSync = true
                     SwingUtilities.invokeLater {
-                        hasPendingInputSync = false
-                        if (isRefreshing || isUpdatingEditorPresentation) {
+                        hasPendingEditorSync = false
+                        if (isSyncingState) {
                             return@invokeLater
                         }
+                        syncSelectionFromCurrentState(
+                            preserveEditorText = true,
+                            keepCurrentSelectionWhenUnresolved = false,
+                        )
                         notifyEditorTextChanged(hintOverlayTextField.text)
                     }
                 }
@@ -170,20 +172,18 @@ public class EditableHintedComboBox<T> internal constructor(
         )
 
         addActionListener {
-            if (isRefreshing) {
+            if (isSyncingState) {
                 return@addActionListener
             }
             isUserEditingText = false
-            val item = selectedItem as? T ?: return@addActionListener
-            leftHint = presentation.editorLeftHintOf(item)
-            notifySelectedValueChanged(item)
-            notifyEditorTextChanged(presentation.editorTextOf(item))
+            notifyEditorTextChanged(hintOverlayTextField.text)
         }
 
         SwingUtilities.invokeLater {
             reinstallComboEditorIfNeeded()
         }
-        refreshFromState()
+        replaceModelItems()
+        syncSelectionFromCurrentState(preserveEditorText = false, keepCurrentSelectionWhenUnresolved = true)
     }
 
     override fun getPreferredSize(): Dimension {
@@ -195,22 +195,29 @@ public class EditableHintedComboBox<T> internal constructor(
         reinstallComboEditorIfNeeded()
     }
 
+    override fun setSelectedItem(anObject: Any?) {
+        applySelectedItem(asItem(anObject), preserveEditorText = isUserEditingText)
+    }
+
     public fun configureInputResolver(
         resolver: EditableHintedComboBoxInputResolver<T>,
     ): EditableHintedComboBox<T> {
         inputResolver = resolver
-        refreshFromState()
+        syncSelectionFromCurrentState(
+            preserveEditorText = hintOverlayTextField.hasFocus() && isUserEditingText,
+            keepCurrentSelectionWhenUnresolved = true,
+        )
         return this
     }
 
-    public fun whenSelectedValueChanged(
+    internal fun whenSelectedItemChanged(
         parentDisposable: Disposable? = null,
         listener: (T?) -> Unit,
     ): EditableHintedComboBox<T> {
-        selectedValueListeners += listener
+        selectedItemListeners += listener
         parentDisposable?.let {
             Disposer.register(it) {
-                selectedValueListeners.remove(listener)
+                selectedItemListeners.remove(listener)
             }
         }
         return this
@@ -232,11 +239,6 @@ public class EditableHintedComboBox<T> internal constructor(
     private fun resolveItemByInput(text: String): T? {
         return inputResolver.findValueByEditorText(items, text)
             ?: inputResolver.createInlineValue?.invoke(text)
-    }
-
-    private fun resolveSelectedValue(): T? {
-        return selectedValue
-            ?: inputResolver.createInlineValue?.invoke(editorText)
     }
 
     private fun reinstallComboEditorIfNeeded() {
@@ -264,55 +266,94 @@ public class EditableHintedComboBox<T> internal constructor(
         }
     }
 
-    private fun notifySelectedValueChanged(value: T?) {
-        if (selectedValue == value) {
-            return
-        }
-        selectedValue = value
-        selectedValueListeners.toList().forEach { listener ->
+    private fun notifySelectedItemChanged(value: T?) {
+        selectedItemListeners.toList().forEach { listener ->
             listener(value)
         }
     }
 
     private fun notifyEditorTextChanged(value: String) {
-        if (editorText == value) {
-            return
-        }
-        editorText = value
         editorTextListeners.toList().forEach { listener ->
             listener(value)
         }
     }
 
-    private fun refreshFromState() {
-        if (hintOverlayTextField.hasFocus() && isUserEditingText) {
-            val selectedItem = resolveSelectedValue()
-            isUpdatingEditorPresentation = true
-            try {
-                leftHint = presentation.editorLeftHintOf(selectedItem)
-            } finally {
-                isUpdatingEditorPresentation = false
-            }
-            return
-        }
-
-        isRefreshing = true
+    private fun replaceModelItems() {
+        isSyncingState = true
         try {
             comboBoxModel.removeAllElements()
             items.forEach(comboBoxModel::addElement)
+        } finally {
+            isSyncingState = false
+        }
+    }
 
-            val selectedItem = resolveSelectedValue()
-            this.selectedItem = selectedItem
-
-            isUpdatingEditorPresentation = true
-            try {
-                leftHint = presentation.editorLeftHintOf(selectedItem)
-            } finally {
-                isUpdatingEditorPresentation = false
+    private fun applyEditorText(text: String) {
+        val resolvedItem = resolveItemByInput(text)
+        isSyncingState = true
+        try {
+            if (hintOverlayTextField.text != text) {
+                hintOverlayTextField.text = text
             }
         } finally {
-            isRefreshing = false
+            isSyncingState = false
         }
+        applySelectedItem(resolvedItem, preserveEditorText = true)
+    }
+
+    private fun commitEditorText() {
+        syncSelectionFromCurrentState(preserveEditorText = false, keepCurrentSelectionWhenUnresolved = false)
+        notifyEditorTextChanged(hintOverlayTextField.text)
+    }
+
+    private fun syncSelectionFromCurrentState(
+        preserveEditorText: Boolean,
+        keepCurrentSelectionWhenUnresolved: Boolean,
+    ) {
+        val text = hintOverlayTextField.text
+        val resolvedItem = resolveItemByInput(text)
+        if (resolvedItem == null && !keepCurrentSelectionWhenUnresolved) {
+            applySelectedItem(null, preserveEditorText = true)
+            return
+        }
+        val targetItem = resolvedItem ?: asItem(super.getSelectedItem())
+        applySelectedItem(targetItem, preserveEditorText = preserveEditorText)
+    }
+
+    private fun applySelectedItem(item: T?, preserveEditorText: Boolean) {
+        val previousItem = asItem(super.getSelectedItem())
+        val currentText = hintOverlayTextField.text
+        val itemText = item?.let(presentation.editorTextOf).orEmpty()
+        val shouldUpdateText = !preserveEditorText && currentText != itemText
+        if (previousItem == item && !shouldUpdateText && leftHint == presentation.editorLeftHintOf(item)) {
+            return
+        }
+
+        isSyncingState = true
+        try {
+            if (previousItem != item) {
+                super.setSelectedItem(item)
+            }
+            if (preserveEditorText) {
+                if (hintOverlayTextField.text != currentText) {
+                    hintOverlayTextField.text = currentText
+                }
+            } else if (hintOverlayTextField.text != itemText) {
+                hintOverlayTextField.text = itemText
+            }
+            leftHint = presentation.editorLeftHintOf(item)
+        } finally {
+            isSyncingState = false
+        }
+
+        if (previousItem != item) {
+            notifySelectedItemChanged(item)
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun asItem(value: Any?): T? {
+        return value as? T
     }
 }
 

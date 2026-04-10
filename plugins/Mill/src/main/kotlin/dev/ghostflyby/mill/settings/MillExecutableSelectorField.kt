@@ -75,7 +75,7 @@ internal fun createMillExecutableSelectorField(
                 selector,
                 null,
             ) { virtualFile ->
-                selector.selectedValue = createInlineManualChoice(virtualFile.path)
+                selector.selectedItem = createInlineManualChoice(virtualFile.path)
             }
         },
     )
