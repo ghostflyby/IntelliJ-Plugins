@@ -30,7 +30,10 @@ import com.intellij.ui.dsl.builder.Align
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
-import dev.ghostflyby.intellij.ui.*
+import dev.ghostflyby.intellij.ui.bindEditorText
+import dev.ghostflyby.intellij.ui.bindItems
+import dev.ghostflyby.intellij.ui.bindRightHint
+import dev.ghostflyby.intellij.ui.bindRightHintError
 import dev.ghostflyby.mill.Bundle
 
 internal fun millConfigurableView(
@@ -65,7 +68,10 @@ internal fun millConfigurableView(
     row(Bundle.message("settings.mill.executable.label")) {
         cell(createMillExecutableSelectorField(project, model))
             .bindItems(model.executableChoicesProperty)
-            .bindSelectedValue(model.executableSelectedChoiceBindingProperty)
+            .bindItem(
+                getter = model.executableSelectedChoiceBindingProperty::get,
+                setter = model.executableSelectedChoiceBindingProperty::set,
+            )
             .bindEditorText(model.executableInputTextBindingProperty)
             .bindRightHint(model.executableVersionTextProperty)
             .bindRightHintError(model.executableStatusIsErrorProperty)
