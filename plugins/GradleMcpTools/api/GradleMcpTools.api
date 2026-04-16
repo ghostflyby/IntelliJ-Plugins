@@ -44,7 +44,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProj
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProjectDetail;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProjectDetail$Companion {
@@ -71,7 +70,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProj
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProjectDetailsResult;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleProjectDetailsResult$Companion {
@@ -114,7 +112,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTask
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTaskDetail;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTaskDetail$Companion {
@@ -141,7 +138,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTask
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTaskDetailsResult;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTaskDetailsResult$Companion {
@@ -168,7 +164,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTask
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTasksResult;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$GradleTasksResult$Companion {
@@ -195,7 +190,6 @@ public final synthetic class dev/ghostflyby/mcp/gradle/GradleMcpTools$LinkedGrad
 	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
 	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/gradle/GradleMcpTools$LinkedGradleProjectsResult;)V
 	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
-	public fun typeParametersSerializers ()[Lkotlinx/serialization/KSerializer;
 }
 
 public final class dev/ghostflyby/mcp/gradle/GradleMcpTools$LinkedGradleProjectsResult$Companion {
