@@ -6,10 +6,6 @@ public abstract interface class dev/ghostflyby/spotless/Spotless {
 	public abstract fun releaseDaemon (Ldev/ghostflyby/spotless/SpotlessDaemonHost;)V
 }
 
-public final class dev/ghostflyby/spotless/Spotless$DefaultImpls {
-	public static synthetic fun canFormatSync-SxA4cEA$default (Ldev/ghostflyby/spotless/Spotless;Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;JILjava/lang/Object;)Z
-}
-
 public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost {
 }
 
@@ -42,10 +38,6 @@ public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonProvider {
 	public abstract fun findExternalProjectPath (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ljava/nio/file/Path;
 	public abstract fun isApplicableTo (Lcom/intellij/openapi/project/Project;)Z
 	public abstract fun startDaemon (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class dev/ghostflyby/spotless/SpotlessDaemonProvider$DefaultImpls {
-	public static fun afterDaemonStopped (Ldev/ghostflyby/spotless/SpotlessDaemonProvider;Ldev/ghostflyby/spotless/SpotlessDaemonHost;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class dev/ghostflyby/spotless/SpotlessFormatResult {
