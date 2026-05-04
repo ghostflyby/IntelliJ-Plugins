@@ -14,6 +14,10 @@
 
 ### Fixed
 
+- `quality_get_file_problems` and all scope-based problem analysis tools now wrap `InspectionEngine` calls in a
+  `DaemonProgressIndicator` context, fixing `"must be run under DaemonProgressIndicator"` runtime
+  errors. [#222](https://github.com/ghostflyby/IntelliJ-Plugins/pull/222)
+
 ### Security
 
 ## [1.0.3] - 2026-04-02
