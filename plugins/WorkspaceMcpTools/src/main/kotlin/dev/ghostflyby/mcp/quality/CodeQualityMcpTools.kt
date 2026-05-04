@@ -25,6 +25,7 @@ package dev.ghostflyby.mcp.quality
 import com.intellij.codeInsight.actions.AbstractLayoutCodeProcessor
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
+import com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator
 import com.intellij.codeInspection.*
 import com.intellij.codeInspection.ex.GlobalInspectionContextBase
 import com.intellij.codeInspection.ex.InspectionToolWrapper
@@ -42,6 +43,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
@@ -1166,12 +1168,19 @@ internal class CodeQualityMcpTools : McpToolset {
         tools.forEach { tool ->
             checkCanceled()
             val problemSnapshots = readAction {
-                InspectionEngine.runInspectionOnFile(
-                    psiFile,
-                    tool,
-                    inspectionManager.createNewGlobalContext(),
-                )
-                    .mapNotNull { descriptor ->
+                val daemonIndicator = DaemonProgressIndicator().also { it.start() }
+                try {
+                    val descriptors = ProgressManager.getInstance().runProcess(
+                        Computable {
+                            InspectionEngine.runInspectionOnFile(
+                                psiFile,
+                                tool,
+                                inspectionManager.createNewGlobalContext(),
+                            )
+                        },
+                        daemonIndicator,
+                    )
+                    descriptors.mapNotNull { descriptor ->
                         ProgressManager.checkCanceled()
                         buildProblemSnapshotFromDescriptor(
                             descriptor = descriptor,
@@ -1180,6 +1189,9 @@ internal class CodeQualityMcpTools : McpToolset {
                             minSeverity = minSeverity,
                         )
                     }
+                } finally {
+                    daemonIndicator.stop()
+                }
             }
             problemSnapshots.forEach { snapshot ->
                 val problem = createQualityProblem(
