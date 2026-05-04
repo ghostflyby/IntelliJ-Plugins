@@ -1167,8 +1167,14 @@ internal class CodeQualityMcpTools : McpToolset {
 
         tools.forEach { tool ->
             checkCanceled()
+            val currentJob = currentCoroutineContext()[Job]
             val problemSnapshots = readAction {
                 val daemonIndicator = DaemonProgressIndicator().also { it.start() }
+                val cancelHandle = currentJob?.invokeOnCompletion { cause ->
+                    if (cause != null) {
+                        daemonIndicator.cancel()
+                    }
+                }
                 try {
                     val descriptors = ProgressManager.getInstance().runProcess(
                         Computable {
@@ -1190,6 +1196,7 @@ internal class CodeQualityMcpTools : McpToolset {
                         )
                     }
                 } finally {
+                    cancelHandle?.dispose()
                     daemonIndicator.stop()
                 }
             }
