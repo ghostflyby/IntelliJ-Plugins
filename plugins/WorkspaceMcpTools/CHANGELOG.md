@@ -31,19 +31,11 @@
 
 ### Fixed
 
-- `quality_get_file_problems` and all scope-based problem analysis tools now wrap `InspectionEngine` calls in a
-  `DaemonProgressIndicator` context, fixing `"must be run under DaemonProgressIndicator"` runtime errors
-  that occurred when agents invoked these tools.
-
 - wrong enum names for AI agents in tool calling [#194](https://github.com/ghostflyby/IntelliJ-Plugins/pull/194)
 
 ## [1.0.1] - 2026-03-03
 
 ### Fixed
-
-- `quality_get_file_problems` and all scope-based problem analysis tools now wrap `InspectionEngine` calls in a
-  `DaemonProgressIndicator` context, fixing `"must be run under DaemonProgressIndicator"` runtime errors
-  that occurred when agents invoked these tools.
 
 - Fixed `scope_search_symbols` threading to keep symbol/index reads inside read actions and use suspend-friendly
   sequential progress reporting, avoiding read-access assertion crashes in background search.
