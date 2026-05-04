@@ -25,6 +25,7 @@ package dev.ghostflyby.mcp.quality
 import com.intellij.codeInsight.actions.AbstractLayoutCodeProcessor
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
+import com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator
 import com.intellij.codeInspection.*
 import com.intellij.codeInspection.ex.GlobalInspectionContextBase
 import com.intellij.codeInspection.ex.InspectionToolWrapper
@@ -42,6 +43,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.Computable
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
@@ -166,7 +168,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.problems.progress",
@@ -627,7 +629,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.quick.fix.progress",
@@ -882,7 +884,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.cleanup.progress",
@@ -1015,7 +1017,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         when (operation) {
                             QualityOperationKind.REFORMAT -> Bundle.message(
@@ -1165,13 +1167,26 @@ internal class CodeQualityMcpTools : McpToolset {
 
         tools.forEach { tool ->
             checkCanceled()
+            val currentJob = currentCoroutineContext()[Job]
             val problemSnapshots = readAction {
-                InspectionEngine.runInspectionOnFile(
-                    psiFile,
-                    tool,
-                    inspectionManager.createNewGlobalContext(),
-                )
-                    .mapNotNull { descriptor ->
+                val daemonIndicator = DaemonProgressIndicator().also { it.start() }
+                val cancelHandle = currentJob?.invokeOnCompletion { cause ->
+                    if (cause != null) {
+                        daemonIndicator.cancel()
+                    }
+                }
+                try {
+                    val descriptors = ProgressManager.getInstance().runProcess(
+                        Computable {
+                            InspectionEngine.runInspectionOnFile(
+                                psiFile,
+                                tool,
+                                inspectionManager.createNewGlobalContext(),
+                            )
+                        },
+                        daemonIndicator,
+                    )
+                    descriptors.mapNotNull { descriptor ->
                         ProgressManager.checkCanceled()
                         buildProblemSnapshotFromDescriptor(
                             descriptor = descriptor,
@@ -1180,6 +1195,10 @@ internal class CodeQualityMcpTools : McpToolset {
                             minSeverity = minSeverity,
                         )
                     }
+                } finally {
+                    cancelHandle?.dispose()
+                    daemonIndicator.stop()
+                }
             }
             problemSnapshots.forEach { snapshot ->
                 val problem = createQualityProblem(
