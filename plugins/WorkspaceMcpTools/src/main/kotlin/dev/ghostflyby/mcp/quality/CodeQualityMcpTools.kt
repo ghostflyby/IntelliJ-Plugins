@@ -168,7 +168,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.problems.progress",
@@ -629,7 +629,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.quick.fix.progress",
@@ -884,7 +884,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.quality.scope.cleanup.progress",
@@ -1017,7 +1017,7 @@ internal class CodeQualityMcpTools : McpToolset {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000)
+                    delay(1000.milliseconds)
                     reportActivity(
                         when (operation) {
                             QualityOperationKind.REFORMAT -> Bundle.message(
