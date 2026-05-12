@@ -20,10 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import org.gradle.api.artifacts.ResolutionStrategy
-import org.gradle.api.tasks.testing.Test
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.gradle.kotlin.dsl.*
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -82,9 +79,6 @@ dependencies {
         testFramework(TestFrameworkType.Platform)
     }
 
-}
-configurations.all {
-    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }
 
 kover { reports { total { xml { onCheck = true } } } }

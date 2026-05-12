@@ -31,7 +31,8 @@ private const val BUNDLE = "messages.Bundle"
 
 internal object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
     @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
+    @Nls
+    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String =
         getMessage(key, *params)
 
     @JvmStatic

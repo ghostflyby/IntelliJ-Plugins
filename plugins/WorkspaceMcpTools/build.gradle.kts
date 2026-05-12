@@ -27,6 +27,12 @@ plugins {
 
 version = "1.0.4"
 
+
+dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+}
+
 dependencies.intellijPlatform {
     bundledPlugin("com.intellij.mcpServer")
 }
