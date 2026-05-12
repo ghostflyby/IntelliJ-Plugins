@@ -3,6 +3,19 @@
 <!-- Plugin description -->
 MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symbol Navigation integrations.
 
+Workspace resource URI contract:
+
+- VFS resources use `ij-workspace-vfs://{rawIntellijVfsUrl}`, for example
+  `ij-workspace-vfs://jar:///path/lib.jar!/pkg/Foo.kt`.
+- Document resources use `ij-workspace-document://{rawIntellijVfsUrl}` and represent the current editor document
+  snapshot, including unsaved text when a document is loaded.
+- Resource handlers strip only the fixed outer prefix. The inner IntelliJ VFS URL is passed through unchanged so
+  `file://`, `jar://`, `jrt://`, and other IntelliJ VFS schemes keep their original syntax.
+- Directory/stat/API-signature/document-metadata resources are returned as `application/json`; text reads return a
+  text MIME type when the file type is known, otherwise `text/plain`.
+- `resources/list` should stay small and list only stable entry points plus active workspace/editor roots. Large project
+  file inventories should be reached through resource templates, not full resource enumeration.
+
 VFS tools:
 
 - `vfs_get_url_from_local_path`
