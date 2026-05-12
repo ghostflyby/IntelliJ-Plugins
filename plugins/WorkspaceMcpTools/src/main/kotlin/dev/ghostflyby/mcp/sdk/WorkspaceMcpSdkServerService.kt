@@ -23,8 +23,10 @@
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadOptions
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
@@ -43,45 +45,74 @@ import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Service(Service.Level.PROJECT)
 internal class WorkspaceMcpSdkServerService(
     private val project: Project,
     private val scope: CoroutineScope,
-) {
+) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val resourceReader = WorkspaceResourceReader()
     private val resourceCatalog = WorkspaceResourceCatalog(project)
+    private val lifecycleMutex = Mutex()
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
 
+    @Volatile
+    private var server: Server? = null
+
     internal fun start() {
-        if (engine != null) {
-            return
-        }
         scope.launch {
-            runCatching {
-                val server = createServer()
-                val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = 0) {
-                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) {
-                        server
-                    }
-                }.start(wait = false)
-                engine = started
-                logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:<assigned>$MCP_ENDPOINT_PATH for ${project.name}")
-            }.onFailure { error ->
-                logger.warn("Failed to start Workspace MCP SDK server for ${project.name}", error)
+            lifecycleMutex.withLock {
+                if (engine != null) {
+                    return@withLock
+                }
+                runCatching {
+                    val listableResources = resourceCatalog.listResources()
+                    val createdServer = createServer(listableResources)
+                    val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = 0) {
+                        mcpStreamableHttp(path = MCP_ENDPOINT_PATH) {
+                            createdServer
+                        }
+                    }.start(wait = false)
+                    server = createdServer
+                    engine = started
+                    logger.info(
+                        "Workspace MCP SDK server started at http://$LOOPBACK_HOST:<assigned>$MCP_ENDPOINT_PATH " +
+                            "for ${project.name}",
+                    )
+                }.onFailure { error ->
+                    logger.warn("Failed to start Workspace MCP SDK server for ${project.name}", error)
+                }
             }
         }
     }
 
     internal fun stop() {
-        engine?.stop()
-        engine = null
+        scope.launch {
+            lifecycleMutex.withLock {
+                val stoppedEngine = engine
+                val stoppedServer = server
+                engine = null
+                server = null
+                runCatching {
+                    stoppedServer?.close()
+                }.onFailure { error ->
+                    logger.warn("Failed to close Workspace MCP SDK server for ${project.name}", error)
+                }
+                stoppedEngine?.stop()
+            }
+        }
     }
 
-    private fun createServer(): Server {
+    override fun dispose() {
+        stop()
+    }
+
+    private fun createServer(listableResources: List<WorkspaceListableResource>): Server {
         return Server(
             serverInfo = Implementation(
                 name = "workspace-mcp",
@@ -101,26 +132,20 @@ internal class WorkspaceMcpSdkServerService(
             ),
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
-            registerListableWorkspaceResources()
+            registerListableWorkspaceResources(listableResources)
             registerWorkspaceResourceTemplates()
         }
     }
 
-    private fun Server.registerListableWorkspaceResources() {
-        scope.launch {
-            runCatching {
-                resourceCatalog.listResources().forEach { entry ->
-                    addResource(
-                        uri = entry.uri,
-                        name = entry.name,
-                        description = entry.description,
-                        mimeType = entry.mimeType,
-                    ) {
-                        resourceReader.readWorkspaceResource(entry.uri).toReadResourceResult()
-                    }
-                }
-            }.onFailure { error ->
-                logger.warn("Failed to register Workspace MCP listable resources for ${project.name}", error)
+    private fun Server.registerListableWorkspaceResources(listableResources: List<WorkspaceListableResource>) {
+        listableResources.forEach { entry ->
+            addResource(
+                uri = entry.uri,
+                name = entry.name,
+                description = entry.description,
+                mimeType = entry.mimeType,
+            ) {
+                resourceReader.readWorkspaceResource(entry.uri).toReadResourceResult()
             }
         }
     }
