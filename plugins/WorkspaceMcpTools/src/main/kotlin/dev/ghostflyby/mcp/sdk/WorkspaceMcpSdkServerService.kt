@@ -97,6 +97,7 @@ internal class WorkspaceMcpSdkServerService(
                         listChanged = true,
                     ),
                 ),
+                resourceTemplateMatcherFactory = WorkspaceResourceTemplateMatcherFactory,
             ),
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
