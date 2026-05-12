@@ -448,16 +448,6 @@ internal class WorkspaceResourceReader {
         return starts
     }
 
-    private fun String.toTextMimeType(): String {
-        return when (this.lowercase()) {
-            "kotlin" -> "text/x-kotlin"
-            "java" -> "text/x-java-source"
-            "xml" -> "application/xml"
-            "json" -> APPLICATION_JSON_MIME_TYPE
-            "markdown" -> "text/markdown"
-            else -> TEXT_PLAIN_MIME_TYPE
-        }
-    }
 }
 
 @Serializable
@@ -518,8 +508,6 @@ private data class WorkspaceDocumentLineMetadata(
     val isModified: Boolean,
 )
 
-private const val TEXT_PLAIN_MIME_TYPE = "text/plain"
-private const val APPLICATION_JSON_MIME_TYPE = "application/json"
 private const val MAX_IMPORTS_IN_SIGNATURE = 200
 private const val MAX_MEMBERS_IN_SIGNATURE = 20
 private const val SIGNATURE_PREVIEW_CONTEXT_LINES = 10

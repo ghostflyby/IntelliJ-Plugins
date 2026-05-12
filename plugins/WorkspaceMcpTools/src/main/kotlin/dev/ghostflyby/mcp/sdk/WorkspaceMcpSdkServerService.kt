@@ -25,11 +25,10 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadMode
 import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadOptions
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
-import dev.ghostflyby.mcp.resource.WorkspaceVfsResourceReadMode
 import dev.ghostflyby.mcp.resource.WorkspaceVfsResourceReadOptions
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
@@ -52,6 +51,7 @@ internal class WorkspaceMcpSdkServerService(
 ) {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val resourceReader = WorkspaceResourceReader()
+    private val resourceCatalog = WorkspaceResourceCatalog(project)
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -100,7 +100,27 @@ internal class WorkspaceMcpSdkServerService(
             ),
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
+            registerListableWorkspaceResources()
             registerWorkspaceResourceTemplates()
+        }
+    }
+
+    private fun Server.registerListableWorkspaceResources() {
+        scope.launch {
+            runCatching {
+                resourceCatalog.listResources().forEach { entry ->
+                    addResource(
+                        uri = entry.uri,
+                        name = entry.name,
+                        description = entry.description,
+                        mimeType = entry.mimeType,
+                    ) {
+                        resourceReader.readWorkspaceResource(entry.uri).toReadResourceResult()
+                    }
+                }
+            }.onFailure { error ->
+                logger.warn("Failed to register Workspace MCP listable resources for ${project.name}", error)
+            }
         }
     }
 
