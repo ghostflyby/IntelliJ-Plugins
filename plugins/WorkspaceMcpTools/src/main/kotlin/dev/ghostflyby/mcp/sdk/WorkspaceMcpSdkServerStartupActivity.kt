@@ -20,21 +20,14 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-plugins {
-    id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
-}
+package dev.ghostflyby.mcp.sdk
 
-version = "1.0.4"
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.startup.ProjectActivity
 
-
-dependencies {
-    implementation(libs.mcp.kotlin.sdk.server)
-    implementation(libs.ktor.server.cio)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-}
-
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
+internal class WorkspaceMcpSdkServerStartupActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
+        project.service<WorkspaceMcpSdkServerService>().start()
+    }
 }

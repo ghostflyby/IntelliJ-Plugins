@@ -11,6 +11,10 @@
     <depends>com.intellij.modules.vcs</depends>
     <depends>com.intellij.mcpServer</depends>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerStartupActivity"/>
+    </extensions>
+
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="dev.ghostflyby.mcp.vfs.VfsMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
