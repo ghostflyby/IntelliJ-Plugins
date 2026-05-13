@@ -11,20 +11,28 @@ import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
-import kotlinx.serialization.json.JsonArray
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.serializer
 
 /**
  * Registers a tool on the MCP SDK server using [SdkToolDescriptor].
- * The [runner] is injected at registration time so tool handlers
- * can use [WorkspaceMcpRequestRunner] for project resolution.
+ * Arguments are decoded from the [CallToolRequest] using kotlinx.serialization
+ * into the typed [T] DTO.
+ *
+ * On decoding failure the call returns [CallToolResult] with [isError] = true
+ * and a concise message; the protocol-level request does not fail.
  */
-internal fun Server.registerSdkTool(
-    descriptor: SdkToolDescriptor,
+internal fun <T : Any> Server.registerSdkTool(
+    descriptor: SdkToolDescriptor<T>,
     runner: WorkspaceMcpRequestRunner,
+    json: Json = toolArgsJson,
 ) {
     addTool(
         name = descriptor.name,
@@ -36,27 +44,69 @@ internal fun Server.registerSdkTool(
         meta = descriptor.meta,
         execution = null,
     ) { request ->
-        val args = parseToolArguments(request.params.arguments)
+        val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
+        val decoded: T = try {
+            json.decodeFromJsonElement(descriptor.serializer, jsonArgs)
+        } catch (e: SerializationException) {
+            return@addTool CallToolResult(
+                content = listOf(TextContent(
+                    text = "Invalid arguments for ${descriptor.name}: ${e.message}",
+                )),
+                isError = true,
+            )
+        } catch (e: IllegalArgumentException) {
+            return@addTool CallToolResult(
+                content = listOf(TextContent(
+                    text = "Invalid arguments for ${descriptor.name}: ${e.message}",
+                )),
+                isError = true,
+            )
+        }
         val ctx = SdkToolHandlerContext(runner = runner, sessionId = this.sessionId)
-        descriptor.handler(ctx, args)
+        descriptor.handler(ctx, decoded)
     }
 }
 
 /**
  * Descriptor for an MCP SDK tool that uses the [WorkspaceMcpRequestRunner].
  *
- * Handlers receive the [SdkToolHandlerContext] and a parsed map of
- * arguments from the [CallToolRequest] and must return a [CallToolResult].
+ * Handlers receive the [SdkToolHandlerContext] and a typed [T] decoded from
+ * [CallToolRequest] arguments via kotlinx.serialization.
  */
-internal class SdkToolDescriptor(
+internal class SdkToolDescriptor<T : Any>(
     val name: String,
     val description: String,
+    val serializer: KSerializer<T>,
     val title: String? = null,
     val inputSchema: ToolSchema = ToolSchema(),
     val outputSchema: ToolSchema? = null,
     val toolAnnotations: ToolAnnotations? = null,
     val meta: JsonObject? = null,
-    val handler: suspend SdkToolHandlerContext.(args: Map<String, String>) -> CallToolResult,
+    val handler: suspend SdkToolHandlerContext.(args: T) -> CallToolResult,
+)
+
+/**
+ * Builds an [SdkToolDescriptor] with automatic serializer resolution for [T].
+ */
+internal inline fun <reified T : Any> sdkToolDescriptor(
+    name: String,
+    description: String,
+    title: String? = null,
+    inputSchema: ToolSchema = ToolSchema(),
+    outputSchema: ToolSchema? = null,
+    toolAnnotations: ToolAnnotations? = null,
+    meta: JsonObject? = null,
+    noinline handler: suspend SdkToolHandlerContext.(args: T) -> CallToolResult,
+): SdkToolDescriptor<T> = SdkToolDescriptor(
+    name = name,
+    description = description,
+    serializer = serializer<T>(),
+    title = title,
+    outputSchema = outputSchema,
+    inputSchema = inputSchema,
+    toolAnnotations = toolAnnotations,
+    meta = meta,
+    handler = handler,
 )
 
 /**
@@ -69,34 +119,63 @@ internal class SdkToolHandlerContext(
 )
 
 /**
- * Parse tool arguments from a nullable [JsonObject] into a [Map<String, String>].
- * Non-string values are coerced to their JSON representation; nulls and blanks are skipped.
+ * Shared interface for SDK tool argument DTOs that carry optional
+ * project resolution hints. Tools that need project resolution
+ * should implement this interface and use the overload of
+ * [WorkspaceMcpRequestRunner.callToolWithProject] that accepts it.
  */
-internal fun parseToolArguments(args: JsonObject?): Map<String, String> {
-    if (args == null) return emptyMap()
-    return args.entries.mapNotNull { (key, value) ->
-        val str = when (value) {
-            is JsonPrimitive -> value.content
-            is JsonArray -> value.toString()
-            else -> value.toString()
-        }
-        if (str.isBlank()) null else key to str
-    }.toMap()
+internal interface WorkspaceMcpProjectToolArguments {
+    val projectKey: String?
+    val projectPath: String?
 }
 
 /**
- * Build a [ToolSchema] with string properties and optional required list.
+ * Shared JSON configuration for decoding tool arguments.
+ * Fails on unknown keys to catch agent-side schema drift early.
+ */
+internal val toolArgsJson: Json = Json {
+    ignoreUnknownKeys = false
+    explicitNulls = false
+}
+
+/**
+ * JSON Schema primitive type names accepted by MCP tool input schemas.
+ */
+internal enum class SdkToolJsonType(val jsonName: String) {
+    String("string"),
+    Boolean("boolean"),
+    Integer("integer"),
+    Number("number"),
+    Object("object"),
+    Array("array"),
+}
+
+/**
+ * JSON Schema property declaration for an SDK tool input field.
+ */
+internal data class SdkToolProperty(
+    val type: SdkToolJsonType,
+    val description: String,
+)
+
+internal fun sdkStringProperty(description: String): SdkToolProperty =
+    SdkToolProperty(type = SdkToolJsonType.String, description = description)
+
+internal fun sdkBooleanProperty(description: String): SdkToolProperty =
+    SdkToolProperty(type = SdkToolJsonType.Boolean, description = description)
+
+/**
+ * Build a [ToolSchema] with explicitly typed properties and optional required list.
  */
 internal fun toolSchema(
-    properties: Map<String, String>,
+    properties: Map<String, SdkToolProperty>,
     required: List<String> = emptyList(),
-    additionalProperties: Boolean = false,
 ): ToolSchema {
     val propsObj = buildJsonObject {
-        properties.forEach { (name, desc) ->
+        properties.forEach { (name, property) ->
             putJsonObject(name) {
-                put("type", JsonPrimitive("string"))
-                put("description", JsonPrimitive(desc))
+                put("type", JsonPrimitive(property.type.jsonName))
+                put("description", JsonPrimitive(property.description))
             }
         }
     }

@@ -176,10 +176,16 @@ Tool handlers use `WorkspaceMcpRequestRunner` for centralized project resolution
 
 ### SDK Tools
 
-The `dev.ghostflyby.mcp.sdk.tools` package provides a scaffold for registering tools via the Kotlin MCP SDK's
-`addTool` API (independent of the annotation-based `McpToolset` system). Proof-of-migration:
+The `dev.ghostflyby.mcp.sdk.tools` package provides the canonical migration pattern for Kotlin MCP SDK tools:
+declare an `@Serializable` argument DTO, register it with `sdkToolDescriptor<T>()`, expose a typed
+`toolSchema` with `SdkToolProperty`, and run handlers through `WorkspaceMcpRequestRunner` for project resolution
+and structured error mapping.
 
-- `vfs_refresh` (in `dev.ghostflyby.mcp.vfs.tools`) — declared via `SdkToolDescriptor`, runs through the request
-  runner, and returns structured error results.
+Proof-of-migration:
+
+- `vfs_refresh` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url`, `async`, `recursive`, and
+  project hints; runs through the request runner; and returns structured error results.
+- `vfs_exists` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url` and project hints; routes
+  relative paths through the request runner; and returns deterministic JSON text results.
 
 Old annotation-based toolsets remain in place and are registered via `plugin.xml` as before.

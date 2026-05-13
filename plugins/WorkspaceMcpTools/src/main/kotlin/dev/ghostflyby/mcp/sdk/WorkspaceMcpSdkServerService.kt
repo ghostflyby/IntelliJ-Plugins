@@ -47,15 +47,15 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.resources.DocumentResourceFeature
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.WorkspaceResourceTextContent
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature
-import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
 import dev.ghostflyby.mcp.sdk.tools.registerSdkTool
+import dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature
+import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
+import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -229,6 +229,7 @@ internal class WorkspaceMcpSdkServerService(
                 }
             }
             features.forEach { feature -> feature.registerOnServer(this, ::readResource) }
+            registerSdkTool(vfsExistsSdkTool(), requestRunner)
             registerSdkTool(vfsRefreshSdkTool(), requestRunner)
             onConnect { installWorkspaceSubscriptionHandlers() }
         }

@@ -12,7 +12,7 @@ Last Updated: 2026-05-13
 3. ✅ Extract core metadata resources (server/info, projects, projects/{key}) into `dev.ghostflyby.mcp.core`.
 4. ✅ Extract VFS resources into `dev.ghostflyby.mcp.vfs.resources`.
 5. ✅ Extract document resources into `dev.ghostflyby.mcp.document.resources`.
-6. ✅ Add SDK tool scaffold (`dev.ghostflyby.mcp.sdk.tools`) and proof tool (`vfs_refresh`).
+6. ✅ Add serialization-first SDK tool scaffold (`dev.ghostflyby.mcp.sdk.tools`) with typed schema support and proof tools (`vfs_refresh`, `vfs_exists`).
 7. ✅ Refactor `WorkspaceMcpSdkServerService` to delegate to features and request runner.
 8. ⬜ Migrate remaining resource read logic from `WorkspaceResourceReader` to feature-owned readers (future).
 9. ⬜ Migrate old annotation-based toolsets to SDK tools incrementally.
@@ -30,7 +30,7 @@ Last Updated: 2026-05-13
 1. Feature boundary provides clear interface for listable resources, templates, tools, and event hooks.
 2. Request runner centralizes project resolution and context installation; all new tool/resource handlers use it.
 3. Core, VFS, and document resources live in their final packages.
-4. At least one SDK proof tool (vfs_refresh) demonstrates the new pattern.
+4. SDK proof tools (`vfs_refresh`, `vfs_exists`) demonstrate the new pattern.
 5. Existing annotation-based toolsets remain functional.
 
 ## Post-Implementation Archive

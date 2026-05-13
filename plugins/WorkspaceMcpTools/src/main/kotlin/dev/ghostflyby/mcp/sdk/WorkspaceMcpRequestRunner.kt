@@ -9,6 +9,7 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.resource.WorkspaceResourceUri
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -63,39 +64,14 @@ internal class WorkspaceMcpRequestRunner(
     }
 
     /**
-     * Resolve a project from tool arguments and run [block] with it.
-     * Extracts `projectKey`, `projectPath`, `rawVfsUrl`, and `relativePath`
-     * from the argument map and passes them to the resolver.
-     */
-    suspend fun callToolWithProject(
-        arguments: Map<String, String>,
-        sessionId: String? = null,
-        block: suspend (Project) -> CallToolResult,
-    ): CallToolResult {
-        return try {
-            runWithProjectResolution(
-                sessionId = sessionId,
-                projectKey = arguments["projectKey"],
-                projectPath = arguments["projectPath"],
-                rawVfsUrl = arguments["_rawVfsUrl"],
-                relativePath = arguments["_relativePath"],
-            ) { project -> block(project) }
-        } catch (e: WorkspaceResourceException) {
-            CallToolResult(content = listOf(TextContent(text = e.message ?: "Unknown error")), isError = true)
-        } catch (e: Exception) {
-            CallToolResult(content = listOf(TextContent(text = "Tool call failed: ${e.message ?: e::class.simpleName}")), isError = true)
-        }
-    }
-
-    /**
-     * Load a project using explicit hints alongside argument-map data, then run [block].
+     * Resolve a project from typed [WorkspaceMcpProjectToolArguments] and run [block] with it.
+     * This is the preferred overload for SDK tools with type-safe argument DTOs.
      *
-     * Unlike [callToolWithProject] which reads hints from the map, this overload
-     * lets callers supply rawVfsUrl/relativePath directly. Both are forwarded to
-     * the resolver; [arguments] contributes projectKey/projectPath as normal.
+     * Project hints are read from the DTO's [WorkspaceMcpProjectToolArguments.projectKey]
+     * and [WorkspaceMcpProjectToolArguments.projectPath].
      */
     suspend fun callToolWithProject(
-        arguments: Map<String, String>,
+        projectArgs: WorkspaceMcpProjectToolArguments,
         sessionId: String? = null,
         rawVfsUrl: String? = null,
         relativePath: String? = null,
@@ -104,15 +80,23 @@ internal class WorkspaceMcpRequestRunner(
         return try {
             runWithProjectResolution(
                 sessionId = sessionId,
-                projectKey = arguments["projectKey"],
-                projectPath = arguments["projectPath"],
+                projectKey = projectArgs.projectKey,
+                projectPath = projectArgs.projectPath,
                 rawVfsUrl = rawVfsUrl,
                 relativePath = relativePath,
             ) { project -> block(project) }
         } catch (e: WorkspaceResourceException) {
-            CallToolResult(content = listOf(TextContent(text = e.message ?: "Unknown error")), isError = true)
+            CallToolResult(
+                content = listOf(TextContent(text = e.message ?: "Unknown error")),
+                isError = true,
+            )
         } catch (e: Exception) {
-            CallToolResult(content = listOf(TextContent(text = "Tool call failed: ${e.message ?: e::class.simpleName}")), isError = true)
+            CallToolResult(
+                content = listOf(TextContent(
+                    text = "Tool call failed: ${e.message ?: e::class.simpleName}",
+                )),
+                isError = true,
+            )
         }
     }
 
