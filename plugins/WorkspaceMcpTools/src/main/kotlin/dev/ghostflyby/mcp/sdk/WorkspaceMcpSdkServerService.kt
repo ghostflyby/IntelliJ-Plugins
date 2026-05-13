@@ -23,8 +23,18 @@
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
+import com.intellij.openapi.project.ProjectManagerListener
+import com.intellij.openapi.roots.ModuleRootEvent
+import com.intellij.openapi.roots.ModuleRootListener
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadOptions
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
@@ -56,6 +66,7 @@ internal class WorkspaceMcpSdkServerService(
     private val projectResolver = WorkspaceProjectResolver()
     private val resourceRegistryMutex = Mutex()
     private var listableResourceUris: Set<String> = emptySet()
+    private val projectConnectionDisposables = linkedMapOf<Project, Disposable>()
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -64,6 +75,7 @@ internal class WorkspaceMcpSdkServerService(
     private var server: Server? = null
 
     init {
+        subscribeToProjectEvents()
         scope.launch {
             runCatching {
                 val listableResources = listWorkspaceResources()
@@ -114,12 +126,19 @@ internal class WorkspaceMcpSdkServerService(
         }
     }
 
+    internal fun ensureProjectListeners(project: Project) {
+        subscribeToProjectBus(project)
+    }
+
     private suspend fun refreshListableResources(
         activeServer: Server,
         nextResources: List<WorkspaceListableResource>,
     ) {
         resourceRegistryMutex.withLock {
             val nextUris = nextResources.mapTo(mutableSetOf()) { it.uri }
+            if (nextUris == listableResourceUris) {
+                return
+            }
             val removedUris = listableResourceUris - nextUris
             val addedResources = nextResources.filter { it.uri !in listableResourceUris }
             removedUris.forEach { uri ->
@@ -221,6 +240,61 @@ internal class WorkspaceMcpSdkServerService(
                 ),
             ),
         )
+    }
+
+    private fun subscribeToProjectEvents() {
+        projectResolver.openProjects().forEach { project ->
+            subscribeToProjectBus(project)
+        }
+
+        val connection = ApplicationManager.getApplication().messageBus.connect(this)
+        connection.subscribe(
+            ProjectManager.TOPIC,
+            object : ProjectManagerListener {
+                override fun projectClosed(project: Project) {
+                    unsubscribeFromProjectBus(project)
+                    refreshListableResources()
+                }
+            },
+        )
+    }
+
+    private fun subscribeToProjectBus(project: Project) {
+        if (project.isDisposed || project in projectConnectionDisposables) {
+            return
+        }
+
+        val disposable = Disposer.newDisposable("Workspace MCP SDK project listeners: ${project.name}")
+        Disposer.register(this, disposable)
+        projectConnectionDisposables[project] = disposable
+
+        val connection = project.messageBus.connect(disposable)
+        connection.subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+                    refreshListableResources()
+                }
+
+                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
+                    refreshListableResources()
+                }
+            },
+        )
+        connection.subscribe(
+            ModuleRootListener.TOPIC,
+            object : ModuleRootListener {
+                override fun rootsChanged(event: ModuleRootEvent) {
+                    refreshListableResources()
+                }
+            },
+        )
+    }
+
+    private fun unsubscribeFromProjectBus(project: Project) {
+        projectConnectionDisposables.remove(project)?.let { disposable ->
+            Disposer.dispose(disposable)
+        }
     }
 
     private companion object {
