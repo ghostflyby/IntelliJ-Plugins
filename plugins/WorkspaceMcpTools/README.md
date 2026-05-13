@@ -17,12 +17,14 @@ SDK transport:
 
 Workspace resource URI contract:
 
-- VFS resources use `ij-workspace-vfs://{rawIntellijVfsUrl}`, for example
-  `ij-workspace-vfs://jar:///path/lib.jar!/pkg/Foo.kt`.
-- Document resources use `ij-workspace-document://{rawIntellijVfsUrl}` and represent the current editor document
-  snapshot, including unsaved text when a document is loaded.
-- Resource handlers strip only the fixed outer prefix. The inner IntelliJ VFS URL is passed through unchanged so
-  `file://`, `jar://`, `jrt://`, and other IntelliJ VFS schemes keep their original syntax.
+- All workspace resources use the unified scheme `ij-workspace://{instanceKey}/projects/{projectKey}/{kind}/{tail}`:
+  - `files/{relativePath}` - project-relative file path; ignores unsaved editor content.
+  - `documents/{relativePath}` - project-relative editor document snapshot; includes unsaved text.
+  - `vfs/{rawIntellijVfsUrl}` - raw VFS URL within a project scope; persisted content only.
+  - `document-vfs/{rawIntellijVfsUrl}` - raw VFS editor document within a project scope; includes unsaved text.
+- `instanceKey` is a stable identifier for the IDE instance (product code lowercase + port, e.g. `iu-63341`).
+- `projectKey` is a stable slug derived from project name and basePath (e.g. `my-project-a1b2`).
+- Listable resources include `server/info`, `projects`, and `projects/{projectKey}` for metadata discovery.
 - Directory/stat/API-signature/document-metadata resources are returned as `application/json`; text reads return a
   text MIME type when the file type is known, otherwise `text/plain`.
 - `resources/list` should stay small and list only stable entry points plus active workspace/editor roots. Large project

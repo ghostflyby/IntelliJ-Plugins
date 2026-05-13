@@ -23,36 +23,117 @@
 package dev.ghostflyby.mcp.resource
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 internal class WorkspaceResourceUrisTest {
 
+    private companion object {
+        const val IK = "iu-63341"
+        const val PK = "my-project-a1b2"
+    }
+
+    // ---- new scheme builders ----
+
     @Test
-    fun `round trips file uri`() {
-        assertRoundTrip("file:///tmp/workspace/file.txt")
+    fun `workspaceFileUri builds correct URI`() {
+        val uri = workspaceFileUri(IK, PK, "src/main/Foo.kt")
+        assertTrue(uri.startsWith(WORKSPACE_URI_SCHEME))
+        assertTrue(uri.contains("/projects/$PK/files/"))
     }
 
     @Test
-    fun `round trips jar uri`() {
-        assertRoundTrip("jar:///tmp/workspace/lib.jar!/pkg/Foo.class")
+    fun `workspaceDocumentUri builds correct URI`() {
+        val uri = workspaceDocumentUri(IK, PK, "src/main/Foo.kt")
+        assertTrue(uri.startsWith(WORKSPACE_URI_SCHEME))
+        assertTrue(uri.contains("/projects/$PK/documents/"))
     }
 
     @Test
-    fun `round trips jrt uri`() {
-        assertRoundTrip("jrt:///java.base/java/lang/Object.class")
+    fun `workspaceVfsUri builds correct URI`() {
+        val uri = workspaceVfsUri(IK, PK, "file:///tmp/workspace/file.txt")
+        assertTrue(uri.startsWith(WORKSPACE_URI_SCHEME))
+        assertTrue(uri.contains("/projects/$PK/vfs/file:///tmp/workspace/file.txt"))
     }
 
     @Test
-    fun `round trips uri with spaces`() {
-        assertRoundTrip("file:///tmp/with space/alpha beta.txt")
+    fun `workspaceDocumentVfsUri builds correct URI`() {
+        val uri = workspaceDocumentVfsUri(IK, PK, "jar:///tmp/lib.jar!/pkg/Foo.class")
+        assertTrue(uri.startsWith(WORKSPACE_URI_SCHEME))
+        assertTrue(uri.contains("/projects/$PK/document-vfs/"))
     }
 
     @Test
-    fun `round trips uri with bang`() {
-        assertRoundTrip("jar:///tmp/lib.jar!/pkg/with!bang.txt")
+    fun `new scheme builders reject blank`() {
+        assertThrowsIllegalArgument { workspaceFileUri(IK, PK, "") }
+        assertThrowsIllegalArgument { workspaceDocumentUri(IK, PK, "  ") }
+        assertThrowsIllegalArgument { workspaceVfsUri(IK, PK, "") }
+        assertThrowsIllegalArgument { workspaceDocumentVfsUri(IK, PK, "  ") }
+    }
+
+    // ---- new scheme decode ----
+
+    @Test
+    fun `decodes valid workspace file URI`() {
+        val uri = workspaceFileUri(IK, PK, "src/main/Foo.kt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals(IK, decoded!!.instanceKey)
+        assertEquals(PK, decoded.projectKey)
+        assertEquals(WorkspaceResourceKind.FILES, decoded.kind)
+        assertEquals("src/main/Foo.kt", decoded.tail)
+    }
+
+    @Test
+    fun `decodes workspace document URI`() {
+        val uri = workspaceDocumentUri(IK, PK, "src/main/Bar.kt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals(WorkspaceResourceKind.DOCUMENTS, decoded!!.kind)
+        assertEquals("src/main/Bar.kt", decoded.tail)
+    }
+
+    @Test
+    fun `decodes workspace vfs URI with raw file scheme`() {
+        val uri = workspaceVfsUri(IK, PK, "file:///tmp/workspace/file.txt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals(WorkspaceResourceKind.VFS, decoded!!.kind)
+        assertEquals("file:///tmp/workspace/file.txt", decoded.tail)
+    }
+
+    @Test
+    fun `decodes workspace vfs URI with jar scheme`() {
+        val uri = workspaceVfsUri(IK, PK, "jar:///tmp/workspace/lib.jar!/pkg/Foo.kt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals("jar:///tmp/workspace/lib.jar!/pkg/Foo.kt", decoded!!.tail)
+    }
+
+    @Test
+    fun `decodes workspace vfs URI with jrt scheme`() {
+        val uri = workspaceVfsUri(IK, PK, "jrt:///java.base/java/lang/String.class")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals("jrt:///java.base/java/lang/String.class", decoded!!.tail)
+    }
+
+    @Test
+    fun `decodes workspace vfs URI with spaces and bang`() {
+        val uri = workspaceVfsUri(IK, PK, "jar:///tmp/with space/lib.jar!/pkg/with!bang.kt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals("jar:///tmp/with space/lib.jar!/pkg/with!bang.kt", decoded!!.tail)
+    }
+
+    @Test
+    fun `decodes workspace vfs URI with unknown inner scheme`() {
+        val uri = workspaceVfsUri(IK, PK, "custom+scheme://host/path/value.txt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals("custom+scheme://host/path/value.txt", decoded!!.tail)
     }
 
     @Test
@@ -61,56 +142,81 @@ internal class WorkspaceResourceUrisTest {
     }
 
     @Test
-    fun `returns null for invalid prefix`() {
-        assertNull(tryDecodeWorkspaceResourceUri("ij-workspace-vfs:/tmp/data"))
-        assertNull(tryDecodeWorkspaceResourceUri("ij-workspace-document:/tmp/data"))
+    fun `returns null for legacy-style prefix`() {
+        assertNull(tryDecodeWorkspaceResourceUri("ij-workspace-vfs://file:///tmp/data"))
     }
 
     @Test
-    fun `returns null for blank raw url`() {
-        assertNull(tryDecodeWorkspaceResourceUri(VFS_RESOURCE_PREFIX))
-        assertNull(tryDecodeWorkspaceResourceUri(DOCUMENT_RESOURCE_PREFIX))
+    fun `returns null for blank tail`() {
+        assertNull(tryDecodeWorkspaceResourceUri("ij-workspace://$IK/projects/$PK/files/"))
     }
 
     @Test
-    fun `rejects blank raw url when encoding`() {
-        assertThrowsIllegalArgument { vfsResourceUri("   ") }
-        assertThrowsIllegalArgument { documentResourceUri("") }
+    fun `returns null for missing projects segment`() {
+        assertNull(tryDecodeWorkspaceResourceUri("ij-workspace://$IK/foo/bar/vfs/something"))
+    }
+
+    // ---- listable resource URIs ----
+
+    @Test
+    fun `listableServerInfoUri produces correct format`() {
+        val uri = listableServerInfoUri("iu-63341")
+        assertEquals("ij-workspace://iu-63341/server/info", uri)
     }
 
     @Test
-    fun `decodes prefixed uri without parsing`() {
-        val raw = "jar:///tmp/archive.jar!/path with spaces/and!bang"
-        val vfsUri = vfsResourceUri(raw)
-        val documentUri = documentResourceUri(raw)
-
-        assertTrue(vfsUri.startsWith(VFS_RESOURCE_PREFIX))
-        assertTrue(documentUri.startsWith(DOCUMENT_RESOURCE_PREFIX))
-        assertEquals(raw, rawVfsUrlFromVfsResourceUri(vfsUri))
-        assertEquals(raw, rawVfsUrlFromDocumentResourceUri(documentUri))
+    fun `listableProjectsUri produces correct format`() {
+        val uri = listableProjectsUri("iu-63341")
+        assertEquals("ij-workspace://iu-63341/projects", uri)
     }
 
     @Test
-    fun `rejects missing prefix when decoding`() {
-        assertThrowsIllegalArgument { rawVfsUrlFromVfsResourceUri("file:///tmp/data") }
-        assertThrowsIllegalArgument { rawVfsUrlFromDocumentResourceUri("file:///tmp/data") }
+    fun `listableProjectInfoUri produces correct format`() {
+        val uri = listableProjectInfoUri("iu-63341", "my-project-a1b2")
+        assertEquals("ij-workspace://iu-63341/projects/my-project-a1b2", uri)
     }
 
-    private fun assertRoundTrip(rawVfsUrl: String) {
-        val vfsUri = vfsResourceUri(rawVfsUrl)
-        val documentUri = documentResourceUri(rawVfsUrl)
+    // ---- relative path validation ----
 
-        assertEquals(rawVfsUrl, rawVfsUrlFromVfsResourceUri(vfsUri))
-        assertEquals(rawVfsUrl, rawVfsUrlFromDocumentResourceUri(documentUri))
+    @Test
+    fun `workspaceFileUri rejects absolute path`() {
+        assertThrowsIllegalArgument { workspaceFileUri(IK, PK, "/etc/passwd") }
+    }
 
-        val decodedVfs = tryDecodeWorkspaceResourceUri(vfsUri)
-        val decodedDocument = tryDecodeWorkspaceResourceUri(documentUri)
-        assertTrue(decodedVfs != null)
-        assertTrue(decodedDocument != null)
-        assertEquals(WorkspaceResourceKind.VFS, decodedVfs!!.kind)
-        assertEquals(WorkspaceResourceKind.DOCUMENT, decodedDocument!!.kind)
-        assertEquals(rawVfsUrl, decodedVfs.rawVfsUrl)
-        assertEquals(rawVfsUrl, decodedDocument.rawVfsUrl)
+    @Test
+    fun `workspaceDocumentUri rejects absolute path`() {
+        assertThrowsIllegalArgument { workspaceDocumentUri(IK, PK, "/etc/passwd") }
+    }
+
+    @Test
+    fun `workspaceFileUri rejects path with dotdot`() {
+        assertThrowsIllegalArgument { workspaceFileUri(IK, PK, "src/../../outside") }
+    }
+
+    @Test
+    fun `workspaceDocumentUri rejects path with dotdot`() {
+        assertThrowsIllegalArgument { workspaceDocumentUri(IK, PK, "src/../../outside") }
+    }
+
+    @Test
+    fun `workspaceFileUri rejects blank path`() {
+        assertThrowsIllegalArgument { workspaceFileUri(IK, PK, "  ") }
+    }
+
+    @Test
+    fun `workspaceDocumentUri rejects blank path`() {
+        assertThrowsIllegalArgument { workspaceDocumentUri(IK, PK, "") }
+    }
+
+    @Test
+    fun `tryDecodeWorkspaceResourceUri returns WorkspaceResourceUri for valid URI`() {
+        val uri = workspaceFileUri(IK, PK, "src/main/Foo.kt")
+        val decoded = tryDecodeWorkspaceResourceUri(uri)
+        assertNotNull(decoded)
+        assertEquals(IK, decoded!!.instanceKey)
+        assertEquals(PK, decoded.projectKey)
+        assertEquals(WorkspaceResourceKind.FILES, decoded.kind)
+        assertEquals("src/main/Foo.kt", decoded.tail)
     }
 
     private fun assertThrowsIllegalArgument(block: () -> Unit) {

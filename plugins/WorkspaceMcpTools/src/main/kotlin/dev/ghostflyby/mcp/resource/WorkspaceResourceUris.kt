@@ -22,63 +22,111 @@
 
 package dev.ghostflyby.mcp.resource
 
-internal const val VFS_RESOURCE_PREFIX = "ij-workspace-vfs://"
-internal const val DOCUMENT_RESOURCE_PREFIX = "ij-workspace-document://"
+/// Unified scheme prefix for all workspace resources.
+/// Format: ij-workspace://{instanceKey}/projects/{projectKey}/{kind}/{rawTail}
+internal const val WORKSPACE_URI_SCHEME = "ij-workspace://"
+
+internal const val PROJECTS_SEGMENT = "/projects/"
+internal const val KIND_FILES = "files"
+internal const val KIND_DOCUMENTS = "documents"
+internal const val KIND_VFS = "vfs"
+internal const val KIND_DOCUMENT_VFS = "document-vfs"
 
 internal enum class WorkspaceResourceKind {
+    FILES,
+    DOCUMENTS,
     VFS,
-    DOCUMENT,
+    DOCUMENT_VFS,
 }
 
+/// Decoded workspace resource URI.
 internal data class WorkspaceResourceUri(
+    val instanceKey: String,
+    val projectKey: String,
     val kind: WorkspaceResourceKind,
-    val rawVfsUrl: String,
+    val tail: String,
 )
 
-internal fun vfsResourceUri(rawVfsUrl: String): String {
-    require(rawVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
-    return VFS_RESOURCE_PREFIX + rawVfsUrl
+// ---- builders ----
+
+internal fun workspaceFileUri(
+    instanceKey: String,
+    projectKey: String,
+    relativePath: String,
+): String {
+    validateProjectRelativePath(relativePath)
+    return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_FILES}/${relativePath}"
 }
 
-internal fun documentResourceUri(rawVfsUrl: String): String {
-    require(rawVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
-    return DOCUMENT_RESOURCE_PREFIX + rawVfsUrl
+internal fun validateProjectRelativePath(relativePath: String) {
+    require(relativePath.isNotBlank()) { "relativePath must not be blank." }
+    require(!relativePath.startsWith('/')) { "relativePath must not be absolute: $relativePath" }
+    require(relativePath.split('/').none { it == ".." }) {
+        "relativePath must not contain '..' segments: $relativePath"
+    }
 }
 
-internal fun rawVfsUrlFromVfsResourceUri(uri: String): String {
-    return decodeWorkspaceResourceUri(uri, VFS_RESOURCE_PREFIX).rawVfsUrl
+internal fun workspaceDocumentUri(
+    instanceKey: String,
+    projectKey: String,
+    relativePath: String,
+): String {
+    validateProjectRelativePath(relativePath)
+    return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_DOCUMENTS}/${relativePath}"
 }
 
-internal fun rawVfsUrlFromDocumentResourceUri(uri: String): String {
-    return decodeWorkspaceResourceUri(uri, DOCUMENT_RESOURCE_PREFIX).rawVfsUrl
+internal fun workspaceVfsUri(
+    instanceKey: String,
+    projectKey: String,
+    rawIntellijVfsUrl: String,
+): String {
+    require(rawIntellijVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
+    return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_VFS}/${rawIntellijVfsUrl}"
 }
+
+internal fun workspaceDocumentVfsUri(
+    instanceKey: String,
+    projectKey: String,
+    rawIntellijVfsUrl: String,
+): String {
+    require(rawIntellijVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
+    return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_DOCUMENT_VFS}/${rawIntellijVfsUrl}"
+}
+
+// ---- decoder ----
 
 internal fun tryDecodeWorkspaceResourceUri(uri: String): WorkspaceResourceUri? {
-    if (uri.startsWith(VFS_RESOURCE_PREFIX)) {
-        val rawVfsUrl = uri.removePrefix(VFS_RESOURCE_PREFIX)
-        if (rawVfsUrl.isNotBlank()) {
-            return WorkspaceResourceUri(WorkspaceResourceKind.VFS, rawVfsUrl)
-        }
-        return null
-    }
-    if (uri.startsWith(DOCUMENT_RESOURCE_PREFIX)) {
-        val rawVfsUrl = uri.removePrefix(DOCUMENT_RESOURCE_PREFIX)
-        if (rawVfsUrl.isNotBlank()) {
-            return WorkspaceResourceUri(WorkspaceResourceKind.DOCUMENT, rawVfsUrl)
-        }
-        return null
-    }
-    return null
-}
+    if (!uri.startsWith(WORKSPACE_URI_SCHEME)) return null
+    val afterScheme = uri.removePrefix(WORKSPACE_URI_SCHEME)
+    val projectsIdx = afterScheme.indexOf(PROJECTS_SEGMENT)
+    if (projectsIdx < 0) return null
+    val instanceKey = afterScheme.substring(0, projectsIdx)
+    if (instanceKey.isBlank()) return null
 
-private fun decodeWorkspaceResourceUri(uri: String, prefix: String): WorkspaceResourceUri {
-    require(uri.startsWith(prefix)) { "Resource URI must start with '$prefix'." }
-    val rawVfsUrl = uri.removePrefix(prefix)
-    require(rawVfsUrl.isNotBlank()) { "Resource URI must contain a non-blank raw URL after '$prefix'." }
-    val kind = when (prefix) {
-        VFS_RESOURCE_PREFIX -> WorkspaceResourceKind.VFS
-        DOCUMENT_RESOURCE_PREFIX -> WorkspaceResourceKind.DOCUMENT
-        else -> error("Unknown workspace resource prefix: $prefix")
+    val afterProjects = afterScheme.substring(projectsIdx + PROJECTS_SEGMENT.length)
+    val firstSlash = afterProjects.indexOf('/')
+    if (firstSlash < 0) return null
+    val projectKey = afterProjects.substring(0, firstSlash)
+    if (projectKey.isBlank()) return null
+
+    val afterProjectKey = afterProjects.substring(firstSlash + 1)
+    val kindEnd = afterProjectKey.indexOf('/')
+    if (kindEnd < 0) return null
+    val kindStr = afterProjectKey.substring(0, kindEnd)
+    val kind = when (kindStr) {
+        KIND_FILES -> WorkspaceResourceKind.FILES
+        KIND_DOCUMENTS -> WorkspaceResourceKind.DOCUMENTS
+        KIND_VFS -> WorkspaceResourceKind.VFS
+        KIND_DOCUMENT_VFS -> WorkspaceResourceKind.DOCUMENT_VFS
+        else -> return null
     }
-    return WorkspaceResourceUri(kind, rawVfsUrl)
+    val tail = afterProjectKey.substring(kindEnd + 1)
+    if (tail.isBlank()) return null
+
+    return WorkspaceResourceUri(
+        instanceKey = instanceKey,
+        projectKey = projectKey,
+        kind = kind,
+        tail = tail,
+    )
 }

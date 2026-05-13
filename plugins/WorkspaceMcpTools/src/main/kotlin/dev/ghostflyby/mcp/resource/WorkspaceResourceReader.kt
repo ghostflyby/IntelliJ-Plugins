@@ -26,11 +26,16 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.isTooLargeForIntellijSense
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
+import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -77,7 +82,9 @@ internal data class WorkspaceResourceTextContent(
     val text: String,
 )
 
-internal class WorkspaceResourceReader {
+internal class WorkspaceResourceReader(
+    private val projectResolver: WorkspaceProjectResolver? = null,
+) {
     private val vfsManager: VirtualFileManager
         get() = service<VirtualFileManager>()
 
@@ -89,17 +96,146 @@ internal class WorkspaceResourceReader {
     internal suspend fun readWorkspaceResource(
         uri: String,
     ): WorkspaceResourceTextContent {
+        val listableResult = tryReadListableResource(uri)
+        if (listableResult != null) return listableResult
+
         val decoded = tryDecodeWorkspaceResourceUri(uri)
             ?: resourceFail("Unsupported Workspace MCP resource URI: $uri")
-        return when (decoded.kind) {
-            WorkspaceResourceKind.VFS -> readVfsResource(uri, decoded.rawVfsUrl)
-            WorkspaceResourceKind.DOCUMENT -> readDocumentResource(uri, decoded.rawVfsUrl)
+        return readDecodedResource(uri, decoded)
+    }
+
+    private suspend fun tryReadListableResource(uri: String): WorkspaceResourceTextContent? {
+        if (!uri.startsWith(WORKSPACE_URI_SCHEME)) return null
+        val afterScheme = uri.removePrefix(WORKSPACE_URI_SCHEME)
+        val firstSlash = afterScheme.indexOf('/')
+        if (firstSlash < 0) return null
+        val instanceKey = afterScheme.substring(0, firstSlash)
+        val path = afterScheme.substring(firstSlash + 1)
+        val resolver = this.projectResolver
+        return when {
+            path == "server/info" -> serverInfoContent(uri, instanceKey)
+            path == "projects" -> projectsListContent(uri, resolver)
+            path.startsWith("projects/") && !path.substringAfter("projects/").contains('/') -> {
+                val projectKey = path.substringAfter("projects/")
+                if (projectKey.isBlank()) null else projectInfoContent(uri, projectKey, resolver)
+            }
+            else -> null
         }
+    }
+
+    private suspend fun serverInfoContent(uri: String, instanceKey: String): WorkspaceResourceTextContent {
+        val info = readAction {
+            mapOf("instanceKey" to instanceKey, "version" to "1.0.0")
+        }
+        return WorkspaceResourceTextContent(
+            uri = uri,
+            mimeType = APPLICATION_JSON_MIME_TYPE,
+            text = json.encodeToString(kotlinx.serialization.serializer<Map<String, String>>(), info),
+        )
+    }
+
+    private suspend fun projectsListContent(uri: String, resolver: WorkspaceProjectResolver?): WorkspaceResourceTextContent {
+        val projects = if (resolver != null) {
+            readAction { resolver.openProjects() }.map { project ->
+                mapOf(
+                    "projectKey" to workspaceProjectKey(project),
+                    "name" to project.name,
+                    "basePath" to (project.basePath ?: ""),
+                )
+            }
+        } else {
+            emptyList()
+        }
+        return WorkspaceResourceTextContent(
+            uri = uri,
+            mimeType = APPLICATION_JSON_MIME_TYPE,
+            text = json.encodeToString(kotlinx.serialization.serializer<List<Map<String, String>>>(), projects),
+        )
+    }
+
+    private suspend fun projectInfoContent(uri: String, projectKey: String, resolver: WorkspaceProjectResolver?): WorkspaceResourceTextContent {
+        if (resolver == null) {
+            return WorkspaceResourceTextContent(
+                uri = uri,
+                mimeType = APPLICATION_JSON_MIME_TYPE,
+                text = """{"error":"No project resolver configured","projectKey":"$projectKey"}""",
+            )
+        }
+        val resolved = resolver.resolve(projectKey = projectKey)
+        val info = when (resolved) {
+            is dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution.Resolved -> mapOf(
+                "projectKey" to projectKey,
+                "name" to resolved.project.name,
+                "basePath" to (resolved.project.basePath ?: ""),
+            )
+            is dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution.Unresolved -> mapOf(
+                "error" to resolved.message,
+                "projectKey" to projectKey,
+            )
+        }
+        return WorkspaceResourceTextContent(
+            uri = uri,
+            mimeType = APPLICATION_JSON_MIME_TYPE,
+            text = json.encodeToString(kotlinx.serialization.serializer<Map<String, String>>(), info),
+        )
+    }
+
+    private suspend fun readDecodedResource(
+        resourceUri: String,
+        decoded: WorkspaceResourceUri,
+    ): WorkspaceResourceTextContent {
+        return when (decoded.kind) {
+            WorkspaceResourceKind.FILES -> readFileByRelativePath(resourceUri, decoded.projectKey, decoded.tail)
+            WorkspaceResourceKind.DOCUMENTS -> readDocumentByRelativePath(resourceUri, decoded.projectKey, decoded.tail)
+            WorkspaceResourceKind.VFS -> readVfsResource(resourceUri, decoded.tail)
+            WorkspaceResourceKind.DOCUMENT_VFS -> readDocumentResource(resourceUri, decoded.tail)
+        }
+    }
+
+    private suspend fun resolveProjectForRead(projectKey: String): Project {
+        val resolver = projectResolver ?: resourceFail("No project resolver configured for WorkspaceResourceReader.")
+        val resolved = resolver.resolve(projectKey = projectKey)
+        return when (resolved) {
+            is dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution.Resolved -> resolved.project
+            is dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution.Unresolved -> resourceFail(resolved.message)
+        }
+    }
+
+    private suspend fun readFileByRelativePath(
+        resourceUri: String,
+        projectKey: String,
+        relativePath: String,
+    ): WorkspaceResourceTextContent {
+        validateProjectRelativePath(relativePath)
+        val project = resolveProjectForRead(projectKey)
+        val basePath = project.basePath ?: resourceFail("Project $projectKey has no base path.")
+        val fullPath = "$basePath/$relativePath"
+        val file = readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
+            ?: resourceFail("File not found at relative path '$relativePath' in project '$projectKey': $fullPath")
+        return if (readAction { file.isDirectory }) {
+            directoryListingContent(resourceUri, file)
+        } else {
+            vfsTextContent(resourceUri, file.url, file, WorkspaceVfsResourceReadOptions())
+        }
+    }
+
+    private suspend fun readDocumentByRelativePath(
+        resourceUri: String,
+        projectKey: String,
+        relativePath: String,
+    ): WorkspaceResourceTextContent {
+        validateProjectRelativePath(relativePath)
+        val project = resolveProjectForRead(projectKey)
+        val basePath = project.basePath ?: resourceFail("Project $projectKey has no base path.")
+        val fullPath = "$basePath/$relativePath"
+        val file = readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
+            ?: resourceFail("Document not found at relative path '$relativePath' in project '$projectKey': $fullPath")
+        return readDocumentResource(resourceUri, file.url)
     }
 
     internal suspend fun readVfsResource(
         resourceUri: String,
-        rawVfsUrl: String = rawVfsUrlFromVfsResourceUri(resourceUri),
+        rawVfsUrl: String,
         options: WorkspaceVfsResourceReadOptions = WorkspaceVfsResourceReadOptions(),
     ): WorkspaceResourceTextContent {
         val file = resolveVfsFile(rawVfsUrl)
@@ -125,7 +261,7 @@ internal class WorkspaceResourceReader {
 
     internal suspend fun readDocumentResource(
         resourceUri: String,
-        rawVfsUrl: String = rawVfsUrlFromDocumentResourceUri(resourceUri),
+        rawVfsUrl: String,
         options: WorkspaceDocumentResourceReadOptions = WorkspaceDocumentResourceReadOptions(),
     ): WorkspaceResourceTextContent {
         val (_, document) = resolveTextDocument(rawVfsUrl)

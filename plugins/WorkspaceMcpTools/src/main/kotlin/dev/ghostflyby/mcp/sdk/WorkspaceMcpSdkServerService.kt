@@ -44,15 +44,12 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadOptions
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
-import dev.ghostflyby.mcp.resource.WorkspaceVfsResourceReadOptions
-import dev.ghostflyby.mcp.resource.documentResourceUri
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
-import dev.ghostflyby.mcp.resource.vfsResourceUri
+import dev.ghostflyby.mcp.resource.workspaceVfsUri
+import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -77,14 +74,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
     private val scope: CoroutineScope,
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
-    private val resourceReader = WorkspaceResourceReader()
     private val projectResolver = WorkspaceProjectResolver()
+    private val resourceReader = WorkspaceResourceReader(projectResolver)
     private val resourceRegistryMutex = Mutex()
     private var listableResourceUris: Set<String> = emptySet()
     private val projectConnectionDisposables = linkedMapOf<Project, Disposable>()
@@ -225,40 +223,46 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun Server.registerWorkspaceResourceTemplates() {
+        // New scheme templates (project-scoped)
         addResourceTemplate(
-            uriTemplate = "ij-workspace-vfs://{rawVfsUrl}",
-            name = "IntelliJ VFS resource",
-            description = "Reads IntelliJ VirtualFile content, directory listing, metadata, or API signature snapshots.",
+            uriTemplate = NEW_WORKSPACE_FILES_TEMPLATE,
+            name = "Project file resource",
+            description = "Reads IntelliJ VirtualFile content by project-relative path.",
             mimeType = "text/plain",
-        ) { request, variables ->
-            val rawVfsUrl = variables.requireRawVfsUrl()
-            val content = resourceReader.readVfsResource(
-                resourceUri = request.uri,
-                rawVfsUrl = rawVfsUrl,
-                options = WorkspaceVfsResourceReadOptions(),
-            )
+        ) { request, _ ->
+            val content = resourceReader.readWorkspaceResource(request.uri)
             content.toReadResourceResult()
         }
 
         addResourceTemplate(
-            uriTemplate = "ij-workspace-document://{rawVfsUrl}",
-            name = "IntelliJ editor document resource",
-            description = "Reads the current IntelliJ editor document snapshot for a VFS URL, including unsaved text.",
+            uriTemplate = NEW_WORKSPACE_DOCUMENTS_TEMPLATE,
+            name = "Project document resource",
+            description = "Reads the current editor document snapshot by project-relative path, including unsaved text.",
             mimeType = "text/plain",
-        ) { request, variables ->
-            val rawVfsUrl = variables.requireRawVfsUrl()
-            val content = resourceReader.readDocumentResource(
-                resourceUri = request.uri,
-                rawVfsUrl = rawVfsUrl,
-                options = WorkspaceDocumentResourceReadOptions(),
-            )
+        ) { request, _ ->
+            val content = resourceReader.readWorkspaceResource(request.uri)
             content.toReadResourceResult()
         }
-    }
 
-    private fun Map<String, String>.requireRawVfsUrl(): String {
-        return this["rawVfsUrl"]?.takeIf { it.isNotBlank() }
-            ?: throw WorkspaceResourceException("Resource template did not provide rawVfsUrl.")
+        addResourceTemplate(
+            uriTemplate = NEW_WORKSPACE_VFS_TEMPLATE,
+            name = "Project VFS resource",
+            description = "Reads IntelliJ VirtualFile content by raw VFS URL within a project scope.",
+            mimeType = "text/plain",
+        ) { request, _ ->
+            val content = resourceReader.readWorkspaceResource(request.uri)
+            content.toReadResourceResult()
+        }
+
+        addResourceTemplate(
+            uriTemplate = NEW_WORKSPACE_DOCUMENT_VFS_TEMPLATE,
+            name = "Project document VFS resource",
+            description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
+            mimeType = "text/plain",
+        ) { request, _ ->
+            val content = resourceReader.readWorkspaceResource(request.uri)
+            content.toReadResourceResult()
+        }
     }
 
     private fun dev.ghostflyby.mcp.resource.WorkspaceResourceTextContent.toReadResourceResult(): ReadResourceResult {
@@ -306,7 +310,18 @@ internal class WorkspaceMcpSdkServerService(
             object : BulkFileListener {
                 override fun after(events: List<VFileEvent>) {
                     events.mapNotNull { event -> event.file?.url }
-                        .map(::vfsResourceUri)
+                        .flatMap { url ->
+                            projectResolver.openProjects().mapNotNull { project ->
+                                val bp = project.basePath
+                                if (bp != null && url.startsWith("file://$bp")) {
+                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
+                                } else if (url.startsWith("file://") && projectResolver.openProjects().size == 1) {
+                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
+                                } else {
+                                    null
+                                }
+                            }
+                        }
                         .distinct()
                         .forEach(::scheduleResourceUpdated)
                     refreshListableResources()
@@ -361,7 +376,15 @@ internal class WorkspaceMcpSdkServerService(
 
     private fun scheduleDocumentResourceUpdate(document: Document) {
         val file = FileDocumentManager.getInstance().getFile(document) ?: return
-        scheduleResourceUpdated(documentResourceUri(file.url))
+        projectResolver.openProjects().forEach { project ->
+            val bp = project.basePath
+            if (bp != null && file.path.startsWith(bp)) {
+                val instanceKey = workspaceInstanceKey()
+                val projectKey = workspaceProjectKey(project)
+                val relativePath = file.path.removePrefix(bp).trimStart('/')
+                scheduleResourceUpdated(workspaceDocumentUri(instanceKey, projectKey, relativePath))
+            }
+        }
     }
 
     private fun scheduleResourceUpdated(resourceUri: String) {
@@ -371,7 +394,7 @@ internal class WorkspaceMcpSdkServerService(
                 return
             }
             resourceUpdateFlushJob = scope.launch {
-                delay(RESOURCE_UPDATE_COALESCE_MILLIS)
+                delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
                 flushPendingResourceUpdates()
             }
         }

@@ -29,6 +29,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
+import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 
 internal data class WorkspaceListableResource(
     val uri: String,
@@ -37,37 +39,96 @@ internal data class WorkspaceListableResource(
     val mimeType: String,
 )
 
+// Listable resource URI paths (not full templates; these are concrete URIs)
+internal fun listableServerInfoUri(instanceKey: String): String =
+    "ij-workspace://$instanceKey/server/info"
+
+internal fun listableProjectsUri(instanceKey: String): String =
+    "ij-workspace://$instanceKey/projects"
+
+internal fun listableProjectInfoUri(instanceKey: String, projectKey: String): String =
+    "ij-workspace://$instanceKey/projects/$projectKey"
+
 internal class WorkspaceResourceCatalog(
     private val project: Project,
 ) {
+    private val instanceKey = workspaceInstanceKey()
+    private val projectKey = workspaceProjectKey(project)
+
     internal suspend fun listResources(): List<WorkspaceListableResource> {
         return readAction {
             buildList {
-                project.basePath?.let { basePath -> LocalFileSystem.getInstance().findFileByPath(basePath) }?.let { baseDir ->
-                    add(baseDir.toVfsResource("Project base directory", "Workspace project base directory."))
+                // Server info
+                add(
+                    WorkspaceListableResource(
+                        uri = listableServerInfoUri(instanceKey),
+                        name = "Workspace MCP server info",
+                        description = "IDE runtime and server metadata.",
+                        mimeType = APPLICATION_JSON_MIME_TYPE,
+                    ),
+                )
+                // Projects list
+                add(
+                    WorkspaceListableResource(
+                        uri = listableProjectsUri(instanceKey),
+                        name = "Open projects",
+                        description = "List of open IDE projects.",
+                        mimeType = APPLICATION_JSON_MIME_TYPE,
+                    ),
+                )
+                // Single project info
+                add(
+                    WorkspaceListableResource(
+                        uri = listableProjectInfoUri(instanceKey, projectKey),
+                        name = "Project info: ${project.name}",
+                        description = "Project metadata for key $projectKey.",
+                        mimeType = APPLICATION_JSON_MIME_TYPE,
+                    ),
+                )
+
+                // Project base directory (project-relative files)
+                project.basePath?.let { basePath ->
+                    LocalFileSystem.getInstance().findFileByPath(basePath)
+                }?.let { baseDir ->
+                    add(
+                        baseDir.toProjectFileResource(
+                            "Project base directory: ${project.name}",
+                            "Workspace project base directory.",
+                        ),
+                    )
                 }
 
                 ProjectRootManager.getInstance(project).contentRoots
                     .sortedBy { it.url }
                     .forEach { root ->
-                        add(root.toVfsResource("Content root: ${root.presentableName}", "Workspace content root."))
+                        add(
+                            root.toProjectFileResource(
+                                "Content root: ${root.presentableName}",
+                                "Workspace content root.",
+                            ),
+                        )
                     }
 
                 ProjectRootManager.getInstance(project).contentSourceRoots
                     .sortedBy { it.url }
                     .forEach { root ->
-                        add(root.toVfsResource("Source root: ${root.presentableName}", "Workspace source root."))
+                        add(
+                            root.toProjectFileResource(
+                                "Source root: ${root.presentableName}",
+                                "Workspace source root.",
+                            ),
+                        )
                     }
 
                 val documentManager = FileDocumentManager.getInstance()
                 FileEditorManager.getInstance(project).openFiles
                     .sortedBy { it.url }
                     .forEach { file ->
-                        add(file.toVfsResource("Open file: ${file.presentableName}", "Open editor file."))
+                        add(file.toProjectFileResource("Open file: ${file.presentableName}", "Open editor file."))
                         if (!file.isDirectory && documentManager.getDocument(file) != null) {
                             add(
                                 WorkspaceListableResource(
-                                    uri = documentResourceUri(file.url),
+                                    uri = file.toProjectDocumentUri(),
                                     name = "Open document: ${file.presentableName}",
                                     description = "Current editor document snapshot for an open file.",
                                     mimeType = TEXT_PLAIN_MIME_TYPE,
@@ -79,16 +140,33 @@ internal class WorkspaceResourceCatalog(
         }
     }
 
-    private fun VirtualFile.toVfsResource(
+    private fun VirtualFile.toProjectFileResource(
         name: String,
         description: String,
     ): WorkspaceListableResource {
+        val relativePath = project.relativePathFor(this)
         return WorkspaceListableResource(
-            uri = vfsResourceUri(url),
+            uri = if (relativePath != null) workspaceFileUri(instanceKey, projectKey, relativePath)
+                  else workspaceVfsUri(instanceKey, projectKey, url),
             name = name,
             description = description,
             mimeType = if (isDirectory) APPLICATION_JSON_MIME_TYPE else fileType.name.toTextMimeType(),
         )
+    }
+
+    private fun VirtualFile.toProjectDocumentUri(): String {
+        val relativePath = project.relativePathFor(this)
+        return if (relativePath != null) workspaceDocumentUri(instanceKey, projectKey, relativePath)
+               else workspaceDocumentVfsUri(instanceKey, projectKey, url)
+    }
+
+    private fun Project.relativePathFor(file: VirtualFile): String? {
+        val bp = basePath ?: return null
+        val filePath = file.path
+        if (filePath.startsWith(bp)) {
+            return filePath.removePrefix(bp).trimStart('/')
+        }
+        return null
     }
 }
 
