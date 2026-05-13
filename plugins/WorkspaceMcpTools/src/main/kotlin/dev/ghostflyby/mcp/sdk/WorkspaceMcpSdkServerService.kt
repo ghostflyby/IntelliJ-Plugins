@@ -44,13 +44,18 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
+import dev.ghostflyby.mcp.core.CoreResourceFeature
+import dev.ghostflyby.mcp.document.resources.DocumentResourceFeature
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
-import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
-import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
-import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
+import dev.ghostflyby.mcp.resource.WorkspaceResourceTextContent
+import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
+import dev.ghostflyby.mcp.resource.workspaceDocumentUri
+import dev.ghostflyby.mcp.resource.workspaceVfsUri
+import dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature
+import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
+import dev.ghostflyby.mcp.sdk.tools.registerSdkTool
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -84,6 +89,14 @@ internal class WorkspaceMcpSdkServerService(
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = WorkspaceProjectResolver()
     private val resourceReader = WorkspaceResourceReader(projectResolver)
+    private val requestRunner = WorkspaceMcpRequestRunner(projectResolver)
+
+    private val features: List<WorkspaceMcpFeature> = listOf(
+        CoreResourceFeature(projectResolver),
+        VfsResourceFeature(projectResolver),
+        DocumentResourceFeature(projectResolver),
+    )
+
     private val resourceRegistryMutex = Mutex()
     private var listableResourceUris: Set<String> = emptySet()
     private val projectConnectionDisposables = linkedMapOf<Project, Disposable>()
@@ -108,11 +121,8 @@ internal class WorkspaceMcpSdkServerService(
                 val createdServer = createServer(listableResources)
                 val port = service<WorkspaceMcpSdkServerSettings>().port
                 val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) {
-                        createdServer
-                    }
-                }
-                    .start(wait = false)
+                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
+                }.start(wait = false)
                 server = createdServer
                 engine = started
                 listableResourceUris = listableResources.mapTo(mutableSetOf()) { it.uri }
@@ -124,9 +134,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     override fun dispose() {
-        scope.launch {
-            closeServer()
-        }
+        scope.launch { closeServer() }
     }
 
     private suspend fun closeServer() {
@@ -134,11 +142,8 @@ internal class WorkspaceMcpSdkServerService(
         val stoppedServer = server
         engine = null
         server = null
-        runCatching {
-            stoppedServer?.close()
-        }.onFailure { error ->
-            logger.warn("Failed to close Workspace MCP SDK server", error)
-        }
+        runCatching { stoppedServer?.close() }
+            .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
         stoppedEngine?.stop()
     }
 
@@ -163,233 +168,128 @@ internal class WorkspaceMcpSdkServerService(
     ) {
         resourceRegistryMutex.withLock {
             val nextUris = nextResources.mapTo(mutableSetOf()) { it.uri }
-            if (nextUris == listableResourceUris) {
-                return
-            }
+            if (nextUris == listableResourceUris) return
             val removedUris = listableResourceUris - nextUris
             val addedResources = nextResources.filter { it.uri !in listableResourceUris }
-            removedUris.forEach { uri ->
-                activeServer.removeResource(uri)
+            removedUris.forEach { uri -> activeServer.removeResource(uri) }
+            addedResources.forEach { entry ->
+                activeServer.addResource(
+                    uri = entry.uri, name = entry.name, description = entry.description, mimeType = entry.mimeType,
+                ) { readResource(entry.uri, this.sessionId) }
             }
-            activeServer.registerListableWorkspaceResources(addedResources)
             listableResourceUris = nextUris
         }
     }
 
-    private suspend fun listWorkspaceResources(): List<WorkspaceListableResource> {
-        return projectResolver.openProjects()
-            .flatMap { project -> WorkspaceResourceCatalog(project).listResources() }
-            .distinctBy { it.uri }
-    }
-
-    private fun createServer(listableResources: List<WorkspaceListableResource>): Server {
-        return Server(
-            serverInfo = Implementation(
-                name = "workspace-mcp",
-                version = "1.0.0",
-            ),
-            options = ServerOptions(
-                capabilities = ServerCapabilities(
-                    resources = ServerCapabilities.Resources(
-                        subscribe = true,
-                        listChanged = true,
-                    ),
-                    tools = ServerCapabilities.Tools(
-                        listChanged = true,
-                    ),
-                ),
-                resourceTemplateMatcherFactory = WorkspaceResourceTemplateMatcherFactory,
-            ),
-            instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
-        ) {
-            registerListableWorkspaceResources(listableResources)
-            registerWorkspaceResourceTemplates()
-            onConnect {
-                installWorkspaceSubscriptionHandlers()
-            }
-        }
-    }
-
-    private fun Server.registerListableWorkspaceResources(listableResources: List<WorkspaceListableResource>) {
-        listableResources.forEach { entry ->
-            addResource(
-                uri = entry.uri,
-                name = entry.name,
-                description = entry.description,
-                mimeType = entry.mimeType,
-            ) {
-                readWorkspaceResourceInContext(resourceUri = entry.uri, sessionId = this.sessionId)
-            }
-        }
-    }
-
-    private fun Server.registerWorkspaceResourceTemplates() {
-        // New scheme templates (project-scoped)
-        addResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_FILES_TEMPLATE,
-            name = "Project file resource",
-            description = "Reads IntelliJ VirtualFile content by project-relative path.",
-            mimeType = "text/plain",
-        ) { request, _ ->
-            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
-        }
-
-        addResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_DOCUMENTS_TEMPLATE,
-            name = "Project document resource",
-            description = "Reads the current editor document snapshot by project-relative path, including unsaved text.",
-            mimeType = "text/plain",
-        ) { request, _ ->
-            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
-        }
-
-        addResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_VFS_TEMPLATE,
-            name = "Project VFS resource",
-            description = "Reads IntelliJ VirtualFile content by raw VFS URL within a project scope.",
-            mimeType = "text/plain",
-        ) { request, _ ->
-            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
-        }
-
-        addResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_DOCUMENT_VFS_TEMPLATE,
-            name = "Project document VFS resource",
-            description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
-            mimeType = "text/plain",
-        ) { request, _ ->
-            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
-        }
-    }
-
-    private fun dev.ghostflyby.mcp.resource.WorkspaceResourceTextContent.toReadResourceResult(): ReadResourceResult {
-        return ReadResourceResult(
-            contents = listOf(
-                TextResourceContents(
-                    uri = uri,
-                    mimeType = mimeType,
-                    text = text,
-                ),
-            ),
-        )
-    }
+    private suspend fun listWorkspaceResources(): List<WorkspaceListableResource> =
+        features.flatMap { it.computeListableResources() }.distinctBy { it.uri }
 
     /**
-     * Unified resource read helper that installs call context and, for project-scoped
-     * URIs, resolves the project and installs WorkspaceMcpProjectContext before delegating
-     * to the reader. This ensures WorkspaceResourceReader.resolveProjectForRead can
-     * short-circuit through coroutine context instead of re-resolving.
+     * Shared read callback provided to features during registration.
+     * - Core listable resources (server/info, projects, projects/{key}) shortcut.
+     * - Project-scoped resources delegate to [requestRunner] for context installation.
      */
-    private suspend fun readWorkspaceResourceInContext(
-        resourceUri: String,
-        sessionId: String? = null,
-    ): ReadResourceResult {
+    private suspend fun readResource(resourceUri: String, sessionId: String?): ReadResourceResult {
+        val coreFeature = features.firstOrNull { it is CoreResourceFeature } as? CoreResourceFeature
+        if (coreFeature != null) {
+            val coreResult = coreFeature.tryReadCoreListable(resourceUri, workspaceInstanceKey())
+            if (coreResult != null) return coreResult
+        }
+
         val decoded = tryDecodeWorkspaceResourceUri(resourceUri)
         return withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = workspaceInstanceKey()) {
             if (decoded != null) {
-                val resolved = projectResolver.resolve(projectKey = decoded.projectKey)
-                when (resolved) {
-                    is WorkspaceProjectResolution.Resolved -> {
-                        withResolvedWorkspaceProject(
-                            projectKey = decoded.projectKey,
-                            project = resolved.project,
-                            reason = resolved.reason,
-                        ) {
-                            resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
-                        }
-                    }
-                    is WorkspaceProjectResolution.Unresolved -> {
-                        throw WorkspaceResourceException(resolved.message)
-                    }
+                requestRunner.runResourceRead(sessionId = sessionId, decoded = decoded) {
+                    resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
                 }
             } else {
-                // Metadata resources (server/info, projects, projects/{key}) - no project context
                 resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
             }
         }
     }
 
-    private fun subscribeToProjectEvents() {
-        projectResolver.openProjects().forEach { project ->
-            subscribeToProjectBus(project)
+    private suspend fun WorkspaceResourceTextContent.toReadResourceResult(): ReadResourceResult =
+        ReadResourceResult(contents = listOf(TextResourceContents(uri = uri, mimeType = mimeType, text = text)))
+
+    private fun createServer(listableResources: List<WorkspaceListableResource>): Server {
+        val server = Server(
+            serverInfo = Implementation(name = "workspace-mcp", version = "1.0.0"),
+            options = ServerOptions(
+                capabilities = ServerCapabilities(
+                    resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),
+                    tools = ServerCapabilities.Tools(listChanged = true),
+                ),
+                resourceTemplateMatcherFactory = WorkspaceResourceTemplateMatcherFactory,
+            ),
+            instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
+        ) {
+            listableResources.forEach { entry ->
+                addResource(uri = entry.uri, name = entry.name, description = entry.description, mimeType = entry.mimeType) {
+                    readResource(entry.uri, this.sessionId)
+                }
+            }
+            features.forEach { feature -> feature.registerOnServer(this, ::readResource) }
+            registerSdkTool(vfsRefreshSdkTool(), requestRunner)
+            onConnect { installWorkspaceSubscriptionHandlers() }
         }
+        return server
+    }
+
+    private fun subscribeToProjectEvents() {
+        projectResolver.openProjects().forEach { project -> subscribeToProjectBus(project) }
 
         val connection = ApplicationManager.getApplication().messageBus.connect(this)
-        connection.subscribe(
-            ProjectManager.TOPIC,
-            object : ProjectManagerListener {
-                override fun projectClosed(project: Project) {
-                    unsubscribeFromProjectBus(project)
-                    refreshListableResources()
-                }
-            },
-        )
+        connection.subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
+            override fun projectClosed(project: Project) {
+                unsubscribeFromProjectBus(project)
+                refreshListableResources()
+            }
+        })
     }
 
     private fun subscribeToResourceUpdateEvents() {
         EditorFactory.getInstance().eventMulticaster.addDocumentListener(
             object : DocumentListener {
-                override fun documentChanged(event: DocumentEvent) {
-                    scheduleDocumentResourceUpdate(event.document)
-                }
-            },
-            this,
+                override fun documentChanged(event: DocumentEvent) { scheduleDocumentResourceUpdate(event.document) }
+            }, this,
         )
 
         val connection = ApplicationManager.getApplication().messageBus.connect(this)
-        connection.subscribe(
-            VirtualFileManager.VFS_CHANGES,
-            object : BulkFileListener {
-                override fun after(events: List<VFileEvent>) {
-                    events.mapNotNull { event -> event.file?.url }
-                        .flatMap { url ->
-                            projectResolver.openProjects().mapNotNull { project ->
-                                val bp = project.basePath
-                                if (bp != null && url.startsWith("file://$bp")) {
-                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
-                                } else if (url.startsWith("file://") && projectResolver.openProjects().size == 1) {
-                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
-                                } else {
-                                    null
-                                }
-                            }
+        connection.subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener {
+            override fun after(events: List<VFileEvent>) {
+                events.mapNotNull { it.file?.url }
+                    .flatMap { url ->
+                        projectResolver.openProjects().mapNotNull { project ->
+                            val bp = project.basePath
+                            if (bp != null && url.startsWith("file://$bp")) {
+                                workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
+                            } else if (url.startsWith("file://") && projectResolver.openProjects().size == 1) {
+                                workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
+                            } else null
                         }
-                        .distinct()
-                        .forEach(::scheduleResourceUpdated)
-                    refreshListableResources()
-                }
-            },
-        )
+                    }.distinct().forEach(::scheduleResourceUpdated)
+                refreshListableResources()
+            }
+        })
     }
 
-    private fun Server.installWorkspaceSubscriptionHandlers() {
-        sessions.values.forEach { session ->
-            installWorkspaceSubscriptionHandlers(session)
-        }
+    private fun installWorkspaceSubscriptionHandlers() {
+        server?.sessions?.values?.forEach { s -> installWorkspaceSubscriptionHandlers(s) }
     }
 
     private fun installWorkspaceSubscriptionHandlers(session: ServerSession) {
-        val shouldInstall = synchronized(resourceUpdateStateLock) {
-            subscriptionHandlerSessionIds.add(session.sessionId)
-        }
-        if (!shouldInstall) {
-            return
-        }
-
+        val shouldInstall = synchronized(resourceUpdateStateLock) { subscriptionHandlerSessionIds.add(session.sessionId) }
+        if (!shouldInstall) return
         session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
-            recordResourceSubscription(session.sessionId, request.params.uri)
-            EmptyResult()
+            recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
         session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
-            removeResourceSubscription(session.sessionId, request.params.uri)
-            EmptyResult()
+            removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
     }
 
     private fun recordResourceSubscription(sessionId: String, resourceUri: String) {
-        if (tryDecodeWorkspaceResourceUri(resourceUri) == null) {
-            return
-        }
+        if (tryDecodeWorkspaceResourceUri(resourceUri) == null) return
         synchronized(resourceUpdateStateLock) {
             resourceSubscriptionsBySession.getOrPut(sessionId) { linkedSetOf() }.add(resourceUri)
         }
@@ -397,11 +297,8 @@ internal class WorkspaceMcpSdkServerService(
 
     private fun removeResourceSubscription(sessionId: String, resourceUri: String) {
         synchronized(resourceUpdateStateLock) {
-            resourceSubscriptionsBySession[sessionId]?.let { subscriptions ->
-                subscriptions.remove(resourceUri)
-                if (subscriptions.isEmpty()) {
-                    resourceSubscriptionsBySession.remove(sessionId)
-                }
+            resourceSubscriptionsBySession[sessionId]?.let { subs ->
+                subs.remove(resourceUri); if (subs.isEmpty()) resourceSubscriptionsBySession.remove(sessionId)
             }
         }
     }
@@ -422,9 +319,7 @@ internal class WorkspaceMcpSdkServerService(
     private fun scheduleResourceUpdated(resourceUri: String) {
         synchronized(resourceUpdateStateLock) {
             pendingResourceUpdateUris.add(resourceUri)
-            if (resourceUpdateFlushJob != null) {
-                return
-            }
+            if (resourceUpdateFlushJob != null) return
             resourceUpdateFlushJob = scope.launch {
                 delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
                 flushPendingResourceUpdates()
@@ -440,82 +335,46 @@ internal class WorkspaceMcpSdkServerService(
             snapshot
         }
         val activeServer = server ?: return
-        resourceUris.forEach { resourceUri ->
-            sendResourceUpdated(activeServer, resourceUri)
-        }
+        resourceUris.forEach { uri -> sendResourceUpdated(activeServer, uri) }
     }
 
-    private suspend fun sendResourceUpdated(
-        activeServer: Server,
-        resourceUri: String,
-    ) {
+    private suspend fun sendResourceUpdated(activeServer: Server, resourceUri: String) {
         val sessionIds = subscribedSessionIds(activeServer, resourceUri)
-        if (sessionIds.isEmpty()) {
-            return
-        }
-        val notification = ResourceUpdatedNotification(
-            ResourceUpdatedNotificationParams(uri = resourceUri),
-        )
+        if (sessionIds.isEmpty()) return
+        val notification = ResourceUpdatedNotification(ResourceUpdatedNotificationParams(uri = resourceUri))
         sessionIds.forEach { sessionId ->
-            runCatching {
-                activeServer.sendResourceUpdated(sessionId, notification)
-            }.onFailure { error ->
-                logger.warn("Failed to send Workspace MCP resource update for $resourceUri to session $sessionId", error)
-            }
+            runCatching { activeServer.sendResourceUpdated(sessionId, notification) }
+                .onFailure { error -> logger.warn("Failed to send Workspace MCP resource update for $resourceUri to session $sessionId", error) }
         }
     }
 
-    private fun subscribedSessionIds(
-        activeServer: Server,
-        resourceUri: String,
-    ): List<String> {
+    private fun subscribedSessionIds(activeServer: Server, resourceUri: String): List<String> {
         val activeSessionIds = activeServer.sessions.keys
         return synchronized(resourceUpdateStateLock) {
-            resourceSubscriptionsBySession.keys.removeAll { sessionId -> sessionId !in activeSessionIds }
-            subscriptionHandlerSessionIds.removeAll { sessionId -> sessionId !in activeSessionIds }
-            resourceSubscriptionsBySession
-                .filterValues { resourceUri in it }
-                .keys
-                .toList()
+            resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
+            subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
+            resourceSubscriptionsBySession.filterValues { resourceUri in it }.keys.toList()
         }
     }
 
     private fun subscribeToProjectBus(project: Project) {
-        if (project.isDisposed || project in projectConnectionDisposables) {
-            return
-        }
-
+        if (project.isDisposed || project in projectConnectionDisposables) return
         val disposable = Disposer.newDisposable("Workspace MCP SDK project listeners: ${project.name}")
         Disposer.register(this, disposable)
         projectConnectionDisposables[project] = disposable
 
         val connection = project.messageBus.connect(disposable)
-        connection.subscribe(
-            FileEditorManagerListener.FILE_EDITOR_MANAGER,
-            object : FileEditorManagerListener {
-                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-                    refreshListableResources()
-                }
-
-                override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-                    refreshListableResources()
-                }
-            },
-        )
-        connection.subscribe(
-            ModuleRootListener.TOPIC,
-            object : ModuleRootListener {
-                override fun rootsChanged(event: ModuleRootEvent) {
-                    refreshListableResources()
-                }
-            },
-        )
+        connection.subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, object : FileEditorManagerListener {
+            override fun fileOpened(source: FileEditorManager, file: VirtualFile) { refreshListableResources() }
+            override fun fileClosed(source: FileEditorManager, file: VirtualFile) { refreshListableResources() }
+        })
+        connection.subscribe(ModuleRootListener.TOPIC, object : ModuleRootListener {
+            override fun rootsChanged(event: ModuleRootEvent) { refreshListableResources() }
+        })
     }
 
     private fun unsubscribeFromProjectBus(project: Project) {
-        projectConnectionDisposables.remove(project)?.let { disposable ->
-            Disposer.dispose(disposable)
-        }
+        projectConnectionDisposables.remove(project)?.let { Disposer.dispose(it) }
     }
 
     private companion object {

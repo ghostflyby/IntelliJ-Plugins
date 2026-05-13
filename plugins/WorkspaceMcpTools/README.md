@@ -160,3 +160,26 @@ SearchScope tools:
 For text modes, input is matched as ordered keywords (whitespace-split by default): every keyword must exist and appear in the same order.
 `NAME` mode prefers `FilenameIndex` when scope resolves to `GLOBAL`; non-global scopes use traversal with `scope.contains(file)` filtering.
 <!-- Plugin description end -->
+
+## Core/Feature Architecture
+
+The SDK server (`WorkspaceMcpSdkServerService`) delegates resource listing, template registration, and tool
+registration to feature modules implementing `WorkspaceMcpFeature`:
+
+- **Core** (`dev.ghostflyby.mcp.core`): server/info, projects, projects/{projectKey} metadata resources.
+- **VFS Resources** (`dev.ghostflyby.mcp.vfs.resources`): project-scoped `files/{relativePath}` and `vfs/{rawVfsUrl}`
+  templates, plus per-project listable resources for base dirs, content/source roots, and open files.
+- **Document Resources** (`dev.ghostflyby.mcp.document.resources`): project-scoped `documents/{relativePath}` and
+  `document-vfs/{rawVfsUrl}` templates, plus listable open document snapshots.
+
+Tool handlers use `WorkspaceMcpRequestRunner` for centralized project resolution and error mapping.
+
+### SDK Tools
+
+The `dev.ghostflyby.mcp.sdk.tools` package provides a scaffold for registering tools via the Kotlin MCP SDK's
+`addTool` API (independent of the annotation-based `McpToolset` system). Proof-of-migration:
+
+- `vfs_refresh` (in `dev.ghostflyby.mcp.vfs.tools`) — declared via `SdkToolDescriptor`, runs through the request
+  runner, and returns structured error results.
+
+Old annotation-based toolsets remain in place and are registered via `plugin.xml` as before.
