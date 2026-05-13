@@ -3,6 +3,13 @@
 <!-- Plugin description -->
 MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symbol Navigation integrations.
 
+SDK transport:
+
+- The official Kotlin SDK server is hosted once per IDE application, not once per project, so MCP clients can configure a
+  single localhost endpoint.
+- Project-specific behavior is resolved inside the server from open IDE projects and, for later tool routing, MCP roots
+  or explicit request parameters.
+
 Workspace resource URI contract:
 
 - VFS resources use `ij-workspace-vfs://{rawIntellijVfsUrl}`, for example
