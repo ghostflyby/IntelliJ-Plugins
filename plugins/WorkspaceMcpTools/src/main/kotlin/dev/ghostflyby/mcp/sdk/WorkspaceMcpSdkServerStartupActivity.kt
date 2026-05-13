@@ -28,6 +28,6 @@ import com.intellij.openapi.startup.ProjectActivity
 
 internal class WorkspaceMcpSdkServerStartupActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
-        service<WorkspaceMcpSdkServerService>()
+        service<WorkspaceMcpSdkServerService>().refreshListableResources()
     }
 }

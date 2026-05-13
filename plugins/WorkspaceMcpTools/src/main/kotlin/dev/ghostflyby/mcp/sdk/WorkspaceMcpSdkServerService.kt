@@ -44,6 +44,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
@@ -52,6 +54,8 @@ internal class WorkspaceMcpSdkServerService(
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val resourceReader = WorkspaceResourceReader()
     private val projectResolver = WorkspaceProjectResolver()
+    private val resourceRegistryMutex = Mutex()
+    private var listableResourceUris: Set<String> = emptySet()
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -72,6 +76,7 @@ internal class WorkspaceMcpSdkServerService(
                     .start(wait = false)
                 server = createdServer
                 engine = started
+                listableResourceUris = listableResources.mapTo(mutableSetOf()) { it.uri }
                 logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:<assigned>$MCP_ENDPOINT_PATH")
             }.onFailure { error ->
                 logger.warn("Failed to start Workspace MCP SDK server", error)
@@ -96,6 +101,33 @@ internal class WorkspaceMcpSdkServerService(
             logger.warn("Failed to close Workspace MCP SDK server", error)
         }
         stoppedEngine?.stop()
+    }
+
+    internal fun refreshListableResources() {
+        scope.launch {
+            val activeServer = server ?: return@launch
+            runCatching {
+                refreshListableResources(activeServer, listWorkspaceResources())
+            }.onFailure { error ->
+                logger.warn("Failed to refresh Workspace MCP listable resources", error)
+            }
+        }
+    }
+
+    private suspend fun refreshListableResources(
+        activeServer: Server,
+        nextResources: List<WorkspaceListableResource>,
+    ) {
+        resourceRegistryMutex.withLock {
+            val nextUris = nextResources.mapTo(mutableSetOf()) { it.uri }
+            val removedUris = listableResourceUris - nextUris
+            val addedResources = nextResources.filter { it.uri !in listableResourceUris }
+            removedUris.forEach { uri ->
+                activeServer.removeResource(uri)
+            }
+            activeServer.registerListableWorkspaceResources(addedResources)
+            listableResourceUris = nextUris
+        }
     }
 
     private suspend fun listWorkspaceResources(): List<WorkspaceListableResource> {
