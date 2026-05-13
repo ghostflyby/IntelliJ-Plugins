@@ -6,6 +6,9 @@
 
 ### Added
 
+- Added an application-level official Kotlin MCP SDK Streamable HTTP endpoint for workspace resources, with VFS and
+  document resource templates plus resource list/update notifications.
+
 ### Changed
 
 ### Deprecated

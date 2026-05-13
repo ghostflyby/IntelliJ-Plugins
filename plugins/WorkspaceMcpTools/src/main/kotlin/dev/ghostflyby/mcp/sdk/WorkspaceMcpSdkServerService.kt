@@ -25,6 +25,7 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
@@ -106,7 +107,8 @@ internal class WorkspaceMcpSdkServerService(
             runCatching {
                 val listableResources = listWorkspaceResources()
                 val createdServer = createServer(listableResources)
-                val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = 0) {
+                val port = service<WorkspaceMcpSdkServerSettings>().port
+                val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
                     mcpStreamableHttp(path = MCP_ENDPOINT_PATH) {
                         createdServer
                     }
@@ -115,7 +117,7 @@ internal class WorkspaceMcpSdkServerService(
                 server = createdServer
                 engine = started
                 listableResourceUris = listableResources.mapTo(mutableSetOf()) { it.uri }
-                logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:<assigned>$MCP_ENDPOINT_PATH")
+                logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
             }.onFailure { error ->
                 logger.warn("Failed to start Workspace MCP SDK server", error)
             }

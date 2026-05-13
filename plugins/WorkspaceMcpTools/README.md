@@ -7,8 +7,13 @@ SDK transport:
 
 - The official Kotlin SDK server is hosted once per IDE application, not once per project, so MCP clients can configure a
   single localhost endpoint.
+- The default Streamable HTTP endpoint is `http://127.0.0.1:63341/mcp`. Override the port with
+  `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
 - Project-specific behavior is resolved inside the server from open IDE projects and, for later tool routing, MCP roots
   or explicit request parameters.
+- The server declares resource subscription and list-change support. Open editor/document changes and VFS changes send
+  `notifications/resources/updated` to subscribed MCP sessions, while project/editor/root list changes refresh
+  `resources/list`.
 
 Workspace resource URI contract:
 
