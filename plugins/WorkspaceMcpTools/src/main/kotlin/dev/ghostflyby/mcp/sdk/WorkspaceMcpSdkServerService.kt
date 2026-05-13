@@ -50,6 +50,7 @@ import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
+import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -217,7 +218,7 @@ internal class WorkspaceMcpSdkServerService(
                 description = entry.description,
                 mimeType = entry.mimeType,
             ) {
-                resourceReader.readWorkspaceResource(entry.uri).toReadResourceResult()
+                readWorkspaceResourceInContext(resourceUri = entry.uri, sessionId = this.sessionId)
             }
         }
     }
@@ -230,8 +231,7 @@ internal class WorkspaceMcpSdkServerService(
             description = "Reads IntelliJ VirtualFile content by project-relative path.",
             mimeType = "text/plain",
         ) { request, _ ->
-            val content = resourceReader.readWorkspaceResource(request.uri)
-            content.toReadResourceResult()
+            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
         }
 
         addResourceTemplate(
@@ -240,8 +240,7 @@ internal class WorkspaceMcpSdkServerService(
             description = "Reads the current editor document snapshot by project-relative path, including unsaved text.",
             mimeType = "text/plain",
         ) { request, _ ->
-            val content = resourceReader.readWorkspaceResource(request.uri)
-            content.toReadResourceResult()
+            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
         }
 
         addResourceTemplate(
@@ -250,8 +249,7 @@ internal class WorkspaceMcpSdkServerService(
             description = "Reads IntelliJ VirtualFile content by raw VFS URL within a project scope.",
             mimeType = "text/plain",
         ) { request, _ ->
-            val content = resourceReader.readWorkspaceResource(request.uri)
-            content.toReadResourceResult()
+            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
         }
 
         addResourceTemplate(
@@ -260,8 +258,7 @@ internal class WorkspaceMcpSdkServerService(
             description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
             mimeType = "text/plain",
         ) { request, _ ->
-            val content = resourceReader.readWorkspaceResource(request.uri)
-            content.toReadResourceResult()
+            readWorkspaceResourceInContext(resourceUri = request.uri, sessionId = this.sessionId)
         }
     }
 
@@ -275,6 +272,41 @@ internal class WorkspaceMcpSdkServerService(
                 ),
             ),
         )
+    }
+
+    /**
+     * Unified resource read helper that installs call context and, for project-scoped
+     * URIs, resolves the project and installs WorkspaceMcpProjectContext before delegating
+     * to the reader. This ensures WorkspaceResourceReader.resolveProjectForRead can
+     * short-circuit through coroutine context instead of re-resolving.
+     */
+    private suspend fun readWorkspaceResourceInContext(
+        resourceUri: String,
+        sessionId: String? = null,
+    ): ReadResourceResult {
+        val decoded = tryDecodeWorkspaceResourceUri(resourceUri)
+        return withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = workspaceInstanceKey()) {
+            if (decoded != null) {
+                val resolved = projectResolver.resolve(projectKey = decoded.projectKey)
+                when (resolved) {
+                    is WorkspaceProjectResolution.Resolved -> {
+                        withResolvedWorkspaceProject(
+                            projectKey = decoded.projectKey,
+                            project = resolved.project,
+                            reason = resolved.reason,
+                        ) {
+                            resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
+                        }
+                    }
+                    is WorkspaceProjectResolution.Unresolved -> {
+                        throw WorkspaceResourceException(resolved.message)
+                    }
+                }
+            } else {
+                // Metadata resources (server/info, projects, projects/{key}) - no project context
+                resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
+            }
+        }
     }
 
     private fun subscribeToProjectEvents() {

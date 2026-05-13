@@ -19,6 +19,7 @@
 
 ### Changed
 - `resources/list` now emits project-scoped URIs with fallback to raw VFS URIs for files outside the project base.
+- Resource handlers now install `WorkspaceMcpCallContext` and `WorkspaceMcpProjectContext` on the coroutine context before delegating to the workspace resource reader.
 
 ### Removed
 - Removed legacy `ij-workspace-vfs://` and `ij-workspace-document://` URI protocol support.
