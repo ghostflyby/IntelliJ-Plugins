@@ -25,7 +25,6 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.project.ProjectManager
 import dev.ghostflyby.mcp.resource.WorkspaceDocumentResourceReadOptions
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.WorkspaceResourceCatalog
@@ -52,6 +51,7 @@ internal class WorkspaceMcpSdkServerService(
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val resourceReader = WorkspaceResourceReader()
+    private val projectResolver = WorkspaceProjectResolver()
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -99,7 +99,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private suspend fun listWorkspaceResources(): List<WorkspaceListableResource> {
-        return ProjectManager.getInstance().openProjects
+        return projectResolver.openProjects()
             .flatMap { project -> WorkspaceResourceCatalog(project).listResources() }
             .distinctBy { it.uri }
     }
