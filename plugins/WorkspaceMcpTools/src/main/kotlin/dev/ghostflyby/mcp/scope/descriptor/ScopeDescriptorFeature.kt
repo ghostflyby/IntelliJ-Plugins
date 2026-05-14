@@ -15,6 +15,7 @@ import dev.ghostflyby.mcp.scope.descriptor.tools.scopeValidatePatternSdkTool
 import dev.ghostflyby.mcp.scope.descriptor.tools.scopeResolveProgramSdkTool
 import dev.ghostflyby.mcp.scope.descriptor.tools.scopeNormalizeProgramDescriptorSdkTool
 import dev.ghostflyby.mcp.scope.descriptor.tools.scopeContainsFileSdkTool
+import dev.ghostflyby.mcp.scope.descriptor.tools.scopeFilterFilesSdkTool
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
@@ -30,10 +31,9 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
  * - scope_resolve_program
  * - scope_normalize_program_descriptor
  * - scope_contains_file
+ * - scope_filter_files
  *
- * These tools are migrated from [ScopeDescriptorMcpTools] (annotation-based toolset)
- * to the SDK typed tool pattern. The old annotation-based tools remain in place
- * during incremental migration.
+ * These tools were migrated from an annotation-based toolset to the SDK typed tool pattern.
  */
 internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-descriptor"
@@ -56,6 +56,7 @@ internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
         context.registerTool(scopeResolveProgramSdkTool())
         context.registerTool(scopeNormalizeProgramDescriptorSdkTool())
         context.registerTool(scopeContainsFileSdkTool())
+        context.registerTool(scopeFilterFilesSdkTool())
 
         return context.buildRegistration()
     }

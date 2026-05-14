@@ -15,6 +15,7 @@ import dev.ghostflyby.mcp.scope.ScopeCatalogItemDto
 import dev.ghostflyby.mcp.scope.ScopeCatalogResultDto
 import dev.ghostflyby.mcp.scope.ScopeCatalogService
 import dev.ghostflyby.mcp.scope.ScopeDescribeProgramResultDto
+import dev.ghostflyby.mcp.scope.ScopeFilterFilesResultDto
 import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
 import dev.ghostflyby.mcp.scope.ScopeProgramOp
 import dev.ghostflyby.mcp.scope.ScopeProgramTokenDto
@@ -29,13 +30,14 @@ import dev.ghostflyby.mcp.scope.buildStandardScopeDescriptor
 import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
 import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.sdkArrayProperty
 import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
 import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
 import dev.ghostflyby.mcp.sdk.tools.sdkObjectProperty
-    import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-    import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-    import dev.ghostflyby.mcp.sdk.tools.toolSchema
-    import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
+import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
+import dev.ghostflyby.mcp.sdk.tools.toolSchema
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.serialization.Serializable
@@ -43,7 +45,7 @@ import kotlinx.serialization.encodeToString
 
 /**
  * Local serializable enum for catalog intent; duplicates the shape from
- * [ScopeDescriptorMcpTools.ScopeCatalogIntent] to avoid depending on annotation-tool internals.
+ * [ScopeSdkCatalogIntent] to avoid depending on annotation-tool internals.
  */
 @Serializable
 internal enum class ScopeSdkCatalogIntent {
@@ -523,6 +525,89 @@ private suspend fun scopeContainsFileHandler(
             scopeDisplayName = resolved.displayName,
             scopeShape = resolved.scopeShape,
             diagnostics = (args.scope.diagnostics + resolved.diagnostics).distinct(),
+        )
+        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+    }
+}
+
+// ── scope_filter_files ──────────────────────────────────────────
+
+@Serializable
+internal data class ScopeFilterFilesArgs(
+    val fileUrls: List<String>,
+    val `scope`: ScopeProgramDescriptorDto,
+    val allowUiInteractiveScopes: Boolean = false,
+    override val projectKey: String? = null,
+    override val projectPath: String? = null,
+) : WorkspaceMcpProjectToolArguments
+
+internal fun scopeFilterFilesSdkTool(): SdkToolDescriptor<ScopeFilterFilesArgs> {
+    return sdkToolDescriptor<ScopeFilterFilesArgs>(
+        name = "scope_filter_files",
+        description = "Filter file URLs by whether they belong to a resolved scope descriptor.",
+        inputSchema = toolSchema(
+            properties = mapOf(
+                "fileUrls" to sdkArrayProperty("Input file URLs to test against the scope."),
+                "scope" to sdkObjectProperty("The scope program descriptor to test membership against."),
+                "allowUiInteractiveScopes" to sdkBooleanProperty(
+                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
+                ),
+                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
+                "projectPath" to sdkStringProperty(
+                    "Absolute project base path for project-scoped resolution (optional).",
+                ),
+            ),
+            required = listOf("fileUrls", "scope"),
+        ),
+        handler = { args -> scopeFilterFilesHandler(this, args) },
+    )
+}
+
+private suspend fun scopeFilterFilesHandler(
+    ctx: SdkToolHandlerContext,
+    args: ScopeFilterFilesArgs,
+): CallToolResult {
+    return ctx.runner.callToolWithProject(
+        projectArgs = args,
+        sessionId = ctx.sessionId,
+    ) { project ->
+        val resolver = ScopeResolverService.getInstance(project)
+        val resolved = resolver.resolveDescriptor(
+            project = project,
+            descriptor = args.scope,
+            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+        )
+
+        val diagnostics = mutableListOf<String>()
+        val matched = mutableListOf<String>()
+        val excluded = mutableListOf<String>()
+        val missing = mutableListOf<String>()
+
+        args.fileUrls.forEach { url ->
+            val file = findFileByUrlWithRefresh(url)
+            when {
+                file == null -> {
+                    missing += url
+                    diagnostics += "File URL '$url' not found."
+                }
+
+                file.isDirectory -> {
+                    missing += url
+                    diagnostics += "URL '$url' points to a directory and was skipped."
+                }
+
+                readAction { resolved.scope.contains(file) } -> matched += url
+                else -> excluded += url
+            }
+        }
+
+        val result = ScopeFilterFilesResultDto(
+            scopeDisplayName = resolved.displayName,
+            scopeShape = resolved.scopeShape,
+            matchedFileUrls = matched,
+            excludedFileUrls = excluded,
+            missingFileUrls = missing,
+            diagnostics = (args.scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
         CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
