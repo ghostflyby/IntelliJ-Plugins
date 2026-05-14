@@ -19,6 +19,7 @@ internal class WorkspaceMcpCoroutineContextTest {
     fun `nullable getters return null when absent`() {
         assertNull(EmptyCoroutineContext.workspaceMcpCall)
         assertNull(EmptyCoroutineContext.workspaceMcpProject)
+        assertNull(EmptyCoroutineContext.workspaceMcpProjectLifetime)
     }
 
     @Test
@@ -33,6 +34,14 @@ internal class WorkspaceMcpCoroutineContextTest {
     fun `requireWorkspaceMcpProjectContext throws when missing`() {
         var threw = false
         try { EmptyCoroutineContext.requireWorkspaceMcpProjectContext }
+        catch (_: IllegalStateException) { threw = true }
+        assert(threw)
+    }
+
+    @Test
+    fun `requireWorkspaceMcpProjectLifetime throws when missing`() {
+        var threw = false
+        try { EmptyCoroutineContext.requireWorkspaceMcpProjectLifetime }
         catch (_: IllegalStateException) { threw = true }
         assert(threw)
     }
@@ -65,6 +74,7 @@ internal class WorkspaceMcpCoroutineContextTest {
         val ctx = EmptyCoroutineContext.withWorkspaceMcpCallContext(instanceKey = "test")
         assertNotNull(ctx.workspaceMcpCall)
         assertNull(ctx.workspaceMcpProject)
+        assertNull(ctx.workspaceMcpProjectLifetime)
     }
 
     @Test
@@ -81,15 +91,10 @@ internal class WorkspaceMcpCoroutineContextTest {
     }
 
     @Test
-    fun `currentWorkspaceProject function throws when project context missing`() {
+    fun `currentWorkspaceProject extension throws when project context missing`() {
         var threw = false
-        try {
-            runBlocking {
-                currentWorkspaceProject()
-            }
-        } catch (_: IllegalStateException) {
-            threw = true
-        }
+        try { EmptyCoroutineContext.currentWorkspaceProject }
+        catch (_: IllegalStateException) { threw = true }
         assert(threw)
     }
 
@@ -99,5 +104,11 @@ internal class WorkspaceMcpCoroutineContextTest {
         assertNull(ctx.requireWorkspaceMcpCallContext.sessionId)
         assertEquals("default-test", ctx.requireWorkspaceMcpCallContext.instanceKey)
         assertNull(ctx.requireWorkspaceMcpCallContext.roots)
+    }
+
+    @Test
+    fun `WorkspaceProjectLifetimeRegistry compiles and is constructable`() {
+        val registry = WorkspaceProjectLifetimeRegistry()
+        assertNotNull(registry)
     }
 }

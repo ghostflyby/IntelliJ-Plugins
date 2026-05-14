@@ -14,11 +14,13 @@ import dev.ghostflyby.mcp.resource.listableProjectsUri
 import dev.ghostflyby.mcp.resource.listableServerInfoUri
 import dev.ghostflyby.mcp.resource.WORKSPACE_URI_SCHEME
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import kotlinx.serialization.json.Json
@@ -29,16 +31,14 @@ import kotlinx.serialization.json.Json
  * These are global (app-level) resources that do not require a Project context
  * for listing. They are entirely listable; no templates are registered.
  */
-internal class CoreResourceFeature(
-    private val projectResolver: WorkspaceProjectResolver,
-) : WorkspaceMcpFeature {
+internal class CoreResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "core"
 
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
-    override suspend fun computeListableResources(): List<WorkspaceListableResource> {
+    override suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource> {
         val instanceKey = workspaceInstanceKey()
-        val projects = readAction { projectResolver.openProjects() }
+        val projects = readAction { context.projectResolver.openProjects() }
         return buildList {
             add(
                 WorkspaceListableResource(
@@ -70,16 +70,15 @@ internal class CoreResourceFeature(
         }
     }
 
-    override fun registerOnServer(
-        server: Server,
-        readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
-    ) {
-        // Core metadata resources are fully listable; no templates needed.
+    override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
+        // Core metadata resources are fully listable; no templates or tools needed.
+        return context.buildRegistration()
     }
 
     internal suspend fun tryReadCoreListable(
         uri: String,
         instanceKey: String,
+        projectResolver: WorkspaceProjectResolver,
     ): ReadResourceResult? {
         if (!uri.startsWith(WORKSPACE_URI_SCHEME)) return null
         val afterScheme = uri.removePrefix(WORKSPACE_URI_SCHEME)
@@ -88,10 +87,10 @@ internal class CoreResourceFeature(
         val path = afterScheme.substring(firstSlash + 1)
         return when {
             path == "server/info" -> serverInfoContent(uri, instanceKey)
-            path == "projects" -> projectsListContent(uri)
+            path == "projects" -> projectsListContent(uri, projectResolver)
             path.startsWith("projects/") && !path.substringAfter("projects/").contains('/') -> {
                 val pk = path.substringAfter("projects/")
-                if (pk.isBlank()) null else projectInfoContent(uri, pk)
+                if (pk.isBlank()) null else projectInfoContent(uri, pk, projectResolver)
             }
             else -> null
         }
@@ -104,7 +103,7 @@ internal class CoreResourceFeature(
         )
     }
 
-    private suspend fun projectsListContent(uri: String): ReadResourceResult {
+    private suspend fun projectsListContent(uri: String, projectResolver: WorkspaceProjectResolver): ReadResourceResult {
         val projects = readAction { projectResolver.openProjects() }.map { project ->
             mapOf("projectKey" to workspaceProjectKey(project), "name" to project.name, "basePath" to (project.basePath ?: ""))
         }
@@ -113,7 +112,7 @@ internal class CoreResourceFeature(
         )
     }
 
-    private suspend fun projectInfoContent(uri: String, projectKey: String): ReadResourceResult {
+    private suspend fun projectInfoContent(uri: String, projectKey: String, projectResolver: WorkspaceProjectResolver): ReadResourceResult {
         val resolved = projectResolver.resolve(projectKey = projectKey)
         val info = when (resolved) {
             is WorkspaceProjectResolution.Resolved -> mapOf(

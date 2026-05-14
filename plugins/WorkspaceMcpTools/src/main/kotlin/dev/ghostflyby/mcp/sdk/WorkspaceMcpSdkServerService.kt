@@ -31,6 +31,8 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.extensions.ExtensionPointListener
+import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
@@ -45,17 +47,12 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import dev.ghostflyby.mcp.core.CoreResourceFeature
-import dev.ghostflyby.mcp.document.resources.DocumentResourceFeature
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.WorkspaceResourceTextContent
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.sdk.tools.registerSdkTool
-import dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature
-import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
-import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
 import io.ktor.server.cio.CIO
 import io.ktor.server.cio.CIOApplicationEngine
 import io.ktor.server.engine.EmbeddedServer
@@ -76,6 +73,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.UnsubscribeRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -91,15 +89,14 @@ internal class WorkspaceMcpSdkServerService(
     private val resourceReader = WorkspaceResourceReader(projectResolver)
     private val requestRunner = WorkspaceMcpRequestRunner(projectResolver)
 
-    private val features: List<WorkspaceMcpFeature> = listOf(
-        CoreResourceFeature(projectResolver),
-        VfsResourceFeature(projectResolver),
-        DocumentResourceFeature(projectResolver),
-    )
+    private val features: List<WorkspaceMcpFeature>
+        get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
     private val resourceRegistryMutex = Mutex()
     private var listableResourceUris: Set<String> = emptySet()
     private val projectConnectionDisposables = linkedMapOf<Project, Disposable>()
+    private val featureRegistrationLock = Any()
+    private val featureRegistrations = linkedMapOf<String, WorkspaceMcpFeatureRegistration>()
     private val resourceUpdateStateLock = Any()
     private val resourceSubscriptionsBySession = linkedMapOf<String, MutableSet<String>>()
     private val subscriptionHandlerSessionIds = linkedSetOf<String>()
@@ -115,6 +112,7 @@ internal class WorkspaceMcpSdkServerService(
     init {
         subscribeToProjectEvents()
         subscribeToResourceUpdateEvents()
+        subscribeToFeatureEvents()
         scope.launch {
             runCatching {
                 val listableResources = listWorkspaceResources()
@@ -182,7 +180,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private suspend fun listWorkspaceResources(): List<WorkspaceListableResource> =
-        features.flatMap { it.computeListableResources() }.distinctBy { it.uri }
+        features.flatMap { it.computeListableResources(featureContext()) }.distinctBy { it.uri }
 
     /**
      * Shared read callback provided to features during registration.
@@ -192,7 +190,7 @@ internal class WorkspaceMcpSdkServerService(
     private suspend fun readResource(resourceUri: String, sessionId: String?): ReadResourceResult {
         val coreFeature = features.firstOrNull { it is CoreResourceFeature } as? CoreResourceFeature
         if (coreFeature != null) {
-            val coreResult = coreFeature.tryReadCoreListable(resourceUri, workspaceInstanceKey())
+            val coreResult = coreFeature.tryReadCoreListable(resourceUri, workspaceInstanceKey(), projectResolver)
             if (coreResult != null) return coreResult
         }
 
@@ -228,12 +226,98 @@ internal class WorkspaceMcpSdkServerService(
                     readResource(entry.uri, this.sessionId)
                 }
             }
-            features.forEach { feature -> feature.registerOnServer(this, ::readResource) }
-            registerSdkTool(vfsExistsSdkTool(), requestRunner)
-            registerSdkTool(vfsRefreshSdkTool(), requestRunner)
+            features.forEach { feature ->
+                registerFeature(this, feature)
+            }
             onConnect { installWorkspaceSubscriptionHandlers() }
         }
         return server
+    }
+
+    private fun featureContext(): WorkspaceMcpFeatureContext = WorkspaceMcpFeatureContext(
+        projectResolver = projectResolver,
+        readResource = ::readResource,
+    )
+
+    private fun featureRegistrationContext(
+        server: Server,
+        feature: WorkspaceMcpFeature,
+        featureScope: CoroutineScope,
+    ): WorkspaceMcpFeatureRegistrationContext = WorkspaceMcpFeatureRegistrationContext(
+        projectResolver = projectResolver,
+        requestRunner = requestRunner,
+        server = server,
+        featureScope = featureScope,
+        featureName = feature.featureName,
+        readResource = ::readResource,
+    )
+
+    private fun subscribeToFeatureEvents() {
+        WORKSPACE_MCP_FEATURE_EP.point.addExtensionPointListener(
+            scope,
+            false,
+            object : ExtensionPointListener<WorkspaceMcpFeature> {
+                override fun extensionAdded(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
+                    scope.launch {
+                        val activeServer = server ?: return@launch
+                        registerFeature(activeServer, extension)
+                        refreshListableResources()
+                    }
+                }
+
+                override fun extensionRemoved(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
+                    scope.launch {
+                        val activeServer = server ?: return@launch
+                        unregisterFeature(activeServer, extension.featureName)
+                        refreshListableResources()
+                    }
+                }
+            },
+        )
+    }
+
+    private fun registerFeature(activeServer: Server, feature: WorkspaceMcpFeature) {
+        synchronized(featureRegistrationLock) {
+            if (feature.featureName in featureRegistrations) {
+                logger.warn("Workspace MCP feature ${feature.featureName} is already registered")
+                return
+            }
+        }
+
+        val featureJob = SupervisorJob(scope.coroutineContext[Job])
+        val featureScope = CoroutineScope(scope.coroutineContext + featureJob)
+        val registration = runCatching {
+            feature.register(featureRegistrationContext(activeServer, feature, featureScope))
+        }.onFailure { error ->
+            featureJob.cancel()
+            logger.warn("Failed to register Workspace MCP feature ${feature.featureName}", error)
+        }.getOrNull() ?: return
+
+        synchronized(featureRegistrationLock) {
+            val previous = featureRegistrations.putIfAbsent(feature.featureName, registration)
+            if (previous != null) {
+                featureJob.cancel()
+                logger.warn("Workspace MCP feature ${feature.featureName} was registered concurrently")
+            }
+        }
+    }
+
+    private fun unregisterFeature(activeServer: Server, featureName: String) {
+        val registration = synchronized(featureRegistrationLock) {
+            featureRegistrations.remove(featureName)
+        } ?: return
+
+        registration.job.cancel()
+        registration.registeredTools.forEach { name ->
+            runCatching { activeServer.removeTool(name) }
+                .onFailure { error -> logger.warn("Failed to remove Workspace MCP tool $name for feature $featureName", error) }
+        }
+        registration.registeredTemplates.forEach { uriTemplate ->
+            runCatching { activeServer.removeResourceTemplate(uriTemplate) }
+                .onFailure { error ->
+                    logger.warn("Failed to remove Workspace MCP resource template $uriTemplate for feature $featureName", error)
+                }
+        }
     }
 
     private fun subscribeToProjectEvents() {
@@ -243,6 +327,7 @@ internal class WorkspaceMcpSdkServerService(
         connection.subscribe(ProjectManager.TOPIC, object : ProjectManagerListener {
             override fun projectClosed(project: Project) {
                 unsubscribeFromProjectBus(project)
+                projectLifetimeRegistry.cancelProject(project)
                 refreshListableResources()
             }
         })

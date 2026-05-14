@@ -59,13 +59,17 @@ internal fun workspaceProjectKey(project: Project): String {
     return "$slug-$shortHash"
 }
 
+internal interface WorkspaceProjectProvider {
+    fun openProjects(): List<Project>
+}
+
 internal class WorkspaceProjectResolver(
     private val projectManager: ProjectManager = ProjectManager.getInstance(),
-) {
+) : WorkspaceProjectProvider {
     private val vfsManager: VirtualFileManager
         get() = service<VirtualFileManager>()
 
-    internal fun openProjects(): List<Project> {
+    override fun openProjects(): List<Project> {
         return projectManager.openProjects
             .filterNot { it.isDisposed }
             .sortedBy { it.basePath ?: it.name }

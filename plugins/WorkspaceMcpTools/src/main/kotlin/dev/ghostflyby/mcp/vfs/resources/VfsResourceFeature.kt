@@ -20,26 +20,27 @@ import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_FILES_TEMPLATE
 import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_VFS_TEMPLATE
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
+import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
  * and per-project listable resources for base directories, content roots,
  * source roots, and open files.
  *
- * This feature owns the `files/{relativePath}` and `vfs/{rawVfsUrl}` templates.
+ * This feature owns the `files/{relativePath}` and `vfs/{rawVfsUrl}` templates
+ * and the SDK VFS tools (vfs_exists, vfs_refresh).
  */
-internal class VfsResourceFeature(
-    private val projectResolver: WorkspaceProjectResolver,
-) : WorkspaceMcpFeature {
+internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
 
-    override suspend fun computeListableResources(): List<WorkspaceListableResource> {
-        val projects = readAction { projectResolver.openProjects() }
+    override suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource> {
+        val projects = readAction { context.projectResolver.openProjects() }
         return buildList {
             projects.forEach { project ->
                 val instanceKey = workspaceInstanceKey()
@@ -84,27 +85,25 @@ internal class VfsResourceFeature(
         }
     }
 
-    override fun registerOnServer(
-        server: Server,
-        readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
-    ) {
-        server.addResourceTemplate(
+    override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
+        context.registerResourceTemplate(
             uriTemplate = NEW_WORKSPACE_FILES_TEMPLATE,
             name = "Project file resource",
             description = "Reads IntelliJ VirtualFile content by project-relative path.",
             mimeType = "text/plain",
-        ) { request, _ ->
-            readResource(request.uri, this.sessionId)
-        }
+        )
 
-        server.addResourceTemplate(
+        context.registerResourceTemplate(
             uriTemplate = NEW_WORKSPACE_VFS_TEMPLATE,
             name = "Project VFS resource",
             description = "Reads IntelliJ VirtualFile content by raw VFS URL within a project scope.",
             mimeType = "text/plain",
-        ) { request, _ ->
-            readResource(request.uri, this.sessionId)
-        }
+        )
+
+        context.registerTool(vfsExistsSdkTool())
+        context.registerTool(vfsRefreshSdkTool())
+
+        return context.buildRegistration()
     }
 
     private fun relativePathFor(project: Project, file: VirtualFile): String? {

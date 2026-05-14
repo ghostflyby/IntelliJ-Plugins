@@ -11,6 +11,18 @@
     <depends>com.intellij.modules.vcs</depends>
     <depends>com.intellij.mcpServer</depends>
 
+    <extensionPoints>
+        <extensionPoint name="workspaceFeature"
+                        interface="dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature"
+                        dynamic="true"/>
+    </extensionPoints>
+
+    <extensions defaultExtensionNs="dev.ghostflyby.mcp.workspace">
+        <workspaceFeature implementation="dev.ghostflyby.mcp.core.CoreResourceFeature"/>
+        <workspaceFeature implementation="dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature"/>
+        <workspaceFeature implementation="dev.ghostflyby.mcp.document.resources.DocumentResourceFeature"/>
+    </extensions>
+
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerStartupActivity"/>
     </extensions>
