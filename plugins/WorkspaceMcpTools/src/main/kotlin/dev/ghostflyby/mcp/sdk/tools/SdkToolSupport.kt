@@ -164,6 +164,15 @@ internal fun sdkStringProperty(description: String): SdkToolProperty =
 internal fun sdkBooleanProperty(description: String): SdkToolProperty =
     SdkToolProperty(type = SdkToolJsonType.Boolean, description = description)
 
+internal fun sdkIntegerProperty(description: String): SdkToolProperty =
+    SdkToolProperty(type = SdkToolJsonType.Integer, description = description)
+
+internal fun sdkObjectProperty(description: String): SdkToolProperty =
+    SdkToolProperty(type = SdkToolJsonType.Object, description = description)
+
+internal fun sdkArrayProperty(description: String): SdkToolProperty =
+    SdkToolProperty(type = SdkToolJsonType.Array, description = description)
+
 /**
  * Build a [ToolSchema] with explicitly typed properties and optional required list.
  */

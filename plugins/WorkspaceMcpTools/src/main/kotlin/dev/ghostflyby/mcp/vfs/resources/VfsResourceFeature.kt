@@ -27,6 +27,11 @@ import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
 import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
+import dev.ghostflyby.mcp.vfs.tools.vfsGetUrlFromLocalPathTool
+import dev.ghostflyby.mcp.vfs.tools.vfsGetUrlsFromLocalPathsTool
+import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathFromUrlTool
+import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathsFromUrlsTool
+import dev.ghostflyby.mcp.vfs.tools.vfsExistsManySdkTool
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
@@ -102,6 +107,12 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
 
         context.registerTool(vfsExistsSdkTool())
         context.registerTool(vfsRefreshSdkTool())
+
+        context.registerTool(vfsGetUrlFromLocalPathTool())
+        context.registerTool(vfsGetUrlsFromLocalPathsTool())
+        context.registerTool(vfsGetLocalPathFromUrlTool())
+        context.registerTool(vfsGetLocalPathsFromUrlsTool())
+        context.registerTool(vfsExistsManySdkTool())
 
         return context.buildRegistration()
     }

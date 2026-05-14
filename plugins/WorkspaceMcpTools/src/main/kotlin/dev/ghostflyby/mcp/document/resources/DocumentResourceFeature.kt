@@ -9,6 +9,12 @@ package dev.ghostflyby.mcp.document.resources
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import dev.ghostflyby.mcp.document.tools.documentDeleteStringSdkTool
+import dev.ghostflyby.mcp.document.tools.documentGetModificationStampSdkTool
+import dev.ghostflyby.mcp.document.tools.documentInsertStringSdkTool
+import dev.ghostflyby.mcp.document.tools.documentIsWritableSdkTool
+import dev.ghostflyby.mcp.document.tools.documentReplaceStringSdkTool
+import dev.ghostflyby.mcp.document.tools.documentSetTextSdkTool
 import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
@@ -26,7 +32,9 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
  * Document resource feature: provides project-scoped document resource templates
  * and per-project listable resources for open document snapshots.
  *
- * This feature owns the `documents/{relativePath}` and `document-vfs/{rawVfsUrl}` templates.
+ * This feature owns the `documents/{relativePath}` and `document-vfs/{rawVfsUrl}` templates
+ * and the SDK document tools (document_is_writable, document_get_modification_stamp,
+ * document_insert_string, document_delete_string, document_replace_string, document_set_text).
  */
 internal class DocumentResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "document-resources"
@@ -72,6 +80,13 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
             description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
             mimeType = "text/plain",
         )
+
+        context.registerTool(documentIsWritableSdkTool())
+        context.registerTool(documentGetModificationStampSdkTool())
+        context.registerTool(documentInsertStringSdkTool())
+        context.registerTool(documentDeleteStringSdkTool())
+        context.registerTool(documentReplaceStringSdkTool())
+        context.registerTool(documentSetTextSdkTool())
 
         return context.buildRegistration()
     }
