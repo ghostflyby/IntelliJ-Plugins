@@ -22,6 +22,7 @@
         <workspaceFeature implementation="dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.document.resources.DocumentResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorFeature"/>
+        <workspaceFeature implementation="dev.ghostflyby.mcp.scope.search.ScopeFileSearchFeature"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
@@ -33,7 +34,6 @@
         <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.navigation.SymbolNavigationMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.quality.CodeQualityMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.scope.search.ScopeFileSearchMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.scope.symbol.ScopeSymbolSearchMcpTools"/>
         <mcpToolset implementation="dev.ghostflyby.mcp.scope.text.ScopeTextSearchMcpTools"/>
     </extensions>
