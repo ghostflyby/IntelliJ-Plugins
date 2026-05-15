@@ -39,30 +39,17 @@ import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.SCOPE_QUICK_PRESET_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkArrayProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkObjectProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -84,18 +71,29 @@ internal fun scopeTextSearchSdkTools(): List<SdkToolDescriptor<*>> {
 
 // ── scope_search_text ────────────────────────────────────────────
 
+@Description("Arguments for ScopeSearchTextArgs")
+@Schema
 @Serializable
 internal data class ScopeSearchTextArgs(
     val query: String = "",
     val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+    @Description("Whether to search in a case-sensitive manner.")
     val caseSensitive: Boolean = true,
+    @Description("Whether to match whole words only.")
     val wholeWordsOnly: Boolean = false,
+    @Description("Search context filter.")
     val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+    @Description("Optional file mask filter.")
     val fileMask: String? = null,
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
+    @Description("Maximum number of occurrences to return.")
     val maxUsageCount: Int = 1000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether to allow empty string matches.")
     val allowEmptyMatches: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -105,25 +103,7 @@ internal fun scopeSearchTextTool(): SdkToolDescriptor<ScopeSearchTextArgs> {
     return sdkToolDescriptor<ScopeSearchTextArgs>(
         name = "scope_search_text",
         description = "Search text within a resolved scope descriptor using IntelliJ Find engine. " +
-            "Supports plain text and regex mode, file mask, and search context.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Text or regex pattern to search."),
-                "mode" to sdkStringProperty(SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION),
-                "caseSensitive" to sdkBooleanProperty("Whether to search in a case-sensitive manner."),
-                "wholeWordsOnly" to sdkBooleanProperty("Whether to match whole words only."),
-                "searchContext" to sdkStringProperty(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION),
-                "fileMask" to sdkStringProperty("Optional file mask filter, e.g. '*.kt, !*Test.kt'."),
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Whether UI-interactive scopes are allowed during descriptor resolution."),
-                "maxUsageCount" to sdkIntegerProperty("Maximum number of occurrences to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds for this search."),
-                "allowEmptyMatches" to sdkBooleanProperty("Whether to allow patterns that may match empty string in REGEX mode."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
+                "Supports plain text and regex mode, file mask, and search context.",
         handler = { args -> scopeSearchTextHandler(this, args) },
     )
 }
@@ -201,17 +181,27 @@ private suspend fun scopeSearchTextHandler(
 
 // ── scope_search_text_quick ──────────────────────────────────────
 
+@Description("Arguments for ScopeSearchTextQuickArgs")
+@Schema
 @Serializable
 internal data class ScopeSearchTextQuickArgs(
     val query: String = "",
     val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+    @Description("Preset scope identifier.")
     val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+    @Description("Whether to search in a case-sensitive manner.")
     val caseSensitive: Boolean = true,
+    @Description("Whether to match whole words only.")
     val wholeWordsOnly: Boolean = false,
+    @Description("Search context filter.")
     val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+    @Description("Optional file mask filter.")
     val fileMask: String? = null,
+    @Description("Maximum number of occurrences to return.")
     val maxUsageCount: Int = 1000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether to allow empty string matches.")
     val allowEmptyMatches: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -221,24 +211,7 @@ internal fun scopeSearchTextQuickTool(): SdkToolDescriptor<ScopeSearchTextQuickA
     return sdkToolDescriptor<ScopeSearchTextQuickArgs>(
         name = "scope_search_text_quick",
         description = "First-call friendly text search shortcut with preset scope." +
-            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Text or regex pattern to search."),
-                "mode" to sdkStringProperty(SCOPE_TEXT_QUERY_MODE_PARAM_DESCRIPTION),
-                "scopePreset" to sdkStringProperty(SCOPE_QUICK_PRESET_PARAM_DESCRIPTION),
-                "caseSensitive" to sdkBooleanProperty("Whether to search in a case-sensitive manner."),
-                "wholeWordsOnly" to sdkBooleanProperty("Whether to match whole words only."),
-                "searchContext" to sdkStringProperty(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION),
-                "fileMask" to sdkStringProperty("Optional file mask filter, e.g. '*.kt, !*Test.kt'."),
-                "maxUsageCount" to sdkIntegerProperty("Maximum number of occurrences to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds for this search."),
-                "allowEmptyMatches" to sdkBooleanProperty("Whether to allow patterns that may match empty string in REGEX mode."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("query"),
-        ),
+                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
         handler = { args -> scopeSearchTextQuickHandler(this, args) },
     )
 }
@@ -294,16 +267,26 @@ private suspend fun scopeSearchTextQuickHandler(
 
 // ── scope_search_text_by_plain ───────────────────────────────────
 
+@Description("Arguments for ScopeSearchTextByPlainArgs")
+@Schema
 @Serializable
 internal data class ScopeSearchTextByPlainArgs(
     val query: String = "",
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether to search in a case-sensitive manner.")
     val caseSensitive: Boolean = true,
+    @Description("Whether to match whole words only.")
     val wholeWordsOnly: Boolean = false,
+    @Description("Search context filter.")
     val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+    @Description("Optional file mask filter.")
     val fileMask: String? = null,
+    @Description("Maximum number of occurrences to return.")
     val maxUsageCount: Int = 1000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -313,22 +296,6 @@ internal fun scopeSearchTextByPlainTool(): SdkToolDescriptor<ScopeSearchTextByPl
     return sdkToolDescriptor<ScopeSearchTextByPlainArgs>(
         name = "scope_search_text_by_plain",
         description = "Shortcut: search plain text within a resolved scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Text to search."),
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "caseSensitive" to sdkBooleanProperty("Whether to search in a case-sensitive manner."),
-                "wholeWordsOnly" to sdkBooleanProperty("Whether to match whole words only."),
-                "searchContext" to sdkStringProperty(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION),
-                "fileMask" to sdkStringProperty("Optional file mask filter, e.g. '*.kt, !*Test.kt'."),
-                "maxUsageCount" to sdkIntegerProperty("Maximum number of occurrences to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds for this search."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> scopeSearchTextByPlainHandler(this, args) },
     )
 }
@@ -361,17 +328,28 @@ private suspend fun scopeSearchTextByPlainHandler(
 
 // ── scope_search_text_by_regex ───────────────────────────────────
 
+@Description("Arguments for ScopeSearchTextByRegexArgs")
+@Schema
 @Serializable
 internal data class ScopeSearchTextByRegexArgs(
     val query: String = "",
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether to search in a case-sensitive manner.")
     val caseSensitive: Boolean = true,
+    @Description("Whether to match whole words only.")
     val wholeWordsOnly: Boolean = false,
+    @Description("Search context filter.")
     val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+    @Description("Optional file mask filter.")
     val fileMask: String? = null,
+    @Description("Maximum number of occurrences to return.")
     val maxUsageCount: Int = 1000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether to allow empty string matches.")
     val allowEmptyMatches: Boolean = false,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -381,23 +359,6 @@ internal fun scopeSearchTextByRegexTool(): SdkToolDescriptor<ScopeSearchTextByRe
     return sdkToolDescriptor<ScopeSearchTextByRegexArgs>(
         name = "scope_search_text_by_regex",
         description = "Shortcut: search regex pattern within a resolved scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Regex pattern to search."),
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "caseSensitive" to sdkBooleanProperty("Whether to search in a case-sensitive manner."),
-                "wholeWordsOnly" to sdkBooleanProperty("Whether to match whole words only."),
-                "searchContext" to sdkStringProperty(SCOPE_TEXT_SEARCH_CONTEXT_PARAM_DESCRIPTION),
-                "fileMask" to sdkStringProperty("Optional file mask filter, e.g. '*.kt, !*Test.kt'."),
-                "maxUsageCount" to sdkIntegerProperty("Maximum number of occurrences to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds for this search."),
-                "allowEmptyMatches" to sdkBooleanProperty("Whether to allow patterns that may match empty string."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> scopeSearchTextByRegexHandler(this, args) },
     )
 }
@@ -431,12 +392,18 @@ private suspend fun scopeSearchTextByRegexHandler(
 
 // ── scope_replace_text_preview ───────────────────────────────────
 
+@Description("Arguments for ScopeReplaceTextPreviewArgs")
+@Schema
 @Serializable
 internal data class ScopeReplaceTextPreviewArgs(
     val search: ScopeTextSearchRequestDto,
+    @Description("Replacement text.")
     val replaceWith: String = "",
+    @Description("Whether to preserve original case during replacement.")
     val preserveCase: Boolean = false,
+    @Description("Optional specific occurrence IDs to replace.")
     val occurrenceIds: List<String> = emptyList(),
+    @Description("Whether to fail if specified occurrence IDs are not found.")
     val failOnMissingOccurrenceIds: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -446,19 +413,7 @@ internal fun scopeReplaceTextPreviewTool(): SdkToolDescriptor<ScopeReplaceTextPr
     return sdkToolDescriptor<ScopeReplaceTextPreviewArgs>(
         name = "scope_replace_text_preview",
         description = "Preview text replacement within a scope. " +
-            "This computes replacement text using IntelliJ Find/Replace semantics (including regex groups and preserve-case).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "search" to sdkObjectProperty("Scope text search request specifying query, mode, scope, etc."),
-                "replaceWith" to sdkStringProperty("Replacement text."),
-                "preserveCase" to sdkBooleanProperty("Whether to preserve original case during replacement."),
-                "occurrenceIds" to sdkArrayProperty("Optional specific occurrence IDs to replace; empty means all found occurrences."),
-                "failOnMissingOccurrenceIds" to sdkBooleanProperty("Whether to fail if specified occurrence IDs are not found in the current search result."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("search"),
-        ),
+                "This computes replacement text using IntelliJ Find/Replace semantics (including regex groups and preserve-case).",
         handler = { args -> scopeReplaceTextPreviewHandler(this, args) },
     )
 }
@@ -514,14 +469,22 @@ private suspend fun scopeReplaceTextPreviewHandler(
 
 // ── scope_replace_text_apply ─────────────────────────────────────
 
+@Description("Arguments for ScopeReplaceTextApplyArgs")
+@Schema
 @Serializable
 internal data class ScopeReplaceTextApplyArgs(
     val search: ScopeTextSearchRequestDto,
+    @Description("Replacement text.")
     val replaceWith: String = "",
+    @Description("Whether to preserve original case during replacement.")
     val preserveCase: Boolean = false,
+    @Description("Optional specific occurrence IDs to replace.")
     val occurrenceIds: List<String> = emptyList(),
+    @Description("Whether to fail if specified occurrence IDs are not found.")
     val failOnMissingOccurrenceIds: Boolean = true,
+    @Description("Whether to save documents after write.")
     val saveAfterWrite: Boolean = true,
+    @Description("Maximum number of occurrences to replace.")
     val maxReplaceCount: Int = 10000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -531,22 +494,8 @@ internal fun scopeReplaceTextApplyTool(): SdkToolDescriptor<ScopeReplaceTextAppl
     return sdkToolDescriptor<ScopeReplaceTextApplyArgs>(
         name = "scope_replace_text_apply",
         description = "Apply text replacement within a scope. " +
-            "If occurrenceIds is empty, all found occurrences are replaced. " +
-            "If occurrenceIds is provided, only those matches are replaced.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "search" to sdkObjectProperty("Scope text search request specifying query, mode, scope, etc."),
-                "replaceWith" to sdkStringProperty("Replacement text."),
-                "preserveCase" to sdkBooleanProperty("Whether to preserve original case during replacement."),
-                "occurrenceIds" to sdkArrayProperty("Optional specific occurrence IDs to replace; empty means all found occurrences."),
-                "failOnMissingOccurrenceIds" to sdkBooleanProperty("Whether to fail if specified occurrence IDs are not found in the current search result."),
-                "saveAfterWrite" to sdkBooleanProperty("Whether to save documents after write."),
-                "maxReplaceCount" to sdkIntegerProperty("Maximum number of occurrences to replace."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("search"),
-        ),
+                "If occurrenceIds is empty, all found occurrences are replaced. " +
+                "If occurrenceIds is provided, only those matches are replaced.",
         handler = { args -> scopeReplaceTextApplyHandler(this, args) },
     )
 }
@@ -591,10 +540,12 @@ private suspend fun scopeReplaceTextApplyHandler(
 
         if (plan.execution.timedOut && request.occurrenceIds.isEmpty()) {
             return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(
-                    text = "Search timed out while preparing replace-all. " +
-                        "Increase timeoutMillis or provide explicit occurrenceIds.",
-                )),
+                content = listOf(
+                    TextContent(
+                        text = "Search timed out while preparing replace-all. " +
+                                "Increase timeoutMillis or provide explicit occurrenceIds.",
+                    ),
+                ),
                 isError = true,
             )
         }
@@ -602,9 +553,11 @@ private suspend fun scopeReplaceTextApplyHandler(
         val selectedOccurrences = plan.selectedOccurrences
         if (selectedOccurrences.size > request.maxReplaceCount) {
             return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(
-                    text = "Selected occurrence count ${selectedOccurrences.size} exceeds maxReplaceCount ${request.maxReplaceCount}.",
-                )),
+                content = listOf(
+                    TextContent(
+                        text = "Selected occurrence count ${selectedOccurrences.size} exceeds maxReplaceCount ${request.maxReplaceCount}.",
+                    ),
+                ),
                 isError = true,
             )
         }
@@ -971,7 +924,7 @@ private fun ensureOccurrenceStillMatches(
     if (currentMatched != occurrence.matchedText) {
         throw WorkspaceResourceException(
             "Occurrence '${occurrence.occurrenceId}' no longer matches current content in '${occurrence.fileUrl}'. " +
-                "Please rerun preview/search.",
+                    "Please rerun preview/search.",
         )
     }
     return currentMatched
@@ -986,7 +939,7 @@ private fun validateRangeInDocument(
     if (startOffset !in 0..endOffset || endOffset > document.textLength) {
         throw WorkspaceResourceException(
             "Occurrence range [$startOffset, $endOffset) is out of bounds for '$fileUrl' " +
-                "(textLength=${document.textLength}).",
+                    "(textLength=${document.textLength}).",
         )
     }
 }

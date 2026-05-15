@@ -2,16 +2,29 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.sdk
 
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
 import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
 import dev.ghostflyby.mcp.vfs.tools.VfsExistsResult
 import dev.ghostflyby.mcp.vfs.tools.encodeVfsExistsResult
 import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
@@ -22,9 +35,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 internal class WorkspaceMcpRequestRunnerTest {
@@ -113,27 +124,6 @@ internal class WorkspaceMcpRequestRunnerTest {
         val args = MyArgs(url = "/test", projectKey = "my-key", projectPath = "/tmp")
         assertEquals("my-key", args.projectKey)
         assertEquals("/tmp", args.projectPath)
-    }
-
-    @Test
-    fun `tool schema helper builds correct schema`() {
-        val schema = toolSchema(
-            properties = mapOf(
-                "projectKey" to sdkStringProperty("Project key"),
-                "url" to sdkStringProperty("VFS URL"),
-                "async" to sdkBooleanProperty("Run asynchronously"),
-            ),
-            required = listOf("url"),
-        )
-        assertTrue(schema.required?.contains("url") == true)
-        assertEquals("string", schema.propertyType("url"))
-        assertEquals("boolean", schema.propertyType("async"))
-    }
-
-    @Test
-    fun `empty tool schema has null required`() {
-        val schema = toolSchema(properties = emptyMap())
-        assertNull(schema.required)
     }
 
     @Test

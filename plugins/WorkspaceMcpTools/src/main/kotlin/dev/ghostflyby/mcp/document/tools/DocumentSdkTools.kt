@@ -2,6 +2,22 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.document.tools
@@ -17,23 +33,17 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 
 /**
  * Typed result for document write operations.
  */
+@Schema
 @Serializable
 internal data class DocumentSdkWriteResult(
     val textLength: Int,
@@ -44,6 +54,7 @@ internal data class DocumentSdkWriteResult(
 /**
  * Typed result for document_is_writable.
  */
+@Schema
 @Serializable
 internal data class DocumentSdkWritableResult(
     val writable: Boolean,
@@ -52,6 +63,7 @@ internal data class DocumentSdkWritableResult(
 /**
  * Typed result for document_get_modification_stamp.
  */
+@Schema
 @Serializable
 internal data class DocumentSdkModificationStampResult(
     val modificationStamp: Long,
@@ -59,50 +71,82 @@ internal data class DocumentSdkModificationStampResult(
 
 // -- single-URL argument DTOs --
 
+@Schema
 @Serializable
 internal data class DocumentSdkUrlArgs(
+    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
     val url: String,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class DocumentSdkInsertArgs(
+    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
     val url: String,
+    @Description("Insert offset in [0, textLength].")
     val offset: Int,
+    @Description("Text to insert.")
     val text: String,
+    @Description("Save document after write (default false).")
     val saveAfterWrite: Boolean = false,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class DocumentSdkDeleteArgs(
+    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
     val url: String,
+    @Description("Delete range start (inclusive).")
     val startOffset: Int,
+    @Description("Delete range end (exclusive).")
     val endOffset: Int,
+    @Description("Save document after write (default false).")
     val saveAfterWrite: Boolean = false,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class DocumentSdkReplaceArgs(
+    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
     val url: String,
+    @Description("Replace range start (inclusive).")
     val startOffset: Int,
+    @Description("Replace range end (exclusive).")
     val endOffset: Int,
+    @Description("Text to replace with.")
     val text: String,
+    @Description("Save document after write (default false).")
     val saveAfterWrite: Boolean = false,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class DocumentSdkSetTextArgs(
+    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
     val url: String,
+    @Description("New whole text.")
     val text: String,
+    @Description("Save document after write (default false).")
     val saveAfterWrite: Boolean = false,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
@@ -112,14 +156,7 @@ internal fun documentIsWritableSdkTool(): SdkToolDescriptor<DocumentSdkUrlArgs> 
     return sdkToolDescriptor<DocumentSdkUrlArgs>(
         name = "document_is_writable",
         description = "Document.isWritable(): return whether document text is writable.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("url"),
-        ),
+        inputSchema = schemaFor<DocumentSdkUrlArgs>().copy(required = listOf("url")),
         handler = { args -> documentIsWritableHandler(this, args) },
     )
 }
@@ -128,14 +165,7 @@ internal fun documentGetModificationStampSdkTool(): SdkToolDescriptor<DocumentSd
     return sdkToolDescriptor<DocumentSdkUrlArgs>(
         name = "document_get_modification_stamp",
         description = "Document.getModificationStamp(): return current modification stamp.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("url"),
-        ),
+        inputSchema = schemaFor<DocumentSdkUrlArgs>().copy(required = listOf("url")),
         handler = { args -> documentGetModificationStampHandler(this, args) },
     )
 }
@@ -144,17 +174,7 @@ internal fun documentInsertStringSdkTool(): SdkToolDescriptor<DocumentSdkInsertA
     return sdkToolDescriptor<DocumentSdkInsertArgs>(
         name = "document_insert_string",
         description = "Document.insertString(offset, text).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "offset" to sdkIntegerProperty("Insert offset in [0, textLength]."),
-                "text" to sdkStringProperty("Text to insert."),
-                "saveAfterWrite" to sdkBooleanProperty("Save document after write (default false)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("url", "offset", "text"),
-        ),
+        inputSchema = schemaFor<DocumentSdkInsertArgs>().copy(required = listOf("url", "offset", "text")),
         handler = { args -> documentInsertStringHandler(this, args) },
     )
 }
@@ -163,17 +183,7 @@ internal fun documentDeleteStringSdkTool(): SdkToolDescriptor<DocumentSdkDeleteA
     return sdkToolDescriptor<DocumentSdkDeleteArgs>(
         name = "document_delete_string",
         description = "Document.deleteString(startOffset, endOffset).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "startOffset" to sdkIntegerProperty("Delete range start (inclusive)."),
-                "endOffset" to sdkIntegerProperty("Delete range end (exclusive)."),
-                "saveAfterWrite" to sdkBooleanProperty("Save document after write (default false)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("url", "startOffset", "endOffset"),
-        ),
+        inputSchema = schemaFor<DocumentSdkDeleteArgs>().copy(required = listOf("url", "startOffset", "endOffset")),
         handler = { args -> documentDeleteStringHandler(this, args) },
     )
 }
@@ -182,17 +192,13 @@ internal fun documentReplaceStringSdkTool(): SdkToolDescriptor<DocumentSdkReplac
     return sdkToolDescriptor<DocumentSdkReplaceArgs>(
         name = "document_replace_string",
         description = "Document.replaceString(startOffset, endOffset, text).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "startOffset" to sdkIntegerProperty("Replace range start (inclusive)."),
-                "endOffset" to sdkIntegerProperty("Replace range end (exclusive)."),
-                "text" to sdkStringProperty("Text to replace with."),
-                "saveAfterWrite" to sdkBooleanProperty("Save document after write (default false)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
+        inputSchema = schemaFor<DocumentSdkReplaceArgs>().copy(
+            required = listOf(
+                "url",
+                "startOffset",
+                "endOffset",
+                "text",
             ),
-            required = listOf("url", "startOffset", "endOffset", "text"),
         ),
         handler = { args -> documentReplaceStringHandler(this, args) },
     )
@@ -202,16 +208,7 @@ internal fun documentSetTextSdkTool(): SdkToolDescriptor<DocumentSdkSetTextArgs>
     return sdkToolDescriptor<DocumentSdkSetTextArgs>(
         name = "document_set_text",
         description = "Document.setText(text): replace whole document with new text.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION"),
-                "text" to sdkStringProperty("New whole text."),
-                "saveAfterWrite" to sdkBooleanProperty("Save document after write (default false)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("url", "text"),
-        ),
+        inputSchema = schemaFor<DocumentSdkSetTextArgs>().copy(required = listOf("url", "text")),
         handler = { args -> documentSetTextHandler(this, args) },
     )
 }
@@ -331,7 +328,7 @@ private suspend fun resolveTextDocument(url: String): Pair<VirtualFile, Document
         mcpFail("URL points to a directory, not a file: $url")
     }
     val document = FileDocumentManager.getInstance().getDocument(file)
-        ?: mcpFail("File at URL '$url' is binary or has no text document.")
+        ?: mcpFail("File at URL \u0027$url\u0027 is binary or has no text document.")
     file to document
 }
 

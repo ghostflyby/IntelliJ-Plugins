@@ -22,8 +22,8 @@
 
 package dev.ghostflyby.mcp.quality.tools
 
-import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.AbstractLayoutCodeProcessor
+import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
 import com.intellij.codeInsight.daemon.impl.DaemonProgressIndicator
 import com.intellij.codeInspection.*
@@ -58,6 +58,8 @@ import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
@@ -70,157 +72,247 @@ import kotlin.time.Duration.Companion.milliseconds
 // Args DTOs
 // ---------------------------------------------------------------------------
 
+@Description("Arguments for QualityGetFileProblemsArgs")
+@Schema
 @Serializable
 internal data class QualityGetFileProblemsArgs(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
+    @Description("Whether to include only errors or include both errors and warnings.")
     val errorsOnly: Boolean = true,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityGetScopeProblemsArgs")
+@Schema
 @Serializable
 internal data class QualityGetScopeProblemsArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Whether to include only errors or include both errors and warnings.")
     val errorsOnly: Boolean = true,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Maximum number of problems to collect.")
     val maxProblemCount: Int = 5000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityGetScopeProblemsQuickArgs")
+@Schema
 @Serializable
 internal data class QualityGetScopeProblemsQuickArgs(
+    @Description("Preset scope identifier.")
     val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+    @Description("Whether to include only errors or include both errors and warnings.")
     val errorsOnly: Boolean = true,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Maximum number of problems to collect.")
     val maxProblemCount: Int = 5000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityReformatFileArgs")
+@Schema
 @Serializable
 internal data class QualityReformatFileArgs(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityOptimizeImportsFileArgs")
+@Schema
 @Serializable
 internal data class QualityOptimizeImportsFileArgs(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityReformatScopeFilesArgs")
+@Schema
 @Serializable
 internal data class QualityReformatScopeFilesArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 180000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityOptimizeImportsScopeFilesArgs")
+@Schema
 @Serializable
 internal data class QualityOptimizeImportsScopeFilesArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 180000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityGetScopeProblemsBySeverityArgs")
+@Schema
 @Serializable
 internal data class QualityGetScopeProblemsBySeverityArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Minimum severity threshold.")
     val minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Maximum number of problems to collect.")
     val maxProblemCount: Int = 5000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
+    @Description("Keep files with no problems after filtering.")
     val includeFilesWithoutMatchingProblems: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityGetScopeProblemsBySeverityQuickArgs")
+@Schema
 @Serializable
 internal data class QualityGetScopeProblemsBySeverityQuickArgs(
+    @Description("Preset scope identifier.")
     val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+    @Description("Minimum severity threshold.")
     val minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Maximum number of problems to collect.")
     val maxProblemCount: Int = 5000,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Keep files with no problems after filtering.")
     val includeFilesWithoutMatchingProblems: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityFixFileQuickArgs")
+@Schema
 @Serializable
 internal data class QualityFixFileQuickArgs(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 120000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityFixScopeQuickArgs")
+@Schema
 @Serializable
 internal data class QualityFixScopeQuickArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 180000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityFixScopeQuickByPresetArgs")
+@Schema
 @Serializable
 internal data class QualityFixScopeQuickByPresetArgs(
+    @Description("Preset scope identifier.")
     val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 180000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityListInspectionProfilesArgs")
+@Schema
 @Serializable
 internal data class QualityListInspectionProfilesArgs(
+    @Description("Whether to include application-level profile names.")
     val includeApplicationProfiles: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityCodeCleanupFileArgs")
+@Schema
 @Serializable
 internal data class QualityCodeCleanupFileArgs(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
+    @Description("Inspection profile name. Defaults to current active profile.")
     val inspectionProfileName: String? = null,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 300000,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for QualityCodeCleanupScopeFilesArgs")
+@Schema
 @Serializable
 internal data class QualityCodeCleanupScopeFilesArgs(
     val scope: ScopeProgramDescriptorDto,
+    @Description("Inspection profile name. Defaults to current active profile.")
     val inspectionProfileName: String? = null,
+    @Description("Maximum number of files to process.")
     val maxFileCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 300000,
+    @Description("Continue on single file failure.")
     val continueOnError: Boolean = true,
+    @Description("Allow UI-interactive scopes.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -230,12 +322,14 @@ internal data class QualityCodeCleanupScopeFilesArgs(
 // Result DTOs
 // ---------------------------------------------------------------------------
 
+@Schema
 @Serializable
 internal enum class QualityOperationKind {
     REFORMAT,
     OPTIMIZE_IMPORTS,
 }
 
+@Schema
 @Serializable
 internal enum class QualitySeverityThreshold {
     ERROR,
@@ -244,6 +338,7 @@ internal enum class QualitySeverityThreshold {
     INFO,
 }
 
+@Schema
 @Serializable
 internal data class QualityProblemDto(
     val severity: String,
@@ -254,8 +349,10 @@ internal data class QualityProblemDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityFileProblemsResultDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val problems: List<QualityProblemDto>,
@@ -263,8 +360,10 @@ internal data class QualityFileProblemsResultDto(
     val timedOut: Boolean = false,
 )
 
+@Schema
 @Serializable
 internal data class QualityFileProblemsItemDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val problems: List<QualityProblemDto>,
@@ -272,10 +371,12 @@ internal data class QualityFileProblemsItemDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityScopeProblemsResultDto(
     val scopeDisplayName: String,
     val scopeShape: ScopeShape,
+    @Description("Whether to include only errors or include both errors and warnings.")
     val errorsOnly: Boolean,
     val scannedFileCount: Int,
     val analyzedFileCount: Int,
@@ -293,6 +394,7 @@ internal data class QualityScopeProblemsResultDto(
     val diagnostics: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class QualitySeverityCountDto(
     val severity: String,
@@ -300,10 +402,12 @@ internal data class QualitySeverityCountDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityScopeProblemsBySeverityResultDto(
     val scopeDisplayName: String,
     val scopeShape: ScopeShape,
+    @Description("Minimum severity threshold.")
     val minSeverity: QualitySeverityThreshold,
     val scannedFileCount: Int,
     val analyzedFileCount: Int,
@@ -323,9 +427,11 @@ internal data class QualityScopeProblemsBySeverityResultDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityFileOperationResultDto(
     val operation: QualityOperationKind,
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val success: Boolean,
@@ -336,8 +442,10 @@ internal data class QualityFileOperationResultDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityQuickFixFileResultDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val optimizeImportsApplied: Boolean,
@@ -347,8 +455,10 @@ internal data class QualityQuickFixFileResultDto(
     val timedOut: Boolean = false,
 )
 
+@Schema
 @Serializable
 internal data class QualityScopeOperationItemDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val success: Boolean,
@@ -356,6 +466,7 @@ internal data class QualityScopeOperationItemDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityScopeOperationResultDto(
     val operation: QualityOperationKind,
@@ -376,8 +487,10 @@ internal data class QualityScopeOperationResultDto(
     val diagnostics: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class QualityScopeQuickFixItemDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val success: Boolean,
@@ -387,6 +500,7 @@ internal data class QualityScopeQuickFixItemDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityScopeQuickFixResultDto(
     val scopeDisplayName: String,
@@ -406,6 +520,7 @@ internal data class QualityScopeQuickFixResultDto(
     val diagnostics: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class QualityInspectionProfileItemDto(
     val name: String,
@@ -413,6 +528,7 @@ internal data class QualityInspectionProfileItemDto(
     val isProjectLevel: Boolean,
 )
 
+@Schema
 @Serializable
 internal data class QualityInspectionProfilesResultDto(
     val currentProfileName: String,
@@ -420,10 +536,13 @@ internal data class QualityInspectionProfilesResultDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityCleanupFileResultDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
+    @Description("Inspection profile name. Defaults to current active profile.")
     val inspectionProfileName: String,
     val success: Boolean,
     @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
@@ -431,8 +550,10 @@ internal data class QualityCleanupFileResultDto(
     val diagnostics: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class QualityScopeCleanupItemDto(
+    @Description("VFS URL of the file to clean up.")
     val fileUrl: String,
     val filePath: String? = null,
     val success: Boolean,
@@ -440,10 +561,12 @@ internal data class QualityScopeCleanupItemDto(
 )
 
 @OptIn(ExperimentalSerializationApi::class)
+@Schema
 @Serializable
 internal data class QualityScopeCleanupResultDto(
     val scopeDisplayName: String,
     val scopeShape: ScopeShape,
+    @Description("Inspection profile name. Defaults to current active profile.")
     val inspectionProfileName: String,
     val scannedFileCount: Int,
     val processedFileCount: Int,
@@ -857,7 +980,6 @@ private fun encodeJson(obj: Any): String {
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Tool factories
 // ---------------------------------------------------------------------------
@@ -866,16 +988,6 @@ internal fun qualityGetFileProblemsSdkTool(): SdkToolDescriptor<QualityGetFilePr
     return sdkToolDescriptor<QualityGetFileProblemsArgs>(
         name = "quality_get_file_problems",
         description = "Analyze a text file by VFS URL and return IDE highlight problems (errors only or errors+warnings).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty("VFS URL of the file to analyze."),
-                "errorsOnly" to sdkBooleanProperty("Whether to include only errors or include both errors and warnings."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("fileUrl"),
-        ),
         handler = { args -> qualityGetFileProblemsHandler(this, args) },
     )
 }
@@ -884,20 +996,6 @@ internal fun qualityGetScopeProblemsSdkTool(): SdkToolDescriptor<QualityGetScope
     return sdkToolDescriptor<QualityGetScopeProblemsArgs>(
         name = "quality_get_scope_problems",
         description = "Analyze files inside a resolved scope descriptor and return IDE highlight problems. Scope traversal currently targets project-content files and filters by scope.contains(file).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor defining the files to analyze."),
-                "errorsOnly" to sdkBooleanProperty("Whether to include only errors or include both errors and warnings."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to analyze from the matched scope."),
-                "maxProblemCount" to sdkIntegerProperty("Maximum number of problems to return across all files."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Whether to continue when a single file analysis fails."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Whether to allow UI-interactive scopes like 'Open Files'."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityGetScopeProblemsHandler(this, args) },
     )
 }
@@ -906,19 +1004,6 @@ internal fun qualityGetScopeProblemsQuickSdkTool(): SdkToolDescriptor<QualityGet
     return sdkToolDescriptor<QualityGetScopeProblemsQuickArgs>(
         name = "quality_get_scope_problems_quick",
         description = "First-call friendly scope problem analysis shortcut with preset scope and default non-interactive resolution.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scopePreset" to sdkStringProperty("Preset scope identifier."),
-                "errorsOnly" to sdkBooleanProperty("Whether to include only errors or include both errors and warnings."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to analyze."),
-                "maxProblemCount" to sdkIntegerProperty("Maximum number of problems to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = emptyList(),
-        ),
         handler = { args -> qualityGetScopeProblemsQuickHandler(this, args) },
     )
 }
@@ -927,15 +1012,6 @@ internal fun qualityReformatFileSdkTool(): SdkToolDescriptor<QualityReformatFile
     return sdkToolDescriptor<QualityReformatFileArgs>(
         name = "quality_reformat_file",
         description = "Run IDE reformat action for a single file by VFS URL.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty("VFS URL of the file to reformat."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("fileUrl"),
-        ),
         handler = { args -> qualityReformatFileHandler(this, args) },
     )
 }
@@ -944,15 +1020,6 @@ internal fun qualityOptimizeImportsFileSdkTool(): SdkToolDescriptor<QualityOptim
     return sdkToolDescriptor<QualityOptimizeImportsFileArgs>(
         name = "quality_optimize_imports_file",
         description = "Run IDE optimize-imports action for a single file by VFS URL.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty("VFS URL of the file to optimize imports in."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("fileUrl"),
-        ),
         handler = { args -> qualityOptimizeImportsFileHandler(this, args) },
     )
 }
@@ -961,18 +1028,6 @@ internal fun qualityReformatScopeFilesSdkTool(): SdkToolDescriptor<QualityReform
     return sdkToolDescriptor<QualityReformatScopeFilesArgs>(
         name = "quality_reformat_scope_files",
         description = "Run IDE reformat action for project-content files matched by a scope descriptor. Files are processed one-by-one to keep per-file result visibility.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to process."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Allow UI-interactive scopes."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityReformatScopeFilesHandler(this, args) },
     )
 }
@@ -981,42 +1036,14 @@ internal fun qualityOptimizeImportsScopeFilesSdkTool(): SdkToolDescriptor<Qualit
     return sdkToolDescriptor<QualityOptimizeImportsScopeFilesArgs>(
         name = "quality_optimize_imports_scope_files",
         description = "Run IDE optimize-imports action for project-content files matched by a scope descriptor. Files are processed one-by-one to keep per-file result visibility.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to process."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Allow UI-interactive scopes."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityOptimizeImportsScopeFilesHandler(this, args) },
     )
 }
-
 
 internal fun qualityGetScopeProblemsBySeveritySdkTool(): SdkToolDescriptor<QualityGetScopeProblemsBySeverityArgs> {
     return sdkToolDescriptor<QualityGetScopeProblemsBySeverityArgs>(
         name = "quality_get_scope_problems_by_severity",
         description = "Analyze files inside a resolved scope descriptor and return problems at or above the given minimum severity, with server-side severity aggregation.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor."),
-                "minSeverity" to sdkStringProperty("Minimum severity threshold (ERROR, WARNING, WEAK_WARNING, INFO)."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to analyze."),
-                "maxProblemCount" to sdkIntegerProperty("Maximum number of problems to collect."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Allow UI-interactive scopes."),
-                "includeFilesWithoutMatchingProblems" to sdkBooleanProperty("Keep files with no problems after filtering."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityGetScopeProblemsBySeverityHandler(this, args) },
     )
 }
@@ -1025,20 +1052,6 @@ internal fun qualityGetScopeProblemsBySeverityQuickSdkTool(): SdkToolDescriptor<
     return sdkToolDescriptor<QualityGetScopeProblemsBySeverityQuickArgs>(
         name = "quality_get_scope_problems_by_severity_quick",
         description = "First-call friendly scope problem analysis by severity with preset scope.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scopePreset" to sdkStringProperty("Preset scope identifier."),
-                "minSeverity" to sdkStringProperty("Minimum severity threshold."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to analyze."),
-                "maxProblemCount" to sdkIntegerProperty("Maximum number of problems to collect."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "includeFilesWithoutMatchingProblems" to sdkBooleanProperty("Keep files with no problems after filtering."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = emptyList(),
-        ),
         handler = { args -> qualityGetScopeProblemsBySeverityQuickHandler(this, args) },
     )
 }
@@ -1047,15 +1060,6 @@ internal fun qualityFixFileQuickSdkTool(): SdkToolDescriptor<QualityFixFileQuick
     return sdkToolDescriptor<QualityFixFileQuickArgs>(
         name = "quality_fix_file_quick",
         description = "Run quick file fix pipeline (optimize imports + reformat) by VFS URL.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty("VFS URL of the file to fix."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("fileUrl"),
-        ),
         handler = { args -> qualityFixFileQuickHandler(this, args) },
     )
 }
@@ -1064,18 +1068,6 @@ internal fun qualityFixScopeQuickSdkTool(): SdkToolDescriptor<QualityFixScopeQui
     return sdkToolDescriptor<QualityFixScopeQuickArgs>(
         name = "quality_fix_scope_quick",
         description = "Run quick scope fix pipeline (optimize imports + reformat) for project-content files matched by a scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to process."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Allow UI-interactive scopes."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityFixScopeQuickHandler(this, args) },
     )
 }
@@ -1084,17 +1076,6 @@ internal fun qualityFixScopeQuickByPresetSdkTool(): SdkToolDescriptor<QualityFix
     return sdkToolDescriptor<QualityFixScopeQuickByPresetArgs>(
         name = "quality_fix_scope_quick_by_preset",
         description = "First-call friendly quick scope fix shortcut (optimize imports + reformat) with preset scope.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scopePreset" to sdkStringProperty("Preset scope identifier."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to process."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = emptyList(),
-        ),
         handler = { args -> qualityFixScopeQuickByPresetHandler(this, args) },
     )
 }
@@ -1103,14 +1084,6 @@ internal fun qualityListInspectionProfilesSdkTool(): SdkToolDescriptor<QualityLi
     return sdkToolDescriptor<QualityListInspectionProfilesArgs>(
         name = "quality_list_inspection_profiles",
         description = "List available inspection profile names and mark the current profile.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "includeApplicationProfiles" to sdkBooleanProperty("Whether to include application-level profile names."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = emptyList(),
-        ),
         handler = { args -> qualityListInspectionProfilesHandler(this, args) },
     )
 }
@@ -1119,16 +1092,6 @@ internal fun qualityCodeCleanupFileSdkTool(): SdkToolDescriptor<QualityCodeClean
     return sdkToolDescriptor<QualityCodeCleanupFileArgs>(
         name = "quality_code_cleanup_file",
         description = "Run IDE inspection-based code cleanup for a single file by VFS URL using the selected inspection profile.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty("VFS URL of the file to clean up."),
-                "inspectionProfileName" to sdkStringProperty("Inspection profile name. Defaults to current active profile."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("fileUrl"),
-        ),
         handler = { args -> qualityCodeCleanupFileHandler(this, args) },
     )
 }
@@ -1137,23 +1100,9 @@ internal fun qualityCodeCleanupScopeFilesSdkTool(): SdkToolDescriptor<QualityCod
     return sdkToolDescriptor<QualityCodeCleanupScopeFilesArgs>(
         name = "quality_code_cleanup_scope_files",
         description = "Run IDE inspection-based code cleanup for project-content files matched by a scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor."),
-                "inspectionProfileName" to sdkStringProperty("Inspection profile name. Defaults to current active profile."),
-                "maxFileCount" to sdkIntegerProperty("Maximum number of files to process."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "continueOnError" to sdkBooleanProperty("Continue on single file failure."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty("Allow UI-interactive scopes."),
-                "projectKey" to sdkStringProperty("Stable project key (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> qualityCodeCleanupScopeFilesHandler(this, args) },
     )
 }
-
 
 // ---------------------------------------------------------------------------
 // Handlers
@@ -1192,7 +1141,6 @@ private suspend fun qualityGetFileProblemsHandler(
         )
     }
 }
-
 
 private suspend fun qualityGetScopeProblemsHandler(
     ctx: SdkToolHandlerContext,

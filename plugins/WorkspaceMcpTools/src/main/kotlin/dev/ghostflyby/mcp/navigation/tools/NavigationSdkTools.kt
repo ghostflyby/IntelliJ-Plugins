@@ -37,114 +37,138 @@ import com.intellij.psi.search.searches.DefinitionsScopedSearch
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.DocumentUtil
 import com.intellij.util.Processor
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
 import dev.ghostflyby.mcp.common.reportActivity
-import dev.ghostflyby.mcp.navigation.NavigationBatchMultiItem
-import dev.ghostflyby.mcp.navigation.NavigationBatchMultiResult
-import dev.ghostflyby.mcp.navigation.NavigationBatchSingleItem
-import dev.ghostflyby.mcp.navigation.NavigationBatchSingleResult
-import dev.ghostflyby.mcp.navigation.NavigationBatchSymbolInfoItem
-import dev.ghostflyby.mcp.navigation.NavigationBatchSymbolInfoResult
-import dev.ghostflyby.mcp.navigation.NavigationResult
-import dev.ghostflyby.mcp.navigation.NavigationResults
-import dev.ghostflyby.mcp.navigation.NavigationSourcePosition
-import dev.ghostflyby.mcp.navigation.NavigationSymbolInfoAutoPositionInput
-import dev.ghostflyby.mcp.navigation.NavigationSymbolInfoPosition
-import dev.ghostflyby.mcp.navigation.NavigationSymbolInfoResolvedResult
-import dev.ghostflyby.mcp.navigation.NavigationSymbolInfoResult
+import dev.ghostflyby.mcp.navigation.*
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkArrayProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkObjectProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 
 // ---------------------------------------------------------------------------
 // Argument DTOs — each tool gets a typed args class implementing
 // WorkspaceMcpProjectToolArguments for project resolution.
 // ---------------------------------------------------------------------------
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoArgs(
+    @Description("VFS URL of the target source file.")
     val uri: String,
+    @Description("1-based line number.")
     val row: Int,
+    @Description("1-based column number.")
     val column: Int,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoByOffsetArgs(
+    @Description("VFS URL of the target source file.")
     val uri: String,
+    @Description("0-based source offset.")
     val offset: Int,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoAutoPositionArgs(
+    @Description("VFS URL of the target source file.")
     val uri: String,
+    @Description("Positioning input with optional row, column, or offset fields.")
     val input: NavigationSymbolInfoAutoPositionInput,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoBatchArgs(
+    @Description("Source positions to resolve symbol info from.")
     val inputs: List<NavigationSymbolInfoPosition>,
+    @Description("Whether to continue collecting results after a single input fails.")
     val continueOnError: Boolean = true,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationSourcePositionArgs(
+    @Description("VFS URL of the target source file.")
     val uri: String,
+    @Description("1-based line number.")
     val row: Int,
+    @Description("1-based column number.")
     val column: Int,
+    @Description("Maximum number of results to return (default 50).")
     val limit: Int = 50,
+    @Description("If true, fallback to navigation_find_references when primary search returns empty.")
     val fallbackToReferencesWhenEmpty: Boolean = false,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationFindReferencesArgs(
+    @Description("VFS URL of the target source file.")
     val uri: String,
+    @Description("1-based line number.")
     val row: Int,
+    @Description("1-based column number.")
     val column: Int,
+    @Description("Maximum number of results to return (default 50).")
     val limit: Int = 50,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationToReferenceBatchArgs(
+    @Description("Source positions to resolve symbol info from.")
     val inputs: List<NavigationSourcePosition>,
+    @Description("Whether to continue collecting results after a single input fails.")
     val continueOnError: Boolean = true,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class NavigationFindReferencesBatchArgs(
+    @Description("Source positions to resolve symbol info from.")
     val inputs: List<NavigationSourcePosition>,
+    @Description("Maximum number of results to return (default 50).")
     val limit: Int = 50,
+    @Description("Whether to continue collecting results after a single input fails.")
     val continueOnError: Boolean = true,
+    @Description("Stable project key for project-scoped resolution (optional).")
     override val projectKey: String? = null,
+    @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
@@ -157,16 +181,6 @@ internal fun navigationGetSymbolInfoSdkTool(): SdkToolDescriptor<NavigationSymbo
         name = "navigation_get_symbol_info",
         description = "Retrieves symbol declaration and IDE quick documentation markdown " +
             "for the source position (1-based row/column) in the specified VFS URL.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationGetSymbolInfoHandler(this, args) },
     )
 }
@@ -175,15 +189,6 @@ internal fun navigationGetSymbolInfoByOffsetSdkTool(): SdkToolDescriptor<Navigat
     return sdkToolDescriptor<NavigationSymbolInfoByOffsetArgs>(
         name = "navigation_get_symbol_info_by_offset",
         description = "Retrieves symbol declaration and IDE quick documentation markdown by source offset (0-based) in the specified VFS URL.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "offset" to sdkIntegerProperty("Source offset (0-based)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "offset"),
-        ),
         handler = { args -> navigationGetSymbolInfoByOffsetHandler(this, args) },
     )
 }
@@ -192,15 +197,6 @@ internal fun navigationGetSymbolInfoAutoPositionSdkTool(): SdkToolDescriptor<Nav
     return sdkToolDescriptor<NavigationSymbolInfoAutoPositionArgs>(
         name = "navigation_get_symbol_info_auto_position",
         description = "Retrieves symbol info by either row/column or offset. Exactly one positioning mode must be provided.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "input" to sdkObjectProperty("Positioning input with optional row, column, or offset fields."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "input"),
-        ),
         handler = { args -> navigationGetSymbolInfoAutoPositionHandler(this, args) },
     )
 }
@@ -209,16 +205,6 @@ internal fun navigationGetSymbolInfoQuickSdkTool(): SdkToolDescriptor<Navigation
     return sdkToolDescriptor<NavigationSymbolInfoArgs>(
         name = "navigation_get_symbol_info_quick",
         description = "First-call friendly symbol info lookup by URI + row/column with normalized position in response.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationGetSymbolInfoQuickHandler(this, args) },
     )
 }
@@ -227,15 +213,6 @@ internal fun navigationGetSymbolInfoBatchSdkTool(): SdkToolDescriptor<Navigation
     return sdkToolDescriptor<NavigationSymbolInfoBatchArgs>(
         name = "navigation_get_symbol_info_batch",
         description = "Batch retrieve symbol declaration and IDE quick documentation markdown for source positions.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "inputs" to sdkArrayProperty("Source positions to resolve symbol info from."),
-                "continueOnError" to sdkBooleanProperty("Whether to continue collecting results after a single input fails."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("inputs"),
-        ),
         handler = { args -> navigationGetSymbolInfoBatchHandler(this, args) },
     )
 }
@@ -244,16 +221,6 @@ internal fun navigationToReferenceSdkTool(): SdkToolDescriptor<NavigationSourceP
     return sdkToolDescriptor<NavigationSourcePositionArgs>(
         name = "navigation_to_reference",
         description = "Resolve a reference at source position (1-based row/column) to its target declaration location.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationToReferenceHandler(this, args) },
     )
 }
@@ -263,16 +230,6 @@ internal fun navigationToTypeDefinitionSdkTool(): SdkToolDescriptor<NavigationSo
         name = "navigation_to_type_definition",
         description = "Resolve best-effort type declaration for the symbol at source position (1-based row/column). " +
             "May produce false negatives in some languages/PSI shapes.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationToTypeDefinitionHandler(this, args) },
     )
 }
@@ -281,20 +238,6 @@ internal fun navigationToImplementationSdkTool(): SdkToolDescriptor<NavigationSo
     return sdkToolDescriptor<NavigationSourcePositionArgs>(
         name = "navigation_to_implementation",
         description = "Resolve implementations for a reference at source position (1-based row/column).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return (default 20)."),
-                "fallbackToReferencesWhenEmpty" to sdkBooleanProperty(
-                    "If true and no implementation is found, fallback to navigation_find_references semantics.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationToImplementationHandler(this, args) },
     )
 }
@@ -303,20 +246,6 @@ internal fun navigationFindOverridesSdkTool(): SdkToolDescriptor<NavigationSourc
     return sdkToolDescriptor<NavigationSourcePositionArgs>(
         name = "navigation_find_overrides",
         description = "Find override/implementation declarations for the symbol at source position (1-based row/column).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return (default 20)."),
-                "fallbackToReferencesWhenEmpty" to sdkBooleanProperty(
-                    "If true and no override is found, fallback to navigation_find_references semantics.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationFindOverridesHandler(this, args) },
     )
 }
@@ -325,20 +254,6 @@ internal fun navigationFindInheritorsSdkTool(): SdkToolDescriptor<NavigationSour
     return sdkToolDescriptor<NavigationSourcePositionArgs>(
         name = "navigation_find_inheritors",
         description = "Find inheritor declarations for the type symbol at source position (1-based row/column).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return (default 20)."),
-                "fallbackToReferencesWhenEmpty" to sdkBooleanProperty(
-                    "If true and no inheritor is found, fallback to navigation_find_references semantics.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationFindInheritorsHandler(this, args) },
     )
 }
@@ -347,17 +262,6 @@ internal fun navigationFindReferencesSdkTool(): SdkToolDescriptor<NavigationFind
     return sdkToolDescriptor<NavigationFindReferencesArgs>(
         name = "navigation_find_references",
         description = "Find reference usages for the symbol at source position (1-based row/column).",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return (default 50)."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationFindReferencesHandler(this, args) },
     )
 }
@@ -367,20 +271,6 @@ internal fun navigationGetCallersSdkTool(): SdkToolDescriptor<NavigationSourcePo
         name = "navigation_get_callers",
         description = "Find caller references for the symbol at source position (1-based row/column). " +
             "Uses heuristic filtering to prefer call/invocation references.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "uri" to sdkStringProperty(VFS_URL_PARAM_DESCRIPTION),
-                "row" to sdkIntegerProperty("Source line number (1-based)."),
-                "column" to sdkIntegerProperty("Source column number (1-based)."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return (default 50)."),
-                "fallbackToReferencesWhenEmpty" to sdkBooleanProperty(
-                    "If true and no caller is found by heuristic filtering, fallback to generic references.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("uri", "row", "column"),
-        ),
         handler = { args -> navigationGetCallersHandler(this, args) },
     )
 }
@@ -389,15 +279,6 @@ internal fun navigationToReferenceBatchSdkTool(): SdkToolDescriptor<NavigationTo
     return sdkToolDescriptor<NavigationToReferenceBatchArgs>(
         name = "navigation_to_reference_batch",
         description = "Batch resolve references for multiple source positions.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "inputs" to sdkArrayProperty("Source positions to resolve."),
-                "continueOnError" to sdkBooleanProperty("Whether to continue collecting results after a single input fails."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("inputs"),
-        ),
         handler = { args -> navigationToReferenceBatchHandler(this, args) },
     )
 }
@@ -406,16 +287,6 @@ internal fun navigationFindReferencesBatchSdkTool(): SdkToolDescriptor<Navigatio
     return sdkToolDescriptor<NavigationFindReferencesBatchArgs>(
         name = "navigation_find_references_batch",
         description = "Batch find references for multiple source positions.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "inputs" to sdkArrayProperty("Source positions to search references from."),
-                "limit" to sdkIntegerProperty("Maximum number of results to return for each input (default 50)."),
-                "continueOnError" to sdkBooleanProperty("Whether to continue collecting results after a single input fails."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("inputs"),
-        ),
         handler = { args -> navigationFindReferencesBatchHandler(this, args) },
     )
 }

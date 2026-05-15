@@ -2,6 +2,22 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.vfs.tools
@@ -11,45 +27,52 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 
 /**
  * Typed arguments for the vfs_refresh tool.
  */
+@Schema
 @Serializable
 internal data class VfsRefreshArgs(
+    @Description("VFS URL to refresh")
     val url: String,
+    @Description("Whether to run refresh asynchronously")
     val async: Boolean = false,
+    @Description("Refresh children recursively")
     val recursive: Boolean = false,
+    @Description("Explicit project key for multi-project workspaces")
     override val projectKey: String? = null,
+    @Description("Explicit project base path for resolution")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
 /**
  * Typed arguments for the vfs_exists tool.
  */
+@Schema
 @Serializable
 internal data class VfsExistsArgs(
+    @Description("VFS URL or project-relative path to check")
     val url: String,
+    @Description("Explicit project key for multi-project workspaces")
     override val projectKey: String? = null,
+    @Description("Explicit project base path for resolution")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class VfsExistsResult(
+    @Description("VFS URL that was checked")
     val url: String,
+    @Description("Whether the file or directory exists")
     val exists: Boolean,
 )
 
@@ -72,20 +95,6 @@ internal fun vfsRefreshSdkTool(): SdkToolDescriptor<VfsRefreshArgs> {
     return sdkToolDescriptor<VfsRefreshArgs>(
         name = "vfs_refresh",
         description = "Refresh a VFS file or directory. Supports project-scoped URL resolution via optional projectKey/projectPath.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("VFS URL or project-relative path to refresh."),
-                "async" to sdkBooleanProperty("Run refresh asynchronously (default false)."),
-                "recursive" to sdkBooleanProperty(
-                    "Refresh children recursively (default false). Effective for directories.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("url"),
-        ),
         handler = { args -> vfsRefreshHandler(this, args) },
     )
 }
@@ -98,16 +107,6 @@ internal fun vfsExistsSdkTool(): SdkToolDescriptor<VfsExistsArgs> {
     return sdkToolDescriptor<VfsExistsArgs>(
         name = "vfs_exists",
         description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("VFS URL or project-relative path to check."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("url"),
-        ),
         handler = { args -> vfsExistsHandler(this, args) },
     )
 }

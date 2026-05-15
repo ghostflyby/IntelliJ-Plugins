@@ -22,94 +22,147 @@
 
 package dev.ghostflyby.mcp.navigation
 
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
 
+@Schema
 @Serializable
 internal data class NavigationResult(
+    @Description("The VFS URL of the declared target file.")
     val targetVirtualFileUri: String,
+    @Description("1-based line number of the target location.")
     val row: Int,
+    @Description("1-based column number of the target location.")
     val column: Int,
 )
 
+@Schema
 @Serializable
 internal data class NavigationResults(
+    @Description("List of navigation results.")
     val items: List<NavigationResult>,
+    @Description("Diagnostic messages about the search.")
     val diagnostics: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class NavigationSourcePosition(
+    @Description("VFS URL of the source file.")
     val uri: String,
+    @Description("1-based line number.")
     val row: Int,
+    @Description("1-based column number.")
     val column: Int,
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchSingleItem(
+    @Description("The source position that was resolved.")
     val input: NavigationSourcePosition,
+    @Description("Resolved navigation result, null on error.")
     val result: NavigationResult? = null,
+    @Description("Error message if resolution failed.")
     val error: String? = null,
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchMultiItem(
+    @Description("The source position that was resolved.")
     val input: NavigationSourcePosition,
+    @Description("Navigation results (possibly multiple items), null on error.")
     val result: NavigationResults? = null,
+    @Description("Error message if resolution failed.")
     val error: String? = null,
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchSingleResult(
+    @Description("Individual batch item results.")
     val items: List<NavigationBatchSingleItem>,
+    @Description("Number of successfully resolved items.")
     val successCount: Int,
+    @Description("Number of items that failed to resolve.")
     val failureCount: Int,
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchMultiResult(
+    @Description("Individual batch item results.")
     val items: List<NavigationBatchMultiItem>,
+    @Description("Number of successfully resolved items.")
     val successCount: Int,
+    @Description("Number of items that failed to resolve.")
     val failureCount: Int,
 )
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoResult(
+    @Description("Documentation text, may be empty.")
     val documentation: String,
 )
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoPosition(
+    @Description("VFS URL of the source file.")
     val uri: String,
+    @Description("1-based line number.")
     val row: Int,
+    @Description("1-based column number.")
     val column: Int,
 )
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoAutoPositionInput(
+    @Description("1-based line number (omit when using offset).")
     val row: Int? = null,
+    @Description("1-based column number (omit when using offset).")
     val column: Int? = null,
+    @Description("0-based source offset (omit when using row+column).")
     val offset: Int? = null,
 )
 
+@Schema
 @Serializable
 internal data class NavigationSymbolInfoResolvedResult(
+    @Description("Documentation text, may be empty.")
     val documentation: String,
+    @Description("Resolved 1-based line number.")
     val row: Int,
+    @Description("Resolved 1-based column number.")
     val column: Int,
+    @Description("Resolved 0-based offset.")
     val offset: Int,
+    @Description("Recommended next tool calls after this result.")
     val recommendedNextCalls: List<String> = emptyList(),
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchSymbolInfoItem(
+    @Description("The source position that was resolved.")
     val input: NavigationSymbolInfoPosition,
+    @Description("Symbol info result, null on error.")
     val result: NavigationSymbolInfoResult? = null,
+    @Description("Error message if resolution failed.")
     val error: String? = null,
 )
 
+@Schema
 @Serializable
 internal data class NavigationBatchSymbolInfoResult(
+    @Description("Individual batch item results.")
     val items: List<NavigationBatchSymbolInfoItem>,
+    @Description("Number of successfully resolved items.")
     val successCount: Int,
+    @Description("Number of items that failed to resolve.")
     val failureCount: Int,
 )

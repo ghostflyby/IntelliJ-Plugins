@@ -2,51 +2,41 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.scope.descriptor.tools
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
-import dev.ghostflyby.mcp.scope.ModuleScopeFlavor
-import dev.ghostflyby.mcp.scope.ScopeAtomFailureMode
-import dev.ghostflyby.mcp.scope.ScopeAtomKind
-import dev.ghostflyby.mcp.scope.ScopeCatalogItemDto
-import dev.ghostflyby.mcp.scope.ScopeCatalogResultDto
-import dev.ghostflyby.mcp.scope.ScopeCatalogService
-import dev.ghostflyby.mcp.scope.ScopeDescribeProgramResultDto
-import dev.ghostflyby.mcp.scope.ScopeFilterFilesResultDto
-import dev.ghostflyby.mcp.scope.ScopeProgramDescriptorDto
-import dev.ghostflyby.mcp.scope.ScopeProgramOp
-import dev.ghostflyby.mcp.scope.ScopeProgramTokenDto
-import dev.ghostflyby.mcp.scope.ScopeQuickPreset
-import dev.ghostflyby.mcp.scope.ScopeResolveRequestDto
-import dev.ghostflyby.mcp.scope.ScopeResolveResultDto
-import dev.ghostflyby.mcp.scope.ScopeResolverService
-import dev.ghostflyby.mcp.scope.ScopeContainsFileResultDto
-import dev.ghostflyby.mcp.scope.buildPresetScopeDescriptor
-import dev.ghostflyby.mcp.scope.buildStandardScopeDescriptor
-
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkArrayProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkObjectProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.scope.*
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 
 /**
  * Local serializable enum for catalog intent; duplicates the shape from
  * [ScopeSdkCatalogIntent] to avoid depending on annotation-tool internals.
  */
+@Schema
 @Serializable
 internal enum class ScopeSdkCatalogIntent {
     PROJECT_ONLY,
@@ -59,8 +49,10 @@ internal enum class ScopeSdkCatalogIntent {
 /**
  * Local result DTO for catalog-by-intent lookup.
  */
+@Schema
 @Serializable
 internal data class ScopeSdkCatalogIntentResultDto(
+    @Description("Selection intent for reducing catalog candidates. One of: PROJECT_ONLY, WITH_LIBRARIES, CHANGED_FILES, OPEN_FILES, CURRENT_FILE.")
     val intent: ScopeSdkCatalogIntent,
     val recommendedScopeRefId: String? = null,
     val items: List<ScopeCatalogItemDto>,
@@ -69,8 +61,11 @@ internal data class ScopeSdkCatalogIntentResultDto(
 
 // ── scope_list_catalog ──────────────────────────────────────────
 
+@Description("Arguments for ScopeListCatalogArgs")
+@Schema
 @Serializable
 internal data class ScopeListCatalogArgs(
+    @Description("Whether to include scopes that depend on current UI context.")
     val includeInteractiveScopes: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -80,17 +75,6 @@ internal fun scopeListCatalogSdkTool(): SdkToolDescriptor<ScopeListCatalogArgs> 
     return sdkToolDescriptor<ScopeListCatalogArgs>(
         name = "scope_list_catalog",
         description = "List available search scopes (Find-like catalog) with stable scopeRefId and metadata.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "includeInteractiveScopes" to sdkBooleanProperty(
-                    "Whether to include scopes that depend on current UI context (for example Current File).",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-        ),
         handler = { args -> scopeListCatalogHandler(this, args) },
     )
 }
@@ -110,9 +94,13 @@ private suspend fun scopeListCatalogHandler(
 
 // ── scope_get_default_descriptor ─────────────────────────────────
 
+@Description("Arguments for ScopeGetDefaultDescriptorArgs")
+@Schema
 @Serializable
 internal data class ScopeGetDefaultDescriptorArgs(
+    @Description("Preset scope to use. One of: PROJECT_FILES, ALL_PLACES, OPEN_FILES, PROJECT_AND_LIBRARIES, PROJECT_PRODUCTION_FILES, PROJECT_TEST_FILES.")
     val preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -122,21 +110,6 @@ internal fun scopeGetDefaultDescriptorSdkTool(): SdkToolDescriptor<ScopeGetDefau
     return sdkToolDescriptor<ScopeGetDefaultDescriptorArgs>(
         name = "scope_get_default_descriptor",
         description = "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "preset" to sdkStringProperty(
-                    "Preset scope to use. One of: PROJECT_FILES, ALL_PLACES, OPEN_FILES, " +
-                        "PROJECT_AND_LIBRARIES, PROJECT_PRODUCTION_FILES, PROJECT_TEST_FILES.",
-                ),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(
-                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-        ),
         handler = { args -> scopeGetDefaultDescriptorHandler(this, args) },
     )
 }
@@ -161,9 +134,13 @@ private suspend fun scopeGetDefaultDescriptorHandler(
 
 // ── scope_resolve_standard_descriptor ────────────────────────────
 
+@Description("Arguments for ScopeResolveStandardDescriptorArgs")
+@Schema
 @Serializable
 internal data class ScopeResolveStandardDescriptorArgs(
+    @Description("Standard scope id, for example 'Project Files' or 'All Places'.")
     val standardScopeId: String,
+    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -173,21 +150,6 @@ internal fun scopeResolveStandardDescriptorSdkTool(): SdkToolDescriptor<ScopeRes
     return sdkToolDescriptor<ScopeResolveStandardDescriptorArgs>(
         name = "scope_resolve_standard_descriptor",
         description = "Resolve a standard IDE scope id directly to a normalized reusable descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "standardScopeId" to sdkStringProperty(
-                    "Standard scope id, for example 'Project Files' or 'All Places'.",
-                ),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(
-                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("standardScopeId"),
-        ),
         handler = { args -> scopeResolveStandardDescriptorHandler(this, args) },
     )
 }
@@ -218,10 +180,15 @@ private suspend fun scopeResolveStandardDescriptorHandler(
 
 // ── scope_catalog_find_by_intent ─────────────────────────────────
 
+@Description("Arguments for ScopeCatalogFindByIntentArgs")
+@Schema
 @Serializable
 internal data class ScopeCatalogFindByIntentArgs(
+    @Description("Selection intent for reducing catalog candidates. One of: PROJECT_ONLY, WITH_LIBRARIES, CHANGED_FILES, OPEN_FILES, CURRENT_FILE.")
     val intent: ScopeSdkCatalogIntent,
+    @Description("Maximum number of catalog items to return.")
     val maxResults: Int = 20,
+    @Description("Whether to include scopes that depend on current UI context.")
     val includeInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -231,25 +198,8 @@ internal fun scopeCatalogFindByIntentSdkTool(): SdkToolDescriptor<ScopeCatalogFi
     return sdkToolDescriptor<ScopeCatalogFindByIntentArgs>(
         name = "scope_catalog_find_by_intent",
         description = "Find a compact scope catalog subset by intent " +
-            "(project-only, with-libraries, changed/open/current file) " +
-            "to reduce first-call catalog payload.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "intent" to sdkStringProperty(
-                    "Selection intent for reducing catalog candidates. " +
-                        "One of: PROJECT_ONLY, WITH_LIBRARIES, CHANGED_FILES, OPEN_FILES, CURRENT_FILE.",
-                ),
-                "maxResults" to sdkIntegerProperty("Maximum number of catalog items to return."),
-                "includeInteractiveScopes" to sdkBooleanProperty(
-                    "Whether to include scopes that depend on current UI context.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("intent"),
-        ),
+                "(project-only, with-libraries, changed/open/current file) " +
+                "to reduce first-call catalog payload.",
         handler = { args -> scopeCatalogFindByIntentHandler(this, args) },
     )
 }
@@ -273,14 +223,14 @@ private suspend fun scopeCatalogFindByIntentHandler(
             val serializationId = item.serializationId
             when (args.intent) {
                 ScopeSdkCatalogIntent.PROJECT_ONLY -> serializationId == "Project Files" ||
-                    serializationId == "Project Production Files" ||
-                    serializationId == "Project Test Files" ||
-                    item.kind == ScopeAtomKind.MODULE
+                        serializationId == "Project Production Files" ||
+                        serializationId == "Project Test Files" ||
+                        item.kind == ScopeAtomKind.MODULE
 
                 ScopeSdkCatalogIntent.WITH_LIBRARIES -> serializationId == "All Places" ||
-                    serializationId == "Project and Libraries" ||
-                    item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_LIBRARIES ||
-                    item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES
+                        serializationId == "Project and Libraries" ||
+                        item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_LIBRARIES ||
+                        item.moduleFlavor == ModuleScopeFlavor.MODULE_WITH_DEPENDENCIES_AND_LIBRARIES
 
                 ScopeSdkCatalogIntent.CHANGED_FILES -> serializationId == "Recently Changed Files"
                 ScopeSdkCatalogIntent.OPEN_FILES -> serializationId == "Open Files"
@@ -318,8 +268,11 @@ private suspend fun scopeCatalogFindByIntentHandler(
 
 // ── scope_validate_pattern ───────────────────────────────────────
 
+@Description("Arguments for ScopeValidatePatternArgs")
+@Schema
 @Serializable
 internal data class ScopeValidatePatternArgs(
+    @Description("Scope pattern text in IntelliJ PackageSet syntax.")
     val patternText: String,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -329,16 +282,6 @@ internal fun scopeValidatePatternSdkTool(): SdkToolDescriptor<ScopeValidatePatte
     return sdkToolDescriptor<ScopeValidatePatternArgs>(
         name = "scope_validate_pattern",
         description = "Validate a PackageSet pattern text used by IntelliJ scopes.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "patternText" to sdkStringProperty("Scope pattern text in IntelliJ PackageSet syntax."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("patternText"),
-        ),
         handler = { args -> scopeValidatePatternHandler(this, args) },
     )
 }
@@ -358,8 +301,11 @@ private suspend fun scopeValidatePatternHandler(
 
 // ── scope_resolve_program ────────────────────────────────────────
 
+@Description("Arguments for ScopeResolveProgramArgs")
+@Schema
 @Serializable
 internal data class ScopeResolveProgramArgs(
+    @Description("Compile request with atoms and RPN tokens.")
     val request: ScopeResolveRequestDto,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -369,18 +315,6 @@ internal fun scopeResolveProgramSdkTool(): SdkToolDescriptor<ScopeResolveProgram
     return sdkToolDescriptor<ScopeResolveProgramArgs>(
         name = "scope_resolve_program",
         description = "Compile and normalize scope atoms and RPN tokens into a reusable scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "request" to sdkObjectProperty(
-                    "Scope resolve request with atoms, RPN tokens, strict mode, and failure configuration.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("request"),
-        ),
         handler = { args -> scopeResolveProgramHandler(this, args) },
     )
 }
@@ -401,9 +335,13 @@ private suspend fun scopeResolveProgramHandler(
 
 // ── scope_normalize_program_descriptor ───────────────────────────
 
+@Description("Arguments for ScopeNormalizeDescriptorArgs")
+@Schema
 @Serializable
 internal data class ScopeNormalizeDescriptorArgs(
+    @Description("Existing scope descriptor to normalize.")
     val descriptor: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -413,20 +351,7 @@ internal fun scopeNormalizeProgramDescriptorSdkTool(): SdkToolDescriptor<ScopeNo
     return sdkToolDescriptor<ScopeNormalizeDescriptorArgs>(
         name = "scope_normalize_program_descriptor",
         description = "Normalize and recompile an existing scope descriptor, " +
-            "useful for migration and compatibility upgrades.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "descriptor" to sdkObjectProperty("The scope program descriptor to normalize."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(
-                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("descriptor"),
-        ),
+                "useful for migration and compatibility upgrades.",
         handler = { args -> scopeNormalizeDescriptorHandler(this, args) },
     )
 }
@@ -458,10 +383,15 @@ private suspend fun scopeNormalizeDescriptorHandler(
 
 // ── scope_contains_file ──────────────────────────────────────────
 
+@Description("Arguments for ScopeContainsFileArgs")
+@Schema
 @Serializable
 internal data class ScopeContainsFileArgs(
+    @Description("VFS URL of the file to check.")
     val fileUrl: String,
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -471,22 +401,6 @@ internal fun scopeContainsFileSdkTool(): SdkToolDescriptor<ScopeContainsFileArgs
     return sdkToolDescriptor<ScopeContainsFileArgs>(
         name = "scope_contains_file",
         description = "Check whether a file URL belongs to a resolved scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrl" to sdkStringProperty(
-                    "Target VFS URL. returned from other mcp calls, or constructed by the caller.",
-                ),
-                "scope" to sdkObjectProperty("The scope program descriptor to test membership against."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(
-                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("fileUrl", "scope"),
-        ),
         handler = { args -> scopeContainsFileHandler(this, args) },
     )
 }
@@ -532,10 +446,15 @@ private suspend fun scopeContainsFileHandler(
 
 // ── scope_filter_files ──────────────────────────────────────────
 
+@Description("Arguments for ScopeFilterFilesArgs")
+@Schema
 @Serializable
 internal data class ScopeFilterFilesArgs(
+    @Description("Input file URLs to test against the scope.")
     val fileUrls: List<String>,
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -545,20 +464,6 @@ internal fun scopeFilterFilesSdkTool(): SdkToolDescriptor<ScopeFilterFilesArgs> 
     return sdkToolDescriptor<ScopeFilterFilesArgs>(
         name = "scope_filter_files",
         description = "Filter file URLs by whether they belong to a resolved scope descriptor.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "fileUrls" to sdkArrayProperty("Input file URLs to test against the scope."),
-                "scope" to sdkObjectProperty("The scope program descriptor to test membership against."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(
-                    "Whether UI-interactive scopes are allowed during descriptor resolution.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("fileUrls", "scope"),
-        ),
         handler = { args -> scopeFilterFilesHandler(this, args) },
     )
 }

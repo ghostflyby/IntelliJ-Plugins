@@ -46,35 +46,16 @@ import com.intellij.psi.search.*
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
-import dev.ghostflyby.mcp.common.ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.SCOPE_SYMBOL_QUICK_PRESET_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.isLikelyCallableDeclarationClassName
-import dev.ghostflyby.mcp.common.isLikelyFieldDeclarationClassName
-import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
-import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkIntegerProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkObjectProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.*
+import kotlinx.schema.Description
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -82,12 +63,14 @@ import kotlin.time.Duration.Companion.milliseconds
 
 // ── Serializable DTOs (moved from old McpToolset) ────────────────
 
+@Schema
 @Serializable
 internal enum class ScopeSymbolQuickPreset {
     PROJECT_FILES,
     ALL_PLACES,
 }
 
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchStageStatsDto(
     val recallObserved: Int,
@@ -98,12 +81,14 @@ internal data class ScopeSymbolSearchStageStatsDto(
     val providerMode: String,
 )
 
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchWithStageResultDto(
     val result: ScopeSymbolSearchResultDto,
     val stageStats: ScopeSymbolSearchStageStatsDto,
 )
 
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchHealthcheckResultDto(
     val indexReady: Boolean,
@@ -115,46 +100,72 @@ internal data class ScopeSymbolSearchHealthcheckResultDto(
 
 // ── Tool argument DTOs ───────────────────────────────────────────
 
+@Description("Arguments for ScopeSymbolSearchArgs")
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchArgs(
     val query: String = "",
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
+    @Description("Maximum number of symbol items to return.")
     val maxResultCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether to include library/dependency symbols.")
     val includeNonProjectItems: Boolean = true,
+    @Description("Whether returned items must have physical file+position.")
     val requirePhysicalLocation: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for ScopeSymbolSearchQuickArgs")
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchQuickArgs(
     val query: String = "",
+    @Description("Preset scope for quick symbol search.")
     val scopePreset: ScopeSymbolQuickPreset = ScopeSymbolQuickPreset.PROJECT_FILES,
+    @Description("Maximum number of symbol items to return.")
     val maxResultCount: Int = 50,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 20000,
+    @Description("Whether returned items must have physical file+position.")
     val requirePhysicalLocation: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for ScopeSymbolSearchWithStageProgressArgs")
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchWithStageProgressArgs(
     val query: String = "",
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
+    @Description("Maximum number of symbol items to return.")
     val maxResultCount: Int = 200,
+    @Description("Timeout in milliseconds.")
     val timeoutMillis: Int = 30000,
+    @Description("Whether to include library/dependency symbols.")
     val includeNonProjectItems: Boolean = true,
+    @Description("Whether returned items must have physical file+position.")
     val requirePhysicalLocation: Boolean = true,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Description("Arguments for ScopeSymbolSearchHealthcheckArgs")
+@Schema
 @Serializable
 internal data class ScopeSymbolSearchHealthcheckArgs(
+    @Description("Scope program descriptor.")
     val `scope`: ScopeProgramDescriptorDto,
+    @Description("Whether UI-interactive scopes are allowed.")
     val allowUiInteractiveScopes: Boolean = false,
     override val projectKey: String? = null,
     override val projectPath: String? = null,
@@ -177,21 +188,7 @@ internal fun scopeSymbolSearchTool(): SdkToolDescriptor<ScopeSymbolSearchArgs> {
     return sdkToolDescriptor<ScopeSymbolSearchArgs>(
         name = "scope_search_symbols",
         description = "Search symbols within a resolved scope descriptor. " +
-            "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Symbol query string (for example class/method/field name pattern)."),
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION),
-                "maxResultCount" to sdkIntegerProperty("Maximum number of symbol items to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "includeNonProjectItems" to sdkBooleanProperty("Whether to include non-project symbols (libraries/dependencies) when scope allows."),
-                "requirePhysicalLocation" to sdkBooleanProperty("Whether returned items must have physical file+position location."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("query", "scope"),
-        ),
+                "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
         handler = { args -> scopeSymbolSearchHandler(this, args) },
     )
 }
@@ -358,12 +355,12 @@ private suspend fun scopeSymbolSearchHandler(
                     timedOut = timedOut,
                     canceled = false,
                     diagnostics = (
-                        args.scope.diagnostics +
-                            resolved.diagnostics +
-                            effectiveScope.diagnostics +
-                            converted.diagnostics +
-                            runtimeDiagnostics
-                        ).distinct(),
+                            args.scope.diagnostics +
+                                    resolved.diagnostics +
+                                    effectiveScope.diagnostics +
+                                    converted.diagnostics +
+                                    runtimeDiagnostics
+                            ).distinct(),
                 )
                 reportActivity(
                     Bundle.message(
@@ -394,19 +391,7 @@ internal fun scopeSymbolSearchQuickTool(): SdkToolDescriptor<ScopeSymbolSearchQu
     return sdkToolDescriptor<ScopeSymbolSearchQuickArgs>(
         name = "scope_search_symbols_quick",
         description = "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope." +
-            AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Symbol query string."),
-                "scopePreset" to sdkStringProperty(SCOPE_SYMBOL_QUICK_PRESET_PARAM_DESCRIPTION),
-                "maxResultCount" to sdkIntegerProperty("Maximum number of symbol items to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "requirePhysicalLocation" to sdkBooleanProperty("Whether returned items must have physical file+position location."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("query"),
-        ),
+                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
         handler = { args -> scopeSymbolSearchQuickHandler(this, args) },
     )
 }
@@ -430,7 +415,16 @@ private suspend fun scopeSymbolSearchQuickHandler(
                 return@callToolWithProject errorResult("timeoutMillis must be >= 1.")
             }
 
-            reportActivity(Bundle.message("tool.activity.scope.symbol.search.start", args.query.length, args.maxResultCount, args.timeoutMillis, false, args.requirePhysicalLocation))
+            reportActivity(
+                Bundle.message(
+                    "tool.activity.scope.symbol.search.start",
+                    args.query.length,
+                    args.maxResultCount,
+                    args.timeoutMillis,
+                    false,
+                    args.requirePhysicalLocation,
+                ),
+            )
 
             val descriptor = buildPresetScopeDescriptor(
                 project = project,
@@ -460,20 +454,6 @@ internal fun scopeSymbolSearchWithStageProgressTool(): SdkToolDescriptor<ScopeSy
     return sdkToolDescriptor<ScopeSymbolSearchWithStageProgressArgs>(
         name = "scope_search_symbols_with_stage_progress",
         description = "Search symbols and return stage counters for agent-side retry/expand decisions.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "query" to sdkStringProperty("Symbol query string (for example class/method/field name pattern)."),
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION),
-                "maxResultCount" to sdkIntegerProperty("Maximum number of symbol items to return."),
-                "timeoutMillis" to sdkIntegerProperty("Timeout in milliseconds."),
-                "includeNonProjectItems" to sdkBooleanProperty("Whether to include non-project symbols (libraries/dependencies) when scope allows."),
-                "requirePhysicalLocation" to sdkBooleanProperty("Whether returned items must have physical file+position location."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("query", "scope"),
-        ),
         handler = { args -> scopeSymbolSearchWithStageProgressHandler(this, args) },
     )
 }
@@ -513,7 +493,7 @@ private suspend fun scopeSymbolSearchWithStageProgressHandler(
             )
             val searchResult = scopeSymbolSearchImpl(project, searchArgs)
             val estimatedProcessed = searchResult.items.size +
-                searchResult.diagnostics.count { it.startsWith("Skipped ") }
+                    searchResult.diagnostics.count { it.startsWith("Skipped ") }
             val result = ScopeSymbolSearchWithStageResultDto(
                 result = searchResult,
                 stageStats = ScopeSymbolSearchStageStatsDto(
@@ -538,15 +518,6 @@ internal fun scopeSymbolSearchHealthcheckTool(): SdkToolDescriptor<ScopeSymbolSe
     return sdkToolDescriptor<ScopeSymbolSearchHealthcheckArgs>(
         name = "scope_search_symbols_healthcheck",
         description = "Quickly check symbol search readiness (index state + provider mode) before a full search.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "scope" to sdkObjectProperty("Scope program descriptor defining the search scope."),
-                "allowUiInteractiveScopes" to sdkBooleanProperty(ALLOW_UI_INTERACTIVE_SCOPES_PARAM_DESCRIPTION),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty("Absolute project base path for project-scoped resolution (optional)."),
-            ),
-            required = listOf("scope"),
-        ),
         handler = { args -> scopeSymbolSearchHealthcheckHandler(this, args) },
     )
 }
@@ -560,7 +531,12 @@ private suspend fun scopeSymbolSearchHealthcheckHandler(
         sessionId = ctx.sessionId,
     ) { project ->
         try {
-            reportActivity(Bundle.message("tool.activity.scope.symbol.search.healthcheck", args.allowUiInteractiveScopes))
+            reportActivity(
+                Bundle.message(
+                    "tool.activity.scope.symbol.search.healthcheck",
+                    args.allowUiInteractiveScopes,
+                ),
+            )
             val result = scopeSymbolSearchHealthcheckImpl(project, args)
             okResult(toolArgsJson.encodeToString(result))
         } catch (e: IllegalArgumentException) {
@@ -621,7 +597,11 @@ private suspend fun scopeSymbolSearchImpl(
                 while (isActive && !finished.get()) {
                     delay(800)
                     reportActivity(
-                        Bundle.message("tool.activity.scope.symbol.search.progress", observedCandidateCount.get(), processedCandidateCount.get()),
+                        Bundle.message(
+                            "tool.activity.scope.symbol.search.progress",
+                            observedCandidateCount.get(),
+                            processedCandidateCount.get(),
+                        ),
                     )
                 }
             }
@@ -706,12 +686,12 @@ private suspend fun scopeSymbolSearchImpl(
             timedOut = timedOut,
             canceled = false,
             diagnostics = (
-                args.scope.diagnostics +
-                    resolved.diagnostics +
-                    effectiveScope.diagnostics +
-                    converted.diagnostics +
-                    runtimeDiagnostics
-                ).distinct(),
+                    args.scope.diagnostics +
+                            resolved.diagnostics +
+                            effectiveScope.diagnostics +
+                            converted.diagnostics +
+                            runtimeDiagnostics
+                    ).distinct(),
         )
     } catch (_: IndexNotReadyException) {
         throw IllegalStateException("Symbol search is temporarily unavailable while indexes are updating. Please retry.")
@@ -1004,7 +984,6 @@ private suspend fun convertCandidate(
                 language = language,
                 score = candidate.score,
             ),
-            skipReason = SkipReason.NONE,
         )
     }
 }
@@ -1047,7 +1026,7 @@ private fun buildEffectiveScope(project: Project, resolvedScope: SearchScope): E
             if (reflectedLocal != null) {
                 diagnostics +=
                     "Resolved non-global scope '${resolvedScope.javaClass.name}' exposes LocalSearchScope via reflection; " +
-                        "using global recall plus local post-filter."
+                            "using global recall plus local post-filter."
                 EffectiveScope(
                     globalScope = GlobalSearchScopeUtil.toGlobalSearchScope(reflectedLocal, project),
                     postFilterPolicy = PostFilterPolicy.LocalOnly(reflectedLocal),
@@ -1056,7 +1035,7 @@ private fun buildEffectiveScope(project: Project, resolvedScope: SearchScope): E
             } else {
                 diagnostics +=
                     "Scope type '${resolvedScope.javaClass.name}' cannot be converted losslessly to GlobalSearchScope; " +
-                        "using broad global recall with generic post-filter."
+                            "using broad global recall with generic post-filter."
                 EffectiveScope(
                     globalScope = ProjectScope.getAllScope(project),
                     postFilterPolicy = PostFilterPolicy.Generic(resolvedScope),
@@ -1082,7 +1061,7 @@ private fun passesPostFilter(
         is PostFilterPolicy.GlobalOrLocal -> {
             val inGlobal = file?.let(postFilterPolicy.globalScope::contains) ?: false
             inGlobal || element?.let { PsiSearchScopeUtil.isInScope(postFilterPolicy.localScope, it) } == true ||
-                (file != null && postFilterPolicy.localScope.isInScope(file))
+                    (file != null && postFilterPolicy.localScope.isInScope(file))
         }
 
         is PostFilterPolicy.Generic -> {

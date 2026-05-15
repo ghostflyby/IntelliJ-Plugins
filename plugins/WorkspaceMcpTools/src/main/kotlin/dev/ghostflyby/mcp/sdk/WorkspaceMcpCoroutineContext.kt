@@ -96,14 +96,14 @@ internal val CoroutineContext.currentWorkspaceProject: Project
         if (projectCtx.project.isDisposed) {
             throw CancellationException(
                 "Project '" + projectCtx.projectKey + "' is disposed, " +
-                    "currentWorkspaceProject is not available",
+                        "currentWorkspaceProject is not available",
             )
         }
         val lifetimeCtx = workspaceMcpProjectLifetime
         if (lifetimeCtx != null && !lifetimeCtx.lifetimeJob.isActive) {
             throw CancellationException(
                 "Project '" + projectCtx.projectKey + "' lifetime job is cancelled, " +
-                    "currentWorkspaceProject is not available",
+                        "currentWorkspaceProject is not available",
             )
         }
         return projectCtx.project
@@ -129,7 +129,7 @@ internal fun CoroutineContext.withResolvedWorkspaceProject(
         projectKey = projectKey, project = project, reason = reason,
     )
     if (lifetimeJob != null) {
-        ctx = ctx + WorkspaceMcpProjectLifetimeContext(
+        ctx += WorkspaceMcpProjectLifetimeContext(
             projectKey = projectKey, project = project, lifetimeJob = lifetimeJob,
         )
     }
@@ -176,7 +176,13 @@ internal suspend fun <T> withWorkspaceMcpCallContext(
     roots: WorkspaceMcpRootsSnapshot? = null,
     block: suspend CoroutineScope.() -> T,
 ): T {
-    return withContext(EmptyCoroutineContext.withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = instanceKey, roots = roots)) {
+    return withContext(
+        EmptyCoroutineContext.withWorkspaceMcpCallContext(
+            sessionId = sessionId,
+            instanceKey = instanceKey,
+            roots = roots,
+        ),
+    ) {
         block()
     }
 }

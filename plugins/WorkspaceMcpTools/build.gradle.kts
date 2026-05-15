@@ -23,6 +23,7 @@
 plugins {
     id("repo.intellij-plugin")
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 version = "1.0.4"
@@ -33,5 +34,12 @@ dependencies {
     implementation(libs.ktor.server.cio)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    ksp("org.jetbrains.kotlinx:kotlinx-schema-ksp:0.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-schema-annotations:0.5.0")
 }
 
+ksp {
+    arg("kotlinx.schema.rootPackage", "dev.ghostflyby.mcp")
+    arg("kotlinx.schema.withSchemaObject", "true")
+    arg("kotlinx.schema.visibility", "internal")
+}

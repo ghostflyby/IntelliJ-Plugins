@@ -177,8 +177,6 @@ Tool handlers use `WorkspaceMcpRequestRunner` for centralized project resolution
 ### SDK Tools
 
 The `dev.ghostflyby.mcp.sdk.tools` package provides the canonical migration pattern for Kotlin MCP SDK tools:
-declare an `@Serializable` argument DTO, register it with `sdkToolDescriptor<T>()`, expose a typed
-`toolSchema` with `SdkToolProperty`, and run handlers through `WorkspaceMcpRequestRunner` for project resolution
 and structured error mapping.
 
 Proof-of-migration:

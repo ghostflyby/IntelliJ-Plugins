@@ -2,6 +2,22 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.vfs.tools
@@ -13,25 +29,18 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.SdkToolHandlerContext
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkBooleanProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkStringProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkArrayProperty
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.toolSchema
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import java.nio.file.Path
 
 // ---------------------------------------------------------------------------
 // Serializable DTOs — matching old shapes from VfsMcpTools
 // ---------------------------------------------------------------------------
 
+@Schema
 @Serializable
 internal data class VfsBatchUrlResultItem(
     val input: String,
@@ -39,6 +48,7 @@ internal data class VfsBatchUrlResultItem(
     val error: String? = null,
 )
 
+@Schema
 @Serializable
 internal data class VfsBatchUrlResult(
     val items: List<VfsBatchUrlResultItem>,
@@ -46,12 +56,14 @@ internal data class VfsBatchUrlResult(
     val failureCount: Int,
 )
 
+@Schema
 @Serializable
 internal data class VfsBatchExistsResultItem(
     val url: String,
     val exists: Boolean,
 )
 
+@Schema
 @Serializable
 internal data class VfsBatchExistsResult(
     val items: List<VfsBatchExistsResultItem>,
@@ -61,6 +73,7 @@ internal data class VfsBatchExistsResult(
 // Tool argument DTOs
 // ---------------------------------------------------------------------------
 
+@Schema
 @Serializable
 internal data class VfsGetUrlArgs(
     val pathInProject: String,
@@ -69,6 +82,7 @@ internal data class VfsGetUrlArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class VfsGetUrlsArgs(
     val pathsInProject: List<String>,
@@ -78,6 +92,7 @@ internal data class VfsGetUrlsArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class VfsGetLocalPathArgs(
     val url: String,
@@ -85,6 +100,7 @@ internal data class VfsGetLocalPathArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class VfsGetLocalPathsArgs(
     val urls: List<String>,
@@ -93,6 +109,7 @@ internal data class VfsGetLocalPathsArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
+@Schema
 @Serializable
 internal data class VfsExistsManyArgs(
     val urls: List<String>,
@@ -114,17 +131,6 @@ internal fun vfsGetUrlFromLocalPathTool(): SdkToolDescriptor<VfsGetUrlArgs> {
         description = "Resolve a project-relative local path to a VFS URL. " +
             "This is a convenience helper: for local files, you can directly pass " +
             "a file:///absolute/path URL to tools that accept VFS URLs.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "pathInProject" to sdkStringProperty("Project-relative local path to resolve (convenience input)."),
-                "refreshIfNeeded" to sdkBooleanProperty("Refresh the file system before resolving the path."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("pathInProject"),
-        ),
         handler = { args -> vfsGetUrlHandler(this, args) },
     )
 }
@@ -139,20 +145,6 @@ internal fun vfsGetUrlsFromLocalPathsTool(): SdkToolDescriptor<VfsGetUrlsArgs> {
         description = "Resolve multiple project-relative local paths to VFS URLs. " +
             "This is a convenience helper: for local files, you can directly pass " +
             "file:///absolute/path URLs to tools that accept VFS URLs.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "pathsInProject" to sdkArrayProperty("Project-relative local paths to resolve (convenience input)."),
-                "refreshIfNeeded" to sdkBooleanProperty("Refresh the file system before resolving each path."),
-                "continueOnError" to sdkBooleanProperty(
-                    "Whether to continue collecting results after a single path fails.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("pathsInProject"),
-        ),
         handler = { args -> vfsGetUrlsHandler(this, args) },
     )
 }
@@ -165,16 +157,6 @@ internal fun vfsGetLocalPathFromUrlTool(): SdkToolDescriptor<VfsGetLocalPathArgs
     return sdkToolDescriptor<VfsGetLocalPathArgs>(
         name = "vfs_get_local_path_from_url",
         description = "Resolve a VFS URL to a local file-system path.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "url" to sdkStringProperty("VFS URL to resolve to a local filesystem path."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("url"),
-        ),
         handler = { args -> vfsGetLocalPathHandler(this, args) },
     )
 }
@@ -187,19 +169,6 @@ internal fun vfsGetLocalPathsFromUrlsTool(): SdkToolDescriptor<VfsGetLocalPathsA
     return sdkToolDescriptor<VfsGetLocalPathsArgs>(
         name = "vfs_get_local_paths_from_urls",
         description = "Resolve multiple VFS URLs to local file-system paths.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "urls" to sdkArrayProperty("VFS URLs to resolve."),
-                "continueOnError" to sdkBooleanProperty(
-                    "Whether to continue collecting results after a single URL fails.",
-                ),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("urls"),
-        ),
         handler = { args -> vfsGetLocalPathsHandler(this, args) },
     )
 }
@@ -212,16 +181,6 @@ internal fun vfsExistsManySdkTool(): SdkToolDescriptor<VfsExistsManyArgs> {
     return sdkToolDescriptor<VfsExistsManyArgs>(
         name = "vfs_exists_many",
         description = "Check whether multiple VFS URLs currently resolve to existing files or directories.",
-        inputSchema = toolSchema(
-            properties = mapOf(
-                "urls" to sdkArrayProperty("VFS URLs to check."),
-                "projectKey" to sdkStringProperty("Stable project key for project-scoped resolution (optional)."),
-                "projectPath" to sdkStringProperty(
-                    "Absolute project base path for project-scoped resolution (optional).",
-                ),
-            ),
-            required = listOf("urls"),
-        ),
         handler = { args -> vfsExistsManyHandler(this, args) },
     )
 }
@@ -362,3 +321,4 @@ private suspend fun checkExistsMany(urls: List<String>): VfsBatchExistsResult {
     }
     return VfsBatchExistsResult(items = items)
 }
+
