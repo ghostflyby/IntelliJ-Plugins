@@ -21,11 +21,4 @@
  */
 
 package dev.ghostflyby.mcp.common
-
-import com.intellij.mcpserver.reportToolActivity
-import com.intellij.openapi.util.NlsContexts
-import kotlinx.coroutines.currentCoroutineContext
-
-internal suspend fun reportActivity(@NlsContexts.Label description: String) {
-    currentCoroutineContext().reportToolActivity(description)
-}
+internal suspend fun reportActivity(key: String, vararg args: Any?) {}

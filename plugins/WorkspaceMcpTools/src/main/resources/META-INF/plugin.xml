@@ -9,6 +9,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.vcs</depends>
+
     <depends>com.intellij.mcpServer</depends>
 
     <extensionPoints>
@@ -33,12 +34,4 @@
         <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerStartupActivity"/>
     </extensions>
 
-    <extensions defaultExtensionNs="com.intellij.mcpServer">
-        <mcpToolset implementation="dev.ghostflyby.mcp.vfs.VfsMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.document.DocumentMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.navigation.SymbolNavigationMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.quality.CodeQualityMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.scope.symbol.ScopeSymbolSearchMcpTools"/>
-        <mcpToolset implementation="dev.ghostflyby.mcp.scope.text.ScopeTextSearchMcpTools"/>
-    </extensions>
 </idea-plugin>

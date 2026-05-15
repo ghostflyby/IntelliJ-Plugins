@@ -22,7 +22,7 @@
 
 package dev.ghostflyby.mcp.common
 
-import com.intellij.mcpserver.mcpFail
+import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 
 internal data class BatchAttempt<T>(
     val value: T?,
@@ -39,7 +39,7 @@ internal suspend fun <T> batchTry(
         if (error is java.util.concurrent.CancellationException) throw error
         val message = error.message ?: error::class.java.simpleName
         if (!continueOnError) {
-            mcpFail(message)
+            throw WorkspaceResourceException(message)
         }
         BatchAttempt(value = null, error = message)
     }
