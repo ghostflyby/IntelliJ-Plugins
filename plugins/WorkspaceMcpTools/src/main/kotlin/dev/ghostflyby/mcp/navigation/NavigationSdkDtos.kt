@@ -22,9 +22,6 @@
 
 package dev.ghostflyby.mcp.navigation
 
-import com.intellij.mcpserver.util.SymbolInfo
-import kotlinx.serialization.EncodeDefault
-import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -75,11 +72,8 @@ internal data class NavigationBatchMultiResult(
     val failureCount: Int,
 )
 
-@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 internal data class NavigationSymbolInfoResult(
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
-    val symbolInfo: SymbolInfo? = null,
     val documentation: String,
 )
 
@@ -97,11 +91,8 @@ internal data class NavigationSymbolInfoAutoPositionInput(
     val offset: Int? = null,
 )
 
-@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 internal data class NavigationSymbolInfoResolvedResult(
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
-    val symbolInfo: SymbolInfo? = null,
     val documentation: String,
     val row: Int,
     val column: Int,

@@ -23,9 +23,6 @@
 package dev.ghostflyby.mcp.navigation.tools
 
 import com.intellij.lang.LanguageDocumentation
-import com.intellij.mcpserver.util.SymbolInfo
-import com.intellij.mcpserver.util.convertHtmlToMarkdown
-import com.intellij.mcpserver.util.getElementSymbolInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
@@ -457,7 +454,6 @@ private suspend fun navigationGetSymbolInfoByOffsetHandler(
         }
         val info = resolveSymbolInfo(project, args.uri, position.row, position.column)
         val result = NavigationSymbolInfoResolvedResult(
-            symbolInfo = info.symbolInfo,
             documentation = info.documentation,
             row = position.row,
             column = position.column,
@@ -485,7 +481,6 @@ private suspend fun navigationGetSymbolInfoAutoPositionHandler(
         }
         val info = resolveSymbolInfo(project, args.uri, position.row, position.column)
         val result = NavigationSymbolInfoResolvedResult(
-            symbolInfo = info.symbolInfo,
             documentation = info.documentation,
             row = position.row,
             column = position.column,
@@ -520,7 +515,6 @@ private suspend fun navigationGetSymbolInfoQuickHandler(
             resolveSourceOffset(sourceDocument, args.row, args.column)
         }
         val result = NavigationSymbolInfoResolvedResult(
-            symbolInfo = info.symbolInfo,
             documentation = info.documentation,
             row = position.row,
             column = position.column,
@@ -865,7 +859,7 @@ private class ResolvedReferenceContext(
 )
 
 private class SymbolInfoContext(
-    val symbolInfo: SymbolInfo?,
+    val symbolName: String,
     val documentationHtml: String,
 )
 
@@ -888,8 +882,7 @@ private suspend fun resolveSymbolInfo(
         readSymbolInfoContext(project, uri, row, column)
     }
     return NavigationSymbolInfoResult(
-        symbolInfo = context.symbolInfo,
-        documentation = if (context.documentationHtml.isBlank()) "" else convertHtmlToMarkdown(context.documentationHtml),
+        documentation = if (context.documentationHtml.isBlank()) "" else context.documentationHtml.replace(Regex("<[^>]+>"), ""),
     )
 }
 
@@ -993,14 +986,14 @@ private fun readSymbolInfoContext(
     val sourceElement = findElementAt(sourcePsiFile, sourceOffset, lineStartOffset)
     val reference = findReferenceAt(sourcePsiFile, sourceOffset, lineStartOffset)
     val resolvedReference = reference?.resolve()
-    val symbolInfo = resolvedReference?.let { getElementSymbolInfo(it, extraLines = 1) }
+    val symbolName = resolvedReference?.let { (it as? PsiNamedElement)?.name ?: it.text.take(80) } ?: ""
     val documentationTarget = resolvedReference ?: sourceElement
     val documentationHtml = generateDocumentationHtml(
         targetElement = documentationTarget,
         originalElement = sourceElement,
     )
     return SymbolInfoContext(
-        symbolInfo = symbolInfo,
+        symbolName = symbolName,
         documentationHtml = documentationHtml,
     )
 }

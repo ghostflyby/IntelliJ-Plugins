@@ -10,8 +10,6 @@
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.vcs</depends>
 
-    <depends>com.intellij.mcpServer</depends>
-
     <extensionPoints>
         <extensionPoint name="workspaceFeature"
                         interface="dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature"
