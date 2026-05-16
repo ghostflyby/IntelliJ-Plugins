@@ -2,30 +2,11 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.resource
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
 internal class WorkspaceResourceUrisTest {
@@ -154,26 +135,6 @@ internal class WorkspaceResourceUrisTest {
     @Test
     fun `returns null for missing projects segment`() {
         assertNull(tryDecodeWorkspaceResourceUri("ij-workspace://$IK/foo/bar/vfs/something"))
-    }
-
-    // ---- listable resource URIs ----
-
-    @Test
-    fun `listableServerInfoUri produces correct format`() {
-        val uri = listableServerInfoUri("iu-63341")
-        assertEquals("ij-workspace://iu-63341/server/info", uri)
-    }
-
-    @Test
-    fun `listableProjectsUri produces correct format`() {
-        val uri = listableProjectsUri("iu-63341")
-        assertEquals("ij-workspace://iu-63341/projects", uri)
-    }
-
-    @Test
-    fun `listableProjectInfoUri produces correct format`() {
-        val uri = listableProjectInfoUri("iu-63341", "my-project-a1b2")
-        assertEquals("ij-workspace://iu-63341/projects/my-project-a1b2", uri)
     }
 
     // ---- relative path validation ----

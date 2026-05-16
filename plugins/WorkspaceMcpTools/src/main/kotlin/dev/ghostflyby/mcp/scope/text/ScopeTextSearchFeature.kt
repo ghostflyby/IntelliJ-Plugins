@@ -30,6 +30,7 @@ internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
             "scope_search_text",
             "Search text within a resolved scope descriptor using IntelliJ Find engine. " +
                 "Supports plain text and regex mode, file mask, and search context.",
+            schema = ScopeSearchTextArgs::class.jsonSchema,
             handler = { args, request -> scopeSearchTextHandler(args, request) },
         )
         registerTool<ScopeSearchTextQuickArgs>(
@@ -37,22 +38,26 @@ internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
             "First-call friendly text search shortcut with preset scope." +
                 " " +
                 "First-call friendly shortcut for agents with no prior context; uses non-interactive defaults and stable parameters.",
+            schema = ScopeSearchTextQuickArgs::class.jsonSchema,
             handler = { args, request -> scopeSearchTextQuickHandler(args, request) },
         )
         registerTool<ScopeSearchTextByPlainArgs>(
             "scope_search_text_by_plain",
             "Shortcut: search plain text within a resolved scope descriptor.",
+            schema = ScopeSearchTextByPlainArgs::class.jsonSchema,
             handler = { args, request -> scopeSearchTextByPlainHandler(args, request) },
         )
         registerTool<ScopeSearchTextByRegexArgs>(
             "scope_search_text_by_regex",
             "Shortcut: search regex pattern within a resolved scope descriptor.",
+            schema = ScopeSearchTextByRegexArgs::class.jsonSchema,
             handler = { args, request -> scopeSearchTextByRegexHandler(args, request) },
         )
         registerTool<ScopeReplaceTextPreviewArgs>(
             "scope_replace_text_preview",
             "Preview text replacement within a scope. " +
                 "This computes replacement text using IntelliJ Find/Replace semantics (including regex groups and preserve-case).",
+            schema = ScopeReplaceTextPreviewArgs::class.jsonSchema,
             handler = { args, request -> scopeReplaceTextPreviewHandler(args, request) },
         )
         registerTool<ScopeReplaceTextApplyArgs>(
@@ -60,6 +65,7 @@ internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
             "Apply text replacement within a scope. " +
                 "If occurrenceIds is empty, all found occurrences are replaced. " +
                 "If occurrenceIds is provided, only those matches are replaced.",
+            schema = ScopeReplaceTextApplyArgs::class.jsonSchema,
             handler = { args, request -> scopeReplaceTextApplyHandler(args, request) },
         )
         return buildRegistration()

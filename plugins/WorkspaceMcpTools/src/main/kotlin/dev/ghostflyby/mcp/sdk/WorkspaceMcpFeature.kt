@@ -10,18 +10,16 @@ import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.segment.*
-import dev.ghostflyby.mcp.sdk.tools.schemaFor
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.Request
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.serializer
 
 internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
@@ -64,12 +62,16 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     inline fun <reified T : Any> registerTool(
         name: String,
         description: String,
+        schema: JsonObject = JsonObject(emptyMap()),
         noinline handler: suspend (T, Request) -> CallToolResult,
     ) {
         server.addTool(
             name = name,
             description = description,
-            inputSchema = schemaFor<T>(),
+            inputSchema = ToolSchema(
+                properties = schema["properties"] as? JsonObject,
+                required = (schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content },
+            ),
         ) { request ->
             val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
             val decoded: T = try {

@@ -32,16 +32,19 @@ internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
         registerTool<ScopeListCatalogArgs>(
             "scope_list_catalog",
             "List available search scopes (Find-like catalog) with stable scopeRefId and metadata.",
+            schema = ScopeListCatalogArgs::class.jsonSchema,
             handler = { args, request -> scopeListCatalogHandler(args, request) },
         )
         registerTool<ScopeGetDefaultDescriptorArgs>(
             "scope_get_default_descriptor",
             "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
+            schema = ScopeGetDefaultDescriptorArgs::class.jsonSchema,
             handler = { args, request -> scopeGetDefaultDescriptorHandler(args, request) },
         )
         registerTool<ScopeResolveStandardDescriptorArgs>(
             "scope_resolve_standard_descriptor",
             "Resolve a standard IDE scope id directly to a normalized reusable descriptor.",
+            schema = ScopeResolveStandardDescriptorArgs::class.jsonSchema,
             handler = { args, request -> scopeResolveStandardDescriptorHandler(args, request) },
         )
         registerTool<ScopeCatalogFindByIntentArgs>(
@@ -49,32 +52,38 @@ internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
             "Find a compact scope catalog subset by intent " +
                 "(project-only, with-libraries, changed/open/current file) " +
                 "to reduce first-call catalog payload.",
+            schema = ScopeCatalogFindByIntentArgs::class.jsonSchema,
             handler = { args, request -> scopeCatalogFindByIntentHandler(args, request) },
         )
         registerTool<ScopeValidatePatternArgs>(
             "scope_validate_pattern",
             "Validate a PackageSet pattern text used by IntelliJ scopes.",
+            schema = ScopeValidatePatternArgs::class.jsonSchema,
             handler = { args, request -> scopeValidatePatternHandler(args, request) },
         )
         registerTool<ScopeResolveProgramArgs>(
             "scope_resolve_program",
             "Compile and normalize scope atoms and RPN tokens into a reusable scope descriptor.",
+            schema = ScopeResolveProgramArgs::class.jsonSchema,
             handler = { args, request -> scopeResolveProgramHandler(args, request) },
         )
         registerTool<ScopeNormalizeDescriptorArgs>(
             "scope_normalize_program_descriptor",
             "Normalize and recompile an existing scope descriptor, " +
                 "useful for migration and compatibility upgrades.",
+            schema = ScopeNormalizeDescriptorArgs::class.jsonSchema,
             handler = { args, request -> scopeNormalizeDescriptorHandler(args, request) },
         )
         registerTool<ScopeContainsFileArgs>(
             "scope_contains_file",
             "Check whether a file URL belongs to a resolved scope descriptor.",
+            schema = ScopeContainsFileArgs::class.jsonSchema,
             handler = { args, request -> scopeContainsFileHandler(args, request) },
         )
         registerTool<ScopeFilterFilesArgs>(
             "scope_filter_files",
             "Filter file URLs by whether they belong to a resolved scope descriptor.",
+            schema = ScopeFilterFilesArgs::class.jsonSchema,
             handler = { args, request -> scopeFilterFilesHandler(args, request) },
         )
 

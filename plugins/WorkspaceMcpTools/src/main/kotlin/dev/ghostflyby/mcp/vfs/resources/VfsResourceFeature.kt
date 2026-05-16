@@ -73,11 +73,13 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         registerTool<VfsExistsArgs>(
             name = "vfs_exists",
             description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",
+            schema = VfsExistsArgs::class.jsonSchema,
             handler = { args, request -> vfsExistsHandler(args, request) },
         )
         registerTool<VfsRefreshArgs>(
             name = "vfs_refresh",
             description = "Refresh a VFS file or directory. Supports project-scoped URL resolution via optional projectKey/projectPath.",
+            schema = VfsRefreshArgs::class.jsonSchema,
             handler = { args, request -> vfsRefreshHandler(args, request) },
         )
         registerTool<VfsGetUrlArgs>(
@@ -85,6 +87,7 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
             description = "Resolve a project-relative local path to a VFS URL. " +
                 "This is a convenience helper: for local files, you can directly pass " +
                 "a file:///absolute/path URL to tools that accept VFS URLs.",
+            schema = VfsGetUrlArgs::class.jsonSchema,
             handler = { args, request -> vfsGetUrlHandler(args, request) },
         )
         registerTool<VfsGetUrlsArgs>(
@@ -92,21 +95,25 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
             description = "Resolve multiple project-relative local paths to VFS URLs. " +
                 "This is a convenience helper: for local files, you can directly pass " +
                 "file:///absolute/path URLs to tools that accept VFS URLs.",
+            schema = VfsGetUrlsArgs::class.jsonSchema,
             handler = { args, request -> vfsGetUrlsHandler(args, request) },
         )
         registerTool<VfsGetLocalPathArgs>(
             name = "vfs_get_local_path_from_url",
             description = "Resolve a VFS URL to a local file-system path.",
+            schema = VfsGetLocalPathArgs::class.jsonSchema,
             handler = { args, request -> vfsGetLocalPathHandler(args, request) },
         )
         registerTool<VfsGetLocalPathsArgs>(
             name = "vfs_get_local_paths_from_urls",
             description = "Resolve multiple VFS URLs to local file-system paths.",
+            schema = VfsGetLocalPathsArgs::class.jsonSchema,
             handler = { args, request -> vfsGetLocalPathsHandler(args, request) },
         )
         registerTool<VfsExistsManyArgs>(
             name = "vfs_exists_many",
             description = "Check whether multiple VFS URLs currently resolve to existing files or directories.",
+            schema = VfsExistsManyArgs::class.jsonSchema,
             handler = { args, request -> vfsExistsManyHandler(args, request) },
         )
 
