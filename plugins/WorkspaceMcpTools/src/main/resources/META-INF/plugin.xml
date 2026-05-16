@@ -32,4 +32,13 @@
         <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerStartupActivity"/>
     </extensions>
 
+    <projectListeners>
+        <listener class="dev.ghostflyby.mcp.sdk.ProjectManagerListener1"
+                  topic="com.intellij.openapi.project.ProjectManager$TOPIC"/>
+        <listener class="dev.ghostflyby.mcp.sdk.FileEditorManagerListener1"
+                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener$FILE_EDITOR_MANAGER"/>
+        <listener class="dev.ghostflyby.mcp.sdk.ModuleRootListener1"
+                  topic="com.intellij.openapi.roots.ModuleRootListener$TOPIC"/>
+    </projectListeners>
+
 </idea-plugin>
