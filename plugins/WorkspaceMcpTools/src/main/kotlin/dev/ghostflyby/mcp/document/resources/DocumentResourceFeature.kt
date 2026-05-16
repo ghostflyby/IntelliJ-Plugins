@@ -9,29 +9,12 @@ package dev.ghostflyby.mcp.document.resources
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
-import dev.ghostflyby.mcp.document.tools.documentDeleteStringHandler
-import dev.ghostflyby.mcp.document.tools.documentGetModificationStampHandler
-import dev.ghostflyby.mcp.document.tools.documentInsertStringHandler
-import dev.ghostflyby.mcp.document.tools.documentIsWritableHandler
-import dev.ghostflyby.mcp.document.tools.documentReplaceStringHandler
-import dev.ghostflyby.mcp.document.tools.documentSetTextHandler
-import dev.ghostflyby.mcp.document.tools.DocumentSdkUrlArgs
-import dev.ghostflyby.mcp.document.tools.DocumentSdkDeleteArgs
-import dev.ghostflyby.mcp.document.tools.DocumentSdkInsertArgs
-import dev.ghostflyby.mcp.document.tools.DocumentSdkReplaceArgs
-import dev.ghostflyby.mcp.document.tools.DocumentSdkSetTextArgs
+import dev.ghostflyby.mcp.document.tools.*
 import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentVfsUri
-import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_DOCUMENTS_TEMPLATE
-import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_DOCUMENT_VFS_TEMPLATE
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
+import dev.ghostflyby.mcp.sdk.*
 
 /**
  * Document resource feature: provides project-scoped document resource templates
@@ -71,53 +54,53 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
         }
     }
 
-    override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
-        context.registerResourceTemplate(
+    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+        registerResourceTemplate(
             uriTemplate = NEW_WORKSPACE_DOCUMENTS_TEMPLATE,
             name = "Project document resource",
             description = "Reads the current editor document snapshot by project-relative path, including unsaved text.",
             mimeType = "text/plain",
         )
 
-        context.registerResourceTemplate(
+        registerResourceTemplate(
             uriTemplate = NEW_WORKSPACE_DOCUMENT_VFS_TEMPLATE,
             name = "Project document VFS resource",
             description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
             mimeType = "text/plain",
         )
 
-        context.registerTool<DocumentSdkUrlArgs>(
+        registerTool<DocumentSdkUrlArgs>(
             name = "document_is_writable",
             description = "Document.isWritable(): return whether document text is writable.",
-            handler = { args, sid -> documentIsWritableHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentIsWritableHandler(args, sid, requestRunner) },
         )
-        context.registerTool<DocumentSdkUrlArgs>(
+        registerTool<DocumentSdkUrlArgs>(
             name = "document_get_modification_stamp",
             description = "Document.getModificationStamp(): return current modification stamp.",
-            handler = { args, sid -> documentGetModificationStampHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentGetModificationStampHandler(args, sid, requestRunner) },
         )
-        context.registerTool<DocumentSdkInsertArgs>(
+        registerTool<DocumentSdkInsertArgs>(
             name = "document_insert_string",
             description = "Document.insertString(offset, text).",
-            handler = { args, sid -> documentInsertStringHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentInsertStringHandler(args, sid, requestRunner) },
         )
-        context.registerTool<DocumentSdkDeleteArgs>(
+        registerTool<DocumentSdkDeleteArgs>(
             name = "document_delete_string",
             description = "Document.deleteString(startOffset, endOffset).",
-            handler = { args, sid -> documentDeleteStringHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentDeleteStringHandler(args, sid, requestRunner) },
         )
-        context.registerTool<DocumentSdkReplaceArgs>(
+        registerTool<DocumentSdkReplaceArgs>(
             name = "document_replace_string",
             description = "Document.replaceString(startOffset, endOffset, text).",
-            handler = { args, sid -> documentReplaceStringHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentReplaceStringHandler(args, sid, requestRunner) },
         )
-        context.registerTool<DocumentSdkSetTextArgs>(
+        registerTool<DocumentSdkSetTextArgs>(
             name = "document_set_text",
             description = "Document.setText(text): replace whole document with new text.",
-            handler = { args, sid -> documentSetTextHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> documentSetTextHandler(args, sid, requestRunner) },
         )
 
-        return context.buildRegistration()
+        return buildRegistration()
     }
 
     private fun com.intellij.openapi.vfs.VirtualFile.relativePathFor(project: com.intellij.openapi.project.Project): String? {

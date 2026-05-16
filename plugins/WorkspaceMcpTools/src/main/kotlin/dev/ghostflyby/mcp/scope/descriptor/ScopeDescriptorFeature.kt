@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.scope.descriptor
@@ -53,58 +37,56 @@ internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
         return emptyList()
     }
 
-    override fun register(
-        context: WorkspaceMcpFeatureRegistrationContext,
-    ): WorkspaceMcpFeatureRegistration {
-        context.registerTool<ScopeListCatalogArgs>(
+    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+        registerTool<ScopeListCatalogArgs>(
             "scope_list_catalog",
             "List available search scopes (Find-like catalog) with stable scopeRefId and metadata.",
-            handler = { args, sid -> scopeListCatalogHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeListCatalogHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeGetDefaultDescriptorArgs>(
+        registerTool<ScopeGetDefaultDescriptorArgs>(
             "scope_get_default_descriptor",
             "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
-            handler = { args, sid -> scopeGetDefaultDescriptorHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeGetDefaultDescriptorHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeResolveStandardDescriptorArgs>(
+        registerTool<ScopeResolveStandardDescriptorArgs>(
             "scope_resolve_standard_descriptor",
             "Resolve a standard IDE scope id directly to a normalized reusable descriptor.",
-            handler = { args, sid -> scopeResolveStandardDescriptorHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeResolveStandardDescriptorHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeCatalogFindByIntentArgs>(
+        registerTool<ScopeCatalogFindByIntentArgs>(
             "scope_catalog_find_by_intent",
             "Find a compact scope catalog subset by intent " +
                 "(project-only, with-libraries, changed/open/current file) " +
                 "to reduce first-call catalog payload.",
-            handler = { args, sid -> scopeCatalogFindByIntentHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeCatalogFindByIntentHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeValidatePatternArgs>(
+        registerTool<ScopeValidatePatternArgs>(
             "scope_validate_pattern",
             "Validate a PackageSet pattern text used by IntelliJ scopes.",
-            handler = { args, sid -> scopeValidatePatternHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeValidatePatternHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeResolveProgramArgs>(
+        registerTool<ScopeResolveProgramArgs>(
             "scope_resolve_program",
             "Compile and normalize scope atoms and RPN tokens into a reusable scope descriptor.",
-            handler = { args, sid -> scopeResolveProgramHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeResolveProgramHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeNormalizeDescriptorArgs>(
+        registerTool<ScopeNormalizeDescriptorArgs>(
             "scope_normalize_program_descriptor",
             "Normalize and recompile an existing scope descriptor, " +
                 "useful for migration and compatibility upgrades.",
-            handler = { args, sid -> scopeNormalizeDescriptorHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeNormalizeDescriptorHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeContainsFileArgs>(
+        registerTool<ScopeContainsFileArgs>(
             "scope_contains_file",
             "Check whether a file URL belongs to a resolved scope descriptor.",
-            handler = { args, sid -> scopeContainsFileHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeContainsFileHandler(args, sid, requestRunner) },
         )
-        context.registerTool<ScopeFilterFilesArgs>(
+        registerTool<ScopeFilterFilesArgs>(
             "scope_filter_files",
             "Filter file URLs by whether they belong to a resolved scope descriptor.",
-            handler = { args, sid -> scopeFilterFilesHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> scopeFilterFilesHandler(args, sid, requestRunner) },
         )
 
-        return context.buildRegistration()
+        return buildRegistration()
     }
 }

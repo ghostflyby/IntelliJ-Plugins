@@ -64,9 +64,9 @@ internal class WorkspaceMcpFeatureTest {
             )
         }
 
-        override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
+        override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
             // Registration logic tested in integration
-            return context.buildRegistration()
+            return buildRegistration()
         }
     }
 }

@@ -72,11 +72,11 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         }
     }
 
-    override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         // VFS resource templates via segment DSL
         val projectAnchor = CoreResourceFeature.PROJECT_SEGMENT
 
-        context.segments {
+        segments {
             under(projectAnchor) {
                 segment("files") {
                     template("relativePath") { params, anc ->
@@ -85,7 +85,7 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                         // Delegate to the existing reader for now
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceFileUri(instanceKey, projectKey ?: "", relativePath)
-                        context.readResource(uri, null)
+                        readResource(uri, null)
                     }
                 }
                 segment("vfs") {
@@ -94,54 +94,54 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                         val rawVfsUrl = params["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceVfsUri(instanceKey, projectKey ?: "", rawVfsUrl)
-                        context.readResource(uri, null)
+                        readResource(uri, null)
                     }
                 }
             }
         }
 
         // Register SDK tools (inline handler)
-        context.registerTool<VfsExistsArgs>(
+        registerTool<VfsExistsArgs>(
             name = "vfs_exists",
             description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",
-            handler = { args, sid -> vfsExistsHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsExistsHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsRefreshArgs>(
+        registerTool<VfsRefreshArgs>(
             name = "vfs_refresh",
             description = "Refresh a VFS file or directory. Supports project-scoped URL resolution via optional projectKey/projectPath.",
-            handler = { args, sid -> vfsRefreshHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsRefreshHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsGetUrlArgs>(
+        registerTool<VfsGetUrlArgs>(
             name = "vfs_get_url_from_local_path",
             description = "Resolve a project-relative local path to a VFS URL. " +
                 "This is a convenience helper: for local files, you can directly pass " +
                 "a file:///absolute/path URL to tools that accept VFS URLs.",
-            handler = { args, sid -> vfsGetUrlHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsGetUrlHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsGetUrlsArgs>(
+        registerTool<VfsGetUrlsArgs>(
             name = "vfs_get_url_from_local_paths",
             description = "Resolve multiple project-relative local paths to VFS URLs. " +
                 "This is a convenience helper: for local files, you can directly pass " +
                 "file:///absolute/path URLs to tools that accept VFS URLs.",
-            handler = { args, sid -> vfsGetUrlsHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsGetUrlsHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsGetLocalPathArgs>(
+        registerTool<VfsGetLocalPathArgs>(
             name = "vfs_get_local_path_from_url",
             description = "Resolve a VFS URL to a local file-system path.",
-            handler = { args, sid -> vfsGetLocalPathHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsGetLocalPathHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsGetLocalPathsArgs>(
+        registerTool<VfsGetLocalPathsArgs>(
             name = "vfs_get_local_paths_from_urls",
             description = "Resolve multiple VFS URLs to local file-system paths.",
-            handler = { args, sid -> vfsGetLocalPathsHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsGetLocalPathsHandler(args, sid, requestRunner) },
         )
-        context.registerTool<VfsExistsManyArgs>(
+        registerTool<VfsExistsManyArgs>(
             name = "vfs_exists_many",
             description = "Check whether multiple VFS URLs currently resolve to existing files or directories.",
-            handler = { args, sid -> vfsExistsManyHandler(args, sid, context.requestRunner) },
+            handler = { args, sid -> vfsExistsManyHandler(args, sid, requestRunner) },
         )
 
-        return context.buildRegistration()
+        return buildRegistration()
     }
 
     private fun relativePathFor(project: Project, file: VirtualFile): String? {
