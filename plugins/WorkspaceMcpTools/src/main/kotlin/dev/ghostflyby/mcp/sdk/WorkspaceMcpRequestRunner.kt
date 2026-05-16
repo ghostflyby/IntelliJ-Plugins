@@ -13,10 +13,14 @@ import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+
 
 /**
  * Centralized request runner that handles project resolution,
- * [WorkspaceMcpCallContext] and [WorkspaceMcpProjectContext] installation,
  * and tool/resource error mapping.
  *
  * Tool and resource handlers should use the appropriate `run*` method
@@ -26,7 +30,9 @@ internal class WorkspaceMcpRequestRunner(
     val projectResolver: WorkspaceProjectResolver = WorkspaceProjectResolver(),
 ) {
     /**
-     * Resolve a project, install call context and project context, and execute [block].
+     * Resolve a project and execute [block] under a scope that
+     * is cancelled when the project lifecycle ends (e.g. on
+     * project close or plugin unload for that project).
      *
      * Resolution hints ([rawVfsUrl], [relativePath]) are tried after explicit
      * [projectKey]/[projectPath] but before single-project fallback.
@@ -34,12 +40,10 @@ internal class WorkspaceMcpRequestRunner(
      * @throws WorkspaceResourceException if the project cannot be resolved.
      */
     suspend fun <T> runWithProjectResolution(
-        sessionId: String? = null,
         projectKey: String? = null,
         projectPath: String? = null,
         rawVfsUrl: String? = null,
         relativePath: String? = null,
-        instanceKey: String = workspaceInstanceKey(),
         block: suspend (Project) -> T,
     ): T {
         val resolved = projectResolver.resolve(
@@ -52,14 +56,12 @@ internal class WorkspaceMcpRequestRunner(
             is WorkspaceProjectResolution.Resolved -> resolved.project
             is WorkspaceProjectResolution.Unresolved -> throw WorkspaceResourceException(resolved.message)
         }
-        return withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = instanceKey) {
-            withResolvedWorkspaceProject(
-                projectKey = workspaceProjectKey(project),
-                project = project,
-                reason = resolved.reason,
-            ) {
-                block(project)
+        return coroutineScope {
+            val projectJob = project.scope.coroutineContext[Job]
+            projectJob?.invokeOnCompletion { cause ->
+                if (cause != null) cancel(CancellationException("Project closed", cause))
             }
+            block(project)
         }
     }
 
@@ -79,7 +81,6 @@ internal class WorkspaceMcpRequestRunner(
     ): CallToolResult {
         return try {
             runWithProjectResolution(
-                sessionId = sessionId,
                 projectKey = projectArgs.projectKey,
                 projectPath = projectArgs.projectPath,
                 rawVfsUrl = rawVfsUrl,
@@ -92,17 +93,19 @@ internal class WorkspaceMcpRequestRunner(
             )
         } catch (e: Exception) {
             CallToolResult(
-                content = listOf(TextContent(
-                    text = "Tool call failed: ${e.message ?: e::class.simpleName}",
-                )),
+                content = listOf(
+                    TextContent(
+                        text = "Tool call failed: ${e.message ?: e::class.simpleName}",
+                    ),
+                ),
                 isError = true,
             )
         }
     }
 
     /**
-     * Install call context and project context for a resource read identified by [decoded]
-     * (which carries the projectKey), then execute [block].
+     * Run a resource read under a scope that is cancelled when
+     * the project lifecycle ends.
      *
      * @throws WorkspaceResourceException if the project cannot be resolved.
      */
@@ -112,18 +115,20 @@ internal class WorkspaceMcpRequestRunner(
         instanceKey: String = workspaceInstanceKey(),
         block: suspend () -> ReadResourceResult,
     ): ReadResourceResult {
-        val resolved = projectResolver.resolve(projectKey = decoded.projectKey)
-        return withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = instanceKey) {
-            when (resolved) {
-                is WorkspaceProjectResolution.Resolved -> {
-                    withResolvedWorkspaceProject(
-                        projectKey = decoded.projectKey,
-                        project = resolved.project,
-                        reason = resolved.reason,
-                    ) { block() }
+        return when (val resolved = projectResolver.resolve(projectKey = decoded.projectKey)) {
+            is WorkspaceProjectResolution.Resolved -> {
+                coroutineScope {
+                    val projectJob = resolved.project.scope.coroutineContext[Job]
+                    if (projectJob != null) {
+                        projectJob.invokeOnCompletion { cause ->
+                            if (cause != null) cancel(CancellationException("Project closed", cause))
+                        }
+                    }
+                    block()
                 }
-                is WorkspaceProjectResolution.Unresolved -> throw WorkspaceResourceException(resolved.message)
             }
+
+            is WorkspaceProjectResolution.Unresolved -> throw WorkspaceResourceException(resolved.message)
         }
     }
 }

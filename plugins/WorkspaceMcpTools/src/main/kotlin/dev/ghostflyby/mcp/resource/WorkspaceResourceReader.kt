@@ -30,7 +30,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.sdk.workspaceMcpProject
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
@@ -190,12 +189,6 @@ internal class WorkspaceResourceReader(
     }
 
     private suspend fun resolveProjectForRead(projectKey: String): Project {
-        // Priority: coroutine context (set by service's readWorkspaceResourceInContext)
-        // over direct resolver fallback, so context really participates in routing.
-        val contextProject = currentCoroutineContext().workspaceMcpProject
-        if (contextProject != null && contextProject.projectKey == projectKey) {
-            return contextProject.project
-        }
         val resolver = projectResolver ?: resourceFail("No project resolver configured for WorkspaceResourceReader.")
         val resolved = resolver.resolve(projectKey = projectKey)
         return when (resolved) {

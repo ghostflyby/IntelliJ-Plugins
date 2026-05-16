@@ -176,14 +176,12 @@ internal class WorkspaceMcpSdkServerService(
         }
 
         val decoded = tryDecodeWorkspaceResourceUri(resourceUri)
-        return withWorkspaceMcpCallContext(sessionId = sessionId, instanceKey = workspaceInstanceKey()) {
-            if (decoded != null) {
-                requestRunner.runResourceRead(sessionId = sessionId, decoded = decoded) {
-                    resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
-                }
-            } else {
+        return if (decoded != null) {
+            requestRunner.runResourceRead(sessionId = sessionId, decoded = decoded) {
                 resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
             }
+        } else {
+            resourceReader.readWorkspaceResource(resourceUri).toReadResourceResult()
         }
     }
 

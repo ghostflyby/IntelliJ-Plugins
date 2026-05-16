@@ -30,7 +30,7 @@ version = "1.0.4"
 
 
 dependencies {
-    implementation(libs.mcp.kotlin.sdk.server)
+    api(libs.mcp.kotlin.sdk.server)
     implementation(libs.ktor.server.cio)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")

@@ -35,6 +35,15 @@ import java.security.MessageDigest
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
 
+internal enum class WorkspaceProjectResolutionReason {
+    EXPLICIT_PROJECT_KEY,
+    EXPLICIT_PROJECT_PATH,
+    EXPLICIT_PROJECT_NAME,
+    RAW_VFS_URL,
+    RELATIVE_PATH,
+    SINGLE_OPEN_PROJECT,
+}
+
 /**
  * Resolves the stable instanceKey for this IDE application instance.
  * Uses product code lowercase + configured port, e.g. "iu-63341".
