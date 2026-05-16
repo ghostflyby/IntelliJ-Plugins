@@ -2,6 +2,14 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
  *
  * This file is part of IntelliJ-Plugins by ghostflyby
  *
@@ -42,4 +50,9 @@ ksp {
     arg("kotlinx.schema.rootPackage", "dev.ghostflyby.mcp")
     arg("kotlinx.schema.withSchemaObject", "true")
     arg("kotlinx.schema.visibility", "internal")
+}
+
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xannotation-default-target=param-property"))
 }

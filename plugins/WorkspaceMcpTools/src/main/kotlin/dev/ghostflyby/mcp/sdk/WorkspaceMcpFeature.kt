@@ -1,25 +1,3 @@
-/*
- * Copyright (c) 2026 ghostflyby
- * SPDX-FileCopyrightText: 2026 ghostflyby
- * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
- */
-
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
@@ -29,12 +7,18 @@ import dev.ghostflyby.mcp.resource.segment.PendingAnchor
 import dev.ghostflyby.mcp.resource.segment.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.resource.segment.ResourceSegmentCollector
 import dev.ghostflyby.mcp.resource.segment.SegmentId
-import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
-import dev.ghostflyby.mcp.sdk.tools.registerSdkTool
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.serializer
 
 internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
     create("dev.ghostflyby.mcp.workspace.workspaceFeature")
@@ -81,10 +65,34 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         trackedTemplates.add(uriTemplate)
     }
 
-    fun registerTool(descriptor: SdkToolDescriptor<*>) {
-        @Suppress("UNCHECKED_CAST")
-        server.registerSdkTool(descriptor as SdkToolDescriptor<Any>, requestRunner)
-        trackedTools.add(descriptor.name)
+    inline fun <reified T : Any> registerTool(
+        name: String,
+        description: String,
+        inputSchema: ToolSchema = ToolSchema(),
+        noinline handler: suspend (T, String?) -> CallToolResult,
+    ) {
+        server.addTool(
+            name = name,
+            description = description,
+            inputSchema = inputSchema,
+        ) { request ->
+            val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
+            val decoded: T = try {
+                toolArgsJson.decodeFromJsonElement(serializer<T>(), jsonArgs)
+            } catch (e: SerializationException) {
+                return@addTool CallToolResult(
+                    content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
+                    isError = true,
+                )
+            } catch (e: IllegalArgumentException) {
+                return@addTool CallToolResult(
+                    content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
+                    isError = true,
+                )
+            }
+            handler(decoded, this.sessionId)
+        }
+        trackedTools.add(name)
     }
 
     /**

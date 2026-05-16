@@ -49,6 +49,7 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -173,33 +174,17 @@ internal data class ScopeSymbolSearchHealthcheckArgs(
 
 // ── Tool registration entrypoint ─────────────────────────────────
 
-internal fun scopeSymbolSearchSdkTools(): List<SdkToolDescriptor<*>> {
-    return listOf(
-        scopeSymbolSearchTool(),
-        scopeSymbolSearchQuickTool(),
-        scopeSymbolSearchWithStageProgressTool(),
-        scopeSymbolSearchHealthcheckTool(),
-    )
-}
 
 // ── scope_search_symbols ─────────────────────────────────────────
 
-internal fun scopeSymbolSearchTool(): SdkToolDescriptor<ScopeSymbolSearchArgs> {
-    return sdkToolDescriptor<ScopeSymbolSearchArgs>(
-        name = "scope_search_symbols",
-        description = "Search symbols within a resolved scope descriptor. " +
-                "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
-        handler = { args -> scopeSymbolSearchHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSymbolSearchHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSymbolSearchHandler(
     args: ScopeSymbolSearchArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         try {
             if (args.query.isBlank()) {
@@ -387,22 +372,14 @@ private suspend fun scopeSymbolSearchHandler(
 
 // ── scope_search_symbols_quick ───────────────────────────────────
 
-internal fun scopeSymbolSearchQuickTool(): SdkToolDescriptor<ScopeSymbolSearchQuickArgs> {
-    return sdkToolDescriptor<ScopeSymbolSearchQuickArgs>(
-        name = "scope_search_symbols_quick",
-        description = "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope." +
-                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
-        handler = { args -> scopeSymbolSearchQuickHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSymbolSearchQuickHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSymbolSearchQuickHandler(
     args: ScopeSymbolSearchQuickArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         try {
             if (args.query.isBlank()) {
@@ -441,7 +418,7 @@ private suspend fun scopeSymbolSearchQuickHandler(
                 includeNonProjectItems = includeNonProjectItems,
                 requirePhysicalLocation = args.requirePhysicalLocation,
             )
-            return@callToolWithProject scopeSymbolSearchHandler(ctx, innerArgs)
+            return@callToolWithProject scopeSymbolSearchHandler(innerArgs, sessionId, runner)
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: "Invalid argument.")
         }
@@ -450,21 +427,14 @@ private suspend fun scopeSymbolSearchQuickHandler(
 
 // ── scope_search_symbols_with_stage_progress ─────────────────────
 
-internal fun scopeSymbolSearchWithStageProgressTool(): SdkToolDescriptor<ScopeSymbolSearchWithStageProgressArgs> {
-    return sdkToolDescriptor<ScopeSymbolSearchWithStageProgressArgs>(
-        name = "scope_search_symbols_with_stage_progress",
-        description = "Search symbols and return stage counters for agent-side retry/expand decisions.",
-        handler = { args -> scopeSymbolSearchWithStageProgressHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSymbolSearchWithStageProgressHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSymbolSearchWithStageProgressHandler(
     args: ScopeSymbolSearchWithStageProgressArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         try {
             if (args.query.isBlank()) {
@@ -514,21 +484,14 @@ private suspend fun scopeSymbolSearchWithStageProgressHandler(
 
 // ── scope_search_symbols_healthcheck ─────────────────────────────
 
-internal fun scopeSymbolSearchHealthcheckTool(): SdkToolDescriptor<ScopeSymbolSearchHealthcheckArgs> {
-    return sdkToolDescriptor<ScopeSymbolSearchHealthcheckArgs>(
-        name = "scope_search_symbols_healthcheck",
-        description = "Quickly check symbol search readiness (index state + provider mode) before a full search.",
-        handler = { args -> scopeSymbolSearchHealthcheckHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSymbolSearchHealthcheckHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSymbolSearchHealthcheckHandler(
     args: ScopeSymbolSearchHealthcheckArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         try {
             reportActivity(

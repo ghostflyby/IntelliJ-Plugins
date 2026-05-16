@@ -22,12 +22,13 @@ import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.Bundle
-import dev.ghostflyby.mcp.common.AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.tools.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
@@ -42,16 +43,6 @@ import kotlin.time.Duration.Companion.milliseconds
 
 // ── Tool registration entrypoint ─────────────────────────────────
 
-internal fun scopeTextSearchSdkTools(): List<SdkToolDescriptor<*>> {
-    return listOf(
-        scopeSearchTextTool(),
-        scopeSearchTextQuickTool(),
-        scopeSearchTextByPlainTool(),
-        scopeSearchTextByRegexTool(),
-        scopeReplaceTextPreviewTool(),
-        scopeReplaceTextApplyTool(),
-    )
-}
 
 // ── scope_search_text ────────────────────────────────────────────
 
@@ -83,22 +74,14 @@ internal data class ScopeSearchTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeSearchTextTool(): SdkToolDescriptor<ScopeSearchTextArgs> {
-    return sdkToolDescriptor<ScopeSearchTextArgs>(
-        name = "scope_search_text",
-        description = "Search text within a resolved scope descriptor using IntelliJ Find engine. " +
-                "Supports plain text and regex mode, file mask, and search context.",
-        handler = { args -> scopeSearchTextHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSearchTextHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSearchTextHandler(
     args: ScopeSearchTextArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         if (args.query.isBlank()) {
             return@callToolWithProject CallToolResult(
@@ -191,22 +174,14 @@ internal data class ScopeSearchTextQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeSearchTextQuickTool(): SdkToolDescriptor<ScopeSearchTextQuickArgs> {
-    return sdkToolDescriptor<ScopeSearchTextQuickArgs>(
-        name = "scope_search_text_quick",
-        description = "First-call friendly text search shortcut with preset scope." +
-                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
-        handler = { args -> scopeSearchTextQuickHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSearchTextQuickHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSearchTextQuickHandler(
     args: ScopeSearchTextQuickArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         if (args.query.isBlank()) {
             return@callToolWithProject CallToolResult(
@@ -245,7 +220,7 @@ private suspend fun scopeSearchTextQuickHandler(
             timeoutMillis = args.timeoutMillis,
             allowEmptyMatches = args.allowEmptyMatches,
         )
-        return@callToolWithProject scopeSearchTextHandler(ctx, innerArgs)
+        return@callToolWithProject scopeSearchTextHandler(innerArgs, sessionId, runner)
     }
 }
 
@@ -276,17 +251,11 @@ internal data class ScopeSearchTextByPlainArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeSearchTextByPlainTool(): SdkToolDescriptor<ScopeSearchTextByPlainArgs> {
-    return sdkToolDescriptor<ScopeSearchTextByPlainArgs>(
-        name = "scope_search_text_by_plain",
-        description = "Shortcut: search plain text within a resolved scope descriptor.",
-        handler = { args -> scopeSearchTextByPlainHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSearchTextByPlainHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSearchTextByPlainHandler(
     args: ScopeSearchTextByPlainArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
@@ -307,7 +276,7 @@ private suspend fun scopeSearchTextByPlainHandler(
         maxUsageCount = args.maxUsageCount,
         timeoutMillis = args.timeoutMillis,
     )
-    return scopeSearchTextHandler(ctx, innerArgs)
+    return scopeSearchTextHandler(innerArgs, sessionId, runner)
 }
 
 // ── scope_search_text_by_regex ───────────────────────────────────
@@ -339,17 +308,11 @@ internal data class ScopeSearchTextByRegexArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeSearchTextByRegexTool(): SdkToolDescriptor<ScopeSearchTextByRegexArgs> {
-    return sdkToolDescriptor<ScopeSearchTextByRegexArgs>(
-        name = "scope_search_text_by_regex",
-        description = "Shortcut: search regex pattern within a resolved scope descriptor.",
-        handler = { args -> scopeSearchTextByRegexHandler(this, args) },
-    )
-}
 
-private suspend fun scopeSearchTextByRegexHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeSearchTextByRegexHandler(
     args: ScopeSearchTextByRegexArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
@@ -371,7 +334,7 @@ private suspend fun scopeSearchTextByRegexHandler(
         timeoutMillis = args.timeoutMillis,
         allowEmptyMatches = args.allowEmptyMatches,
     )
-    return scopeSearchTextHandler(ctx, innerArgs)
+    return scopeSearchTextHandler(innerArgs, sessionId, runner)
 }
 
 // ── scope_replace_text_preview ───────────────────────────────────
@@ -393,18 +356,11 @@ internal data class ScopeReplaceTextPreviewArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeReplaceTextPreviewTool(): SdkToolDescriptor<ScopeReplaceTextPreviewArgs> {
-    return sdkToolDescriptor<ScopeReplaceTextPreviewArgs>(
-        name = "scope_replace_text_preview",
-        description = "Preview text replacement within a scope. " +
-                "This computes replacement text using IntelliJ Find/Replace semantics (including regex groups and preserve-case).",
-        handler = { args -> scopeReplaceTextPreviewHandler(this, args) },
-    )
-}
 
-private suspend fun scopeReplaceTextPreviewHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeReplaceTextPreviewHandler(
     args: ScopeReplaceTextPreviewArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
@@ -414,9 +370,8 @@ private suspend fun scopeReplaceTextPreviewHandler(
         failOnMissingOccurrenceIds = args.failOnMissingOccurrenceIds,
     )
 
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(
             Bundle.message(
@@ -474,19 +429,11 @@ internal data class ScopeReplaceTextApplyArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeReplaceTextApplyTool(): SdkToolDescriptor<ScopeReplaceTextApplyArgs> {
-    return sdkToolDescriptor<ScopeReplaceTextApplyArgs>(
-        name = "scope_replace_text_apply",
-        description = "Apply text replacement within a scope. " +
-                "If occurrenceIds is empty, all found occurrences are replaced. " +
-                "If occurrenceIds is provided, only those matches are replaced.",
-        handler = { args -> scopeReplaceTextApplyHandler(this, args) },
-    )
-}
 
-private suspend fun scopeReplaceTextApplyHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeReplaceTextApplyHandler(
     args: ScopeReplaceTextApplyArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
@@ -498,9 +445,8 @@ private suspend fun scopeReplaceTextApplyHandler(
         maxReplaceCount = args.maxReplaceCount,
     )
 
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         if (request.maxReplaceCount < 1) {
             return@callToolWithProject CallToolResult(

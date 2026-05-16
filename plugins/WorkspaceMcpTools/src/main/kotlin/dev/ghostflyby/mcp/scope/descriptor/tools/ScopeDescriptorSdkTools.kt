@@ -25,17 +25,16 @@ package dev.ghostflyby.mcp.scope.descriptor.tools
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.tools.*
+
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
 
-/**
- * Local serializable enum for catalog intent; duplicates the shape from
- * [ScopeSdkCatalogIntent] to avoid depending on annotation-tool internals.
- */
 @Schema
 @Serializable
 internal enum class ScopeSdkCatalogIntent {
@@ -46,22 +45,16 @@ internal enum class ScopeSdkCatalogIntent {
     CURRENT_FILE,
 }
 
-/**
- * Local result DTO for catalog-by-intent lookup.
- */
 @Schema
 @Serializable
 internal data class ScopeSdkCatalogIntentResultDto(
-    @Description("Selection intent for reducing catalog candidates. One of: PROJECT_ONLY, WITH_LIBRARIES, CHANGED_FILES, OPEN_FILES, CURRENT_FILE.")
+    @Description("Selection intent for reducing catalog candidates.")
     val intent: ScopeSdkCatalogIntent,
     val recommendedScopeRefId: String? = null,
     val items: List<ScopeCatalogItemDto>,
     val diagnostics: List<String> = emptyList(),
 )
 
-// ── scope_list_catalog ──────────────────────────────────────────
-
-@Description("Arguments for ScopeListCatalogArgs")
 @Schema
 @Serializable
 internal data class ScopeListCatalogArgs(
@@ -71,34 +64,23 @@ internal data class ScopeListCatalogArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeListCatalogSdkTool(): SdkToolDescriptor<ScopeListCatalogArgs> {
-    return sdkToolDescriptor<ScopeListCatalogArgs>(
-        name = "scope_list_catalog",
-        description = "List available search scopes (Find-like catalog) with stable scopeRefId and metadata.",
-        handler = { args -> scopeListCatalogHandler(this, args) },
-    )
-}
-
-private suspend fun scopeListCatalogHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeListCatalogHandler(
     args: ScopeListCatalogArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val result = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
         CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }
 
-// ── scope_get_default_descriptor ─────────────────────────────────
-
-@Description("Arguments for ScopeGetDefaultDescriptorArgs")
 @Schema
 @Serializable
 internal data class ScopeGetDefaultDescriptorArgs(
-    @Description("Preset scope to use. One of: PROJECT_FILES, ALL_PLACES, OPEN_FILES, PROJECT_AND_LIBRARIES, PROJECT_PRODUCTION_FILES, PROJECT_TEST_FILES.")
+    @Description("Preset scope to use.")
     val preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
     @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
     val allowUiInteractiveScopes: Boolean = false,
@@ -106,21 +88,13 @@ internal data class ScopeGetDefaultDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeGetDefaultDescriptorSdkTool(): SdkToolDescriptor<ScopeGetDefaultDescriptorArgs> {
-    return sdkToolDescriptor<ScopeGetDefaultDescriptorArgs>(
-        name = "scope_get_default_descriptor",
-        description = "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
-        handler = { args -> scopeGetDefaultDescriptorHandler(this, args) },
-    )
-}
-
-private suspend fun scopeGetDefaultDescriptorHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeGetDefaultDescriptorHandler(
     args: ScopeGetDefaultDescriptorArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val descriptor = buildPresetScopeDescriptor(
             project = project,
@@ -132,9 +106,6 @@ private suspend fun scopeGetDefaultDescriptorHandler(
     }
 }
 
-// ── scope_resolve_standard_descriptor ────────────────────────────
-
-@Description("Arguments for ScopeResolveStandardDescriptorArgs")
 @Schema
 @Serializable
 internal data class ScopeResolveStandardDescriptorArgs(
@@ -146,17 +117,10 @@ internal data class ScopeResolveStandardDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeResolveStandardDescriptorSdkTool(): SdkToolDescriptor<ScopeResolveStandardDescriptorArgs> {
-    return sdkToolDescriptor<ScopeResolveStandardDescriptorArgs>(
-        name = "scope_resolve_standard_descriptor",
-        description = "Resolve a standard IDE scope id directly to a normalized reusable descriptor.",
-        handler = { args -> scopeResolveStandardDescriptorHandler(this, args) },
-    )
-}
-
-private suspend fun scopeResolveStandardDescriptorHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeResolveStandardDescriptorHandler(
     args: ScopeResolveStandardDescriptorArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.standardScopeId.isBlank()) {
         return CallToolResult(
@@ -164,9 +128,8 @@ private suspend fun scopeResolveStandardDescriptorHandler(
             isError = true,
         )
     }
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val descriptor = buildStandardScopeDescriptor(
             project = project,
@@ -178,13 +141,10 @@ private suspend fun scopeResolveStandardDescriptorHandler(
     }
 }
 
-// ── scope_catalog_find_by_intent ─────────────────────────────────
-
-@Description("Arguments for ScopeCatalogFindByIntentArgs")
 @Schema
 @Serializable
 internal data class ScopeCatalogFindByIntentArgs(
-    @Description("Selection intent for reducing catalog candidates. One of: PROJECT_ONLY, WITH_LIBRARIES, CHANGED_FILES, OPEN_FILES, CURRENT_FILE.")
+    @Description("Selection intent for reducing catalog candidates.")
     val intent: ScopeSdkCatalogIntent,
     @Description("Maximum number of catalog items to return.")
     val maxResults: Int = 20,
@@ -194,19 +154,10 @@ internal data class ScopeCatalogFindByIntentArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeCatalogFindByIntentSdkTool(): SdkToolDescriptor<ScopeCatalogFindByIntentArgs> {
-    return sdkToolDescriptor<ScopeCatalogFindByIntentArgs>(
-        name = "scope_catalog_find_by_intent",
-        description = "Find a compact scope catalog subset by intent " +
-                "(project-only, with-libraries, changed/open/current file) " +
-                "to reduce first-call catalog payload.",
-        handler = { args -> scopeCatalogFindByIntentHandler(this, args) },
-    )
-}
-
-private suspend fun scopeCatalogFindByIntentHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeCatalogFindByIntentHandler(
     args: ScopeCatalogFindByIntentArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.maxResults < 1) {
         return CallToolResult(
@@ -214,9 +165,8 @@ private suspend fun scopeCatalogFindByIntentHandler(
             isError = true,
         )
     }
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val catalog = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
         val candidates = catalog.items.filter { item ->
@@ -250,7 +200,7 @@ private suspend fun scopeCatalogFindByIntentHandler(
         val diagnostics = buildList {
             addAll(catalog.diagnostics)
             if (selected.isEmpty()) {
-                add("No catalog items matched intent=${args.intent.name}. Consider includeInteractiveScopes=true or a different intent.")
+                add("No catalog items matched intent=${args.intent.name}.")
             }
             if (truncated) {
                 add("Matched catalog items exceed maxResults=${args.maxResults}; result was truncated.")
@@ -266,9 +216,6 @@ private suspend fun scopeCatalogFindByIntentHandler(
     }
 }
 
-// ── scope_validate_pattern ───────────────────────────────────────
-
-@Description("Arguments for ScopeValidatePatternArgs")
 @Schema
 @Serializable
 internal data class ScopeValidatePatternArgs(
@@ -278,30 +225,19 @@ internal data class ScopeValidatePatternArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeValidatePatternSdkTool(): SdkToolDescriptor<ScopeValidatePatternArgs> {
-    return sdkToolDescriptor<ScopeValidatePatternArgs>(
-        name = "scope_validate_pattern",
-        description = "Validate a PackageSet pattern text used by IntelliJ scopes.",
-        handler = { args -> scopeValidatePatternHandler(this, args) },
-    )
-}
-
-private suspend fun scopeValidatePatternHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeValidatePatternHandler(
     args: ScopeValidatePatternArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val result = ScopeResolverService.getInstance(project).validatePattern(args.patternText)
         CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }
 
-// ── scope_resolve_program ────────────────────────────────────────
-
-@Description("Arguments for ScopeResolveProgramArgs")
 @Schema
 @Serializable
 internal data class ScopeResolveProgramArgs(
@@ -311,21 +247,13 @@ internal data class ScopeResolveProgramArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeResolveProgramSdkTool(): SdkToolDescriptor<ScopeResolveProgramArgs> {
-    return sdkToolDescriptor<ScopeResolveProgramArgs>(
-        name = "scope_resolve_program",
-        description = "Compile and normalize scope atoms and RPN tokens into a reusable scope descriptor.",
-        handler = { args -> scopeResolveProgramHandler(this, args) },
-    )
-}
-
-private suspend fun scopeResolveProgramHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeResolveProgramHandler(
     args: ScopeResolveProgramArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, args.request)
         val result = ScopeResolveResultDto(descriptor = descriptor)
@@ -333,9 +261,6 @@ private suspend fun scopeResolveProgramHandler(
     }
 }
 
-// ── scope_normalize_program_descriptor ───────────────────────────
-
-@Description("Arguments for ScopeNormalizeDescriptorArgs")
 @Schema
 @Serializable
 internal data class ScopeNormalizeDescriptorArgs(
@@ -347,22 +272,13 @@ internal data class ScopeNormalizeDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeNormalizeProgramDescriptorSdkTool(): SdkToolDescriptor<ScopeNormalizeDescriptorArgs> {
-    return sdkToolDescriptor<ScopeNormalizeDescriptorArgs>(
-        name = "scope_normalize_program_descriptor",
-        description = "Normalize and recompile an existing scope descriptor, " +
-                "useful for migration and compatibility upgrades.",
-        handler = { args -> scopeNormalizeDescriptorHandler(this, args) },
-    )
-}
-
-private suspend fun scopeNormalizeDescriptorHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeNormalizeDescriptorHandler(
     args: ScopeNormalizeDescriptorArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val request = ScopeResolveRequestDto(
             atoms = args.descriptor.atoms,
@@ -381,9 +297,6 @@ private suspend fun scopeNormalizeDescriptorHandler(
     }
 }
 
-// ── scope_contains_file ──────────────────────────────────────────
-
-@Description("Arguments for ScopeContainsFileArgs")
 @Schema
 @Serializable
 internal data class ScopeContainsFileArgs(
@@ -397,21 +310,13 @@ internal data class ScopeContainsFileArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeContainsFileSdkTool(): SdkToolDescriptor<ScopeContainsFileArgs> {
-    return sdkToolDescriptor<ScopeContainsFileArgs>(
-        name = "scope_contains_file",
-        description = "Check whether a file URL belongs to a resolved scope descriptor.",
-        handler = { args -> scopeContainsFileHandler(this, args) },
-    )
-}
-
-private suspend fun scopeContainsFileHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeContainsFileHandler(
     args: ScopeContainsFileArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val resolver = ScopeResolverService.getInstance(project)
         val resolved = resolver.resolveDescriptor(
@@ -444,9 +349,6 @@ private suspend fun scopeContainsFileHandler(
     }
 }
 
-// ── scope_filter_files ──────────────────────────────────────────
-
-@Description("Arguments for ScopeFilterFilesArgs")
 @Schema
 @Serializable
 internal data class ScopeFilterFilesArgs(
@@ -460,21 +362,13 @@ internal data class ScopeFilterFilesArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFilterFilesSdkTool(): SdkToolDescriptor<ScopeFilterFilesArgs> {
-    return sdkToolDescriptor<ScopeFilterFilesArgs>(
-        name = "scope_filter_files",
-        description = "Filter file URLs by whether they belong to a resolved scope descriptor.",
-        handler = { args -> scopeFilterFilesHandler(this, args) },
-    )
-}
-
-private suspend fun scopeFilterFilesHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFilterFilesHandler(
     args: ScopeFilterFilesArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         val resolver = ScopeResolverService.getInstance(project)
         val resolved = resolver.resolveDescriptor(

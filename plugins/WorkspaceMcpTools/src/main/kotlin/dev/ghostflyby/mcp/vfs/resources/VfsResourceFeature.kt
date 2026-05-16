@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.vfs.resources
@@ -29,26 +13,9 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
-import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.resource.toTextMimeType
-import dev.ghostflyby.mcp.resource.workspaceFileUri
-import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
-import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
-import dev.ghostflyby.mcp.vfs.tools.vfsGetUrlFromLocalPathTool
-import dev.ghostflyby.mcp.vfs.tools.vfsGetUrlsFromLocalPathsTool
-import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathFromUrlTool
-import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathsFromUrlsTool
-import dev.ghostflyby.mcp.vfs.tools.vfsExistsManySdkTool
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
+import dev.ghostflyby.mcp.resource.*
+import dev.ghostflyby.mcp.sdk.*
+import dev.ghostflyby.mcp.vfs.tools.*
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
@@ -133,14 +100,46 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
             }
         }
 
-        // Register SDK tools (unchanged)
-        context.registerTool(vfsExistsSdkTool())
-        context.registerTool(vfsRefreshSdkTool())
-        context.registerTool(vfsGetUrlFromLocalPathTool())
-        context.registerTool(vfsGetUrlsFromLocalPathsTool())
-        context.registerTool(vfsGetLocalPathFromUrlTool())
-        context.registerTool(vfsGetLocalPathsFromUrlsTool())
-        context.registerTool(vfsExistsManySdkTool())
+        // Register SDK tools (inline handler)
+        context.registerTool<VfsExistsArgs>(
+            name = "vfs_exists",
+            description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",
+            handler = { args, sid -> vfsExistsHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsRefreshArgs>(
+            name = "vfs_refresh",
+            description = "Refresh a VFS file or directory. Supports project-scoped URL resolution via optional projectKey/projectPath.",
+            handler = { args, sid -> vfsRefreshHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsGetUrlArgs>(
+            name = "vfs_get_url_from_local_path",
+            description = "Resolve a project-relative local path to a VFS URL. " +
+                "This is a convenience helper: for local files, you can directly pass " +
+                "a file:///absolute/path URL to tools that accept VFS URLs.",
+            handler = { args, sid -> vfsGetUrlHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsGetUrlsArgs>(
+            name = "vfs_get_url_from_local_paths",
+            description = "Resolve multiple project-relative local paths to VFS URLs. " +
+                "This is a convenience helper: for local files, you can directly pass " +
+                "file:///absolute/path URLs to tools that accept VFS URLs.",
+            handler = { args, sid -> vfsGetUrlsHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsGetLocalPathArgs>(
+            name = "vfs_get_local_path_from_url",
+            description = "Resolve a VFS URL to a local file-system path.",
+            handler = { args, sid -> vfsGetLocalPathHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsGetLocalPathsArgs>(
+            name = "vfs_get_local_paths_from_urls",
+            description = "Resolve multiple VFS URLs to local file-system paths.",
+            handler = { args, sid -> vfsGetLocalPathsHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<VfsExistsManyArgs>(
+            name = "vfs_exists_many",
+            description = "Check whether multiple VFS URLs currently resolve to existing files or directories.",
+            handler = { args, sid -> vfsExistsManyHandler(args, sid, context.requestRunner) },
+        )
 
         return context.buildRegistration()
     }

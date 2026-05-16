@@ -23,12 +23,9 @@
 package dev.ghostflyby.mcp.sdk
 
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.sdkToolDescriptor
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import dev.ghostflyby.mcp.vfs.tools.VfsExistsResult
 import dev.ghostflyby.mcp.vfs.tools.encodeVfsExistsResult
-import dev.ghostflyby.mcp.vfs.tools.vfsExistsSdkTool
-import dev.ghostflyby.mcp.vfs.tools.vfsRefreshSdkTool
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
@@ -39,19 +36,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 internal class WorkspaceMcpRequestRunnerTest {
-
-    @Test
-    fun `sdkToolDescriptor builds typed descriptor with serializer`() {
-        @Serializable
-        data class TestArgs(val url: String, val count: Int = 0)
-        val descriptor = sdkToolDescriptor<TestArgs>(
-            name = "test_tool",
-            description = "A test tool",
-        ) { error("not called") }
-        assertEquals("test_tool", descriptor.name)
-        assertTrue(descriptor.serializer.descriptor.serialName.contains("TestArgs"))
-    }
-
     @Test
     fun `serialization decodes defaults when partial args`() {
         @Serializable
@@ -124,28 +108,7 @@ internal class WorkspaceMcpRequestRunnerTest {
         val args = MyArgs(url = "/test", projectKey = "my-key", projectPath = "/tmp")
         assertEquals("my-key", args.projectKey)
         assertEquals("/tmp", args.projectPath)
-    }
-
-    @Test
-    fun `vfs refresh sdk schema uses DTO field types`() {
-        val schema = vfsRefreshSdkTool().inputSchema
-        assertEquals("string", schema.propertyType("url"))
-        assertEquals("string", schema.propertyType("projectKey"))
-        assertEquals("string", schema.propertyType("projectPath"))
-        assertEquals("boolean", schema.propertyType("async"))
-        assertEquals("boolean", schema.propertyType("recursive"))
-    }
-
-    @Test
-    fun `vfs exists sdk schema uses DTO field types`() {
-        val schema = vfsExistsSdkTool().inputSchema
-        assertEquals("string", schema.propertyType("url"))
-        assertEquals("string", schema.propertyType("projectKey"))
-        assertEquals("string", schema.propertyType("projectPath"))
-        assertTrue(schema.required?.contains("url") == true)
-    }
-
-    @Test
+    }    @Test
     fun `vfs exists result encodes deterministic json`() {
         assertEquals(
             """{"url":"file:///tmp/example.txt","exists":true}""",

@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.document.tools
@@ -33,7 +17,9 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.tools.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
@@ -150,75 +136,9 @@ internal data class DocumentSdkSetTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-// -- tool factory functions --
-
-internal fun documentIsWritableSdkTool(): SdkToolDescriptor<DocumentSdkUrlArgs> {
-    return sdkToolDescriptor<DocumentSdkUrlArgs>(
-        name = "document_is_writable",
-        description = "Document.isWritable(): return whether document text is writable.",
-        inputSchema = schemaFor<DocumentSdkUrlArgs>().copy(required = listOf("url")),
-        handler = { args -> documentIsWritableHandler(this, args) },
-    )
-}
-
-internal fun documentGetModificationStampSdkTool(): SdkToolDescriptor<DocumentSdkUrlArgs> {
-    return sdkToolDescriptor<DocumentSdkUrlArgs>(
-        name = "document_get_modification_stamp",
-        description = "Document.getModificationStamp(): return current modification stamp.",
-        inputSchema = schemaFor<DocumentSdkUrlArgs>().copy(required = listOf("url")),
-        handler = { args -> documentGetModificationStampHandler(this, args) },
-    )
-}
-
-internal fun documentInsertStringSdkTool(): SdkToolDescriptor<DocumentSdkInsertArgs> {
-    return sdkToolDescriptor<DocumentSdkInsertArgs>(
-        name = "document_insert_string",
-        description = "Document.insertString(offset, text).",
-        inputSchema = schemaFor<DocumentSdkInsertArgs>().copy(required = listOf("url", "offset", "text")),
-        handler = { args -> documentInsertStringHandler(this, args) },
-    )
-}
-
-internal fun documentDeleteStringSdkTool(): SdkToolDescriptor<DocumentSdkDeleteArgs> {
-    return sdkToolDescriptor<DocumentSdkDeleteArgs>(
-        name = "document_delete_string",
-        description = "Document.deleteString(startOffset, endOffset).",
-        inputSchema = schemaFor<DocumentSdkDeleteArgs>().copy(required = listOf("url", "startOffset", "endOffset")),
-        handler = { args -> documentDeleteStringHandler(this, args) },
-    )
-}
-
-internal fun documentReplaceStringSdkTool(): SdkToolDescriptor<DocumentSdkReplaceArgs> {
-    return sdkToolDescriptor<DocumentSdkReplaceArgs>(
-        name = "document_replace_string",
-        description = "Document.replaceString(startOffset, endOffset, text).",
-        inputSchema = schemaFor<DocumentSdkReplaceArgs>().copy(
-            required = listOf(
-                "url",
-                "startOffset",
-                "endOffset",
-                "text",
-            ),
-        ),
-        handler = { args -> documentReplaceStringHandler(this, args) },
-    )
-}
-
-internal fun documentSetTextSdkTool(): SdkToolDescriptor<DocumentSdkSetTextArgs> {
-    return sdkToolDescriptor<DocumentSdkSetTextArgs>(
-        name = "document_set_text",
-        description = "Document.setText(text): replace whole document with new text.",
-        inputSchema = schemaFor<DocumentSdkSetTextArgs>().copy(required = listOf("url", "text")),
-        handler = { args -> documentSetTextHandler(this, args) },
-    )
-}
-
-// -- handlers --
-
-private suspend fun documentIsWritableHandler(ctx: SdkToolHandlerContext, args: DocumentSdkUrlArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (_, document) = resolveTextDocument(args.url)
@@ -229,10 +149,9 @@ private suspend fun documentIsWritableHandler(ctx: SdkToolHandlerContext, args: 
     }
 }
 
-private suspend fun documentGetModificationStampHandler(ctx: SdkToolHandlerContext, args: DocumentSdkUrlArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (_, document) = resolveTextDocument(args.url)
@@ -243,10 +162,9 @@ private suspend fun documentGetModificationStampHandler(ctx: SdkToolHandlerConte
     }
 }
 
-private suspend fun documentInsertStringHandler(ctx: SdkToolHandlerContext, args: DocumentSdkInsertArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
@@ -263,10 +181,9 @@ private suspend fun documentInsertStringHandler(ctx: SdkToolHandlerContext, args
     }
 }
 
-private suspend fun documentDeleteStringHandler(ctx: SdkToolHandlerContext, args: DocumentSdkDeleteArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
@@ -282,10 +199,9 @@ private suspend fun documentDeleteStringHandler(ctx: SdkToolHandlerContext, args
     }
 }
 
-private suspend fun documentReplaceStringHandler(ctx: SdkToolHandlerContext, args: DocumentSdkReplaceArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
@@ -301,10 +217,9 @@ private suspend fun documentReplaceStringHandler(ctx: SdkToolHandlerContext, arg
     }
 }
 
-private suspend fun documentSetTextHandler(ctx: SdkToolHandlerContext, args: DocumentSdkSetTextArgs): CallToolResult {
-    return ctx.runner.callToolWithProject(
+internal suspend fun documentSetTextHandler(args: DocumentSdkSetTextArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
@@ -318,8 +233,6 @@ private suspend fun documentSetTextHandler(ctx: SdkToolHandlerContext, args: Doc
         )
     }
 }
-
-// -- helpers --
 
 private suspend fun resolveTextDocument(url: String): Pair<VirtualFile, Document> = readAction {
     val vfsManager = service<VirtualFileManager>()

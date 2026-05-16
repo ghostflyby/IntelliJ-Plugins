@@ -74,7 +74,6 @@ internal class WorkspaceMcpRequestRunner(
      */
     suspend fun callToolWithProject(
         projectArgs: WorkspaceMcpProjectToolArguments,
-        sessionId: String? = null,
         rawVfsUrl: String? = null,
         relativePath: String? = null,
         block: suspend (Project) -> CallToolResult,

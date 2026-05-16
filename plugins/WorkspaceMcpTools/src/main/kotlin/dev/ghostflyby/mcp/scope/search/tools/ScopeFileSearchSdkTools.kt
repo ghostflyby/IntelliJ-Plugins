@@ -36,6 +36,7 @@ import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFF
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.*
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -54,16 +55,6 @@ private val WHITESPACE_REGEX = Regex("\\s+")
 
 // ── Tool registration entrypoint ─────────────────────────────────
 
-internal fun scopeFileSearchSdkTools(): List<SdkToolDescriptor<*>> {
-    return listOf(
-        scopeFileSearchTool(),
-        scopeFileSearchQuickTool(),
-        scopeFindFilesByNameTool(),
-        scopeFindFilesByPathTool(),
-        scopeFindInDirectoryGlobTool(),
-        scopeFindSourceFileByClassNameTool(),
-    )
-}
 
 // ── scope_search_files ────────────────────────────────────────────
 
@@ -92,25 +83,14 @@ internal data class ScopeFileSearchArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFileSearchTool(): SdkToolDescriptor<ScopeFileSearchArgs> {
-    return sdkToolDescriptor<ScopeFileSearchArgs>(
-        name = "scope_search_files",
-        description = "Search files by name/path text or glob within a scope descriptor. " +
-                "Returns matching file URLs and search diagnostics. " +
-                "When directoryUrl is provided, this tool traverses that VFS subtree directly " +
-                "(including jar:// ZIP/JAR roots such as Gradle cache source archives). " +
-                "Prefer this over shell commands in most cases.",
-        handler = { args -> scopeFileSearchHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFileSearchHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFileSearchHandler(
     args: ScopeFileSearchArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         if (args.maxResults < 1) {
             return@callToolWithProject CallToolResult(
@@ -270,22 +250,14 @@ internal data class ScopeFileSearchQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFileSearchQuickTool(): SdkToolDescriptor<ScopeFileSearchQuickArgs> {
-    return sdkToolDescriptor<ScopeFileSearchQuickArgs>(
-        name = "scope_search_files_quick",
-        description = "First-call friendly file search shortcut with preset scope and low-parameter defaults." +
-                AGENT_FIRST_CALL_SHORTCUT_DESCRIPTION_SUFFIX,
-        handler = { args -> scopeFileSearchQuickHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFileSearchQuickHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFileSearchQuickHandler(
     args: ScopeFileSearchQuickArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(
             Bundle.message(
@@ -312,7 +284,7 @@ private suspend fun scopeFileSearchQuickHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = false,
         )
-        return@callToolWithProject scopeFileSearchHandler(ctx, innerArgs)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
     }
 }
 
@@ -340,22 +312,14 @@ internal data class ScopeFindFilesByNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFindFilesByNameTool(): SdkToolDescriptor<ScopeFindFilesByNameArgs> {
-    return sdkToolDescriptor<ScopeFindFilesByNameArgs>(
-        name = "scope_find_files_by_name_keyword",
-        description = "Shortcut: search files by filename keyword within a scope. " +
-                "For GLOBAL scopes without directoryUrl, this uses indexed name lookup where possible.",
-        handler = { args -> scopeFindFilesByNameHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFindFilesByNameHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFindFilesByNameHandler(
     args: ScopeFindFilesByNameArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(
             Bundle.message(
@@ -374,7 +338,7 @@ private suspend fun scopeFindFilesByNameHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(ctx, innerArgs)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
     }
 }
 
@@ -402,22 +366,14 @@ internal data class ScopeFindFilesByPathArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFindFilesByPathTool(): SdkToolDescriptor<ScopeFindFilesByPathArgs> {
-    return sdkToolDescriptor<ScopeFindFilesByPathArgs>(
-        name = "scope_find_files_by_path_keyword",
-        description = "Shortcut: search files by path keyword within a scope. " +
-                "When directoryUrl points to jar:// roots, path keywords match archive-internal paths.",
-        handler = { args -> scopeFindFilesByPathHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFindFilesByPathHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFindFilesByPathHandler(
     args: ScopeFindFilesByPathArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(
             Bundle.message(
@@ -436,7 +392,7 @@ private suspend fun scopeFindFilesByPathHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(ctx, innerArgs)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
     }
 }
 
@@ -462,20 +418,11 @@ internal data class ScopeFindInDirectoryGlobArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFindInDirectoryGlobTool(): SdkToolDescriptor<ScopeFindInDirectoryGlobArgs> {
-    return sdkToolDescriptor<ScopeFindInDirectoryGlobArgs>(
-        name = "find_in_directory_using_glob",
-        description = "Shortcut: find files in a directory by glob pattern and scope. " +
-                "Works with arbitrary VFS directories, including jar:// URLs in Gradle caches. " +
-                "Example: directoryUrl='jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/', " +
-                "globPattern='**/FindSymbolParameters.java'.",
-        handler = { args -> scopeFindInDirectoryGlobHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFindInDirectoryGlobHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFindInDirectoryGlobHandler(
     args: ScopeFindInDirectoryGlobArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.directoryUrl.isBlank()) {
         return CallToolResult(
@@ -489,9 +436,8 @@ private suspend fun scopeFindInDirectoryGlobHandler(
             isError = true,
         )
     }
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", args.globPattern.length))
         val innerArgs = ScopeFileSearchArgs(
@@ -505,7 +451,7 @@ private suspend fun scopeFindInDirectoryGlobHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(ctx, innerArgs)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
     }
 }
 
@@ -533,18 +479,11 @@ internal data class ScopeFindSourceFileByClassNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal fun scopeFindSourceFileByClassNameTool(): SdkToolDescriptor<ScopeFindSourceFileByClassNameArgs> {
-    return sdkToolDescriptor<ScopeFindSourceFileByClassNameArgs>(
-        name = "scope_find_source_file_by_class_name",
-        description = "Find likely source files by class name across project and libraries, with source-preferred ranking." +
-                MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFFIX,
-        handler = { args -> scopeFindSourceFileByClassNameHandler(this, args) },
-    )
-}
 
-private suspend fun scopeFindSourceFileByClassNameHandler(
-    ctx: SdkToolHandlerContext,
+internal suspend fun scopeFindSourceFileByClassNameHandler(
     args: ScopeFindSourceFileByClassNameArgs,
+    sessionId: String?,
+    runner: WorkspaceMcpRequestRunner,
 ): CallToolResult {
     if (args.className.isBlank()) {
         return CallToolResult(
@@ -552,9 +491,8 @@ private suspend fun scopeFindSourceFileByClassNameHandler(
             isError = true,
         )
     }
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
     ) { project ->
         reportActivity(
             Bundle.message(
@@ -587,7 +525,7 @@ private suspend fun scopeFindSourceFileByClassNameHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        val searchResult = scopeFileSearchHandler(ctx, innerArgs)
+        val searchResult = scopeFileSearchHandler(innerArgs, sessionId, runner)
 
         if (searchResult.isError == true) return@callToolWithProject searchResult
 

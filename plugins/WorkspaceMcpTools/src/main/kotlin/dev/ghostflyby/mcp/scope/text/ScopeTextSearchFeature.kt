@@ -7,7 +7,7 @@
 package dev.ghostflyby.mcp.scope.text
 
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.scope.text.tools.scopeTextSearchSdkTools
+import dev.ghostflyby.mcp.scope.text.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
@@ -36,9 +36,42 @@ internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
     override fun register(
         context: WorkspaceMcpFeatureRegistrationContext,
     ): WorkspaceMcpFeatureRegistration {
-        scopeTextSearchSdkTools().forEach { tool ->
-            context.registerTool(tool)
-        }
+        context.registerTool<ScopeSearchTextArgs>(
+            "scope_search_text",
+            "Search text within a resolved scope descriptor using IntelliJ Find engine. " +
+                "Supports plain text and regex mode, file mask, and search context.",
+            handler = { args, sid -> scopeSearchTextHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<ScopeSearchTextQuickArgs>(
+            "scope_search_text_quick",
+            "First-call friendly text search shortcut with preset scope." +
+                " " +
+                "First-call friendly shortcut for agents with no prior context; uses non-interactive defaults and stable parameters.",
+            handler = { args, sid -> scopeSearchTextQuickHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<ScopeSearchTextByPlainArgs>(
+            "scope_search_text_by_plain",
+            "Shortcut: search plain text within a resolved scope descriptor.",
+            handler = { args, sid -> scopeSearchTextByPlainHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<ScopeSearchTextByRegexArgs>(
+            "scope_search_text_by_regex",
+            "Shortcut: search regex pattern within a resolved scope descriptor.",
+            handler = { args, sid -> scopeSearchTextByRegexHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<ScopeReplaceTextPreviewArgs>(
+            "scope_replace_text_preview",
+            "Preview text replacement within a scope. " +
+                "This computes replacement text using IntelliJ Find/Replace semantics (including regex groups and preserve-case).",
+            handler = { args, sid -> scopeReplaceTextPreviewHandler(args, sid, context.requestRunner) },
+        )
+        context.registerTool<ScopeReplaceTextApplyArgs>(
+            "scope_replace_text_apply",
+            "Apply text replacement within a scope. " +
+                "If occurrenceIds is empty, all found occurrences are replaced. " +
+                "If occurrenceIds is provided, only those matches are replaced.",
+            handler = { args, sid -> scopeReplaceTextApplyHandler(args, sid, context.requestRunner) },
+        )
         return context.buildRegistration()
     }
 }

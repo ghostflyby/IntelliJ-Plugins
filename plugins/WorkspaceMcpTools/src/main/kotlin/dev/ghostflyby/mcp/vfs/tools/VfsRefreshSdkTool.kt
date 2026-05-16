@@ -11,7 +11,9 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.sdk.tools.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CompletableDeferred
@@ -60,51 +62,15 @@ internal data class VfsExistsResult(
     val exists: Boolean,
 )
 
-/**
- * vfs_refresh as an SDK tool — proof-of-concept migration from the old
- * [dev.ghostflyby.mcp.vfs.VfsMcpTools] annotation-based toolset.
- *
- * Runs through [SdkToolHandlerContext.runner] so context installation and
- * project resolution happen before the refresh. Resolution uses the full
- * hint surface:
- * - URLs containing `://` are passed as the raw VFS URL hint,
- *   enabling VFS-URL-based project inference in multi-project workspaces.
- * - Strings without `://` are passed as [relativePath] and resolved against the
- *   project's base path after resolution.
- * - Explicit `projectKey` / `projectPath` always take precedence.
- *
- * The old annotation-based VfsMcpTools.vfs_refresh remains in place.
- */
-internal fun vfsRefreshSdkTool(): SdkToolDescriptor<VfsRefreshArgs> {
-    return sdkToolDescriptor<VfsRefreshArgs>(
-        name = "vfs_refresh",
-        description = "Refresh a VFS file or directory. Supports project-scoped URL resolution via optional projectKey/projectPath.",
-        handler = { args -> vfsRefreshHandler(this, args) },
-    )
-}
-
-/**
- * vfs_exists as an SDK tool. The old annotation-based
- * VfsMcpTools.vfs_exists remains in place during incremental migration.
- */
-internal fun vfsExistsSdkTool(): SdkToolDescriptor<VfsExistsArgs> {
-    return sdkToolDescriptor<VfsExistsArgs>(
-        name = "vfs_exists",
-        description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",
-        handler = { args -> vfsExistsHandler(this, args) },
-    )
-}
-
-private suspend fun vfsRefreshHandler(ctx: SdkToolHandlerContext, args: VfsRefreshArgs): CallToolResult {
+internal suspend fun vfsRefreshHandler(args: VfsRefreshArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
     val url = args.url
     val async = args.async
     val recursive = args.recursive
 
     val isRawVfs = url.contains("://")
 
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = if (isRawVfs) url else null,
         relativePath = if (!isRawVfs) url else null,
     ) { project ->
@@ -135,13 +101,12 @@ private suspend fun vfsRefreshHandler(ctx: SdkToolHandlerContext, args: VfsRefre
     }
 }
 
-private suspend fun vfsExistsHandler(ctx: SdkToolHandlerContext, args: VfsExistsArgs): CallToolResult {
+internal suspend fun vfsExistsHandler(args: VfsExistsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
     val url = args.url
     val isRawVfs = url.contains("://")
 
-    return ctx.runner.callToolWithProject(
+    return runner.callToolWithProject(
         projectArgs = args,
-        sessionId = ctx.sessionId,
         rawVfsUrl = if (isRawVfs) url else null,
         relativePath = if (!isRawVfs) url else null,
     ) { project ->
