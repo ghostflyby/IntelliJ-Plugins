@@ -2,6 +2,22 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.vfs.resources
@@ -12,13 +28,12 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.resource.toTextMimeType
 import dev.ghostflyby.mcp.resource.workspaceFileUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_FILES_TEMPLATE
-import dev.ghostflyby.mcp.sdk.NEW_WORKSPACE_VFS_TEMPLATE
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
@@ -32,19 +47,19 @@ import dev.ghostflyby.mcp.vfs.tools.vfsGetUrlsFromLocalPathsTool
 import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathFromUrlTool
 import dev.ghostflyby.mcp.vfs.tools.vfsGetLocalPathsFromUrlsTool
 import dev.ghostflyby.mcp.vfs.tools.vfsExistsManySdkTool
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
- * and per-project listable resources for base directories, content roots,
- * source roots, and open files.
- *
- * This feature owns the `files/{relativePath}` and `vfs/{rawVfsUrl}` templates
- * and the SDK VFS tools (vfs_exists, vfs_refresh).
+ * and per-project listable resources via the segment-based URI tree.
  */
 internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
 
-    override suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource> {
+    override suspend fun computeListableResources(
+        context: WorkspaceMcpFeatureContext,
+    ): List<WorkspaceListableResource> {
         val projects = readAction { context.projectResolver.openProjects() }
         return buildList {
             projects.forEach { project ->
@@ -91,23 +106,36 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
     }
 
     override fun register(context: WorkspaceMcpFeatureRegistrationContext): WorkspaceMcpFeatureRegistration {
-        context.registerResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_FILES_TEMPLATE,
-            name = "Project file resource",
-            description = "Reads IntelliJ VirtualFile content by project-relative path.",
-            mimeType = "text/plain",
-        )
+        // VFS resource templates via segment DSL
+        val projectAnchor = CoreResourceFeature.PROJECT_SEGMENT
 
-        context.registerResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_VFS_TEMPLATE,
-            name = "Project VFS resource",
-            description = "Reads IntelliJ VirtualFile content by raw VFS URL within a project scope.",
-            mimeType = "text/plain",
-        )
+        context.segments {
+            under(projectAnchor) {
+                segment("files") {
+                    template("relativePath") { params, anc ->
+                        val projectKey = anc[projectAnchor]
+                        val relativePath = params["relativePath"] ?: ""
+                        // Delegate to the existing reader for now
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceFileUri(instanceKey, projectKey ?: "", relativePath)
+                        context.readResource(uri, null)
+                    }
+                }
+                segment("vfs") {
+                    template("rawVfsUrl") { params, anc ->
+                        val projectKey = anc[projectAnchor]
+                        val rawVfsUrl = params["rawVfsUrl"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceVfsUri(instanceKey, projectKey ?: "", rawVfsUrl)
+                        context.readResource(uri, null)
+                    }
+                }
+            }
+        }
 
+        // Register SDK tools (unchanged)
         context.registerTool(vfsExistsSdkTool())
         context.registerTool(vfsRefreshSdkTool())
-
         context.registerTool(vfsGetUrlFromLocalPathTool())
         context.registerTool(vfsGetUrlsFromLocalPathsTool())
         context.registerTool(vfsGetLocalPathFromUrlTool())
@@ -120,10 +148,7 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
     private fun relativePathFor(project: Project, file: VirtualFile): String? {
         val bp = project.basePath ?: return null
         val filePath = file.path
-        if (filePath.startsWith(bp)) {
-            return filePath.removePrefix(bp).trimStart('/')
-        }
-        return null
+        return if (filePath.startsWith(bp)) filePath.removePrefix(bp).trimStart('/') else null
     }
 
     private fun VirtualFile.toProjectFileResource(

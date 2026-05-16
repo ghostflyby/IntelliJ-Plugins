@@ -22,7 +22,6 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
-import dev.ghostflyby.mcp.document.tools.jsonSchema
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
@@ -31,7 +30,9 @@ import io.modelcontextprotocol.kotlin.sdk.types.ToolAnnotations
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.serializer
 
 internal fun <T : Any> Server.registerSdkTool(
@@ -54,16 +55,20 @@ internal fun <T : Any> Server.registerSdkTool(
             json.decodeFromJsonElement(descriptor.serializer, jsonArgs)
         } catch (e: SerializationException) {
             return@addTool CallToolResult(
-                content = listOf(TextContent(
-                    text = "Invalid arguments for ${descriptor.name}: ${e.message}",
-                )),
+                content = listOf(
+                    TextContent(
+                        text = "Invalid arguments for ${descriptor.name}: ${e.message}",
+                    ),
+                ),
                 isError = true,
             )
         } catch (e: IllegalArgumentException) {
             return@addTool CallToolResult(
-                content = listOf(TextContent(
-                    text = "Invalid arguments for ${descriptor.name}: ${e.message}",
-                )),
+                content = listOf(
+                    TextContent(
+                        text = "Invalid arguments for ${descriptor.name}: ${e.message}",
+                    ),
+                ),
                 isError = true,
             )
         }
@@ -120,15 +125,16 @@ internal val toolArgsJson: Json = Json {
     explicitNulls = false
 }
 
-internal inline fun <reified T : Any> schemaFor(): ToolSchema {
-    val jsonObj = T::class.jsonSchema  // KSP-generated extension property
-    return ToolSchema(
-        schema = jsonObj["$schema"]?.jsonPrimitive?.content,
-        properties = jsonObj["properties"]?.jsonObject
-            ?: (jsonObj["$defs"]?.jsonObject?.get(T::class.simpleName!!)?.jsonObject?.get("properties")?.jsonObject),
-        required = jsonObj["required"]?.jsonArray?.map { it.jsonPrimitive.content },
-        defs = null,
-    )
+internal fun <T : Any> schemaFor(): ToolSchema {
+    TODO()
+//    val jsonObj = T::class.jsonSchema  // KSP-generated extension property
+//    return ToolSchema(
+//        schema = jsonObj["$schema"]?.jsonPrimitive?.content,
+//        properties = jsonObj["properties"]?.jsonObject
+//            ?: (jsonObj["$defs"]?.jsonObject?.get(T::class.simpleName!!)?.jsonObject?.get("properties")?.jsonObject),
+//        required = jsonObj["required"]?.jsonArray?.map { it.jsonPrimitive.content },
+//        defs = null,
+//    )
 }
 
 

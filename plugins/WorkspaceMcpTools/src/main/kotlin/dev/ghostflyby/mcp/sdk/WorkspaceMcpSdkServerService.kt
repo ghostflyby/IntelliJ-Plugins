@@ -44,8 +44,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.*
+import dev.ghostflyby.mcp.resource.segment.ResourceSegmentRegistry
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -64,6 +64,7 @@ internal class WorkspaceMcpSdkServerService(
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = WorkspaceProjectResolver()
+    private val segmentRegistry = ResourceSegmentRegistry()
     private val resourceReader = WorkspaceResourceReader(projectResolver)
     private val requestRunner = WorkspaceMcpRequestRunner(projectResolver)
 
@@ -160,10 +161,18 @@ internal class WorkspaceMcpSdkServerService(
      * - Project-scoped resources delegate to [requestRunner] for context installation.
      */
     private suspend fun readResource(resourceUri: String, sessionId: String?): ReadResourceResult {
-        val coreFeature = features.firstOrNull { it is CoreResourceFeature } as? CoreResourceFeature
-        if (coreFeature != null) {
-            val coreResult = coreFeature.tryReadCoreListable(resourceUri, workspaceInstanceKey(), projectResolver)
-            if (coreResult != null) return coreResult
+        // Segment-based resource matching (handles core server/info, projects, and feature resources)
+        val segmentMatch = segmentRegistry.match(resourceUri)
+        if (segmentMatch != null) {
+            return when (val seg = segmentMatch.segment) {
+                is dev.ghostflyby.mcp.resource.segment.StaticSegment -> {
+                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc)
+                        ?: ReadResourceResult(contents = emptyList())
+                }
+                is dev.ghostflyby.mcp.resource.segment.TemplateSegment -> {
+                    seg.handler(segmentMatch.params, segmentMatch.anc)
+                }
+            }
         }
 
         val decoded = tryDecodeWorkspaceResourceUri(resourceUri)
@@ -283,6 +292,9 @@ internal class WorkspaceMcpSdkServerService(
         val registration = synchronized(featureRegistrationLock) {
             featureRegistrations.remove(featureName)
         } ?: return
+
+        // Remove feature's segments from the global tree
+        segmentRegistry.removeTree(registration.segmentIds)
 
         registration.job.cancel()
         registration.registeredTools.forEach { name ->
@@ -456,4 +468,3 @@ internal object ModuleRootListener1 : ModuleRootListener {
         service<WorkspaceMcpSdkServerService>().refreshListableResources()
     }
 }
-

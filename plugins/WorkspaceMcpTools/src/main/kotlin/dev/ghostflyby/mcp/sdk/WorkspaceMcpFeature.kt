@@ -2,6 +2,22 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.sdk
@@ -9,6 +25,10 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
 import dev.ghostflyby.mcp.resource.WorkspaceListableResource
+import dev.ghostflyby.mcp.resource.segment.PendingAnchor
+import dev.ghostflyby.mcp.resource.segment.ResourceSegmentBuilder
+import dev.ghostflyby.mcp.resource.segment.ResourceSegmentCollector
+import dev.ghostflyby.mcp.resource.segment.SegmentId
 import dev.ghostflyby.mcp.sdk.tools.SdkToolDescriptor
 import dev.ghostflyby.mcp.sdk.tools.registerSdkTool
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -33,15 +53,16 @@ internal class WorkspaceMcpFeatureContext(
  * Tracks registered resources/tools for cleanup on dynamic removal.
  */
 internal class WorkspaceMcpFeatureRegistrationContext(
-    val projectResolver: WorkspaceProjectProvider,
+    val projectResolver: WorkspaceProjectResolver,
     val requestRunner: WorkspaceMcpRequestRunner,
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,
-    private val readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
+    internal val readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
 ) {
     private val trackedTemplates = mutableSetOf<String>()
     private val trackedTools = mutableSetOf<String>()
+    internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
 
     fun registerResourceTemplate(
         uriTemplate: String,
@@ -66,12 +87,28 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         trackedTools.add(descriptor.name)
     }
 
-    fun buildRegistration(): WorkspaceMcpFeatureRegistration = WorkspaceMcpFeatureRegistration(
-        featureName = featureName,
-        job = featureScope.coroutineContext[Job] ?: Job(),
-        registeredTemplates = trackedTemplates.toSet(),
-        registeredTools = trackedTools.toSet(),
-    )
+    /**
+     * Register resource segments using the builder DSL.
+     * Segments are collected via [segmentCollector] and later assembled
+     * into the global resource tree by the server service.
+     */
+    fun segments(block: ResourceSegmentBuilder.() -> Unit) {
+        segmentCollector.block()
+    }
+
+    fun buildRegistration(): WorkspaceMcpFeatureRegistration {
+        // Resolve deferred under() anchors within this feature's own collector.
+        val pendingAnchors = segmentCollector.pendingAnchors.toList()
+        val segmentIds = segmentCollector.roots.map { it.segmentId }.toSet()
+        return WorkspaceMcpFeatureRegistration(
+            featureName = featureName,
+            job = featureScope.coroutineContext[Job] ?: Job(),
+            registeredTemplates = trackedTemplates.toSet(),
+            registeredTools = trackedTools.toSet(),
+            segmentIds = segmentIds,
+            pendingAnchors = pendingAnchors,
+        )
+    }
 }
 
 /**
@@ -83,6 +120,8 @@ internal data class WorkspaceMcpFeatureRegistration(
     val job: Job,
     val registeredTemplates: Set<String>,
     val registeredTools: Set<String>,
+    val segmentIds: Set<SegmentId> = emptySet(),
+    val pendingAnchors: List<PendingAnchor> = emptyList(),
 )
 
 /**
