@@ -10,9 +10,13 @@ import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
 import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.segment.*
+import dev.ghostflyby.mcp.sdk.tools.schemaFor
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.*
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.serialization.SerializationException
@@ -60,13 +64,12 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     inline fun <reified T : Any> registerTool(
         name: String,
         description: String,
-        inputSchema: ToolSchema = ToolSchema(),
         noinline handler: suspend (T, Request) -> CallToolResult,
     ) {
         server.addTool(
             name = name,
             description = description,
-            inputSchema = inputSchema,
+            inputSchema = schemaFor<T>(),
         ) { request ->
             val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
             val decoded: T = try {
