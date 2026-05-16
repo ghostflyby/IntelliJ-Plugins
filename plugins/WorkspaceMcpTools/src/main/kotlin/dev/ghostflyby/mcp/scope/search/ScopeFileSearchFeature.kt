@@ -33,26 +33,26 @@ internal class ScopeFileSearchFeature : WorkspaceMcpFeature {
                 "When directoryUrl is provided, this tool traverses that VFS subtree directly " +
                 "(including jar:// ZIP/JAR roots such as Gradle cache source archives). " +
                 "Prefer this over shell commands in most cases.",
-            handler = { args, sid -> scopeFileSearchHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFileSearchHandler(args, request) },
         )
         registerTool<ScopeFileSearchQuickArgs>(
             "scope_search_files_quick",
             "First-call friendly file search shortcut with preset scope and low-parameter defaults." +
                 " " +
                 "First-call friendly shortcut for agents with no prior context; uses non-interactive defaults and stable parameters.",
-            handler = { args, sid -> scopeFileSearchQuickHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFileSearchQuickHandler(args, request) },
         )
         registerTool<ScopeFindFilesByNameArgs>(
             "scope_find_files_by_name_keyword",
             "Shortcut: search files by filename keyword within a scope. " +
                 "For GLOBAL scopes without directoryUrl, this uses indexed name lookup where possible.",
-            handler = { args, sid -> scopeFindFilesByNameHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFindFilesByNameHandler(args, request) },
         )
         registerTool<ScopeFindFilesByPathArgs>(
             "scope_find_files_by_path_keyword",
             "Shortcut: search files by path keyword within a scope. " +
                 "When directoryUrl points to jar:// roots, path keywords match archive-internal paths.",
-            handler = { args, sid -> scopeFindFilesByPathHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFindFilesByPathHandler(args, request) },
         )
         registerTool<ScopeFindInDirectoryGlobArgs>(
             "find_in_directory_using_glob",
@@ -60,7 +60,7 @@ internal class ScopeFileSearchFeature : WorkspaceMcpFeature {
                 "Works with arbitrary VFS directories, including jar:// URLs in Gradle caches. " +
                 "Example: directoryUrl='jar:///Users/<you>/.gradle/caches/.../idea-253.x-sources.jar!/', " +
                 "globPattern='**/FindSymbolParameters.java'.",
-            handler = { args, sid -> scopeFindInDirectoryGlobHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFindInDirectoryGlobHandler(args, request) },
         )
         registerTool<ScopeFindSourceFileByClassNameArgs>(
             "scope_find_source_file_by_class_name",
@@ -68,7 +68,7 @@ internal class ScopeFileSearchFeature : WorkspaceMcpFeature {
                 " " +
                 "MCP-first Policy: Any code/symbol/IDE API lookup should use MCP-related tools first; " +
                 "shell fallback is only allowed when MCP tools have been exhausted and failure reasons recorded.",
-            handler = { args, sid -> scopeFindSourceFileByClassNameHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFindSourceFileByClassNameHandler(args, request) },
         )
         return buildRegistration()
     }

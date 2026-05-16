@@ -11,10 +11,11 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.schema.Description
@@ -62,16 +63,16 @@ internal data class VfsExistsResult(
     val exists: Boolean,
 )
 
-internal suspend fun vfsRefreshHandler(args: VfsRefreshArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun vfsRefreshHandler(args: VfsRefreshArgs, request: Request?): CallToolResult {
     val url = args.url
     val async = args.async
     val recursive = args.recursive
 
     val isRawVfs = url.contains("://")
 
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = if (isRawVfs) url else null,
+        vfsUrl = if (isRawVfs) url else null,
         relativePath = if (!isRawVfs) url else null,
     ) { project ->
         val resolvedUrl = if (isRawVfs) {
@@ -101,13 +102,13 @@ internal suspend fun vfsRefreshHandler(args: VfsRefreshArgs, sessionId: String?,
     }
 }
 
-internal suspend fun vfsExistsHandler(args: VfsExistsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun vfsExistsHandler(args: VfsExistsArgs, request: Request?): CallToolResult {
     val url = args.url
     val isRawVfs = url.contains("://")
 
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = if (isRawVfs) url else null,
+        vfsUrl = if (isRawVfs) url else null,
         relativePath = if (!isRawVfs) url else null,
     ) { project ->
         val resolvedUrl = if (isRawVfs) {

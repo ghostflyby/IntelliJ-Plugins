@@ -36,9 +36,11 @@ import dev.ghostflyby.mcp.common.MCP_FIRST_LIBRARY_QUERY_POLICY_DESCRIPTION_SUFF
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
-import dev.ghostflyby.mcp.sdk.tools.*
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
@@ -54,7 +56,6 @@ import kotlin.time.Duration.Companion.milliseconds
 private val WHITESPACE_REGEX = Regex("\\s+")
 
 // ── Tool registration entrypoint ─────────────────────────────────
-
 
 // ── scope_search_files ────────────────────────────────────────────
 
@@ -83,13 +84,8 @@ internal data class ScopeFileSearchArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFileSearchHandler(
-    args: ScopeFileSearchArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeFileSearchHandler(args: ScopeFileSearchArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         if (args.maxResults < 1) {
@@ -250,13 +246,8 @@ internal data class ScopeFileSearchQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFileSearchQuickHandler(
-    args: ScopeFileSearchQuickArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeFileSearchQuickHandler(args: ScopeFileSearchQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(
@@ -284,7 +275,7 @@ internal suspend fun scopeFileSearchQuickHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = false,
         )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
     }
 }
 
@@ -312,13 +303,8 @@ internal data class ScopeFindFilesByNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFindFilesByNameHandler(
-    args: ScopeFindFilesByNameArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeFindFilesByNameHandler(args: ScopeFindFilesByNameArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(
@@ -338,7 +324,7 @@ internal suspend fun scopeFindFilesByNameHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
     }
 }
 
@@ -366,13 +352,8 @@ internal data class ScopeFindFilesByPathArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFindFilesByPathHandler(
-    args: ScopeFindFilesByPathArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeFindFilesByPathHandler(args: ScopeFindFilesByPathArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(
@@ -392,7 +373,7 @@ internal suspend fun scopeFindFilesByPathHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
     }
 }
 
@@ -418,12 +399,7 @@ internal data class ScopeFindInDirectoryGlobArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFindInDirectoryGlobHandler(
-    args: ScopeFindInDirectoryGlobArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeFindInDirectoryGlobHandler(args: ScopeFindInDirectoryGlobArgs, request: Request?): CallToolResult {
     if (args.directoryUrl.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "directoryUrl must not be blank.")),
@@ -436,7 +412,7 @@ internal suspend fun scopeFindInDirectoryGlobHandler(
             isError = true,
         )
     }
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", args.globPattern.length))
@@ -451,7 +427,7 @@ internal suspend fun scopeFindInDirectoryGlobHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, sessionId, runner)
+        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
     }
 }
 
@@ -479,19 +455,14 @@ internal data class ScopeFindSourceFileByClassNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeFindSourceFileByClassNameHandler(
-    args: ScopeFindSourceFileByClassNameArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeFindSourceFileByClassNameHandler(args: ScopeFindSourceFileByClassNameArgs, request: Request?): CallToolResult {
     if (args.className.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "className must not be blank.")),
             isError = true,
         )
     }
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(
@@ -525,7 +496,7 @@ internal suspend fun scopeFindSourceFileByClassNameHandler(
             timeoutMillis = args.timeoutMillis,
             allowUiInteractiveScopes = args.allowUiInteractiveScopes,
         )
-        val searchResult = scopeFileSearchHandler(innerArgs, sessionId, runner)
+        val searchResult = scopeFileSearchHandler(innerArgs, request)
 
         if (searchResult.isError == true) return@callToolWithProject searchResult
 

@@ -12,10 +12,7 @@ import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.segment.*
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.serialization.SerializationException
@@ -33,7 +30,6 @@ internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
  */
 internal class WorkspaceMcpFeatureRegistrationContext(
     val projectResolver: WorkspaceProjectResolver,
-    val requestRunner: WorkspaceMcpRequestRunner,
     val resourceReader: WorkspaceResourceReader,
     val server: Server,
     val featureScope: CoroutineScope,
@@ -65,7 +61,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         name: String,
         description: String,
         inputSchema: ToolSchema = ToolSchema(),
-        noinline handler: suspend (T, String?) -> CallToolResult,
+        noinline handler: suspend (T, Request) -> CallToolResult,
     ) {
         server.addTool(
             name = name,
@@ -86,7 +82,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
                     isError = true,
                 )
             }
-            handler(decoded, this.sessionId)
+            handler(decoded, request)
         }
         trackedTools.add(name)
     }

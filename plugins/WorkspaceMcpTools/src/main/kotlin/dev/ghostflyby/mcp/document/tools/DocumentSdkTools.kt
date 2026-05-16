@@ -17,10 +17,11 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
@@ -136,10 +137,10 @@ internal data class DocumentSdkSetTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (_, document) = resolveTextDocument(args.url)
         val writable = readAction { document.isWritable }
@@ -149,10 +150,10 @@ internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, session
     }
 }
 
-internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (_, document) = resolveTextDocument(args.url)
         val stamp = readAction { document.modificationStamp }
@@ -162,10 +163,10 @@ internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArg
     }
 }
 
-internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
         val textLength = readAction { document.textLength }
@@ -181,10 +182,10 @@ internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, se
     }
 }
 
-internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
         validateRange(document, args.startOffset, args.endOffset)
@@ -199,10 +200,10 @@ internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, se
     }
 }
 
-internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
         validateRange(document, args.startOffset, args.endOffset)
@@ -217,10 +218,10 @@ internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, 
     }
 }
 
-internal suspend fun documentSetTextHandler(args: DocumentSdkSetTextArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun documentSetTextHandler(args: DocumentSdkSetTextArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
         ensureWritable(file, document, args.url)
@@ -290,7 +291,6 @@ private fun commitAndMaybeSave(
         FileDocumentManager.getInstance().saveDocument(document)
     }
 }
-
 
 private fun mcpFail(message: String): Nothing {
     throw WorkspaceResourceException(message)

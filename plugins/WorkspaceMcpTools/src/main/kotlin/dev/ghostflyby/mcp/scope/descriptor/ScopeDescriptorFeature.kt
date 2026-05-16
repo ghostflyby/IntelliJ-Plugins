@@ -32,50 +32,50 @@ internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
         registerTool<ScopeListCatalogArgs>(
             "scope_list_catalog",
             "List available search scopes (Find-like catalog) with stable scopeRefId and metadata.",
-            handler = { args, sid -> scopeListCatalogHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeListCatalogHandler(args, request) },
         )
         registerTool<ScopeGetDefaultDescriptorArgs>(
             "scope_get_default_descriptor",
             "Return a ready-to-use default scope descriptor by preset, avoiding catalog+program assembly on first call.",
-            handler = { args, sid -> scopeGetDefaultDescriptorHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeGetDefaultDescriptorHandler(args, request) },
         )
         registerTool<ScopeResolveStandardDescriptorArgs>(
             "scope_resolve_standard_descriptor",
             "Resolve a standard IDE scope id directly to a normalized reusable descriptor.",
-            handler = { args, sid -> scopeResolveStandardDescriptorHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeResolveStandardDescriptorHandler(args, request) },
         )
         registerTool<ScopeCatalogFindByIntentArgs>(
             "scope_catalog_find_by_intent",
             "Find a compact scope catalog subset by intent " +
                 "(project-only, with-libraries, changed/open/current file) " +
                 "to reduce first-call catalog payload.",
-            handler = { args, sid -> scopeCatalogFindByIntentHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeCatalogFindByIntentHandler(args, request) },
         )
         registerTool<ScopeValidatePatternArgs>(
             "scope_validate_pattern",
             "Validate a PackageSet pattern text used by IntelliJ scopes.",
-            handler = { args, sid -> scopeValidatePatternHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeValidatePatternHandler(args, request) },
         )
         registerTool<ScopeResolveProgramArgs>(
             "scope_resolve_program",
             "Compile and normalize scope atoms and RPN tokens into a reusable scope descriptor.",
-            handler = { args, sid -> scopeResolveProgramHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeResolveProgramHandler(args, request) },
         )
         registerTool<ScopeNormalizeDescriptorArgs>(
             "scope_normalize_program_descriptor",
             "Normalize and recompile an existing scope descriptor, " +
                 "useful for migration and compatibility upgrades.",
-            handler = { args, sid -> scopeNormalizeDescriptorHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeNormalizeDescriptorHandler(args, request) },
         )
         registerTool<ScopeContainsFileArgs>(
             "scope_contains_file",
             "Check whether a file URL belongs to a resolved scope descriptor.",
-            handler = { args, sid -> scopeContainsFileHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeContainsFileHandler(args, request) },
         )
         registerTool<ScopeFilterFilesArgs>(
             "scope_filter_files",
             "Filter file URLs by whether they belong to a resolved scope descriptor.",
-            handler = { args, sid -> scopeFilterFilesHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeFilterFilesHandler(args, request) },
         )
 
         return buildRegistration()

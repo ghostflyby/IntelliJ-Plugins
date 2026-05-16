@@ -38,32 +38,32 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
         registerTool<DocumentSdkUrlArgs>(
             name = "document_is_writable",
             description = "Document.isWritable(): return whether document text is writable.",
-            handler = { args, sid -> documentIsWritableHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentIsWritableHandler(args, request) },
         )
         registerTool<DocumentSdkUrlArgs>(
             name = "document_get_modification_stamp",
             description = "Document.getModificationStamp(): return current modification stamp.",
-            handler = { args, sid -> documentGetModificationStampHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentGetModificationStampHandler(args, request) },
         )
         registerTool<DocumentSdkInsertArgs>(
             name = "document_insert_string",
             description = "Document.insertString(offset, text).",
-            handler = { args, sid -> documentInsertStringHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentInsertStringHandler(args, request) },
         )
         registerTool<DocumentSdkDeleteArgs>(
             name = "document_delete_string",
             description = "Document.deleteString(startOffset, endOffset).",
-            handler = { args, sid -> documentDeleteStringHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentDeleteStringHandler(args, request) },
         )
         registerTool<DocumentSdkReplaceArgs>(
             name = "document_replace_string",
             description = "Document.replaceString(startOffset, endOffset, text).",
-            handler = { args, sid -> documentReplaceStringHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentReplaceStringHandler(args, request) },
         )
         registerTool<DocumentSdkSetTextArgs>(
             name = "document_set_text",
             description = "Document.setText(text): replace whole document with new text.",
-            handler = { args, sid -> documentSetTextHandler(args, sid, requestRunner) },
+            handler = { args, request -> documentSetTextHandler(args, request) },
         )
 
         return buildRegistration()

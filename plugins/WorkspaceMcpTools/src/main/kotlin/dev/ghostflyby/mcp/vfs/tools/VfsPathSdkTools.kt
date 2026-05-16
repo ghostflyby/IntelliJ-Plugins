@@ -13,10 +13,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
@@ -107,8 +108,8 @@ internal data class VfsExistsManyArgs(
 // Handlers
 // ---------------------------------------------------------------------------
 
-internal suspend fun vfsGetUrlHandler(args: VfsGetUrlArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun vfsGetUrlHandler(args: VfsGetUrlArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
         relativePath = args.pathInProject,
     ) { project ->
@@ -117,8 +118,8 @@ internal suspend fun vfsGetUrlHandler(args: VfsGetUrlArgs, sessionId: String?, r
     }
 }
 
-internal suspend fun vfsGetUrlsHandler(args: VfsGetUrlsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
         relativePath = args.pathsInProject.firstOrNull(),
     ) { project ->
@@ -141,20 +142,20 @@ internal suspend fun vfsGetUrlsHandler(args: VfsGetUrlsArgs, sessionId: String?,
     }
 }
 
-internal suspend fun vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.url,
+        vfsUrl = args.url,
     ) { _ ->
         val localPath = resolveLocalPathFromUrl(args.url)
         CallToolResult(content = listOf(TextContent(text = localPath)))
     }
 }
 
-internal suspend fun vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.urls.firstOrNull(),
+        vfsUrl = args.urls.firstOrNull(),
     ) { _ ->
         val items = mutableListOf<VfsBatchUrlResultItem>()
         var successCount = 0
@@ -175,10 +176,10 @@ internal suspend fun vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, session
     }
 }
 
-internal suspend fun vfsExistsManyHandler(args: VfsExistsManyArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun vfsExistsManyHandler(args: VfsExistsManyArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.urls.firstOrNull(),
+        vfsUrl = args.urls.firstOrNull(),
     ) { _ ->
         val result = checkExistsMany(args.urls)
         CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))

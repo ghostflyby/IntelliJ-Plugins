@@ -48,7 +48,6 @@ internal class WorkspaceMcpSdkServerService(
     private val projectResolver = WorkspaceProjectResolver()
     private val resourceReader = WorkspaceResourceReader(projectResolver)
     private val segmentRegistry = ResourceSegmentRegistry()
-    private val requestRunner = WorkspaceMcpRequestRunner(projectResolver)
 
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
@@ -108,17 +107,17 @@ internal class WorkspaceMcpSdkServerService(
      * - Core listable resources (server/info, projects, projects/{key}) shortcut.
      * - Project-scoped resources delegate to [requestRunner] for context installation.
      */
-    private suspend fun readResource(resourceUri: String, sessionId: String?): ReadResourceResult {
+    private suspend fun readResource(resourceUri: String, sessionId: String?, request: Request? = null): ReadResourceResult {
         // Segment-based resource matching (handles core server/info, projects, and feature resources)
         val segmentMatch = segmentRegistry.match(resourceUri)
         if (segmentMatch != null) {
             return when (val seg = segmentMatch.segment) {
                 is dev.ghostflyby.mcp.resource.segment.StaticSegment -> {
-                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc)
+                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc, request)
                         ?: ReadResourceResult(contents = emptyList())
                 }
                 is dev.ghostflyby.mcp.resource.segment.TemplateSegment -> {
-                    seg.handler(segmentMatch.params, segmentMatch.anc)
+                    seg.handler(segmentMatch.params, segmentMatch.anc, request)
                 }
             }
         }
@@ -167,8 +166,7 @@ internal class WorkspaceMcpSdkServerService(
         featureScope: CoroutineScope,
     ): WorkspaceMcpFeatureRegistrationContext = WorkspaceMcpFeatureRegistrationContext(
         projectResolver = projectResolver,
-        requestRunner = requestRunner,
-        resourceReader = resourceReader,
+                resourceReader = resourceReader,
         server = server,
         featureScope = featureScope,
         featureName = feature.featureName,

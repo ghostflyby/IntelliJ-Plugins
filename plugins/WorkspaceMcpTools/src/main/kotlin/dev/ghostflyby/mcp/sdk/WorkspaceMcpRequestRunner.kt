@@ -6,128 +6,106 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.resource.WorkspaceResourceUri
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 
+/**
+ * Lightweight project resolution helpers for SDK tool handlers.
+ * Replaces the removed WorkspaceMcpRequestRunner class.
+ */
 
 /**
- * Centralized request runner that handles project resolution,
- * and tool/resource error mapping.
- *
- * Tool and resource handlers should use the appropriate `run*` method
- * rather than open-coding project resolution.
+ * Resolve a project from typed [WorkspaceMcpProjectToolArguments] and run [block] with it.
+ * Sets up project lifecycle cancellation scope.
  */
-internal class WorkspaceMcpRequestRunner(
-    val projectResolver: WorkspaceProjectResolver = WorkspaceProjectResolver(),
-) {
-    /**
-     * Resolve a project and execute [block] under a scope that
-     * is cancelled when the project lifecycle ends (e.g. on
-     * project close or plugin unload for that project).
-     *
-     * Resolution hints ([rawVfsUrl], [relativePath]) are tried after explicit
-     * [projectKey]/[projectPath] but before single-project fallback.
-     *
-     * @throws WorkspaceResourceException if the project cannot be resolved.
-     */
-    suspend fun <T> runWithProjectResolution(
-        projectKey: String? = null,
-        projectPath: String? = null,
-        rawVfsUrl: String? = null,
-        relativePath: String? = null,
-        block: suspend (Project) -> T,
-    ): T {
-        val resolved = projectResolver.resolve(
-            projectKey = projectKey,
-            projectPath = projectPath,
-            rawVfsUrl = rawVfsUrl,
+internal suspend fun <T> withResolvedProject(
+    projectArgs: WorkspaceMcpProjectToolArguments,
+    vfsUrl: String? = null,
+    relativePath: String? = null,
+    block: suspend (Project) -> T,
+): T {
+    val resolver = service<WorkspaceProjectResolver>()
+    val resolution = resolver.resolve(
+        projectKey = projectArgs.projectKey,
+        projectPath = projectArgs.projectPath,
+        rawVfsUrl = vfsUrl,
+        relativePath = relativePath,
+    )
+    val project = when (resolution) {
+        is WorkspaceProjectResolution.Resolved -> resolution.project
+        is WorkspaceProjectResolution.Unresolved -> error(resolution.message)
+    }
+    return coroutineScope {
+        val projectJob = project.scope.coroutineContext[Job]
+        projectJob?.invokeOnCompletion { cause ->
+            if (cause != null) cancel(CancellationException("Project closed", cause))
+        }
+        block(project)
+    }
+}
+
+/**
+ * Lightweight version of [withResolvedProject] that catches resolution errors
+ * and wraps them into error [CallToolResult].
+ */
+internal suspend fun callToolWithProject(
+    projectArgs: WorkspaceMcpProjectToolArguments,
+    vfsUrl: String? = null,
+    relativePath: String? = null,
+    block: suspend (Project) -> CallToolResult,
+): CallToolResult {
+    return try {
+        withResolvedProject(
+            projectArgs = projectArgs,
+            vfsUrl = vfsUrl,
             relativePath = relativePath,
+        ) { project -> block(project) }
+    } catch (e: IllegalStateException) {
+        CallToolResult(
+            content = listOf(TextContent(text = e.message ?: "Unknown error")),
+            isError = true,
         )
-        val project = when (resolved) {
-            is WorkspaceProjectResolution.Resolved -> resolved.project
-            is WorkspaceProjectResolution.Unresolved -> throw WorkspaceResourceException(resolved.message)
-        }
-        return coroutineScope {
-            val projectJob = project.scope.coroutineContext[Job]
-            projectJob?.invokeOnCompletion { cause ->
-                if (cause != null) cancel(CancellationException("Project closed", cause))
-            }
-            block(project)
-        }
-    }
-
-    /**
-     * Resolve a project from typed [WorkspaceMcpProjectToolArguments] and run [block] with it.
-     * This is the preferred overload for SDK tools with type-safe argument DTOs.
-     *
-     * Project hints are read from the DTO's [WorkspaceMcpProjectToolArguments.projectKey]
-     * and [WorkspaceMcpProjectToolArguments.projectPath].
-     */
-    suspend fun callToolWithProject(
-        projectArgs: WorkspaceMcpProjectToolArguments,
-        rawVfsUrl: String? = null,
-        relativePath: String? = null,
-        block: suspend (Project) -> CallToolResult,
-    ): CallToolResult {
-        return try {
-            runWithProjectResolution(
-                projectKey = projectArgs.projectKey,
-                projectPath = projectArgs.projectPath,
-                rawVfsUrl = rawVfsUrl,
-                relativePath = relativePath,
-            ) { project -> block(project) }
-        } catch (e: WorkspaceResourceException) {
-            CallToolResult(
-                content = listOf(TextContent(text = e.message ?: "Unknown error")),
-                isError = true,
-            )
-        } catch (e: Exception) {
-            CallToolResult(
-                content = listOf(
-                    TextContent(
-                        text = "Tool call failed: ${e.message ?: e::class.simpleName}",
-                    ),
+    } catch (e: Exception) {
+        CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = "Tool call failed: ${e.message ?: e::class.simpleName}",
                 ),
-                isError = true,
-            )
-        }
+            ),
+            isError = true,
+        )
     }
+}
 
-    /**
-     * Run a resource read under a scope that is cancelled when
-     * the project lifecycle ends.
-     *
-     * @throws WorkspaceResourceException if the project cannot be resolved.
-     */
-    suspend fun runResourceRead(
-        sessionId: String? = null,
-        decoded: WorkspaceResourceUri,
-        instanceKey: String = workspaceInstanceKey(),
-        block: suspend () -> ReadResourceResult,
-    ): ReadResourceResult {
-        return when (val resolved = projectResolver.resolve(projectKey = decoded.projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                coroutineScope {
-                    val projectJob = resolved.project.scope.coroutineContext[Job]
-                    if (projectJob != null) {
-                        projectJob.invokeOnCompletion { cause ->
-                            if (cause != null) cancel(CancellationException("Project closed", cause))
-                        }
-                    }
-                    block()
+/**
+ * Run a resource read under a scope that is cancelled when
+ * the project lifecycle ends.
+ */
+internal suspend fun runResourceRead(
+    decoded: WorkspaceResourceUri,
+    instanceKey: String = workspaceInstanceKey(),
+    block: suspend () -> io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult,
+): io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult {
+    val resolver = service<WorkspaceProjectResolver>()
+    return when (val resolved = resolver.resolve(projectKey = decoded.projectKey)) {
+        is WorkspaceProjectResolution.Resolved -> {
+            coroutineScope {
+                val projectJob = resolved.project.scope.coroutineContext[Job]
+                projectJob?.invokeOnCompletion { cause ->
+                    if (cause != null) cancel(CancellationException("Project closed", cause))
                 }
+                block()
             }
-
-            is WorkspaceProjectResolution.Unresolved -> throw WorkspaceResourceException(resolved.message)
         }
+
+        is WorkspaceProjectResolution.Unresolved -> error(resolved.message)
     }
 }

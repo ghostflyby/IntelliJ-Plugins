@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.quality.tools
@@ -54,10 +38,11 @@ import dev.ghostflyby.mcp.common.relativizePathOrNull
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
@@ -986,27 +971,12 @@ private fun encodeJson(obj: Any): String {
 // Tool factories
 // ---------------------------------------------------------------------------
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
-internal suspend fun qualityGetFileProblemsHandler(args: QualityGetFileProblemsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityGetFileProblemsHandler(args: QualityGetFileProblemsArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
         val filePath = relativizePath(project.basePath, file.path)
@@ -1036,12 +1006,12 @@ internal suspend fun qualityGetFileProblemsHandler(args: QualityGetFileProblemsA
     }
 }
 
-internal suspend fun qualityGetScopeProblemsHandler(args: QualityGetScopeProblemsArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun qualityGetScopeProblemsHandler(args: QualityGetScopeProblemsArgs, request: Request?): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
 
-    return runner.callToolWithProject(projectArgs = args) { project ->
+    return callToolWithProject(projectArgs = args) { project ->
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
             project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,
         )
@@ -1148,8 +1118,8 @@ internal suspend fun qualityGetScopeProblemsHandler(args: QualityGetScopeProblem
     }
 }
 
-internal suspend fun qualityGetScopeProblemsQuickHandler(args: QualityGetScopeProblemsQuickArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityGetScopeProblemsQuickHandler(args: QualityGetScopeProblemsQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityGetScopeProblemsArgs(
             scope = descriptor,
@@ -1160,12 +1130,12 @@ internal suspend fun qualityGetScopeProblemsQuickHandler(args: QualityGetScopePr
             continueOnError = args.continueOnError,
             allowUiInteractiveScopes = false,
         )
-        qualityGetScopeProblemsHandler(innerArgs, sessionId, runner)
+        qualityGetScopeProblemsHandler(innerArgs, request)
     }
 }
 
-internal suspend fun qualityReformatFileHandler(args: QualityReformatFileArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityReformatFileHandler(args: QualityReformatFileArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
@@ -1187,8 +1157,8 @@ internal suspend fun qualityReformatFileHandler(args: QualityReformatFileArgs, s
     }
 }
 
-internal suspend fun qualityOptimizeImportsFileHandler(args: QualityOptimizeImportsFileArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityOptimizeImportsFileHandler(args: QualityOptimizeImportsFileArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
@@ -1210,25 +1180,25 @@ internal suspend fun qualityOptimizeImportsFileHandler(args: QualityOptimizeImpo
     }
 }
 
-internal suspend fun qualityReformatScopeFilesHandler(args: QualityReformatScopeFilesArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityReformatScopeFilesHandler(args: QualityReformatScopeFilesArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         processScopeFilesWithOp(project, args.scope, QualityOperationKind.REFORMAT,
             args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
     }
 }
 
-internal suspend fun qualityOptimizeImportsScopeFilesHandler(args: QualityOptimizeImportsScopeFilesArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityOptimizeImportsScopeFilesHandler(args: QualityOptimizeImportsScopeFilesArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         processScopeFilesWithOp(project, args.scope, QualityOperationKind.OPTIMIZE_IMPORTS,
             args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
     }
 }
 
-internal suspend fun qualityGetScopeProblemsBySeverityHandler(args: QualityGetScopeProblemsBySeverityArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun qualityGetScopeProblemsBySeverityHandler(args: QualityGetScopeProblemsBySeverityArgs, request: Request?): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
 
-    return runner.callToolWithProject(projectArgs = args) { project ->
+    return callToolWithProject(projectArgs = args) { project ->
         val base = qualityGetScopeProblemsInner(
             project = project,
             scope = args.scope,
@@ -1285,8 +1255,8 @@ internal suspend fun qualityGetScopeProblemsBySeverityHandler(args: QualityGetSc
     }
 }
 
-internal suspend fun qualityGetScopeProblemsBySeverityQuickHandler(args: QualityGetScopeProblemsBySeverityQuickArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityGetScopeProblemsBySeverityQuickHandler(args: QualityGetScopeProblemsBySeverityQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityGetScopeProblemsBySeverityArgs(
             scope = descriptor,
@@ -1298,12 +1268,12 @@ internal suspend fun qualityGetScopeProblemsBySeverityQuickHandler(args: Quality
             allowUiInteractiveScopes = false,
             includeFilesWithoutMatchingProblems = args.includeFilesWithoutMatchingProblems,
         )
-        qualityGetScopeProblemsBySeverityHandler(innerArgs, sessionId, runner)
+        qualityGetScopeProblemsBySeverityHandler(innerArgs, request)
     }
 }
 
-internal suspend fun qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
         var optimizeImportsApplied = false
@@ -1333,11 +1303,11 @@ internal suspend fun qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, s
     }
 }
 
-internal suspend fun qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs, request: Request?): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
 
-    return runner.callToolWithProject(projectArgs = args) { project ->
+    return callToolWithProject(projectArgs = args) { project ->
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
             project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,
         )
@@ -1439,8 +1409,8 @@ internal suspend fun qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs,
     }
 }
 
-internal suspend fun qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQuickByPresetArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQuickByPresetArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityFixScopeQuickArgs(
             scope = descriptor,
@@ -1449,12 +1419,12 @@ internal suspend fun qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQu
             continueOnError = args.continueOnError,
             allowUiInteractiveScopes = false,
         )
-        qualityFixScopeQuickHandler(innerArgs, sessionId, runner)
+        qualityFixScopeQuickHandler(innerArgs, request)
     }
 }
 
-internal suspend fun qualityListInspectionProfilesHandler(args: QualityListInspectionProfilesArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityListInspectionProfilesHandler(args: QualityListInspectionProfilesArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         val result = readAction {
             val projectManager = InspectionProjectProfileManager.getInstance(project)
             val projectProfiles = projectManager.profiles.map { it.name }
@@ -1483,8 +1453,8 @@ internal suspend fun qualityListInspectionProfilesHandler(args: QualityListInspe
     }
 }
 
-internal suspend fun qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
-    return runner.callToolWithProject(projectArgs = args) { project ->
+internal suspend fun qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileArgs, request: Request?): CallToolResult {
+    return callToolWithProject(projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
@@ -1514,11 +1484,11 @@ internal suspend fun qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileA
     }
 }
 
-internal suspend fun qualityCodeCleanupScopeFilesHandler(args: QualityCodeCleanupScopeFilesArgs, sessionId: String?, runner: WorkspaceMcpRequestRunner): CallToolResult {
+internal suspend fun qualityCodeCleanupScopeFilesHandler(args: QualityCodeCleanupScopeFilesArgs, request: Request?): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
 
-    return runner.callToolWithProject(projectArgs = args) { project ->
+    return callToolWithProject(projectArgs = args) { project ->
         val profile = resolveInspectionProfile(project, args.inspectionProfileName)
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
             project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,

@@ -28,8 +28,9 @@ import dev.ghostflyby.mcp.scope.*
 
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
@@ -64,12 +65,8 @@ internal data class ScopeListCatalogArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeListCatalogHandler(
-    args: ScopeListCatalogArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeListCatalogHandler(args: ScopeListCatalogArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val result = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
@@ -88,12 +85,8 @@ internal data class ScopeGetDefaultDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeGetDefaultDescriptorHandler(
-    args: ScopeGetDefaultDescriptorArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val descriptor = buildPresetScopeDescriptor(
@@ -117,18 +110,14 @@ internal data class ScopeResolveStandardDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeResolveStandardDescriptorHandler(
-    args: ScopeResolveStandardDescriptorArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: Request?): CallToolResult {
     if (args.standardScopeId.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "standardScopeId must not be blank.")),
             isError = true,
         )
     }
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val descriptor = buildStandardScopeDescriptor(
@@ -154,18 +143,14 @@ internal data class ScopeCatalogFindByIntentArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeCatalogFindByIntentHandler(
-    args: ScopeCatalogFindByIntentArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: Request?): CallToolResult {
     if (args.maxResults < 1) {
         return CallToolResult(
             content = listOf(TextContent(text = "maxResults must be >= 1.")),
             isError = true,
         )
     }
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val catalog = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
@@ -225,12 +210,8 @@ internal data class ScopeValidatePatternArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeValidatePatternHandler(
-    args: ScopeValidatePatternArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val result = ScopeResolverService.getInstance(project).validatePattern(args.patternText)
@@ -247,12 +228,8 @@ internal data class ScopeResolveProgramArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeResolveProgramHandler(
-    args: ScopeResolveProgramArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, args.request)
@@ -272,12 +249,8 @@ internal data class ScopeNormalizeDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeNormalizeDescriptorHandler(
-    args: ScopeNormalizeDescriptorArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val request = ScopeResolveRequestDto(
@@ -310,12 +283,8 @@ internal data class ScopeContainsFileArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeContainsFileHandler(
-    args: ScopeContainsFileArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeContainsFileHandler(args: ScopeContainsFileArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val resolver = ScopeResolverService.getInstance(project)
@@ -362,12 +331,8 @@ internal data class ScopeFilterFilesArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeFilterFilesHandler(
-    args: ScopeFilterFilesArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val resolver = ScopeResolverService.getInstance(project)

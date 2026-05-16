@@ -26,10 +26,11 @@ import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.navigation.*
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
@@ -162,30 +163,22 @@ internal data class NavigationFindReferencesBatchArgs(
 // Handlers — 14 public implementations
 // ---------------------------------------------------------------------------
 
-internal suspend fun navigationGetSymbolInfoHandler(
-    args: NavigationSymbolInfoArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetSymbolInfoHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val result = resolveSymbolInfo(project, args.uri, args.row, args.column)
         CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }
 
-internal suspend fun navigationGetSymbolInfoByOffsetHandler(
-    args: NavigationSymbolInfoByOffsetArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetSymbolInfoByOffsetHandler(args: NavigationSymbolInfoByOffsetArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_by_offset: ${args.uri} offset=${args.offset}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val position = runNavigationRead(project) {
             resolvePositionFromOffset(project, args.uri, args.offset)
@@ -204,15 +197,11 @@ internal suspend fun navigationGetSymbolInfoByOffsetHandler(
     }
 }
 
-internal suspend fun navigationGetSymbolInfoAutoPositionHandler(
-    args: NavigationSymbolInfoAutoPositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetSymbolInfoAutoPositionHandler(args: NavigationSymbolInfoAutoPositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_auto_position: ${args.uri}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val position = runNavigationRead(project) {
             resolveAutoPosition(project, args.uri, args.input)
@@ -232,15 +221,11 @@ internal suspend fun navigationGetSymbolInfoAutoPositionHandler(
     }
 }
 
-internal suspend fun navigationGetSymbolInfoQuickHandler(
-    args: NavigationSymbolInfoArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetSymbolInfoQuickHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_quick: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val position = runNavigationRead(project) {
             ResolvedSourcePosition(row = args.row, column = args.column, offset = -1)
@@ -265,13 +250,9 @@ internal suspend fun navigationGetSymbolInfoQuickHandler(
     }
 }
 
-internal suspend fun navigationGetSymbolInfoBatchHandler(
-    args: NavigationSymbolInfoBatchArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetSymbolInfoBatchHandler(args: NavigationSymbolInfoBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val items = mutableListOf<NavigationBatchSymbolInfoItem>()
@@ -301,15 +282,11 @@ internal suspend fun navigationGetSymbolInfoBatchHandler(
     }
 }
 
-internal suspend fun navigationToReferenceHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationToReferenceHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_reference: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, args.uri, args.row, args.column)
@@ -320,15 +297,11 @@ internal suspend fun navigationToReferenceHandler(
     }
 }
 
-internal suspend fun navigationToTypeDefinitionHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationToTypeDefinitionHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_type_definition: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, args.uri, args.row, args.column)
@@ -341,15 +314,11 @@ internal suspend fun navigationToTypeDefinitionHandler(
     }
 }
 
-internal suspend fun navigationToImplementationHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationToImplementationHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_implementation: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 20 else args.limit
         val result = runNavigationRead(project) {
@@ -375,15 +344,11 @@ internal suspend fun navigationToImplementationHandler(
     }
 }
 
-internal suspend fun navigationFindOverridesHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationFindOverridesHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_overrides: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 20 else args.limit
         val result = runNavigationRead(project) {
@@ -409,15 +374,11 @@ internal suspend fun navigationFindOverridesHandler(
     }
 }
 
-internal suspend fun navigationFindInheritorsHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationFindInheritorsHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_inheritors: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 20 else args.limit
         val result = runNavigationRead(project) {
@@ -444,15 +405,11 @@ internal suspend fun navigationFindInheritorsHandler(
     }
 }
 
-internal suspend fun navigationFindReferencesHandler(
-    args: NavigationFindReferencesArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationFindReferencesHandler(args: NavigationFindReferencesArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_references: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 50 else args.limit
         val result = runNavigationRead(project) {
@@ -466,15 +423,11 @@ internal suspend fun navigationFindReferencesHandler(
     }
 }
 
-internal suspend fun navigationGetCallersHandler(
-    args: NavigationSourcePositionArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationGetCallersHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_callers: ${args.uri}:${args.row}:${args.column}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
-        rawVfsUrl = args.uri,
+        vfsUrl = args.uri,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 50 else args.limit
         val result = runNavigationRead(project) {
@@ -499,13 +452,9 @@ internal suspend fun navigationGetCallersHandler(
     }
 }
 
-internal suspend fun navigationToReferenceBatchHandler(
-    args: NavigationToReferenceBatchArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationToReferenceBatchHandler(args: NavigationToReferenceBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_reference_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val items = mutableListOf<NavigationBatchSingleItem>()
@@ -539,13 +488,9 @@ internal suspend fun navigationToReferenceBatchHandler(
     }
 }
 
-internal suspend fun navigationFindReferencesBatchHandler(
-    args: NavigationFindReferencesBatchArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun navigationFindReferencesBatchHandler(args: NavigationFindReferencesBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_references_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 50 else args.limit

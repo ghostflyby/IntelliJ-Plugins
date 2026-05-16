@@ -28,24 +28,24 @@ internal class ScopeSymbolSearchFeature : WorkspaceMcpFeature {
             "scope_search_symbols",
             "Search symbols within a resolved scope descriptor. " +
                 "Prefer IntelliJ index/contributor search path (Goto Symbol model) and apply post-filtering for LOCAL/MIXED semantics.",
-            handler = { args, sid -> scopeSymbolSearchHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeSymbolSearchHandler(args, request) },
         )
         registerTool<ScopeSymbolSearchQuickArgs>(
             "scope_search_symbols_quick",
             "First-call friendly symbol search shortcut with low-parameter defaults and a preset scope." +
                 " " +
                 "First-call friendly shortcut for agents with no prior context; uses non-interactive defaults and stable parameters.",
-            handler = { args, sid -> scopeSymbolSearchQuickHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeSymbolSearchQuickHandler(args, request) },
         )
         registerTool<ScopeSymbolSearchWithStageProgressArgs>(
             "scope_search_symbols_with_stage_progress",
             "Search symbols and return stage counters for agent-side retry/expand decisions.",
-            handler = { args, sid -> scopeSymbolSearchWithStageProgressHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeSymbolSearchWithStageProgressHandler(args, request) },
         )
         registerTool<ScopeSymbolSearchHealthcheckArgs>(
             "scope_search_symbols_healthcheck",
             "Quickly check symbol search readiness (index state + provider mode) before a full search.",
-            handler = { args, sid -> scopeSymbolSearchHealthcheckHandler(args, sid, requestRunner) },
+            handler = { args, request -> scopeSymbolSearchHealthcheckHandler(args, request) },
         )
         return buildRegistration()
     }

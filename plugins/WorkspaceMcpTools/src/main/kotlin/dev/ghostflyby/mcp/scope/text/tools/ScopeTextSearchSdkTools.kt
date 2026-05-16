@@ -26,10 +26,11 @@ import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
@@ -42,7 +43,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
 // ── Tool registration entrypoint ─────────────────────────────────
-
 
 // ── scope_search_text ────────────────────────────────────────────
 
@@ -74,13 +74,8 @@ internal data class ScopeSearchTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeSearchTextHandler(
-    args: ScopeSearchTextArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSearchTextHandler(args: ScopeSearchTextArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         if (args.query.isBlank()) {
@@ -174,13 +169,8 @@ internal data class ScopeSearchTextQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeSearchTextQuickHandler(
-    args: ScopeSearchTextQuickArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSearchTextQuickHandler(args: ScopeSearchTextQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         if (args.query.isBlank()) {
@@ -220,7 +210,7 @@ internal suspend fun scopeSearchTextQuickHandler(
             timeoutMillis = args.timeoutMillis,
             allowEmptyMatches = args.allowEmptyMatches,
         )
-        return@callToolWithProject scopeSearchTextHandler(innerArgs, sessionId, runner)
+        return@callToolWithProject scopeSearchTextHandler(innerArgs, request)
     }
 }
 
@@ -251,12 +241,7 @@ internal data class ScopeSearchTextByPlainArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeSearchTextByPlainHandler(
-    args: ScopeSearchTextByPlainArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeSearchTextByPlainHandler(args: ScopeSearchTextByPlainArgs, request: Request?): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "query must not be blank.")),
@@ -276,7 +261,7 @@ internal suspend fun scopeSearchTextByPlainHandler(
         maxUsageCount = args.maxUsageCount,
         timeoutMillis = args.timeoutMillis,
     )
-    return scopeSearchTextHandler(innerArgs, sessionId, runner)
+    return scopeSearchTextHandler(innerArgs, request)
 }
 
 // ── scope_search_text_by_regex ───────────────────────────────────
@@ -308,12 +293,7 @@ internal data class ScopeSearchTextByRegexArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeSearchTextByRegexHandler(
-    args: ScopeSearchTextByRegexArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeSearchTextByRegexHandler(args: ScopeSearchTextByRegexArgs, request: Request?): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "query must not be blank.")),
@@ -334,7 +314,7 @@ internal suspend fun scopeSearchTextByRegexHandler(
         timeoutMillis = args.timeoutMillis,
         allowEmptyMatches = args.allowEmptyMatches,
     )
-    return scopeSearchTextHandler(innerArgs, sessionId, runner)
+    return scopeSearchTextHandler(innerArgs, request)
 }
 
 // ── scope_replace_text_preview ───────────────────────────────────
@@ -356,12 +336,7 @@ internal data class ScopeReplaceTextPreviewArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeReplaceTextPreviewHandler(
-    args: ScopeReplaceTextPreviewArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeReplaceTextPreviewHandler(args: ScopeReplaceTextPreviewArgs, request: Request?): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
         replaceWith = args.replaceWith,
@@ -370,7 +345,7 @@ internal suspend fun scopeReplaceTextPreviewHandler(
         failOnMissingOccurrenceIds = args.failOnMissingOccurrenceIds,
     )
 
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         reportActivity(
@@ -429,12 +404,7 @@ internal data class ScopeReplaceTextApplyArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-
-internal suspend fun scopeReplaceTextApplyHandler(
-    args: ScopeReplaceTextApplyArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
+internal suspend fun scopeReplaceTextApplyHandler(args: ScopeReplaceTextApplyArgs, request: Request?): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
         replaceWith = args.replaceWith,
@@ -445,7 +415,7 @@ internal suspend fun scopeReplaceTextApplyHandler(
         maxReplaceCount = args.maxReplaceCount,
     )
 
-    return runner.callToolWithProject(
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         if (request.maxReplaceCount < 1) {

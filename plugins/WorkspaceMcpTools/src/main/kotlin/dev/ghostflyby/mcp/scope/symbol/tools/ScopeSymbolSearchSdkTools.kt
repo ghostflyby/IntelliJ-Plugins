@@ -49,9 +49,11 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.*
 import dev.ghostflyby.mcp.resource.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpRequestRunner
-import dev.ghostflyby.mcp.sdk.tools.*
+import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
@@ -174,16 +176,10 @@ internal data class ScopeSymbolSearchHealthcheckArgs(
 
 // ── Tool registration entrypoint ─────────────────────────────────
 
-
 // ── scope_search_symbols ─────────────────────────────────────────
 
-
-internal suspend fun scopeSymbolSearchHandler(
-    args: ScopeSymbolSearchArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSymbolSearchHandler(args: ScopeSymbolSearchArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         try {
@@ -372,13 +368,8 @@ internal suspend fun scopeSymbolSearchHandler(
 
 // ── scope_search_symbols_quick ───────────────────────────────────
 
-
-internal suspend fun scopeSymbolSearchQuickHandler(
-    args: ScopeSymbolSearchQuickArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSymbolSearchQuickHandler(args: ScopeSymbolSearchQuickArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         try {
@@ -418,7 +409,7 @@ internal suspend fun scopeSymbolSearchQuickHandler(
                 includeNonProjectItems = includeNonProjectItems,
                 requirePhysicalLocation = args.requirePhysicalLocation,
             )
-            return@callToolWithProject scopeSymbolSearchHandler(innerArgs, sessionId, runner)
+            return@callToolWithProject scopeSymbolSearchHandler(innerArgs, request)
         } catch (e: IllegalArgumentException) {
             errorResult(e.message ?: "Invalid argument.")
         }
@@ -427,13 +418,8 @@ internal suspend fun scopeSymbolSearchQuickHandler(
 
 // ── scope_search_symbols_with_stage_progress ─────────────────────
 
-
-internal suspend fun scopeSymbolSearchWithStageProgressHandler(
-    args: ScopeSymbolSearchWithStageProgressArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSymbolSearchWithStageProgressHandler(args: ScopeSymbolSearchWithStageProgressArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         try {
@@ -484,13 +470,8 @@ internal suspend fun scopeSymbolSearchWithStageProgressHandler(
 
 // ── scope_search_symbols_healthcheck ─────────────────────────────
 
-
-internal suspend fun scopeSymbolSearchHealthcheckHandler(
-    args: ScopeSymbolSearchHealthcheckArgs,
-    sessionId: String?,
-    runner: WorkspaceMcpRequestRunner,
-): CallToolResult {
-    return runner.callToolWithProject(
+internal suspend fun scopeSymbolSearchHealthcheckHandler(args: ScopeSymbolSearchHealthcheckArgs, request: Request?): CallToolResult {
+    return callToolWithProject(
         projectArgs = args,
     ) { project ->
         try {
