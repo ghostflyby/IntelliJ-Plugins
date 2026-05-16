@@ -8,11 +8,8 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.resource.segment.PendingAnchor
-import dev.ghostflyby.mcp.resource.segment.ResourceSegmentBuilder
-import dev.ghostflyby.mcp.resource.segment.ResourceSegmentCollector
-import dev.ghostflyby.mcp.resource.segment.SegmentId
+import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
+import dev.ghostflyby.mcp.resource.segment.*
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
@@ -30,14 +27,6 @@ internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
     create("dev.ghostflyby.mcp.workspace.workspaceFeature")
 
 /**
- * Context provided to [WorkspaceMcpFeature.computeListableResources].
- */
-internal class WorkspaceMcpFeatureContext(
-    val projectResolver: WorkspaceProjectProvider,
-    val readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
-)
-
-/**
  * Registration context provided to [WorkspaceMcpFeature.register].
  * Features use this to register resource templates and SDK tools on the server.
  * Tracks registered resources/tools for cleanup on dynamic removal.
@@ -45,6 +34,7 @@ internal class WorkspaceMcpFeatureContext(
 internal class WorkspaceMcpFeatureRegistrationContext(
     val projectResolver: WorkspaceProjectResolver,
     val requestRunner: WorkspaceMcpRequestRunner,
+    val resourceReader: WorkspaceResourceReader,
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,
@@ -121,6 +111,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
             registeredTools = trackedTools.toSet(),
             segmentIds = segmentIds,
             pendingAnchors = pendingAnchors,
+            roots = segmentCollector.roots.toList(),
         )
     }
 }
@@ -136,6 +127,7 @@ internal data class WorkspaceMcpFeatureRegistration(
     val registeredTools: Set<String>,
     val segmentIds: Set<SegmentId> = emptySet(),
     val pendingAnchors: List<PendingAnchor> = emptyList(),
+    val roots: List<ResourceSegment> = emptyList(),
 )
 
 /**
@@ -143,7 +135,6 @@ internal data class WorkspaceMcpFeatureRegistration(
  *
  * Each [WorkspaceMcpFeature] owns a domain (e.g. core metadata, VFS resources,
  * document resources) and is responsible for:
- * - computing its own listable resources on demand (using [WorkspaceMcpFeatureContext]),
  * - registering resource templates and SDK tools during server startup
  *   (using [WorkspaceMcpFeatureRegistrationContext]).
  *
@@ -153,7 +144,10 @@ internal data class WorkspaceMcpFeatureRegistration(
 internal interface WorkspaceMcpFeature {
     val featureName: String
 
-    suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource>
-
     fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration
 }
+
+/**
+ * Call [WorkspaceMcpFeature]'s extension-function register via a standalone
+ * bridge that Kotlin can dispatch through.
+ */

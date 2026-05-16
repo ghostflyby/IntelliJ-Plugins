@@ -152,11 +152,11 @@ internal class ResourceSegmentRegistry {
         val isTemplate = segment is TemplateSegment
         val hasChildren = segment.children.isNotEmpty() || segment.anchors.isNotEmpty()
 
-        // Only emit leaf static segments as listable resources
-        if (!isTemplate && segment is StaticSegment && segment.handler != null && !hasChildren) {
+        // StaticSegment: emit as listable if it has a handler (even with children)
+        if (!isTemplate && segment is StaticSegment && segment.handler != null) {
             sink.add(
                 ResourceEntry(
-                    uri = "ij-workspace://{instanceKey}/projects/{projectKey}$currentPath",
+                    uri = "ij-workspace://{instanceKey}$currentPath",
                     name = segment.name,
                     description = "",
                     mimeType = "application/json",
@@ -165,7 +165,7 @@ internal class ResourceSegmentRegistry {
             )
         }
 
-        // Emit template segments (or paths containing templates) as templates
+        // TemplateSegment: always emit as template. If extensible=true, also emit as listable.
         if (isTemplate) {
             sink.add(
                 ResourceEntry(
@@ -176,6 +176,17 @@ internal class ResourceSegmentRegistry {
                     isTemplate = true,
                 ),
             )
+            if (segment.extensible) {
+                sink.add(
+                    ResourceEntry(
+                        uri = "ij-workspace://{instanceKey}$currentPath",
+                        name = segment.name,
+                        description = "",
+                        mimeType = "application/json",
+                        isTemplate = false,
+                    ),
+                )
+            }
         }
 
         // Recurse children and anchors
@@ -190,11 +201,7 @@ internal class ResourceSegmentRegistry {
     }
 
     private fun buildTemplateUri(path: String, templates: String): String {
-        // The base prefix is ij-workspace://{instanceKey}/projects/{projectKey}
-        // followed by the path with template parameters in the right spots
-        // For simplicity, we construct the full URI from the path
-        val basePrefix = "ij-workspace://{instanceKey}/projects/{projectKey}"
-        return "$basePrefix/$path"
+        return "ij-workspace://{instanceKey}/$path"
     }
 
     private fun matchSegment(
@@ -287,4 +294,3 @@ internal class ResourceSegmentRegistry {
         parent.anchors.values.forEach { removeFromTree(it, idsToRemove) }
     }
 }
-

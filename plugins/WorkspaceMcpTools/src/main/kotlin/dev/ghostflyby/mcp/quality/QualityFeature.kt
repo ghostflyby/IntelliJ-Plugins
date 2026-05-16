@@ -7,9 +7,7 @@
 package dev.ghostflyby.mcp.quality
 
 import dev.ghostflyby.mcp.quality.tools.*
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
@@ -19,10 +17,6 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
  */
 internal class QualityFeature : WorkspaceMcpFeature {
     override val featureName: String = "quality"
-
-    override suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource> {
-        return emptyList()
-    }
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         registerTool<QualityGetFileProblemsArgs>(

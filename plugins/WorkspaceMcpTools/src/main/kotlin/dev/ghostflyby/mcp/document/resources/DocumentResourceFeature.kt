@@ -6,14 +6,7 @@
 
 package dev.ghostflyby.mcp.document.resources
 
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
 import dev.ghostflyby.mcp.document.tools.*
-import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
-import dev.ghostflyby.mcp.resource.workspaceDocumentUri
-import dev.ghostflyby.mcp.resource.workspaceDocumentVfsUri
 import dev.ghostflyby.mcp.sdk.*
 
 /**
@@ -26,33 +19,6 @@ import dev.ghostflyby.mcp.sdk.*
  */
 internal class DocumentResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "document-resources"
-
-    override suspend fun computeListableResources(context: WorkspaceMcpFeatureContext): List<WorkspaceListableResource> {
-        val projects = readAction { context.projectResolver.openProjects() }
-        return buildList {
-            projects.forEach { project ->
-                val instanceKey = workspaceInstanceKey()
-                val projectKey = workspaceProjectKey(project)
-                val documentManager = FileDocumentManager.getInstance()
-
-                FileEditorManager.getInstance(project).openFiles
-                    .sortedBy { it.url }
-                    .filter { !it.isDirectory && documentManager.getDocument(it) != null }
-                    .forEach { file ->
-                        val relativePath = file.relativePathFor(project)
-                        add(
-                            WorkspaceListableResource(
-                                uri = if (relativePath != null) workspaceDocumentUri(instanceKey, projectKey, relativePath)
-                                      else workspaceDocumentVfsUri(instanceKey, projectKey, file.url),
-                                name = "Open document: ${file.presentableName}",
-                                description = "Current editor document snapshot for an open file.",
-                                mimeType = TEXT_PLAIN_MIME_TYPE,
-                            ),
-                        )
-                    }
-            }
-        }
-    }
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         registerResourceTemplate(

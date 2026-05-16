@@ -31,10 +31,6 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
 
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
-    override suspend fun computeListableResources(
-        context: WorkspaceMcpFeatureContext,
-    ): List<dev.ghostflyby.mcp.resource.WorkspaceListableResource> = emptyList()
-
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         segments {
             // server/info — static listable resource

@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.resource
@@ -31,7 +15,6 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -197,7 +180,7 @@ internal class WorkspaceResourceReader(
         }
     }
 
-    private suspend fun readFileByRelativePath(
+    internal suspend fun readFileByRelativePath(
         resourceUri: String,
         projectKey: String,
         relativePath: String,
@@ -583,14 +566,14 @@ internal class WorkspaceResourceReader(
 }
 
 @Serializable
-private data class WorkspaceDirectoryListing(
+internal data class WorkspaceDirectoryListing(
     val url: String,
     val path: String,
     val children: List<WorkspaceFileStat>,
 )
 
 @Serializable
-private data class WorkspaceFileStat(
+internal data class WorkspaceFileStat(
     val name: String,
     val url: String,
     val path: String,
@@ -604,13 +587,13 @@ private data class WorkspaceFileStat(
 )
 
 @Serializable
-private data class WorkspaceApiSignatureMatch(
+internal data class WorkspaceApiSignatureMatch(
     val line: Int,
     val text: String,
 )
 
 @Serializable
-private data class WorkspaceApiSignature(
+internal data class WorkspaceApiSignature(
     val url: String,
     val fileType: String,
     val totalLines: Int,
@@ -624,7 +607,7 @@ private data class WorkspaceApiSignature(
 )
 
 @Serializable
-private data class WorkspaceDocumentMetadata(
+internal data class WorkspaceDocumentMetadata(
     val textLength: Int,
     val lineCount: Int,
     val modificationStamp: Long,
@@ -632,7 +615,7 @@ private data class WorkspaceDocumentMetadata(
 )
 
 @Serializable
-private data class WorkspaceDocumentLineMetadata(
+internal data class WorkspaceDocumentLineMetadata(
     val line: Int,
     val startOffset: Int,
     val endOffset: Int,

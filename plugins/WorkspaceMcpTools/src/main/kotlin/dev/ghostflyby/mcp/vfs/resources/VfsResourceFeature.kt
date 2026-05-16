@@ -6,16 +6,14 @@
 
 package dev.ghostflyby.mcp.vfs.resources
 
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectRootManager
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.*
 import dev.ghostflyby.mcp.sdk.*
 import dev.ghostflyby.mcp.vfs.tools.*
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
@@ -23,54 +21,6 @@ import dev.ghostflyby.mcp.vfs.tools.*
  */
 internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
-
-    override suspend fun computeListableResources(
-        context: WorkspaceMcpFeatureContext,
-    ): List<WorkspaceListableResource> {
-        val projects = readAction { context.projectResolver.openProjects() }
-        return buildList {
-            projects.forEach { project ->
-                val instanceKey = workspaceInstanceKey()
-                val projectKey = workspaceProjectKey(project)
-
-                project.basePath?.let { basePath ->
-                    LocalFileSystem.getInstance().findFileByPath(basePath)
-                }?.let { baseDir ->
-                    add(baseDir.toProjectFileResource(projectKey, instanceKey, project,
-                        "Project base directory: ${project.name}",
-                        "Workspace project base directory.",
-                    ))
-                }
-
-                ProjectRootManager.getInstance(project).contentRoots
-                    .sortedBy { it.url }
-                    .forEach { root ->
-                        add(root.toProjectFileResource(projectKey, instanceKey, project,
-                            "Content root: ${root.presentableName}",
-                            "Workspace content root.",
-                        ))
-                    }
-
-                ProjectRootManager.getInstance(project).contentSourceRoots
-                    .sortedBy { it.url }
-                    .forEach { root ->
-                        add(root.toProjectFileResource(projectKey, instanceKey, project,
-                            "Source root: ${root.presentableName}",
-                            "Workspace source root.",
-                        ))
-                    }
-
-                FileEditorManager.getInstance(project).openFiles
-                    .sortedBy { it.url }
-                    .forEach { file ->
-                        add(file.toProjectFileResource(projectKey, instanceKey, project,
-                            "Open file: ${file.presentableName}",
-                            "Open editor file.",
-                        ))
-                    }
-            }
-        }
-    }
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         // VFS resource templates via segment DSL
@@ -80,21 +30,40 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
             under(projectAnchor) {
                 segment("files") {
                     template("relativePath") { params, anc ->
-                        val projectKey = anc[projectAnchor]
+                        val projectKey = anc[projectAnchor] ?: ""
                         val relativePath = params["relativePath"] ?: ""
-                        // Delegate to the existing reader for now
                         val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceFileUri(instanceKey, projectKey ?: "", relativePath)
-                        readResource(uri, null)
+                        val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
+                        resourceReader.readFileByRelativePath(uri, projectKey, relativePath).run {
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = mimeType,
+                                        text = text
+                                    )
+                                )
+                            )
+                        }
                     }
                 }
                 segment("vfs") {
                     template("rawVfsUrl") { params, anc ->
-                        val projectKey = anc[projectAnchor]
+                        val projectKey = anc[projectAnchor] ?: ""
                         val rawVfsUrl = params["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceVfsUri(instanceKey, projectKey ?: "", rawVfsUrl)
-                        readResource(uri, null)
+                        val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
+                        resourceReader.readVfsResource(uri, rawVfsUrl).run {
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = mimeType,
+                                        text = text
+                                    )
+                                )
+                            )
+                        }
                     }
                 }
             }

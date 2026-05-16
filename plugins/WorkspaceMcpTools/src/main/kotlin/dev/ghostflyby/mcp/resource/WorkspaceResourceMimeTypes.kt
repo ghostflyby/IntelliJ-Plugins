@@ -20,8 +20,19 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-// TODO: removed - dead code (old listable resource chain)
-// WorkspaceListableResource, WorkspaceResourceCatalog, mime type constants,
-// toTextMimeType, and URI helpers have been removed.
-// All resource listing is now handled by the segment tree.
+package dev.ghostflyby.mcp.resource
+
+internal fun String.toTextMimeType(): String {
+    return when (lowercase()) {
+        "kotlin" -> "text/x-kotlin"
+        "java" -> "text/x-java-source"
+        "xml" -> "application/xml"
+        "json" -> APPLICATION_JSON_MIME_TYPE
+        "markdown" -> "text/markdown"
+        else -> TEXT_PLAIN_MIME_TYPE
+    }
+}
+
+internal const val TEXT_PLAIN_MIME_TYPE = "text/plain"
+internal const val APPLICATION_JSON_MIME_TYPE = "application/json"
 

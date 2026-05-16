@@ -7,9 +7,7 @@
 package dev.ghostflyby.mcp.navigation
 
 import dev.ghostflyby.mcp.navigation.tools.*
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
@@ -35,12 +33,6 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
  */
 internal class NavigationFeature : WorkspaceMcpFeature {
     override val featureName: String = "navigation"
-
-    override suspend fun computeListableResources(
-        context: WorkspaceMcpFeatureContext,
-    ): List<WorkspaceListableResource> {
-        return emptyList()
-    }
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         registerTool<NavigationSymbolInfoArgs>(

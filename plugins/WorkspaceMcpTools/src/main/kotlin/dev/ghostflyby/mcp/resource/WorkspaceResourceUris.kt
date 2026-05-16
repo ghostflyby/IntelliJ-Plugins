@@ -49,6 +49,14 @@ internal data class WorkspaceResourceUri(
 
 // ---- builders ----
 
+
+internal data class WorkspaceListableResource(
+    val uri: String,
+    val name: String,
+    val description: String,
+    val mimeType: String,
+)
+
 internal fun workspaceFileUri(
     instanceKey: String,
     projectKey: String,

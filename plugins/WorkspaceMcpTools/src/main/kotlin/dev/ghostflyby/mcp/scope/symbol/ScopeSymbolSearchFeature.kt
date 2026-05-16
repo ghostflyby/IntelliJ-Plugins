@@ -6,10 +6,8 @@
 
 package dev.ghostflyby.mcp.scope.symbol
 
-import dev.ghostflyby.mcp.resource.WorkspaceListableResource
 import dev.ghostflyby.mcp.scope.symbol.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureContext
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
@@ -24,12 +22,6 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
  */
 internal class ScopeSymbolSearchFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-symbol-search"
-
-    override suspend fun computeListableResources(
-        context: WorkspaceMcpFeatureContext,
-    ): List<WorkspaceListableResource> {
-        return emptyList()
-    }
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         registerTool<ScopeSymbolSearchArgs>(
