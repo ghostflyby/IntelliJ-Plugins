@@ -43,7 +43,7 @@ internal class StaticSegment(
     override val segmentId: SegmentId,
     override val name: String,
     override val extensible: Boolean = false,
-    val handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
+    val handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
 ) : ResourceSegment()
 
 /**
@@ -55,6 +55,5 @@ internal class TemplateSegment(
     override val name: String,
     val paramName: String,
     override val extensible: Boolean = false,
-    val handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+    val handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
 ) : ResourceSegment()
-

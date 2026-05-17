@@ -32,9 +32,9 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         segments {
             under(projectAnchor) {
                 segment("files") {
-                    template("relativePath") { params, anc, request ->
+                    template("relativePath") { anc, request ->
                         val projectKey = anc[projectAnchor] ?: ""
-                        val relativePath = params["relativePath"] ?: ""
+                        val relativePath = anc["relativePath"] ?: ""
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
                         val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
@@ -50,9 +50,9 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                     }
                 }
                 segment("vfs") {
-                    template("rawVfsUrl") { params, anc, request ->
+                    template("rawVfsUrl") { anc, request ->
                         val projectKey = anc[projectAnchor] ?: ""
-                        val rawVfsUrl = params["rawVfsUrl"] ?: ""
+                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
                         val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)

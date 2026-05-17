@@ -29,17 +29,24 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import dev.ghostflyby.mcp.resource.segment.ResourceSegmentRegistry
+import dev.ghostflyby.mcp.resource.segment.SegmentTreeTemplateMatcher
+import dev.ghostflyby.mcp.resource.segment.AncestorContext
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
+import io.ktor.server.routing.Routing
+import io.ktor.server.routing.get
+import io.ktor.server.routing.put
+import io.ktor.server.routing.routing
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.*
+import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -111,26 +118,6 @@ internal class WorkspaceMcpSdkServerService(
      * - Core listable resources (server/info, projects, projects/{key}) shortcut.
      * - Project-scoped resources delegate to [requestRunner] for context installation.
      */
-    private suspend fun readResource(resourceUri: String, sessionId: String?, request: ReadResourceRequest? = null): ReadResourceResult {
-        // Segment-based resource matching (handles core server/info, projects, and feature resources)
-        val segmentMatch = segmentRegistry.match(resourceUri)
-        if (segmentMatch != null) {
-            return when (val seg = segmentMatch.segment) {
-                is dev.ghostflyby.mcp.resource.segment.StaticSegment -> {
-                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc, request!!)
-                        ?: ReadResourceResult(contents = emptyList())
-                }
-                is dev.ghostflyby.mcp.resource.segment.TemplateSegment -> {
-                    seg.handler(segmentMatch.params, segmentMatch.anc, request!!)
-                }
-            }
-        }
-
-        return ReadResourceResult(
-            contents = listOf(TextResourceContents(uri = resourceUri, mimeType = "text/plain",
-                text = "Resource not found: $resourceUri"))
-        )
-    }
 
 
     private fun createServer(): Server {
@@ -141,7 +128,9 @@ internal class WorkspaceMcpSdkServerService(
                     resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),
                     tools = ServerCapabilities.Tools(listChanged = true),
                 ),
-                resourceTemplateMatcherFactory = WorkspaceResourceTemplateMatcherFactory,
+                resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
+                    SegmentTreeTemplateMatcher(template, segmentRegistry)
+                },
             ),
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
@@ -417,8 +406,8 @@ internal class WorkspaceMcpSdkServerService(
                         name = entry.name,
                         description = entry.description,
                         mimeType = entry.mimeType,
-                    ) { request, _ ->
-                        readResource(request.uri, this.sessionId)
+                    ) { request, vars ->
+                        entry.handler(AncestorContext(vars), request)
                     }
                 }
             } else {
@@ -429,7 +418,9 @@ internal class WorkspaceMcpSdkServerService(
                         name = entry.name,
                         description = entry.description,
                         mimeType = entry.mimeType,
-                    ) { readResource(entry.uri, this.sessionId) }
+                    ) { request ->
+                        entry.handler(AncestorContext(emptyMap()), request)
+                    }
                 }
             }
         }

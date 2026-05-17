@@ -37,7 +37,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
             segment("server") {
                 segment(
                     "info",
-                    handler = { _, _, _ ->
+                    handler = { _, _ ->
                         val instanceKey = workspaceInstanceKey()
                         val info = readAction {
                             mapOf("instanceKey" to instanceKey, "version" to "1.0.0")
@@ -61,8 +61,8 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                     paramName = "projectKey",
                     id = PROJECT_SEGMENT,
                     extensible = true,
-                ) { params, anc, request ->
-                    val projectKey = params["projectKey"] ?: ""
+                ) { anc, request ->
+                    val projectKey = anc["projectKey"] ?: ""
                     val info = when (val resolved = projectResolver.resolve(projectKey)) {
                         is WorkspaceProjectResolution.Resolved -> mapOf(
                             "projectKey" to projectKey,

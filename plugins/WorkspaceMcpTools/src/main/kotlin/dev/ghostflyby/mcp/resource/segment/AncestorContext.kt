@@ -23,18 +23,18 @@
 package dev.ghostflyby.mcp.resource.segment
 
 /**
- * Read-only view of parameters captured by ancestor segments along the
- * matched URI path. Useful for cross-feature handlers that need values
- * from parent template parameters.
+ * Merged params + ancestor-segment index. Implements [Map] by delegation to
+ * the MCP SDK template variables, while also supporting semantic lookup via
+ * [SegmentId] with [get] operator.
  *
- * Access via `anc[SomeFeature.PROJECT_SEGMENT]` where `PROJECT_SEGMENT`
- * is the [SegmentId] of the ancestor [TemplateSegment].
+ * Usage:
+ *   anc["projectKey"]        — standard Map access (delegates to vars map)
+ *   anc[PROJECT_SEGMENT]     — semantic access via SegmentId
  */
 internal class AncestorContext(
-    chain: Collection<Pair<SegmentId, String>>,
-) {
-    private val map: Map<SegmentId, String> = chain.toMap()
-
-    operator fun get(segmentId: SegmentId): String? = map[segmentId]
+    params: Map<String, String>,
+    segmentIndex: Map<SegmentId, String> = emptyMap(),
+) : Map<String, String> by params {
+    private val index: Map<SegmentId, String> = segmentIndex
+    operator fun get(segmentId: SegmentId): String? = index[segmentId]
 }
-

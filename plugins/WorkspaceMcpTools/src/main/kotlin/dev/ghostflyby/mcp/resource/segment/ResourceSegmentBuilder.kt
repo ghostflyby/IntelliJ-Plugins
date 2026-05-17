@@ -24,7 +24,7 @@ internal interface ResourceSegmentBuilder {
         name: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
+        handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
         block: ResourceSegmentBuilder.() -> Unit = {},
     )
 
@@ -37,7 +37,7 @@ internal interface ResourceSegmentBuilder {
         paramName: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
     )
 
     /**
@@ -62,7 +62,7 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         name: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)?,
+        handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)?,
         block: ResourceSegmentBuilder.() -> Unit,
     ) {
         val seg = StaticSegment(
@@ -80,7 +80,7 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         paramName: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
     ) {
         val seg = TemplateSegment(
             segmentId = id,
@@ -122,9 +122,6 @@ internal data class PendingAnchor(
 internal data class ResourceMatchResult(
     /** Matched leaf segment (never null for successful matches). */
     val segment: ResourceSegment,
-    /** Parameters captured from template segments along the path. */
-    val params: Map<String, String>,
     /** Ancestor parameters indexed by [SegmentId]. */
     val anc: AncestorContext,
 )
-

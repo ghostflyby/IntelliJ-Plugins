@@ -7,6 +7,10 @@
 package dev.ghostflyby.mcp.resource.segment
 
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
+import io.modelcontextprotocol.kotlin.sdk.utils.MatchResult
+import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcher
 
 /**
  * Manages the global resource segment tree across all features.
@@ -76,6 +80,7 @@ internal class ResourceSegmentRegistry {
         val description: String,
         val mimeType: String,
         val isTemplate: Boolean,
+        val handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
     )
 
     fun listAll(): List<ResourceEntry> = buildList {
@@ -88,7 +93,8 @@ internal class ResourceSegmentRegistry {
 
     // -- URI matching --
 
-    fun match(uri: String, request: ReadResourceRequest? = null): ResourceMatchResult? {
+
+    fun segmentMatch(uri: String, request: ReadResourceRequest? = null): ResourceMatchResult? {
         val path = extractPath(uri) ?: return null
         val parts = path.trim('/').split('/')
         if (parts.isEmpty()) return null
@@ -147,6 +153,7 @@ internal class ResourceSegmentRegistry {
                     description = "",
                     mimeType = "application/json",
                     isTemplate = false,
+                    handler = segment.handler,
                 ),
             )
         }
@@ -160,6 +167,7 @@ internal class ResourceSegmentRegistry {
                     description = "",
                     mimeType = "text/plain",
                     isTemplate = true,
+                    handler = { anc, request -> segment.handler(anc, request) },
                 ),
             )
             if (segment.extensible) {
@@ -170,6 +178,7 @@ internal class ResourceSegmentRegistry {
                         description = "",
                         mimeType = "application/json",
                         isTemplate = false,
+                        handler = { anc, request -> segment.handler(anc, request) },
                     ),
                 )
             }
@@ -203,7 +212,7 @@ internal class ResourceSegmentRegistry {
             if (index >= parts.size) {
                 // End of path — return this segment if it has a handler
                 return if (segment.handler != null) {
-                    ResourceMatchResult(segment, params, AncestorContext(ancChain))
+                    ResourceMatchResult(segment, AncestorContext(params, ancChain.toMap()))
                 } else {
                     null
                 }
@@ -229,7 +238,7 @@ internal class ResourceSegmentRegistry {
             val newChain = ancChain + (segment.segmentId to parts.getOrElse(index) { "" })
 
             if (index + 1 >= parts.size) {
-                return ResourceMatchResult(segment, newParams, AncestorContext(newChain))
+                return ResourceMatchResult(segment, AncestorContext(newParams, newChain.toMap()))
             }
 
             // Match next part against children or anchors
@@ -242,7 +251,7 @@ internal class ResourceSegmentRegistry {
                 val result = matchAnchor(anchor, parts, index + 1, fullUri, newParams, newChain)
                 if (result != null) return result
             }
-            return ResourceMatchResult(segment, newParams, AncestorContext(newChain))
+            return ResourceMatchResult(segment, AncestorContext(newParams, newChain.toMap()))
         }
 
         return null
@@ -280,3 +289,18 @@ internal class ResourceSegmentRegistry {
         parent.anchors.values.forEach { removeFromTree(it, idsToRemove) }
     }
 }
+
+/**
+ * Per-template wrapper that delegates [ResourceTemplateMatcher.match] to the
+ * segment tree, keeping its own [resourceTemplate] reference per SDK contract.
+ */
+internal class SegmentTreeTemplateMatcher(
+    override val resourceTemplate: ResourceTemplate,
+    private val registry: ResourceSegmentRegistry,
+) : ResourceTemplateMatcher {
+    override fun match(resourceUri: String): MatchResult? {
+        val segmentMatch = registry.segmentMatch(resourceUri) ?: return null
+        return MatchResult(variables = segmentMatch.anc, score = 100)
+    }
+}
+
