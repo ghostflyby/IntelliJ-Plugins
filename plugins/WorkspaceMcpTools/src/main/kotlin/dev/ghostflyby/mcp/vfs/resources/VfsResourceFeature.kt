@@ -6,10 +6,10 @@
 
 package dev.ghostflyby.mcp.vfs.resources
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
-import dev.ghostflyby.mcp.resource.*
+import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
+import dev.ghostflyby.mcp.resource.workspaceFileUri
+import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -119,29 +119,6 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         )
 
         return buildRegistration()
-    }
-
-    private fun relativePathFor(project: Project, file: VirtualFile): String? {
-        val bp = project.basePath ?: return null
-        val filePath = file.path
-        return if (filePath.startsWith(bp)) filePath.removePrefix(bp).trimStart('/') else null
-    }
-
-    private fun VirtualFile.toProjectFileResource(
-        projectKey: String,
-        instanceKey: String,
-        project: Project,
-        name: String,
-        description: String,
-    ): WorkspaceListableResource {
-        val relativePath = relativePathFor(project, this)
-        return WorkspaceListableResource(
-            uri = if (relativePath != null) workspaceFileUri(instanceKey, projectKey, relativePath)
-                  else workspaceVfsUri(instanceKey, projectKey, url),
-            name = name,
-            description = description,
-            mimeType = if (isDirectory) APPLICATION_JSON_MIME_TYPE else fileType.name.toTextMimeType(),
-        )
     }
 }
 
