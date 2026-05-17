@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.resource.WorkspaceResourceUri
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -89,31 +88,5 @@ internal suspend fun callToolWithProject(
             ),
             isError = true,
         )
-    }
-}
-
-/**
- * Run a resource read under a scope that is cancelled when
- * the project lifecycle ends.
- */
-internal suspend fun runResourceRead(
-    decoded: WorkspaceResourceUri,
-    instanceKey: String = workspaceInstanceKey(),
-    sessionId: String? = null,
-    block: suspend () -> io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult,
-): io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult {
-    val resolver = service<WorkspaceProjectResolver>()
-    return when (val resolved = resolver.resolve(projectKey = decoded.projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            coroutineScope {
-                val projectJob = resolved.project.scope.coroutineContext[Job]
-                projectJob?.invokeOnCompletion { cause ->
-                    if (cause != null) cancel(CancellationException("Project closed", cause))
-                }
-                block()
-            }
-        }
-
-        is WorkspaceProjectResolution.Unresolved -> error(resolved.message)
     }
 }
