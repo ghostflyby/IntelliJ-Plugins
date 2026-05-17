@@ -34,17 +34,16 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                         val relativePath = params["relativePath"] ?: ""
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
-                        resourceReader.readFileByRelativePath(uri, projectKey, relativePath).run {
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = mimeType,
-                                        text = text
-                                    )
+                        val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text
                                 )
                             )
-                        }
+                        )
                     }
                 }
                 segment("vfs") {
@@ -53,17 +52,16 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                         val rawVfsUrl = params["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()
                         val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
-                        resourceReader.readVfsResource(uri, rawVfsUrl).run {
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = mimeType,
-                                        text = text
-                                    )
+                        val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text
                                 )
                             )
-                        }
+                        )
                     }
                 }
             }
@@ -143,3 +141,4 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         )
     }
 }
+

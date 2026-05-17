@@ -25,7 +25,7 @@ import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.navigation.*
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import dev.ghostflyby.mcp.sdk.callToolWithProject

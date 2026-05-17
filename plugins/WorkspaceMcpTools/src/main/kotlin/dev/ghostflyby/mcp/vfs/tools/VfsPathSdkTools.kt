@@ -12,7 +12,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import dev.ghostflyby.mcp.sdk.callToolWithProject

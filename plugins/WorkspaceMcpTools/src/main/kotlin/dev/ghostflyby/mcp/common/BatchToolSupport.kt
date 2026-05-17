@@ -22,7 +22,7 @@
 
 package dev.ghostflyby.mcp.common
 
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 
 internal data class BatchAttempt<T>(
     val value: T?,

@@ -47,7 +47,7 @@ import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.*
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson

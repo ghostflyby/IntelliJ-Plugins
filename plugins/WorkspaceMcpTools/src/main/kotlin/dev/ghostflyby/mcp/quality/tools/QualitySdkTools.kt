@@ -36,7 +36,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.relativizePathOrNull
 import dev.ghostflyby.mcp.common.reportActivity
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.scope.*
 import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments

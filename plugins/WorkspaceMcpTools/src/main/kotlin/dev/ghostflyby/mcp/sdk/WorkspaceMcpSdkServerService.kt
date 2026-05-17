@@ -46,7 +46,6 @@ internal class WorkspaceMcpSdkServerService(
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = WorkspaceProjectResolver()
-    private val resourceReader = WorkspaceResourceReader(projectResolver)
     private val segmentRegistry = ResourceSegmentRegistry()
 
     private val features: List<WorkspaceMcpFeature>
@@ -128,8 +127,6 @@ internal class WorkspaceMcpSdkServerService(
         )
     }
 
-    private fun WorkspaceResourceTextContent.toReadResourceResult(): ReadResourceResult =
-        ReadResourceResult(contents = listOf(TextResourceContents(uri = uri, mimeType = mimeType, text = text)))
 
     private fun createServer(): Server {
         val server = Server(
@@ -166,11 +163,9 @@ internal class WorkspaceMcpSdkServerService(
         featureScope: CoroutineScope,
     ): WorkspaceMcpFeatureRegistrationContext = WorkspaceMcpFeatureRegistrationContext(
         projectResolver = projectResolver,
-                resourceReader = resourceReader,
         server = server,
         featureScope = featureScope,
-        featureName = feature.featureName,
-        readResource = ::readResource,
+        featureName = feature.featureName
     )
 
     private fun subscribeToFeatureEvents() {
@@ -247,15 +242,6 @@ internal class WorkspaceMcpSdkServerService(
                 .onFailure { error ->
                     logger.warn(
                         "Failed to remove Workspace MCP tool $name for feature $featureName",
-                        error,
-                    )
-                }
-        }
-        registration.registeredTemplates.forEach { uriTemplate ->
-            runCatching { activeServer.removeResourceTemplate(uriTemplate) }
-                .onFailure { error ->
-                    logger.warn(
-                        "Failed to remove Workspace MCP resource template $uriTemplate for feature $featureName",
                         error,
                     )
                 }

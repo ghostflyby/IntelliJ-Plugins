@@ -8,11 +8,13 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
-import dev.ghostflyby.mcp.resource.WorkspaceResourceReader
 import dev.ghostflyby.mcp.resource.segment.*
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.*
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.types.Request
+import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.serialization.SerializationException
@@ -32,32 +34,12 @@ internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
  */
 internal class WorkspaceMcpFeatureRegistrationContext(
     val projectResolver: WorkspaceProjectResolver,
-    val resourceReader: WorkspaceResourceReader,
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,
-    internal val readResource: suspend (resourceUri: String, sessionId: String?) -> ReadResourceResult,
 ) {
-    private val trackedTemplates = mutableSetOf<String>()
     private val trackedTools = mutableSetOf<String>()
     internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
-
-    fun registerResourceTemplate(
-        uriTemplate: String,
-        name: String,
-        description: String,
-        mimeType: String,
-    ) {
-        server.addResourceTemplate(
-            uriTemplate = uriTemplate,
-            name = name,
-            description = description,
-            mimeType = mimeType,
-        ) { request, _ ->
-            readResource(request.uri, this.sessionId)
-        }
-        trackedTemplates.add(uriTemplate)
-    }
 
     inline fun <reified T : Any> registerTool(
         name: String,
@@ -108,7 +90,6 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         return WorkspaceMcpFeatureRegistration(
             featureName = featureName,
             job = featureScope.coroutineContext[Job] ?: Job(),
-            registeredTemplates = trackedTemplates.toSet(),
             registeredTools = trackedTools.toSet(),
             segmentIds = segmentIds,
             pendingAnchors = pendingAnchors,
@@ -124,7 +105,6 @@ internal class WorkspaceMcpFeatureRegistrationContext(
 internal data class WorkspaceMcpFeatureRegistration(
     val featureName: String,
     val job: Job,
-    val registeredTemplates: Set<String>,
     val registeredTools: Set<String>,
     val segmentIds: Set<SegmentId> = emptySet(),
     val pendingAnchors: List<PendingAnchor> = emptyList(),

@@ -16,7 +16,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.resource.WorkspaceResourceException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import dev.ghostflyby.mcp.sdk.callToolWithProject

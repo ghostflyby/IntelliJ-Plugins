@@ -6,8 +6,13 @@
 
 package dev.ghostflyby.mcp.document.resources
 
+import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.tools.*
+import dev.ghostflyby.mcp.resource.*
+import dev.ghostflyby.mcp.resource.segment.*
 import dev.ghostflyby.mcp.sdk.*
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * Document resource feature: provides project-scoped document resource templates
@@ -21,19 +26,49 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "document-resources"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
-        registerResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_DOCUMENTS_TEMPLATE,
-            name = "Project document resource",
-            description = "Reads the current editor document snapshot by project-relative path, including unsaved text.",
-            mimeType = "text/plain",
-        )
+        val projectAnchor = CoreResourceFeature.PROJECT_SEGMENT
 
-        registerResourceTemplate(
-            uriTemplate = NEW_WORKSPACE_DOCUMENT_VFS_TEMPLATE,
-            name = "Project document VFS resource",
-            description = "Reads the current editor document snapshot by raw VFS URL within a project scope.",
-            mimeType = "text/plain",
-        )
+        // Document resource templates via segment DSL
+        segments {
+            under(projectAnchor) {
+                segment("documents") {
+                    template("relativePath") { params, anc, request ->
+                        val projectKey = anc[projectAnchor] ?: ""
+                        val relativePath = params["relativePath"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceDocumentUri(instanceKey, projectKey, relativePath)
+                        val text = readDocumentByRelativePath(relativePath, projectKey, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
+                                ),
+                            ),
+                        )
+                    }
+                }
+                segment("document-vfs") {
+                    template("rawVfsUrl") { params, anc, request ->
+                        val projectKey = anc[projectAnchor] ?: ""
+                        val rawVfsUrl = params["rawVfsUrl"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceDocumentVfsUri(instanceKey, projectKey, rawVfsUrl)
+                        val text = readDocumentByVfsUrl(rawVfsUrl)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+        }
 
         registerTool<DocumentSdkUrlArgs>(
             name = "document_is_writable",
@@ -73,14 +108,5 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
         )
 
         return buildRegistration()
-    }
-
-    private fun com.intellij.openapi.vfs.VirtualFile.relativePathFor(project: com.intellij.openapi.project.Project): String? {
-        val bp = project.basePath ?: return null
-        val filePath = this.path
-        if (filePath.startsWith(bp)) {
-            return filePath.removePrefix(bp).trimStart('/')
-        }
-        return null
     }
 }
