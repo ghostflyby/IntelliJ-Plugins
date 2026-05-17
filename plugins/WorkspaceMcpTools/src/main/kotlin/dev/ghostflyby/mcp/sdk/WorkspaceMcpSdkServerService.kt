@@ -28,8 +28,10 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import dev.ghostflyby.mcp.resource.*
 import dev.ghostflyby.mcp.resource.segment.ResourceSegmentRegistry
+import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
+import dev.ghostflyby.mcp.resource.workspaceDocumentUri
+import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -38,9 +40,8 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.*
-import kotlin.time.Duration.Companion.milliseconds
-
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(

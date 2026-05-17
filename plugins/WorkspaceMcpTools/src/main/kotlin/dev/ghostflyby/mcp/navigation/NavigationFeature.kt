@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.navigation
 
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import dev.ghostflyby.mcp.navigation.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration

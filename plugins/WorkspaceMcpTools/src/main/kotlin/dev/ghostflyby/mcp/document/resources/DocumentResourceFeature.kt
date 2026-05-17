@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.document.resources
 
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.tools.*
 import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE

@@ -6,8 +6,8 @@
 
 package dev.ghostflyby.mcp.resource.segment
 
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 
 /**
  * Resource segment tree registration entry point.
