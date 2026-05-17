@@ -24,7 +24,7 @@ internal interface ResourceSegmentBuilder {
         name: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
+        handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)? = null,
         block: ResourceSegmentBuilder.() -> Unit = {},
     )
 
@@ -62,7 +62,7 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         name: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)?,
+        handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)?,
         block: ResourceSegmentBuilder.() -> Unit,
     ) {
         val seg = StaticSegment(

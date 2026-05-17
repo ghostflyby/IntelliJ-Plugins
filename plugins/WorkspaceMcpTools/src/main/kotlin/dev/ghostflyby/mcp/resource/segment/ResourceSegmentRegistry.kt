@@ -75,22 +75,29 @@ internal class ResourceSegmentRegistry {
     // -- resource listing --
 
     data class ResourceEntry(
-        val paramToSegmentId: Map<String, SegmentId> = emptyMap(),
         val uri: String,
         val name: String,
         val description: String,
         val mimeType: String,
-        val isTemplate: Boolean,
-        val handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        val handler: suspend (request: ReadResourceRequest) -> ReadResourceResult,
     )
 
-    fun listAll(): List<ResourceEntry> = buildList {
-        roots.values.forEach { enumerate(it, "", "", this) }
+    data class TemplateEntry(
+        val uri: String,
+        val name: String,
+        val description: String,
+        val mimeType: String,
+        val handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        val paramToSegmentId: Map<String, SegmentId>,
+    )
+
+    fun resources(): List<ResourceEntry> = buildList {
+        roots.values.forEach { enumerate(it, "", "", resourceSink = this) }
     }
 
-    fun listables(): List<ResourceEntry> = listAll().filter { !it.isTemplate }
-
-    fun templates(): List<ResourceEntry> = listAll().filter { it.isTemplate }
+    fun templates(): List<TemplateEntry> = buildList {
+        roots.values.forEach { enumerate(it, "", "", templateSink = this) }
+    }
 
     // -- URI matching --
 
@@ -134,7 +141,8 @@ internal class ResourceSegmentRegistry {
         segment: ResourceSegment,
         prefix: String,
         parentTemplates: String,
-        sink: MutableList<ResourceEntry>,
+        resourceSink: MutableList<ResourceEntry> = mutableListOf(),
+        templateSink: MutableList<TemplateEntry> = mutableListOf(),
         paramToSegmentId: Map<String, SegmentId> = emptyMap(),
     ) {
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
@@ -148,42 +156,37 @@ internal class ResourceSegmentRegistry {
 
         // StaticSegment: emit as listable if it has a handler (even with children)
         if (!isTemplate && segment is StaticSegment && segment.handler != null) {
-            sink.add(
+            resourceSink.add(
                 ResourceEntry(
                     uri = "ij-workspace://{instanceKey}$currentPath",
                     name = segment.name,
                     description = "",
                     mimeType = "application/json",
-                    isTemplate = false,
                     handler = segment.handler,
-                    paramToSegmentId = paramToSegmentId,
                 ),
             )
         }
 
         // TemplateSegment: always emit as template. If extensible=true, also emit as listable.
         if (isTemplate) {
-            sink.add(
-                ResourceEntry(
+            templateSink.add(
+                TemplateEntry(
                     uri = buildTemplateUri(currentPath, currentTemplates),
                     name = segment.name,
                     description = "",
                     mimeType = "text/plain",
-                    isTemplate = true,
                     handler = { anc, request -> segment.handler(anc, request) },
                     paramToSegmentId = paramToSegmentId,
                 ),
             )
             if (segment.extensible) {
-                sink.add(
+                resourceSink.add(
                     ResourceEntry(
                         uri = "ij-workspace://{instanceKey}$currentPath",
                         name = segment.name,
                         description = "",
                         mimeType = "application/json",
-                        isTemplate = false,
-                        handler = { anc, request -> segment.handler(anc, request) },
-                        paramToSegmentId = paramToSegmentId,
+                        handler = { request -> segment.handler(AncestorContext(emptyMap()), request) },
                     ),
                 )
             }
@@ -197,10 +200,10 @@ internal class ResourceSegmentRegistry {
         }
         if (isTemplate || hasChildren) {
             segment.children.values.forEach {
-                enumerate(it, currentPath, currentTemplates, sink, childAncestors)
+                enumerate(it, currentPath, currentTemplates, resourceSink, templateSink, childAncestors)
             }
             segment.anchors.values.forEach {
-                enumerate(it, currentPath, currentTemplates, sink, childAncestors)
+                enumerate(it, currentPath, currentTemplates, resourceSink, templateSink, childAncestors)
             }
         }
     }

@@ -43,7 +43,7 @@ internal class StaticSegment(
     override val segmentId: SegmentId,
     override val name: String,
     override val extensible: Boolean = false,
-    val handler: (suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
+    val handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)? = null,
 ) : ResourceSegment()
 
 /**

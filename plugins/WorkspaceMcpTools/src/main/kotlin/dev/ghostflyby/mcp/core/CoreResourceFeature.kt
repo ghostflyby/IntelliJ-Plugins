@@ -37,7 +37,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
             segment("server") {
                 segment(
                     "info",
-                    handler = { _, _ ->
+                    handler = { request ->
                         val instanceKey = workspaceInstanceKey()
                         val info = readAction {
                             mapOf("instanceKey" to instanceKey, "version" to "1.0.0")

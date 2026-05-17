@@ -393,56 +393,50 @@ internal class WorkspaceMcpSdkServerService(
      * Removes stale entries and adds new ones, then updates tracked URI sets.
      */
     private fun refreshResourcesFromTree(activeServer: Server) {
-        val entries = segmentRegistry.listAll()
+        val resources = segmentRegistry.resources()
+        val templates = segmentRegistry.templates()
         val nextResourceUris = mutableSetOf<String>()
         val nextTemplateUris = mutableSetOf<String>()
 
-        entries.forEach { entry ->
-            if (entry.isTemplate) {
-                nextTemplateUris.add(entry.uri)
-                if (entry.uri !in serverTemplateUris) {
-                    activeServer.addResourceTemplate(
-                        uriTemplate = entry.uri,
-                        name = entry.name,
-                        description = entry.description,
-                        mimeType = entry.mimeType,
-                    ) { request, vars ->
-                        val segIndex = entry.paramToSegmentId.entries.associate { (paramName, segId) ->
-                            segId to (vars[paramName] ?: "")
-                        }
-                        entry.handler(AncestorContext(vars, segIndex), request)
-                    }
+        // Register resources
+        resources.forEach { entry ->
+            nextResourceUris.add(entry.uri)
+            if (entry.uri !in serverResourceUris) {
+                activeServer.addResource(
+                    uri = entry.uri,
+                    name = entry.name,
+                    description = entry.description,
+                    mimeType = entry.mimeType,
+                ) { request ->
+                    entry.handler(request)
                 }
-            } else {
-                nextResourceUris.add(entry.uri)
-                if (entry.uri !in serverResourceUris) {
-                    activeServer.addResource(
-                        uri = entry.uri,
-                        name = entry.name,
-                        description = entry.description,
-                        mimeType = entry.mimeType,
-                    ) { request ->
-                        entry.handler(AncestorContext(emptyMap()), request)
+            }
+        }
+
+        // Register templates
+        templates.forEach { entry ->
+            nextTemplateUris.add(entry.uri)
+            if (entry.uri !in serverTemplateUris) {
+                activeServer.addResourceTemplate(
+                    uriTemplate = entry.uri,
+                    name = entry.name,
+                    description = entry.description,
+                    mimeType = entry.mimeType,
+                ) { request, vars ->
+                    val segIndex = entry.paramToSegmentId.entries.associate { (paramName, segId) ->
+                        segId to (vars[paramName] ?: "")
                     }
+                    entry.handler(AncestorContext(vars, segIndex), request)
                 }
             }
         }
 
         // Remove stale resources and templates
-        (serverResourceUris - nextResourceUris).forEach { uri ->
-            activeServer.removeResource(uri)
-        }
-        (serverTemplateUris - nextTemplateUris).forEach { uri ->
-            activeServer.removeResourceTemplate(uri)
-        }
+        (serverResourceUris - nextResourceUris).forEach { uri -> activeServer.removeResource(uri) }
+        (serverTemplateUris - nextTemplateUris).forEach { uri -> activeServer.removeResourceTemplate(uri) }
 
-        serverResourceUris.clear()
-        serverResourceUris.addAll(nextResourceUris)
-        serverTemplateUris.clear()
-        serverTemplateUris.addAll(nextTemplateUris)
-
-        // Notify subscribed clients that the resource list changed
-        // Resource list changed — clients will pick up on next list request
+        serverResourceUris.clear(); serverResourceUris.addAll(nextResourceUris)
+        serverTemplateUris.clear(); serverTemplateUris.addAll(nextTemplateUris)
     }
 
     private companion object {
