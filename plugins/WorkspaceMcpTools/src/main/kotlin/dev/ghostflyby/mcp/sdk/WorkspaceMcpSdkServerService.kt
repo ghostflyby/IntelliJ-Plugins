@@ -40,6 +40,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.*
 import kotlin.time.Duration.Companion.milliseconds
 
+import java.util.concurrent.ConcurrentHashMap
+
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
     private val scope: CoroutineScope,
@@ -47,6 +49,8 @@ internal class WorkspaceMcpSdkServerService(
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = WorkspaceProjectResolver()
     private val segmentRegistry = ResourceSegmentRegistry()
+
+    private val rootsCache = ConcurrentHashMap<String, List<String>>()
 
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
@@ -167,6 +171,22 @@ internal class WorkspaceMcpSdkServerService(
         featureScope = featureScope,
         featureName = feature.featureName
     )
+
+
+    internal suspend fun getSessionRoots(sessionId: String): List<String> {
+        return rootsCache.getOrPut(sessionId) {
+            val activeServer = server ?: return@getOrPut emptyList()
+            runCatching { activeServer.listRoots(sessionId) }
+                .getOrNull()
+                ?.roots
+                ?.map { it.uri.removePrefix("file://") }
+                ?: emptyList()
+        }
+    }
+
+    internal fun clearSessionRoots(sessionId: String) {
+        rootsCache.remove(sessionId)
+    }
 
     private fun subscribeToFeatureEvents() {
         WORKSPACE_MCP_FEATURE_EP.point.addExtensionPointListener(
@@ -293,6 +313,13 @@ internal class WorkspaceMcpSdkServerService(
         }
         session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
             removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
+        }
+        // clear roots cache when client notifies roots/list_changed
+        session.setNotificationHandler<RootsListChangedNotification>(
+            Method.Defined.NotificationsRootsListChanged,
+        ) {
+            clearSessionRoots(session.sessionId)
+            CompletableDeferred(Unit)
         }
     }
 

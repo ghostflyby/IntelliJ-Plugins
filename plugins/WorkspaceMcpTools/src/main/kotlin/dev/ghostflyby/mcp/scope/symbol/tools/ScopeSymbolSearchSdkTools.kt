@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.mcp.scope.symbol.tools
 
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import com.intellij.ide.actions.searcheverywhere.FoundItemDescriptor
 import com.intellij.ide.util.gotoByName.*
 import com.intellij.navigation.NavigationItem
@@ -178,7 +179,7 @@ internal data class ScopeSymbolSearchHealthcheckArgs(
 
 // ── scope_search_symbols ─────────────────────────────────────────
 
-internal suspend fun scopeSymbolSearchHandler(args: ScopeSymbolSearchArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSymbolSearchHandler(args: ScopeSymbolSearchArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -368,7 +369,7 @@ internal suspend fun scopeSymbolSearchHandler(args: ScopeSymbolSearchArgs, reque
 
 // ── scope_search_symbols_quick ───────────────────────────────────
 
-internal suspend fun scopeSymbolSearchQuickHandler(args: ScopeSymbolSearchQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSymbolSearchQuickHandler(args: ScopeSymbolSearchQuickArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -418,7 +419,7 @@ internal suspend fun scopeSymbolSearchQuickHandler(args: ScopeSymbolSearchQuickA
 
 // ── scope_search_symbols_with_stage_progress ─────────────────────
 
-internal suspend fun scopeSymbolSearchWithStageProgressHandler(args: ScopeSymbolSearchWithStageProgressArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSymbolSearchWithStageProgressHandler(args: ScopeSymbolSearchWithStageProgressArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -470,7 +471,7 @@ internal suspend fun scopeSymbolSearchWithStageProgressHandler(args: ScopeSymbol
 
 // ── scope_search_symbols_healthcheck ─────────────────────────────
 
-internal suspend fun scopeSymbolSearchHealthcheckHandler(args: ScopeSymbolSearchHealthcheckArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSymbolSearchHealthcheckHandler(args: ScopeSymbolSearchHealthcheckArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->

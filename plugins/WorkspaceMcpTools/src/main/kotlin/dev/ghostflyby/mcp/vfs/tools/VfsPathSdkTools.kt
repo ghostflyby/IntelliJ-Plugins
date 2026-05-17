@@ -13,9 +13,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.callToolWithProject
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -108,8 +109,9 @@ internal data class VfsExistsManyArgs(
 // Handlers
 // ---------------------------------------------------------------------------
 
-internal suspend fun vfsGetUrlHandler(args: VfsGetUrlArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetUrlHandler(args: VfsGetUrlArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         relativePath = args.pathInProject,
     ) { project ->
@@ -118,8 +120,9 @@ internal suspend fun vfsGetUrlHandler(args: VfsGetUrlArgs, request: Request?): C
     }
 }
 
-internal suspend fun vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         relativePath = args.pathsInProject.firstOrNull(),
     ) { project ->
@@ -142,8 +145,9 @@ internal suspend fun vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: Request?):
     }
 }
 
-internal suspend fun vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { _ ->
@@ -152,8 +156,9 @@ internal suspend fun vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: 
     }
 }
 
-internal suspend fun vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.urls.firstOrNull(),
     ) { _ ->
@@ -176,8 +181,9 @@ internal suspend fun vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request
     }
 }
 
-internal suspend fun vfsExistsManyHandler(args: VfsExistsManyArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsExistsManyHandler(args: VfsExistsManyArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.urls.firstOrNull(),
     ) { _ ->

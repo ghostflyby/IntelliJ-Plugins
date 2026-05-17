@@ -8,9 +8,13 @@ package dev.ghostflyby.mcp.document.resources
 
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.tools.*
-import dev.ghostflyby.mcp.resource.*
-import dev.ghostflyby.mcp.resource.segment.*
-import dev.ghostflyby.mcp.sdk.*
+import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
+import dev.ghostflyby.mcp.resource.workspaceDocumentUri
+import dev.ghostflyby.mcp.resource.workspaceDocumentVfsUri
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 

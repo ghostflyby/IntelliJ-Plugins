@@ -30,14 +30,19 @@ internal suspend fun <T> withResolvedProject(
     projectArgs: WorkspaceMcpProjectToolArguments,
     vfsUrl: String? = null,
     relativePath: String? = null,
+    sessionId: String? = null,
     block: suspend (Project) -> T,
 ): T {
     val resolver = service<WorkspaceProjectResolver>()
+    val roots = if (sessionId != null) {
+        service<WorkspaceMcpSdkServerService>().getSessionRoots(sessionId).ifEmpty { null }
+    } else null
     val resolution = resolver.resolve(
         projectKey = projectArgs.projectKey,
         projectPath = projectArgs.projectPath,
         rawVfsUrl = vfsUrl,
         relativePath = relativePath,
+        rootsCandidates = roots,
     )
     val project = when (resolution) {
         is WorkspaceProjectResolution.Resolved -> resolution.project
@@ -60,6 +65,7 @@ internal suspend fun callToolWithProject(
     projectArgs: WorkspaceMcpProjectToolArguments,
     vfsUrl: String? = null,
     relativePath: String? = null,
+    sessionId: String? = null,
     block: suspend (Project) -> CallToolResult,
 ): CallToolResult {
     return try {
@@ -67,6 +73,7 @@ internal suspend fun callToolWithProject(
             projectArgs = projectArgs,
             vfsUrl = vfsUrl,
             relativePath = relativePath,
+            sessionId = sessionId,
         ) { project -> block(project) }
     } catch (e: IllegalStateException) {
         CallToolResult(
@@ -92,6 +99,7 @@ internal suspend fun callToolWithProject(
 internal suspend fun runResourceRead(
     decoded: WorkspaceResourceUri,
     instanceKey: String = workspaceInstanceKey(),
+    sessionId: String? = null,
     block: suspend () -> io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult,
 ): io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult {
     val resolver = service<WorkspaceProjectResolver>()

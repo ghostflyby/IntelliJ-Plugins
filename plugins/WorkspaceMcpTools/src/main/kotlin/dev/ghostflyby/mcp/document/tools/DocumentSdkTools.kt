@@ -23,6 +23,7 @@ import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
@@ -137,8 +138,9 @@ internal data class DocumentSdkSetTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentIsWritableHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
@@ -150,8 +152,9 @@ internal suspend fun documentIsWritableHandler(args: DocumentSdkUrlArgs, request
     }
 }
 
-internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentGetModificationStampHandler(args: DocumentSdkUrlArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
@@ -163,8 +166,9 @@ internal suspend fun documentGetModificationStampHandler(args: DocumentSdkUrlArg
     }
 }
 
-internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentInsertStringHandler(args: DocumentSdkInsertArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
@@ -182,8 +186,9 @@ internal suspend fun documentInsertStringHandler(args: DocumentSdkInsertArgs, re
     }
 }
 
-internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentDeleteStringHandler(args: DocumentSdkDeleteArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
@@ -200,8 +205,9 @@ internal suspend fun documentDeleteStringHandler(args: DocumentSdkDeleteArgs, re
     }
 }
 
-internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentReplaceStringHandler(args: DocumentSdkReplaceArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
@@ -218,8 +224,9 @@ internal suspend fun documentReplaceStringHandler(args: DocumentSdkReplaceArgs, 
     }
 }
 
-internal suspend fun documentSetTextHandler(args: DocumentSdkSetTextArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.documentSetTextHandler(args: DocumentSdkSetTextArgs, request: Request?): CallToolResult {
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->

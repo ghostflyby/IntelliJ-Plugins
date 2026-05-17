@@ -32,6 +32,7 @@ import dev.ghostflyby.mcp.sdk.callToolWithProject
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
@@ -163,9 +164,10 @@ internal data class NavigationFindReferencesBatchArgs(
 // Handlers — 14 public implementations
 // ---------------------------------------------------------------------------
 
-internal suspend fun navigationGetSymbolInfoHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetSymbolInfoHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -174,9 +176,10 @@ internal suspend fun navigationGetSymbolInfoHandler(args: NavigationSymbolInfoAr
     }
 }
 
-internal suspend fun navigationGetSymbolInfoByOffsetHandler(args: NavigationSymbolInfoByOffsetArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetSymbolInfoByOffsetHandler(args: NavigationSymbolInfoByOffsetArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_by_offset: ${args.uri} offset=${args.offset}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -197,9 +200,10 @@ internal suspend fun navigationGetSymbolInfoByOffsetHandler(args: NavigationSymb
     }
 }
 
-internal suspend fun navigationGetSymbolInfoAutoPositionHandler(args: NavigationSymbolInfoAutoPositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetSymbolInfoAutoPositionHandler(args: NavigationSymbolInfoAutoPositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_auto_position: ${args.uri}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -221,9 +225,10 @@ internal suspend fun navigationGetSymbolInfoAutoPositionHandler(args: Navigation
     }
 }
 
-internal suspend fun navigationGetSymbolInfoQuickHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetSymbolInfoQuickHandler(args: NavigationSymbolInfoArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_quick: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -250,9 +255,10 @@ internal suspend fun navigationGetSymbolInfoQuickHandler(args: NavigationSymbolI
     }
 }
 
-internal suspend fun navigationGetSymbolInfoBatchHandler(args: NavigationSymbolInfoBatchArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetSymbolInfoBatchHandler(args: NavigationSymbolInfoBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_symbol_info_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
     ) { project ->
         val items = mutableListOf<NavigationBatchSymbolInfoItem>()
@@ -282,9 +288,10 @@ internal suspend fun navigationGetSymbolInfoBatchHandler(args: NavigationSymbolI
     }
 }
 
-internal suspend fun navigationToReferenceHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationToReferenceHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_reference: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -297,9 +304,10 @@ internal suspend fun navigationToReferenceHandler(args: NavigationSourcePosition
     }
 }
 
-internal suspend fun navigationToTypeDefinitionHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationToTypeDefinitionHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_type_definition: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -314,9 +322,10 @@ internal suspend fun navigationToTypeDefinitionHandler(args: NavigationSourcePos
     }
 }
 
-internal suspend fun navigationToImplementationHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationToImplementationHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_implementation: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -344,9 +353,10 @@ internal suspend fun navigationToImplementationHandler(args: NavigationSourcePos
     }
 }
 
-internal suspend fun navigationFindOverridesHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationFindOverridesHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_overrides: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -374,9 +384,10 @@ internal suspend fun navigationFindOverridesHandler(args: NavigationSourcePositi
     }
 }
 
-internal suspend fun navigationFindInheritorsHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationFindInheritorsHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_inheritors: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -405,9 +416,10 @@ internal suspend fun navigationFindInheritorsHandler(args: NavigationSourcePosit
     }
 }
 
-internal suspend fun navigationFindReferencesHandler(args: NavigationFindReferencesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationFindReferencesHandler(args: NavigationFindReferencesArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_references: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -423,9 +435,10 @@ internal suspend fun navigationFindReferencesHandler(args: NavigationFindReferen
     }
 }
 
-internal suspend fun navigationGetCallersHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationGetCallersHandler(args: NavigationSourcePositionArgs, request: Request?): CallToolResult {
     reportActivity("navigation_get_callers: ${args.uri}:${args.row}:${args.column}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
         vfsUrl = args.uri,
     ) { project ->
@@ -452,9 +465,10 @@ internal suspend fun navigationGetCallersHandler(args: NavigationSourcePositionA
     }
 }
 
-internal suspend fun navigationToReferenceBatchHandler(args: NavigationToReferenceBatchArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationToReferenceBatchHandler(args: NavigationToReferenceBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_to_reference_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
     ) { project ->
         val items = mutableListOf<NavigationBatchSingleItem>()
@@ -488,9 +502,10 @@ internal suspend fun navigationToReferenceBatchHandler(args: NavigationToReferen
     }
 }
 
-internal suspend fun navigationFindReferencesBatchHandler(args: NavigationFindReferencesBatchArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.navigationFindReferencesBatchHandler(args: NavigationFindReferencesBatchArgs, request: Request?): CallToolResult {
     reportActivity("navigation_find_references_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
     return callToolWithProject(
+        sessionId = this.sessionId,
         projectArgs = args,
     ) { project ->
         val effectiveLimit = if (args.limit < 1) 50 else args.limit

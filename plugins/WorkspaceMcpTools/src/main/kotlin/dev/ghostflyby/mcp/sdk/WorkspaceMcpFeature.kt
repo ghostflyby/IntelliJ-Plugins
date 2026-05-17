@@ -10,9 +10,10 @@ import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
 import dev.ghostflyby.mcp.resource.segment.*
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CoroutineScope
@@ -45,7 +46,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         name: String,
         description: String,
         schema: JsonObject = JsonObject(emptyMap()),
-        noinline handler: suspend (T, Request) -> CallToolResult,
+        noinline handler: suspend ClientConnection.(T, CallToolRequest) -> CallToolResult,
     ) {
         server.addTool(
             name = name,
@@ -69,7 +70,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
                     isError = true,
                 )
             }
-            handler(decoded, request)
+            this.handler(decoded, request)
         }
         trackedTools.add(name)
     }

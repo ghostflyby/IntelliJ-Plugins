@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.scope.descriptor.tools
@@ -25,10 +9,10 @@ package dev.ghostflyby.mcp.scope.descriptor.tools
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.scope.*
-
+import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.sdk.callToolWithProject
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -65,7 +49,7 @@ internal data class ScopeListCatalogArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeListCatalogHandler(args: ScopeListCatalogArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeListCatalogHandler(args: ScopeListCatalogArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -85,7 +69,7 @@ internal data class ScopeGetDefaultDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -110,7 +94,7 @@ internal data class ScopeResolveStandardDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: Request?): CallToolResult {
     if (args.standardScopeId.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "standardScopeId must not be blank.")),
@@ -143,7 +127,7 @@ internal data class ScopeCatalogFindByIntentArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: Request?): CallToolResult {
     if (args.maxResults < 1) {
         return CallToolResult(
             content = listOf(TextContent(text = "maxResults must be >= 1.")),
@@ -210,7 +194,7 @@ internal data class ScopeValidatePatternArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -228,7 +212,7 @@ internal data class ScopeResolveProgramArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -249,7 +233,7 @@ internal data class ScopeNormalizeDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -283,7 +267,7 @@ internal data class ScopeContainsFileArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeContainsFileHandler(args: ScopeContainsFileArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeContainsFileHandler(args: ScopeContainsFileArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -331,7 +315,7 @@ internal data class ScopeFilterFilesArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: Request?): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
