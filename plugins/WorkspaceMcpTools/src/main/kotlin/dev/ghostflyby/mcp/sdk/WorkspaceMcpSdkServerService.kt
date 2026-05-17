@@ -47,7 +47,7 @@ internal class WorkspaceMcpSdkServerService(
     private val scope: CoroutineScope,
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
-    private val projectResolver = WorkspaceProjectResolver()
+    private val projectResolver = service<WorkspaceProjectResolver>()
     private val segmentRegistry = ResourceSegmentRegistry()
 
     private val rootsCache = ConcurrentHashMap<String, List<String>>()

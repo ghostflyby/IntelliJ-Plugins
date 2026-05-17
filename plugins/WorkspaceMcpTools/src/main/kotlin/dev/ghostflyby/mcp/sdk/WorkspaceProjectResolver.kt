@@ -24,6 +24,7 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager
@@ -72,9 +73,9 @@ internal interface WorkspaceProjectProvider {
     fun openProjects(): List<Project>
 }
 
-internal class WorkspaceProjectResolver(
-    private val projectManager: ProjectManager = ProjectManager.getInstance(),
-) : WorkspaceProjectProvider {
+@Service(Service.Level.APP)
+internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
+    private val projectManager: ProjectManager = ProjectManager.getInstance()
     private val vfsManager: VirtualFileManager
         get() = service<VirtualFileManager>()
 
