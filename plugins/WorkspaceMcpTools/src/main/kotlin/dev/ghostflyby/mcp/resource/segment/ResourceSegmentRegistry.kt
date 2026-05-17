@@ -75,6 +75,7 @@ internal class ResourceSegmentRegistry {
     // -- resource listing --
 
     data class ResourceEntry(
+        val paramToSegmentId: Map<String, SegmentId> = emptyMap(),
         val uri: String,
         val name: String,
         val description: String,
@@ -134,6 +135,7 @@ internal class ResourceSegmentRegistry {
         prefix: String,
         parentTemplates: String,
         sink: MutableList<ResourceEntry>,
+        paramToSegmentId: Map<String, SegmentId> = emptyMap(),
     ) {
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
         val currentTemplates = if (segment is TemplateSegment) {
@@ -154,6 +156,7 @@ internal class ResourceSegmentRegistry {
                     mimeType = "application/json",
                     isTemplate = false,
                     handler = segment.handler,
+                    paramToSegmentId = paramToSegmentId,
                 ),
             )
         }
@@ -168,6 +171,7 @@ internal class ResourceSegmentRegistry {
                     mimeType = "text/plain",
                     isTemplate = true,
                     handler = { anc, request -> segment.handler(anc, request) },
+                    paramToSegmentId = paramToSegmentId,
                 ),
             )
             if (segment.extensible) {
@@ -179,18 +183,24 @@ internal class ResourceSegmentRegistry {
                         mimeType = "application/json",
                         isTemplate = false,
                         handler = { anc, request -> segment.handler(anc, request) },
+                        paramToSegmentId = paramToSegmentId,
                     ),
                 )
             }
         }
 
         // Recurse children and anchors
+        val childAncestors = if (segment is TemplateSegment) {
+            paramToSegmentId + (segment.paramName to segment.segmentId)
+        } else {
+            paramToSegmentId
+        }
         if (isTemplate || hasChildren) {
             segment.children.values.forEach {
-                enumerate(it, currentPath, currentTemplates, sink)
+                enumerate(it, currentPath, currentTemplates, sink, childAncestors)
             }
             segment.anchors.values.forEach {
-                enumerate(it, currentPath, currentTemplates, sink)
+                enumerate(it, currentPath, currentTemplates, sink, childAncestors)
             }
         }
     }

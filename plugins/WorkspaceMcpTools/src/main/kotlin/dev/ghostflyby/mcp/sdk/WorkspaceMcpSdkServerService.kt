@@ -407,7 +407,10 @@ internal class WorkspaceMcpSdkServerService(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request, vars ->
-                        entry.handler(AncestorContext(vars), request)
+                        val segIndex = entry.paramToSegmentId.entries.associate { (paramName, segId) ->
+                            segId to (vars[paramName] ?: "")
+                        }
+                        entry.handler(AncestorContext(vars, segIndex), request)
                     }
                 }
             } else {
