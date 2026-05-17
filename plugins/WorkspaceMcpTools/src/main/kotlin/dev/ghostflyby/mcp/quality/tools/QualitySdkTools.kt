@@ -42,6 +42,7 @@ import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -976,7 +977,7 @@ private fun encodeJson(obj: Any): String {
 // Handlers
 // ---------------------------------------------------------------------------
 
-internal suspend fun ClientConnection.qualityGetFileProblemsHandler(args: QualityGetFileProblemsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityGetFileProblemsHandler(args: QualityGetFileProblemsArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
@@ -1007,7 +1008,7 @@ internal suspend fun ClientConnection.qualityGetFileProblemsHandler(args: Qualit
     }
 }
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsHandler(args: QualityGetScopeProblemsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityGetScopeProblemsHandler(args: QualityGetScopeProblemsArgs, request: CallToolRequest): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
@@ -1119,7 +1120,7 @@ internal suspend fun ClientConnection.qualityGetScopeProblemsHandler(args: Quali
     }
 }
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsQuickHandler(args: QualityGetScopeProblemsQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityGetScopeProblemsQuickHandler(args: QualityGetScopeProblemsQuickArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityGetScopeProblemsArgs(
@@ -1135,7 +1136,7 @@ internal suspend fun ClientConnection.qualityGetScopeProblemsQuickHandler(args: 
     }
 }
 
-internal suspend fun ClientConnection.qualityReformatFileHandler(args: QualityReformatFileArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityReformatFileHandler(args: QualityReformatFileArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
@@ -1158,7 +1159,7 @@ internal suspend fun ClientConnection.qualityReformatFileHandler(args: QualityRe
     }
 }
 
-internal suspend fun ClientConnection.qualityOptimizeImportsFileHandler(args: QualityOptimizeImportsFileArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityOptimizeImportsFileHandler(args: QualityOptimizeImportsFileArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
@@ -1181,21 +1182,21 @@ internal suspend fun ClientConnection.qualityOptimizeImportsFileHandler(args: Qu
     }
 }
 
-internal suspend fun ClientConnection.qualityReformatScopeFilesHandler(args: QualityReformatScopeFilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityReformatScopeFilesHandler(args: QualityReformatScopeFilesArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         processScopeFilesWithOp(project, args.scope, QualityOperationKind.REFORMAT,
             args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
     }
 }
 
-internal suspend fun ClientConnection.qualityOptimizeImportsScopeFilesHandler(args: QualityOptimizeImportsScopeFilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityOptimizeImportsScopeFilesHandler(args: QualityOptimizeImportsScopeFilesArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         processScopeFilesWithOp(project, args.scope, QualityOperationKind.OPTIMIZE_IMPORTS,
             args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
     }
 }
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityHandler(args: QualityGetScopeProblemsBySeverityArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityHandler(args: QualityGetScopeProblemsBySeverityArgs, request: CallToolRequest): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
 
@@ -1256,7 +1257,7 @@ internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityHandler(a
     }
 }
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityQuickHandler(args: QualityGetScopeProblemsBySeverityQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityQuickHandler(args: QualityGetScopeProblemsBySeverityQuickArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityGetScopeProblemsBySeverityArgs(
@@ -1273,7 +1274,7 @@ internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityQuickHand
     }
 }
 
-internal suspend fun ClientConnection.qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
@@ -1304,7 +1305,7 @@ internal suspend fun ClientConnection.qualityFixFileQuickHandler(args: QualityFi
     }
 }
 
-internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs, request: CallToolRequest): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
 
@@ -1410,7 +1411,7 @@ internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityF
     }
 }
 
-internal suspend fun ClientConnection.qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQuickByPresetArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQuickByPresetArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
         val innerArgs = QualityFixScopeQuickArgs(
@@ -1424,7 +1425,7 @@ internal suspend fun ClientConnection.qualityFixScopeQuickByPresetHandler(args: 
     }
 }
 
-internal suspend fun ClientConnection.qualityListInspectionProfilesHandler(args: QualityListInspectionProfilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityListInspectionProfilesHandler(args: QualityListInspectionProfilesArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         val result = readAction {
             val projectManager = InspectionProjectProfileManager.getInstance(project)
@@ -1454,7 +1455,7 @@ internal suspend fun ClientConnection.qualityListInspectionProfilesHandler(args:
     }
 }
 
-internal suspend fun ClientConnection.qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
         validateTimeout(args.timeoutMillis)
         val file = resolveFileByUrl(project, args.fileUrl)
@@ -1485,7 +1486,7 @@ internal suspend fun ClientConnection.qualityCodeCleanupFileHandler(args: Qualit
     }
 }
 
-internal suspend fun ClientConnection.qualityCodeCleanupScopeFilesHandler(args: QualityCodeCleanupScopeFilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.qualityCodeCleanupScopeFilesHandler(args: QualityCodeCleanupScopeFilesArgs, request: CallToolRequest): CallToolResult {
     if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
     validateTimeout(args.timeoutMillis)
 

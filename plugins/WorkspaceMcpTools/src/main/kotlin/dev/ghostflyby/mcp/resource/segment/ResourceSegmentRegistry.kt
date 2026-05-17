@@ -6,7 +6,7 @@
 
 package dev.ghostflyby.mcp.resource.segment
 
-import io.modelcontextprotocol.kotlin.sdk.types.Request
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
 
 /**
  * Manages the global resource segment tree across all features.
@@ -88,7 +88,7 @@ internal class ResourceSegmentRegistry {
 
     // -- URI matching --
 
-    fun match(uri: String, request: Request? = null): ResourceMatchResult? {
+    fun match(uri: String, request: ReadResourceRequest? = null): ResourceMatchResult? {
         val path = extractPath(uri) ?: return null
         val parts = path.trim('/').split('/')
         if (parts.isEmpty()) return null

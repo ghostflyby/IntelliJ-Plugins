@@ -23,7 +23,7 @@
 package dev.ghostflyby.mcp.resource.segment
 
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.Request
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
 
 /**
  * A node in the resource URI tree. Each segment contributes one path element
@@ -59,7 +59,7 @@ internal class StaticSegment(
     override val segmentId: SegmentId,
     override val name: String,
     override val extensible: Boolean = false,
-    val handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult)? = null,
+    val handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
 ) : ResourceSegment()
 
 /**
@@ -71,6 +71,6 @@ internal class TemplateSegment(
     override val name: String,
     val paramName: String,
     override val extensible: Boolean = false,
-    val handler: suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult,
+    val handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
 ) : ResourceSegment()
 

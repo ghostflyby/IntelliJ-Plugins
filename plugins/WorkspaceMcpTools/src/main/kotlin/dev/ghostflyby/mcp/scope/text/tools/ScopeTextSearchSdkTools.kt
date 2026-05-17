@@ -7,6 +7,7 @@
 package dev.ghostflyby.mcp.scope.text.tools
 
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import com.intellij.find.FindManager
 import com.intellij.find.FindModel
 import com.intellij.find.impl.FindInProjectUtil
@@ -75,7 +76,7 @@ internal data class ScopeSearchTextArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeSearchTextHandler(args: ScopeSearchTextArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSearchTextHandler(args: ScopeSearchTextArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -170,7 +171,7 @@ internal data class ScopeSearchTextQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeSearchTextQuickHandler(args: ScopeSearchTextQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSearchTextQuickHandler(args: ScopeSearchTextQuickArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -242,7 +243,7 @@ internal data class ScopeSearchTextByPlainArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeSearchTextByPlainHandler(args: ScopeSearchTextByPlainArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSearchTextByPlainHandler(args: ScopeSearchTextByPlainArgs, request: CallToolRequest): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "query must not be blank.")),
@@ -294,7 +295,7 @@ internal data class ScopeSearchTextByRegexArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeSearchTextByRegexHandler(args: ScopeSearchTextByRegexArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeSearchTextByRegexHandler(args: ScopeSearchTextByRegexArgs, request: CallToolRequest): CallToolResult {
     if (args.query.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "query must not be blank.")),
@@ -337,7 +338,7 @@ internal data class ScopeReplaceTextPreviewArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeReplaceTextPreviewHandler(args: ScopeReplaceTextPreviewArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeReplaceTextPreviewHandler(args: ScopeReplaceTextPreviewArgs, request: CallToolRequest): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
         replaceWith = args.replaceWith,
@@ -405,7 +406,7 @@ internal data class ScopeReplaceTextApplyArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeReplaceTextApplyArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeReplaceTextApplyArgs, request: CallToolRequest): CallToolResult {
     val request = ScopeTextReplaceRequestDto(
         search = args.search,
         replaceWith = args.replaceWith,

@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.scope.symbol
 
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import dev.ghostflyby.mcp.scope.symbol.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration

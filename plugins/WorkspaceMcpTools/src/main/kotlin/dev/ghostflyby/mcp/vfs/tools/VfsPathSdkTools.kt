@@ -17,8 +17,8 @@ import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
@@ -109,7 +109,7 @@ internal data class VfsExistsManyArgs(
 // Handlers
 // ---------------------------------------------------------------------------
 
-internal suspend fun ClientConnection.vfsGetUrlHandler(args: VfsGetUrlArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetUrlHandler(args: VfsGetUrlArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         sessionId = this.sessionId,
         projectArgs = args,
@@ -120,7 +120,7 @@ internal suspend fun ClientConnection.vfsGetUrlHandler(args: VfsGetUrlArgs, requ
     }
 }
 
-internal suspend fun ClientConnection.vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetUrlsHandler(args: VfsGetUrlsArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         sessionId = this.sessionId,
         projectArgs = args,
@@ -145,7 +145,7 @@ internal suspend fun ClientConnection.vfsGetUrlsHandler(args: VfsGetUrlsArgs, re
     }
 }
 
-internal suspend fun ClientConnection.vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetLocalPathHandler(args: VfsGetLocalPathArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         sessionId = this.sessionId,
         projectArgs = args,
@@ -156,7 +156,7 @@ internal suspend fun ClientConnection.vfsGetLocalPathHandler(args: VfsGetLocalPa
     }
 }
 
-internal suspend fun ClientConnection.vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsGetLocalPathsHandler(args: VfsGetLocalPathsArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         sessionId = this.sessionId,
         projectArgs = args,
@@ -181,7 +181,7 @@ internal suspend fun ClientConnection.vfsGetLocalPathsHandler(args: VfsGetLocalP
     }
 }
 
-internal suspend fun ClientConnection.vfsExistsManyHandler(args: VfsExistsManyArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.vfsExistsManyHandler(args: VfsExistsManyArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         sessionId = this.sessionId,
         projectArgs = args,

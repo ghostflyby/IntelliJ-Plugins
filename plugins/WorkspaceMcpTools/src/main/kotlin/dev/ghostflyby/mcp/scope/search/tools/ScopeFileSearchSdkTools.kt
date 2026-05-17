@@ -23,6 +23,7 @@
 package dev.ghostflyby.mcp.scope.search.tools
 
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.roots.ContentIterator
@@ -85,7 +86,7 @@ internal data class ScopeFileSearchArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSearchArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSearchArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -247,7 +248,7 @@ internal data class ScopeFileSearchQuickArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFileSearchQuickHandler(args: ScopeFileSearchQuickArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFileSearchQuickHandler(args: ScopeFileSearchQuickArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -304,7 +305,7 @@ internal data class ScopeFindFilesByNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFindFilesByNameHandler(args: ScopeFindFilesByNameArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFindFilesByNameHandler(args: ScopeFindFilesByNameArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -353,7 +354,7 @@ internal data class ScopeFindFilesByPathArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFindFilesByPathHandler(args: ScopeFindFilesByPathArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFindFilesByPathHandler(args: ScopeFindFilesByPathArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -400,7 +401,7 @@ internal data class ScopeFindInDirectoryGlobArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFindInDirectoryGlobHandler(args: ScopeFindInDirectoryGlobArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFindInDirectoryGlobHandler(args: ScopeFindInDirectoryGlobArgs, request: CallToolRequest): CallToolResult {
     if (args.directoryUrl.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "directoryUrl must not be blank.")),
@@ -456,7 +457,7 @@ internal data class ScopeFindSourceFileByClassNameArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFindSourceFileByClassNameHandler(args: ScopeFindSourceFileByClassNameArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFindSourceFileByClassNameHandler(args: ScopeFindSourceFileByClassNameArgs, request: CallToolRequest): CallToolResult {
     if (args.className.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "className must not be blank.")),

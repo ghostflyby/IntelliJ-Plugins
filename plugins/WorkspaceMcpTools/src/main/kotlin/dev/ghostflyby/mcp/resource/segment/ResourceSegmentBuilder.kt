@@ -7,7 +7,7 @@
 package dev.ghostflyby.mcp.resource.segment
 
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.Request
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
 
 /**
  * Resource segment tree registration entry point.
@@ -24,7 +24,7 @@ internal interface ResourceSegmentBuilder {
         name: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult)? = null,
+        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)? = null,
         block: ResourceSegmentBuilder.() -> Unit = {},
     )
 
@@ -37,7 +37,7 @@ internal interface ResourceSegmentBuilder {
         paramName: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult,
+        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
     )
 
     /**
@@ -62,7 +62,7 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         name: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult)?,
+        handler: (suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult)?,
         block: ResourceSegmentBuilder.() -> Unit,
     ) {
         val seg = StaticSegment(
@@ -80,7 +80,7 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         paramName: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: Request?) -> ReadResourceResult,
+        handler: suspend (params: Map<String, String>, anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
     ) {
         val seg = TemplateSegment(
             segmentId = id,

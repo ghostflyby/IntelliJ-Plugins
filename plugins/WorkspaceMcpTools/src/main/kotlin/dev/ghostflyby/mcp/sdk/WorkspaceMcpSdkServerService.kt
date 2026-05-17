@@ -110,17 +110,17 @@ internal class WorkspaceMcpSdkServerService(
      * - Core listable resources (server/info, projects, projects/{key}) shortcut.
      * - Project-scoped resources delegate to [requestRunner] for context installation.
      */
-    private suspend fun readResource(resourceUri: String, sessionId: String?, request: Request? = null): ReadResourceResult {
+    private suspend fun readResource(resourceUri: String, sessionId: String?, request: ReadResourceRequest? = null): ReadResourceResult {
         // Segment-based resource matching (handles core server/info, projects, and feature resources)
         val segmentMatch = segmentRegistry.match(resourceUri)
         if (segmentMatch != null) {
             return when (val seg = segmentMatch.segment) {
                 is dev.ghostflyby.mcp.resource.segment.StaticSegment -> {
-                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc, request)
+                    seg.handler?.invoke(segmentMatch.params, segmentMatch.anc, request!!)
                         ?: ReadResourceResult(contents = emptyList())
                 }
                 is dev.ghostflyby.mcp.resource.segment.TemplateSegment -> {
-                    seg.handler(segmentMatch.params, segmentMatch.anc, request)
+                    seg.handler(segmentMatch.params, segmentMatch.anc, request!!)
                 }
             }
         }

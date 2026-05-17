@@ -128,8 +128,3 @@ internal interface WorkspaceMcpFeature {
 
     fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration
 }
-
-/**
- * Call [WorkspaceMcpFeature]'s extension-function register via a standalone
- * bridge that Kotlin can dispatch through.
- */

@@ -13,6 +13,7 @@ import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -49,7 +50,7 @@ internal data class ScopeListCatalogArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeListCatalogHandler(args: ScopeListCatalogArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeListCatalogHandler(args: ScopeListCatalogArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -69,7 +70,7 @@ internal data class ScopeGetDefaultDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -94,7 +95,7 @@ internal data class ScopeResolveStandardDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: CallToolRequest): CallToolResult {
     if (args.standardScopeId.isBlank()) {
         return CallToolResult(
             content = listOf(TextContent(text = "standardScopeId must not be blank.")),
@@ -127,7 +128,7 @@ internal data class ScopeCatalogFindByIntentArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: CallToolRequest): CallToolResult {
     if (args.maxResults < 1) {
         return CallToolResult(
             content = listOf(TextContent(text = "maxResults must be >= 1.")),
@@ -194,7 +195,7 @@ internal data class ScopeValidatePatternArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -212,7 +213,7 @@ internal data class ScopeResolveProgramArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -233,7 +234,7 @@ internal data class ScopeNormalizeDescriptorArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -267,7 +268,7 @@ internal data class ScopeContainsFileArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeContainsFileHandler(args: ScopeContainsFileArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeContainsFileHandler(args: ScopeContainsFileArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
@@ -315,7 +316,7 @@ internal data class ScopeFilterFilesArgs(
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: Request?): CallToolResult {
+internal suspend fun ClientConnection.scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: CallToolRequest): CallToolResult {
     return callToolWithProject(
         projectArgs = args,
     ) { project ->
