@@ -28,18 +28,13 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import dev.ghostflyby.mcp.resource.segment.ResourceSegmentRegistry
+import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.resource.segment.SegmentTreeTemplateMatcher
-import dev.ghostflyby.mcp.resource.segment.AncestorContext
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
-import io.ktor.server.routing.Routing
-import io.ktor.server.routing.get
-import io.ktor.server.routing.put
-import io.ktor.server.routing.routing
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
@@ -47,7 +42,6 @@ import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
@@ -56,22 +50,23 @@ internal class WorkspaceMcpSdkServerService(
 ) : Disposable {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = service<WorkspaceProjectResolver>()
-    private val segmentRegistry = ResourceSegmentRegistry()
-
-    private val rootsCache = ConcurrentHashMap<String, List<String>>()
+    private val routeSnapshotRef = ResourceRouteSnapshotRef()
+    private val sessionState = WorkspaceMcpSessionState { server }
+    private val primitiveRegistry = WorkspaceMcpPrimitiveRegistry(sessionState)
+    private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
+        parentScope = scope,
+        projectResolver = projectResolver,
+        primitiveRegistry = primitiveRegistry,
+        onSnapshotChanged = routeSnapshotRef::set,
+    )
 
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
-    private val featureRegistrationLock = Any()
-    private val featureRegistrations = linkedMapOf<String, WorkspaceMcpFeatureRegistration>()
-    private val serverResourceUris = linkedSetOf<String>()
-    private val serverTemplateUris = linkedSetOf<String>()
     private val resourceUpdateStateLock = Any()
-    private val resourceSubscriptionsBySession = linkedMapOf<String, MutableSet<String>>()
-    private val subscriptionHandlerSessionIds = linkedSetOf<String>()
     private val pendingResourceUpdateUris = linkedSetOf<String>()
     private var resourceUpdateFlushJob: Job? = null
+    private var resourceListChangedJob: Job? = null
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -113,13 +108,6 @@ internal class WorkspaceMcpSdkServerService(
     }
 
 
-    /**
-     * Shared read callback provided to features during registration.
-     * - Core listable resources (server/info, projects, projects/{key}) shortcut.
-     * - Project-scoped resources delegate to [requestRunner] for context installation.
-     */
-
-
     private fun createServer(): Server {
         val server = Server(
             serverInfo = Implementation(name = "workspace-mcp", version = "1.0.0"),
@@ -129,53 +117,23 @@ internal class WorkspaceMcpSdkServerService(
                     tools = ServerCapabilities.Tools(listChanged = true),
                 ),
                 resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
-                    SegmentTreeTemplateMatcher(template, segmentRegistry)
+                    SegmentTreeTemplateMatcher(template, routeSnapshotRef)
                 },
             ),
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
-            features.forEach { feature ->
-                registerFeature(this, feature)
-            }
-            // Wire segment tree: register roots from all features, resolve anchors, then sync to server
-            features.forEach { feature ->
-                val reg = featureRegistrations[feature.featureName] ?: return@forEach
-                reg.roots.forEach { segmentRegistry.registerRoot(it) }
-                segmentRegistry.addPendingAnchors(reg.pendingAnchors)
-            }
-            segmentRegistry.resolveAnchors()
-            refreshResourcesFromTree(this)
+            featureCoordinator.registerInitial(this, features)
             onConnect { installWorkspaceSubscriptionHandlers() }
         }
         return server
     }
 
-
-    private fun featureRegistrationContext(
-        server: Server,
-        feature: WorkspaceMcpFeature,
-        featureScope: CoroutineScope,
-    ): WorkspaceMcpFeatureRegistrationContext = WorkspaceMcpFeatureRegistrationContext(
-        projectResolver = projectResolver,
-        server = server,
-        featureScope = featureScope,
-        featureName = feature.featureName
-    )
-
-
     internal suspend fun getSessionRoots(sessionId: String): List<String> {
-        return rootsCache.getOrPut(sessionId) {
-            val activeServer = server ?: return@getOrPut emptyList()
-            runCatching { activeServer.listRoots(sessionId) }
-                .getOrNull()
-                ?.roots
-                ?.map { it.uri.removePrefix("file://") }
-                ?: emptyList()
-        }
+        return sessionState.getRoots(sessionId)
     }
 
     internal fun clearSessionRoots(sessionId: String) {
-        rootsCache.remove(sessionId)
+        sessionState.clearRoots(sessionId)
     }
 
     private fun subscribeToFeatureEvents() {
@@ -186,76 +144,20 @@ internal class WorkspaceMcpSdkServerService(
                 override fun extensionAdded(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
                     scope.launch {
                         val activeServer = server ?: return@launch
-                        registerFeature(activeServer, extension)
-                        // resources handled by segment tree
+                        featureCoordinator.register(activeServer, extension)
+                        scheduleResourceListChanged()
                     }
                 }
 
                 override fun extensionRemoved(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
                     scope.launch {
                         val activeServer = server ?: return@launch
-                        unregisterFeature(activeServer, extension.featureName)
-                        // resources handled by segment tree
+                        featureCoordinator.unregister(activeServer, extension.featureName)
+                        scheduleResourceListChanged()
                     }
                 }
             },
         )
-    }
-
-    private fun registerFeature(activeServer: Server, feature: WorkspaceMcpFeature) {
-        synchronized(featureRegistrationLock) {
-            if (feature.featureName in featureRegistrations) {
-                logger.warn("Workspace MCP feature ${feature.featureName} is already registered")
-                return
-            }
-        }
-
-        val featureJob = SupervisorJob(scope.coroutineContext[Job])
-        val featureScope = CoroutineScope(scope.coroutineContext + featureJob)
-        val ctx = featureRegistrationContext(activeServer, feature, featureScope)
-        val registration = try {
-            with(feature) { ctx.register() }
-        } catch (error: Exception) {
-            featureJob.cancel()
-            logger.warn("Failed to register Workspace MCP feature ${feature.featureName}", error)
-            return
-        }
-
-        synchronized(featureRegistrationLock) {
-            val previous = featureRegistrations.putIfAbsent(feature.featureName, registration)
-            if (previous != null) {
-                featureJob.cancel()
-                logger.warn("Workspace MCP feature ${feature.featureName} was registered concurrently")
-                return
-            }
-        }
-
-        // Register segment roots from the newly registered feature
-        registration.roots.forEach { segmentRegistry.registerRoot(it) }
-        segmentRegistry.addPendingAnchors(registration.pendingAnchors)
-        segmentRegistry.resolveAnchors()
-        refreshResourcesFromTree(activeServer)
-    }
-
-    private fun unregisterFeature(activeServer: Server, featureName: String) {
-        val registration = synchronized(featureRegistrationLock) {
-            featureRegistrations.remove(featureName)
-        } ?: return
-
-        // Remove feature's segments from the global tree
-        segmentRegistry.removeTree(registration.segmentIds)
-        refreshResourcesFromTree(activeServer)
-
-        registration.job.cancel()
-        registration.registeredTools.forEach { name ->
-            runCatching { activeServer.removeTool(name) }
-                .onFailure { error ->
-                    logger.warn(
-                        "Failed to remove Workspace MCP tool $name for feature $featureName",
-                        error,
-                    )
-                }
-        }
     }
 
     private fun subscribeToResourceUpdateEvents() {
@@ -284,7 +186,6 @@ internal class WorkspaceMcpSdkServerService(
                                 } else null
                             }
                         }.distinct().forEach(::scheduleResourceUpdated)
-                    // resources handled by segment tree
                 }
             },
         )
@@ -296,7 +197,7 @@ internal class WorkspaceMcpSdkServerService(
 
     private fun installWorkspaceSubscriptionHandlers(session: ServerSession) {
         val shouldInstall =
-            synchronized(resourceUpdateStateLock) { subscriptionHandlerSessionIds.add(session.sessionId) }
+            sessionState.rememberSubscriptionHandler(session.sessionId)
         if (!shouldInstall) return
         session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
             recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
@@ -309,23 +210,18 @@ internal class WorkspaceMcpSdkServerService(
             Method.Defined.NotificationsRootsListChanged,
         ) {
             clearSessionRoots(session.sessionId)
+            scheduleResourceListChanged()
             CompletableDeferred(Unit)
         }
     }
 
     private fun recordResourceSubscription(sessionId: String, resourceUri: String) {
         if (tryDecodeWorkspaceResourceUri(resourceUri) == null) return
-        synchronized(resourceUpdateStateLock) {
-            resourceSubscriptionsBySession.getOrPut(sessionId) { linkedSetOf() }.add(resourceUri)
-        }
+        sessionState.recordResourceSubscription(sessionId, resourceUri)
     }
 
     private fun removeResourceSubscription(sessionId: String, resourceUri: String) {
-        synchronized(resourceUpdateStateLock) {
-            resourceSubscriptionsBySession[sessionId]?.let { subs ->
-                subs.remove(resourceUri); if (subs.isEmpty()) resourceSubscriptionsBySession.remove(sessionId)
-            }
-        }
+        sessionState.removeResourceSubscription(sessionId, resourceUri)
     }
 
     private fun scheduleDocumentResourceUpdate(document: Document) {
@@ -349,6 +245,31 @@ internal class WorkspaceMcpSdkServerService(
                 delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
                 flushPendingResourceUpdates()
             }
+        }
+    }
+
+    internal fun scheduleResourceListChanged() {
+        synchronized(resourceUpdateStateLock) {
+            if (resourceListChangedJob != null) return
+            resourceListChangedJob = scope.launch {
+                delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
+                flushResourceListChanged()
+            }
+        }
+    }
+
+    private suspend fun flushResourceListChanged() {
+        synchronized(resourceUpdateStateLock) {
+            resourceListChangedJob = null
+        }
+        sessionState.clearAllRoots()
+        val activeServer = server ?: return
+        featureCoordinator.syncResources(activeServer)
+        activeServer.sessions.keys.forEach { sessionId ->
+            runCatching { activeServer.sendResourceListChanged(sessionId) }
+                .onFailure { error ->
+                    logger.warn("Failed to send Workspace MCP resource list changed to session $sessionId", error)
+                }
         }
     }
 
@@ -379,64 +300,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun subscribedSessionIds(activeServer: Server, resourceUri: String): List<String> {
-        val activeSessionIds = activeServer.sessions.keys
-        return synchronized(resourceUpdateStateLock) {
-            resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
-            subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
-            resourceSubscriptionsBySession.filterValues { resourceUri in it }.keys.toList()
-        }
-    }
-
-
-    /**
-     * Sync the server's resource/template set with the current segment tree.
-     * Removes stale entries and adds new ones, then updates tracked URI sets.
-     */
-    private fun refreshResourcesFromTree(activeServer: Server) {
-        val resources = segmentRegistry.resources()
-        val templates = segmentRegistry.templates()
-        val nextResourceUris = mutableSetOf<String>()
-        val nextTemplateUris = mutableSetOf<String>()
-
-        // Register resources
-        resources.forEach { entry ->
-            nextResourceUris.add(entry.uri)
-            if (entry.uri !in serverResourceUris) {
-                activeServer.addResource(
-                    uri = entry.uri,
-                    name = entry.name,
-                    description = entry.description,
-                    mimeType = entry.mimeType,
-                ) { request ->
-                    entry.handler(request)
-                }
-            }
-        }
-
-        // Register templates
-        templates.forEach { entry ->
-            nextTemplateUris.add(entry.uri)
-            if (entry.uri !in serverTemplateUris) {
-                activeServer.addResourceTemplate(
-                    uriTemplate = entry.uri,
-                    name = entry.name,
-                    description = entry.description,
-                    mimeType = entry.mimeType,
-                ) { request, vars ->
-                    val segIndex = entry.paramToSegmentId.entries.associate { (paramName, segId) ->
-                        segId to (vars[paramName] ?: "")
-                    }
-                    entry.handler(AncestorContext(vars, segIndex), request)
-                }
-            }
-        }
-
-        // Remove stale resources and templates
-        (serverResourceUris - nextResourceUris).forEach { uri -> activeServer.removeResource(uri) }
-        (serverTemplateUris - nextTemplateUris).forEach { uri -> activeServer.removeResourceTemplate(uri) }
-
-        serverResourceUris.clear(); serverResourceUris.addAll(nextResourceUris)
-        serverTemplateUris.clear(); serverTemplateUris.addAll(nextTemplateUris)
+        return sessionState.subscribedSessionIds(activeServer.sessions.keys, resourceUri)
     }
 
     private companion object {
@@ -448,23 +312,23 @@ internal class WorkspaceMcpSdkServerService(
 
 internal object ProjectManagerListener1 : ProjectManagerListener {
     override fun projectClosed(project: Project) {
-        service<WorkspaceMcpSdkServerService>()// resources handled by segment tree
+        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
     }
 }
 
 internal object FileEditorManagerListener1 : FileEditorManagerListener {
     override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-        service<WorkspaceMcpSdkServerService>()// resources handled by segment tree
+        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
     }
 
     override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-        service<WorkspaceMcpSdkServerService>()// resources handled by segment tree
+        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
     }
 }
 
 
 internal object ModuleRootListener1 : ModuleRootListener {
     override fun rootsChanged(event: ModuleRootEvent) {
-        service<WorkspaceMcpSdkServerService>()// resources handled by segment tree
+        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
     }
 }

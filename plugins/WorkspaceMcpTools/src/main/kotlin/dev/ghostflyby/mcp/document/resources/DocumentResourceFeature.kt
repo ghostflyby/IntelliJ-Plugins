@@ -36,7 +36,8 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
         segments {
             under(projectAnchor) {
                 segment("documents") {
-                    template("relativePath") { anc, request ->
+                    template("relativePath") { call ->
+                        val anc = call.ancestors
                         val projectKey = anc[projectAnchor] ?: ""
                         val relativePath = anc["relativePath"] ?: ""
                         val instanceKey = workspaceInstanceKey()
@@ -54,7 +55,8 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
                     }
                 }
                 segment("document-vfs") {
-                    template("rawVfsUrl") { anc, request ->
+                    template("rawVfsUrl") { call ->
+                        val anc = call.ancestors
                         val projectKey = anc[projectAnchor] ?: ""
                         val rawVfsUrl = anc["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()

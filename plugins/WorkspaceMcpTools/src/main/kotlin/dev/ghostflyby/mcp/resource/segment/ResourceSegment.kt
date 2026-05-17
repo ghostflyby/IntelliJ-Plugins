@@ -9,6 +9,8 @@ package dev.ghostflyby.mcp.resource.segment
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 
+internal typealias ResourceReadHandler = suspend (WorkspaceMcpCall<ReadResourceRequest>) -> ReadResourceResult
+
 /**
  * A node in the resource URI tree. Each segment contributes one path element
  * to the final MCP resource or resource template URI.
@@ -21,6 +23,7 @@ internal sealed class ResourceSegment {
     abstract val segmentId: SegmentId
     abstract val name: String
     abstract val extensible: Boolean
+    var ownerFeatureName: String? = null
 
     /**
      * Direct children keyed by their segment name (for [StaticSegment]) or
@@ -43,7 +46,7 @@ internal class StaticSegment(
     override val segmentId: SegmentId,
     override val name: String,
     override val extensible: Boolean = false,
-    val handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)? = null,
+    val handler: ResourceReadHandler,
 ) : ResourceSegment()
 
 /**
@@ -55,5 +58,5 @@ internal class TemplateSegment(
     override val name: String,
     val paramName: String,
     override val extensible: Boolean = false,
-    val handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+    val handler: ResourceReadHandler,
 ) : ResourceSegment()

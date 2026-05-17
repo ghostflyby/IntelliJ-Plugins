@@ -10,6 +10,7 @@ import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
 import dev.ghostflyby.mcp.resource.workspaceFileUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
+import dev.ghostflyby.mcp.scope.descriptor.tools.jsonSchema
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -32,7 +33,8 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         segments {
             under(projectAnchor) {
                 segment("files") {
-                    template("relativePath") { anc, request ->
+                    template("relativePath") { call ->
+                        val anc = call.ancestors
                         val projectKey = anc[projectAnchor] ?: ""
                         val relativePath = anc["relativePath"] ?: ""
                         val instanceKey = workspaceInstanceKey()
@@ -50,7 +52,8 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
                     }
                 }
                 segment("vfs") {
-                    template("rawVfsUrl") { anc, request ->
+                    template("rawVfsUrl") { call ->
+                        val anc = call.ancestors
                         val projectKey = anc[projectAnchor] ?: ""
                         val rawVfsUrl = anc["rawVfsUrl"] ?: ""
                         val instanceKey = workspaceInstanceKey()
@@ -121,4 +124,3 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         return buildRegistration()
     }
 }
-

@@ -87,6 +87,8 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     fun buildRegistration(): WorkspaceMcpFeatureRegistration {
         // Resolve deferred under() anchors within this feature's own collector.
         val pendingAnchors = segmentCollector.pendingAnchors.toList()
+        segmentCollector.roots.forEach { it.markOwner(featureName) }
+        pendingAnchors.flatMap { it.segments }.forEach { it.markOwner(featureName) }
         val segmentIds = segmentCollector.roots.map { it.segmentId }.toSet()
         return WorkspaceMcpFeatureRegistration(
             featureName = featureName,
@@ -97,6 +99,12 @@ internal class WorkspaceMcpFeatureRegistrationContext(
             roots = segmentCollector.roots.toList(),
         )
     }
+}
+
+private fun ResourceSegment.markOwner(featureName: String) {
+    ownerFeatureName = featureName
+    children.values.forEach { it.markOwner(featureName) }
+    anchors.values.forEach { it.markOwner(featureName) }
 }
 
 /**

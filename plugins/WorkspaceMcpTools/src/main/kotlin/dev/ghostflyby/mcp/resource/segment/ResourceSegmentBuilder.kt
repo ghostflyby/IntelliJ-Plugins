@@ -6,9 +6,6 @@
 
 package dev.ghostflyby.mcp.resource.segment
 
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-
 /**
  * Resource segment tree registration entry point.
  *
@@ -24,8 +21,14 @@ internal interface ResourceSegmentBuilder {
         name: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)? = null,
         block: ResourceSegmentBuilder.() -> Unit = {},
+    )
+
+    fun resource(
+        name: String,
+        id: SegmentId = SegmentId.next(),
+        extensible: Boolean = false,
+        handler: ResourceReadHandler,
     )
 
     /**
@@ -37,7 +40,7 @@ internal interface ResourceSegmentBuilder {
         paramName: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
-        handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        handler: ResourceReadHandler,
     )
 
     /**
@@ -62,25 +65,42 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         name: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: (suspend (request: ReadResourceRequest) -> ReadResourceResult)?,
         block: ResourceSegmentBuilder.() -> Unit,
     ) {
-        val seg = StaticSegment(
-            segmentId = id, name = name, extensible = extensible, handler = handler,
-        )
         val collector = ResourceSegmentCollector()
         collector.block()
+        val seg = StaticSegment(
+            segmentId = id,
+            name = name,
+            extensible = extensible,
+            handler = { error("Resource segment '$name' is not directly readable.") },
+        )
         seg.children.putAll(collector.roots.associateBy { it.name })
-        seg.anchors.putAll(buildAnchorMap(collector.roots))
         _roots.add(seg)
         _pendingAnchors.addAll(collector.pendingAnchors)
+    }
+
+    override fun resource(
+        name: String,
+        id: SegmentId,
+        extensible: Boolean,
+        handler: ResourceReadHandler,
+    ) {
+        _roots.add(
+            StaticSegment(
+                segmentId = id,
+                name = name,
+                extensible = extensible,
+                handler = handler,
+            ),
+        )
     }
 
     override fun template(
         paramName: String,
         id: SegmentId,
         extensible: Boolean,
-        handler: suspend (anc: AncestorContext, request: ReadResourceRequest) -> ReadResourceResult,
+        handler: ResourceReadHandler,
     ) {
         val seg = TemplateSegment(
             segmentId = id,
@@ -102,26 +122,13 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
             ),
         )
     }
-
-    private fun buildAnchorMap(segments: List<ResourceSegment>): Map<SegmentId, ResourceSegment> =
-        segments.filter { it.extensible }.associateBy { it.segmentId }
 }
 
 /**
  * A deferred cross-feature anchor mount. Collected during registration and
- * resolved by [ResourceSegmentRegistry] after all features have registered.
+ * resolved by [ResourceRouteCompiler] after all features have registered.
  */
 internal data class PendingAnchor(
     val targetId: SegmentId,
     val segments: List<ResourceSegment>,
-)
-
-/**
- * Result of a URI match against the resource segment tree.
- */
-internal data class ResourceMatchResult(
-    /** Matched leaf segment (never null for successful matches). */
-    val segment: ResourceSegment,
-    /** Ancestor parameters indexed by [SegmentId]. */
-    val anc: AncestorContext,
 )
