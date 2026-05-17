@@ -523,7 +523,7 @@ private suspend fun scopeSymbolSearchImpl(
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(800)
+                    delay(800.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.scope.symbol.search.progress",

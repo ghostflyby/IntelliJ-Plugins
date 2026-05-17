@@ -17,6 +17,7 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
+import dev.ghostflyby.mcp.document.resources.validateDocumentRange
 import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
@@ -174,7 +175,7 @@ internal suspend fun ClientConnection.documentInsertStringHandler(args: Document
     ) { project ->
         val (file, document) = resolveTextDocument(args.url)
         val textLength = readAction { document.textLength }
-        validateOffset(args.offset, textLength, "offset")
+        validateDocumentRange(document, args.offset, args.offset) // validate single offset
         ensureWritable(file, document, args.url)
         backgroundWriteAction {
             document.insertString(args.offset, args.text)
