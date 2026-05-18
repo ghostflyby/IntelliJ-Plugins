@@ -28,6 +28,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
+import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.resource.segment.SegmentTreeTemplateMatcher
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
@@ -40,8 +41,8 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
-import kotlinx.coroutines.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
+import kotlinx.coroutines.*
 import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
@@ -110,7 +111,7 @@ internal class WorkspaceMcpSdkServerService(
 
     private fun createServer(): Server {
         val server = Server(
-            serverInfo = Implementation(name = "workspace-mcp", version = "1.0.0"),
+            serverInfo = Implementation(name = "workspace-mcp", version = PluginInfo.version),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
                     resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),

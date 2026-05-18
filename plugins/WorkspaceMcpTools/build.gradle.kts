@@ -20,6 +20,7 @@ dependencies {
     implementation(libs.ktor.server.cio)
     ksp(libs.kotlinx.schema.ksp)
     implementation(libs.kotlinx.schema.annotations)
+    implementation(project(":modules:intellij-shared"))
 }
 
 ksp {

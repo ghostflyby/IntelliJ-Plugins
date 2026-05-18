@@ -7,6 +7,7 @@
 package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
+import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_SEGMENT
 import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
 import dev.ghostflyby.mcp.resource.segment.SegmentId
@@ -40,7 +41,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                     handler = { call ->
                         val instanceKey = workspaceInstanceKey()
                         val info = readAction {
-                            mapOf("instanceKey" to instanceKey, "version" to "1.0.0")
+                            mapOf("instanceKey" to instanceKey, "version" to PluginInfo.version)
                         }
                         ReadResourceResult(
                             contents = listOf(
