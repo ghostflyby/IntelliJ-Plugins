@@ -22,8 +22,8 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import dev.ghostflyby.mcp.PluginInfo
-import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshotRef
-import dev.ghostflyby.mcp.resource.segment.SegmentTreeTemplateMatcher
+import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
+import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri

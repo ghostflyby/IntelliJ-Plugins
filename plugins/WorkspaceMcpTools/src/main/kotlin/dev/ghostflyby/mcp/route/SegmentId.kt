@@ -20,9 +20,8 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp.resource.segment
+package dev.ghostflyby.mcp.route
 
-import dev.ghostflyby.mcp.resource.segment.SegmentId.Companion.next
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -41,4 +40,3 @@ internal data class SegmentId private constructor(val id: Long) {
         fun next(): SegmentId = SegmentId(counter.incrementAndGet())
     }
 }
-

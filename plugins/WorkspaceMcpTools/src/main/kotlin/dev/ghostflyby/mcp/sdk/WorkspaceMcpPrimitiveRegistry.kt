@@ -6,9 +6,9 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import dev.ghostflyby.mcp.resource.segment.AncestorContext
-import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshot
-import dev.ghostflyby.mcp.resource.segment.WorkspaceMcpCall
+import dev.ghostflyby.mcp.route.AncestorContext
+import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
+import dev.ghostflyby.mcp.route.WorkspaceMcpCall
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 
 internal class WorkspaceMcpPrimitiveRegistry(

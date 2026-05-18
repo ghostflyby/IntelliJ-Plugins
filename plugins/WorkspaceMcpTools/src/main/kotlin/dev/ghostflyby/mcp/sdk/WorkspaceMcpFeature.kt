@@ -8,7 +8,7 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
-import dev.ghostflyby.mcp.resource.segment.*
+import dev.ghostflyby.mcp.route.*
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.server.Server

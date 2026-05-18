@@ -6,12 +6,12 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import dev.ghostflyby.mcp.resource.segment.AncestorContext
-import dev.ghostflyby.mcp.resource.segment.ParameterPathSegment
-import dev.ghostflyby.mcp.resource.segment.ResourceListDecision
-import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshot
-import dev.ghostflyby.mcp.resource.segment.ResourceSegment
-import dev.ghostflyby.mcp.resource.segment.WorkspaceMcpCall
+import dev.ghostflyby.mcp.route.AncestorContext
+import dev.ghostflyby.mcp.route.ParameterPathSegment
+import dev.ghostflyby.mcp.route.ResourceListDecision
+import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
+import dev.ghostflyby.mcp.route.ResourceSegment
+import dev.ghostflyby.mcp.route.WorkspaceMcpCall
 import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesResult
 import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest

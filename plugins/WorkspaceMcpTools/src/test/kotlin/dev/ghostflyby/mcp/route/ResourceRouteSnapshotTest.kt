@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.resource.segment
+package dev.ghostflyby.mcp.route
 
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.workspaceFileUri
@@ -57,20 +57,28 @@ internal class ResourceRouteSnapshotTest {
     private fun testSnapshot(): ResourceRouteSnapshot {
         val collector = ResourceSegmentCollector()
         collector.segment("projects") {
-            template(
+            parameter(
                 paramName = "projectKey",
                 id = CoreResourceFeature.PROJECT_SEGMENT,
                 extensible = true,
-                handler = { ReadResourceResult(emptyList()) },
-            )
+            ) {
+                resource { ReadResourceResult(emptyList()) }
+                template()
+            }
         }
         val vfsCollector = ResourceSegmentCollector()
         vfsCollector.under(CoreResourceFeature.PROJECT_SEGMENT) {
             segment("files") {
-                template("relativePath") { ReadResourceResult(emptyList()) }
+                parameter("relativePath") {
+                    resource { ReadResourceResult(emptyList()) }
+                    template()
+                }
             }
             segment("vfs") {
-                template("rawVfsUrl") { ReadResourceResult(emptyList()) }
+                parameter("rawVfsUrl") {
+                    resource { ReadResourceResult(emptyList()) }
+                    template()
+                }
             }
         }
         return ResourceRouteCompiler.compile(
@@ -114,4 +122,3 @@ internal class ResourceRouteSnapshotTest {
         const val PK = "my-project-a1b2"
     }
 }
-

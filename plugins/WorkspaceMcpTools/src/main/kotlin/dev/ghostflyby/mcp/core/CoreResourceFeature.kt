@@ -10,8 +10,8 @@ import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_SEGMENT
 import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
-import dev.ghostflyby.mcp.resource.segment.ResourceListDecision
-import dev.ghostflyby.mcp.resource.segment.SegmentId
+import dev.ghostflyby.mcp.route.ResourceListDecision
+import dev.ghostflyby.mcp.route.SegmentId
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource

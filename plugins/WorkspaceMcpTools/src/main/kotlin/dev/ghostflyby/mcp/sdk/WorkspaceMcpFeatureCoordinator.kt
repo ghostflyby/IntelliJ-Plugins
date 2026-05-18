@@ -8,9 +8,9 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.logger
-import dev.ghostflyby.mcp.resource.segment.ResourceRouteCompiler
-import dev.ghostflyby.mcp.resource.segment.ResourceRouteSnapshot
-import dev.ghostflyby.mcp.resource.segment.WorkspaceResourceRouteContribution
+import dev.ghostflyby.mcp.route.ResourceRouteCompiler
+import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
+import dev.ghostflyby.mcp.route.WorkspaceResourceRouteContribution
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -99,4 +99,3 @@ internal class WorkspaceMcpFeatureCoordinator(
         return ResourceRouteCompiler.compile(contributions)
     }
 }
-

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.resource.segment
+package dev.ghostflyby.mcp.route
 
 internal object ResourceRouteCompiler {
     fun compile(registrations: Collection<WorkspaceResourceRouteContribution>): ResourceRouteSnapshot {

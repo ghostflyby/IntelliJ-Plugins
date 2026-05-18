@@ -20,7 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp.resource.segment
+package dev.ghostflyby.mcp.route
 
 /**
  * Merged params + ancestor-segment index. Implements [Map] by delegation to
