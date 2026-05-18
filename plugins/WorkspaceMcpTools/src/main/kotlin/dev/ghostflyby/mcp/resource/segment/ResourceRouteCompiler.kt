@@ -50,8 +50,10 @@ internal object ResourceRouteCompiler {
         return ResourceRouteSnapshot(
             resources = resources.toList(),
             templates = templates.toList(),
-            roots = roots.toMap(),
-            templateUriBySegmentId = templates.associate { it.segmentId to it.uri },
+            routeRoots = roots.toMap(),
+            parameterizedResourceByUri = resources
+                .filter { it.isParameterized }
+                .associateBy { it.uri },
         )
     }
 
@@ -72,49 +74,46 @@ internal object ResourceRouteCompiler {
         resources: MutableList<ResourceRouteResource>,
         templates: MutableList<ResourceRouteTemplate>,
         paramToSegmentId: Map<String, SegmentId> = emptyMap(),
+        hasParameter: Boolean = false,
     ) {
         val ownerFeatureName = segment.ownerFeatureName ?: inheritedOwnerFeatureName
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
-        when (segment) {
-            is StaticSegment -> {
-                val isContainer = segment.children.isNotEmpty() || segment.anchors.isNotEmpty()
-                if (!isContainer) {
-                    resources += ResourceRouteResource(
-                        uri = "ij-workspace://{instanceKey}/$currentPath",
-                        name = segment.name,
-                        description = "",
-                        mimeType = "application/json",
-                        ownerFeatureName = ownerFeatureName,
-                        handler = segment.handler,
-                    )
-                }
-                segment.children.values.forEach {
-                    enumerate(it, ownerFeatureName, currentPath, resources, templates, paramToSegmentId)
-                }
-                segment.anchors.values.forEach {
-                    enumerate(it, ownerFeatureName, currentPath, resources, templates, paramToSegmentId)
-                }
-            }
+        val currentParams = when (segment) {
+            is LiteralPathSegment -> paramToSegmentId
+            is ParameterPathSegment -> paramToSegmentId + (segment.paramName to segment.segmentId)
+        }
+        val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
-            is TemplateSegment -> {
-                templates += ResourceRouteTemplate(
-                    uri = "ij-workspace://{instanceKey}/$currentPath",
-                    name = segment.name,
-                    description = "",
-                    mimeType = "text/plain",
-                    ownerFeatureName = ownerFeatureName,
-                    handler = segment.handler,
-                    segmentId = segment.segmentId,
-                    paramToSegmentId = paramToSegmentId + (segment.paramName to segment.segmentId),
-                )
-                val childParams = paramToSegmentId + (segment.paramName to segment.segmentId)
-                segment.children.values.forEach {
-                    enumerate(it, ownerFeatureName, currentPath, resources, templates, childParams)
-                }
-                segment.anchors.values.forEach {
-                    enumerate(it, ownerFeatureName, currentPath, resources, templates, childParams)
-                }
-            }
+        segment.resourceEndpoint?.let { endpoint ->
+            resources += ResourceRouteResource(
+                uri = "ij-workspace://{instanceKey}/$currentPath",
+                name = segment.name,
+                description = endpoint.description,
+                mimeType = endpoint.mimeType,
+                ownerFeatureName = ownerFeatureName,
+                handler = endpoint.handler,
+                resourceListProvider = endpoint.listProvider,
+                paramToSegmentId = currentParams,
+                isParameterized = currentHasParameter,
+            )
+        }
+        segment.templateEndpoint?.let { endpoint ->
+            templates += ResourceRouteTemplate(
+                uri = "ij-workspace://{instanceKey}/$currentPath",
+                name = segment.name,
+                description = endpoint.description,
+                mimeType = endpoint.mimeType,
+                ownerFeatureName = ownerFeatureName,
+                templateListProvider = endpoint.listProvider,
+                paramToSegmentId = currentParams,
+            )
+        }
+
+        segment.children.values.forEach {
+            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentParams, currentHasParameter)
+        }
+        segment.anchors.values.forEach {
+            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentParams, currentHasParameter)
         }
     }
 
@@ -129,22 +128,22 @@ internal object ResourceRouteCompiler {
 
     private fun ResourceSegment.cloneWithoutAnchors(): ResourceSegment {
         val clone = when (this) {
-            is StaticSegment -> StaticSegment(
+            is LiteralPathSegment -> LiteralPathSegment(
                 segmentId = segmentId,
                 name = name,
                 extensible = extensible,
-                handler = handler,
             )
 
-            is TemplateSegment -> TemplateSegment(
+            is ParameterPathSegment -> ParameterPathSegment(
                 segmentId = segmentId,
                 name = name,
                 paramName = paramName,
                 extensible = extensible,
-                handler = handler,
             )
         }
         clone.ownerFeatureName = ownerFeatureName
+        clone.resourceEndpoint = resourceEndpoint
+        clone.templateEndpoint = templateEndpoint
         children.values.forEach { child ->
             val childClone = child.cloneWithoutAnchors()
             clone.children[childClone.name] = childClone

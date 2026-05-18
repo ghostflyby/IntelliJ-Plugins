@@ -18,13 +18,6 @@ import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileEditor.FileEditorManager
-import com.intellij.openapi.fileEditor.FileEditorManagerListener
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManagerListener
-import com.intellij.openapi.roots.ModuleRootEvent
-import com.intellij.openapi.roots.ModuleRootListener
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
@@ -53,11 +46,14 @@ internal class WorkspaceMcpSdkServerService(
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val sessionState = WorkspaceMcpSessionState { server }
+    private val catalog = WorkspaceMcpResourceCatalog(sessionState, projectResolver)
+    private val eventBus = WorkspaceMcpResourceEventBus(scope) { server }
     private val primitiveRegistry = WorkspaceMcpPrimitiveRegistry(sessionState)
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
         primitiveRegistry = primitiveRegistry,
+        catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
     )
 
@@ -67,7 +63,6 @@ internal class WorkspaceMcpSdkServerService(
     private val resourceUpdateStateLock = Any()
     private val pendingResourceUpdateUris = linkedSetOf<String>()
     private var resourceUpdateFlushJob: Job? = null
-    private var resourceListChangedJob: Job? = null
 
     @Volatile
     private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -107,7 +102,6 @@ internal class WorkspaceMcpSdkServerService(
             .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
         stoppedEngine?.stop()
     }
-
 
     private fun createServer(): Server {
         val server = Server(
@@ -206,12 +200,17 @@ internal class WorkspaceMcpSdkServerService(
         session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
             removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
-        // clear roots cache when client notifies roots/list_changed
+        session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
+            catalog.listResources(session.sessionId, request)
+        }
+        session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
+            catalog.listTemplates(session.sessionId, request)
+        }
         session.setNotificationHandler<RootsListChangedNotification>(
             Method.Defined.NotificationsRootsListChanged,
         ) {
             clearSessionRoots(session.sessionId)
-            scheduleResourceListChanged()
+            eventBus.scheduleSessionListChanged(session.sessionId)
             CompletableDeferred(Unit)
         }
     }
@@ -250,28 +249,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     internal fun scheduleResourceListChanged() {
-        synchronized(resourceUpdateStateLock) {
-            if (resourceListChangedJob != null) return
-            resourceListChangedJob = scope.launch {
-                delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
-                flushResourceListChanged()
-            }
-        }
-    }
-
-    private suspend fun flushResourceListChanged() {
-        synchronized(resourceUpdateStateLock) {
-            resourceListChangedJob = null
-        }
-        sessionState.clearAllRoots()
-        val activeServer = server ?: return
-        featureCoordinator.syncResources(activeServer)
-        activeServer.sessions.keys.forEach { sessionId ->
-            runCatching { activeServer.sendResourceListChanged(sessionId) }
-                .onFailure { error ->
-                    logger.warn("Failed to send Workspace MCP resource list changed to session $sessionId", error)
-                }
-        }
+        eventBus.scheduleAllSessionsListChanged()
     }
 
     private suspend fun flushPendingResourceUpdates() {
@@ -308,28 +286,5 @@ internal class WorkspaceMcpSdkServerService(
         private const val LOOPBACK_HOST = "127.0.0.1"
         private const val MCP_ENDPOINT_PATH = "/mcp"
         private const val RESOURCE_UPDATE_COALESCE_MILLIS = 100L
-    }
-}
-
-internal object ProjectManagerListener1 : ProjectManagerListener {
-    override fun projectClosed(project: Project) {
-        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
-    }
-}
-
-internal object FileEditorManagerListener1 : FileEditorManagerListener {
-    override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
-        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
-    }
-
-    override fun fileClosed(source: FileEditorManager, file: VirtualFile) {
-        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
-    }
-}
-
-
-internal object ModuleRootListener1 : ModuleRootListener {
-    override fun rootsChanged(event: ModuleRootEvent) {
-        service<WorkspaceMcpSdkServerService>().scheduleResourceListChanged()
     }
 }

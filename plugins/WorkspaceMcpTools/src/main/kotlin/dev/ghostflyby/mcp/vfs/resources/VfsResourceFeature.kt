@@ -10,7 +10,6 @@ import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
 import dev.ghostflyby.mcp.resource.workspaceFileUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
-import dev.ghostflyby.mcp.scope.descriptor.tools.jsonSchema
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -33,41 +32,47 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
         segments {
             under(projectAnchor) {
                 segment("files") {
-                    template("relativePath") { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc[projectAnchor] ?: ""
-                        val relativePath = anc["relativePath"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
-                        val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text
+                    parameter("relativePath") {
+                        resource { call ->
+                            val anc = call.ancestors
+                            val projectKey = anc[projectAnchor] ?: ""
+                            val relativePath = anc["relativePath"] ?: ""
+                            val instanceKey = workspaceInstanceKey()
+                            val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
+                            val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = TEXT_PLAIN_MIME_TYPE,
+                                        text = text
+                                    )
                                 )
                             )
-                        )
+                        }
+                        template()
                     }
                 }
                 segment("vfs") {
-                    template("rawVfsUrl") { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc[projectAnchor] ?: ""
-                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
-                        val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text
+                    parameter("rawVfsUrl") {
+                        resource { call ->
+                            val anc = call.ancestors
+                            val projectKey = anc[projectAnchor] ?: ""
+                            val rawVfsUrl = anc["rawVfsUrl"] ?: ""
+                            val instanceKey = workspaceInstanceKey()
+                            val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
+                            val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = TEXT_PLAIN_MIME_TYPE,
+                                        text = text
+                                    )
                                 )
                             )
-                        )
+                        }
+                        template()
                     }
                 }
             }

@@ -36,41 +36,47 @@ internal class DocumentResourceFeature : WorkspaceMcpFeature {
         segments {
             under(projectAnchor) {
                 segment("documents") {
-                    template("relativePath") { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc[projectAnchor] ?: ""
-                        val relativePath = anc["relativePath"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceDocumentUri(instanceKey, projectKey, relativePath)
-                        val text = readDocumentByRelativePath(relativePath, projectKey, projectResolver)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text,
+                    parameter("relativePath") {
+                        resource { call ->
+                            val anc = call.ancestors
+                            val projectKey = anc[projectAnchor] ?: ""
+                            val relativePath = anc["relativePath"] ?: ""
+                            val instanceKey = workspaceInstanceKey()
+                            val uri = workspaceDocumentUri(instanceKey, projectKey, relativePath)
+                            val text = readDocumentByRelativePath(relativePath, projectKey, projectResolver)
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = TEXT_PLAIN_MIME_TYPE,
+                                        text = text,
+                                    ),
                                 ),
-                            ),
-                        )
+                            )
+                        }
+                        template()
                     }
                 }
                 segment("document-vfs") {
-                    template("rawVfsUrl") { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc[projectAnchor] ?: ""
-                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceDocumentVfsUri(instanceKey, projectKey, rawVfsUrl)
-                        val text = readDocumentByVfsUrl(rawVfsUrl)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text,
+                    parameter("rawVfsUrl") {
+                        resource { call ->
+                            val anc = call.ancestors
+                            val projectKey = anc[projectAnchor] ?: ""
+                            val rawVfsUrl = anc["rawVfsUrl"] ?: ""
+                            val instanceKey = workspaceInstanceKey()
+                            val uri = workspaceDocumentVfsUri(instanceKey, projectKey, rawVfsUrl)
+                            val text = readDocumentByVfsUrl(rawVfsUrl)
+                            ReadResourceResult(
+                                contents = listOf(
+                                    TextResourceContents(
+                                        uri = uri,
+                                        mimeType = TEXT_PLAIN_MIME_TYPE,
+                                        text = text,
+                                    ),
                                 ),
-                            ),
-                        )
+                            )
+                        }
+                        template()
                     }
                 }
             }

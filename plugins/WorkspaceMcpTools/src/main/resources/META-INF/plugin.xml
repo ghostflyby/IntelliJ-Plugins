@@ -33,11 +33,11 @@
     </extensions>
 
     <projectListeners>
-        <listener class="dev.ghostflyby.mcp.sdk.ProjectManagerListener1"
+        <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpProjectLifecycleListener"
                   topic="com.intellij.openapi.project.ProjectManager$TOPIC"/>
-        <listener class="dev.ghostflyby.mcp.sdk.FileEditorManagerListener1"
+        <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpFileEditorListener"
                   topic="com.intellij.openapi.fileEditor.FileEditorManagerListener$FILE_EDITOR_MANAGER"/>
-        <listener class="dev.ghostflyby.mcp.sdk.ModuleRootListener1"
+        <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpModuleRootListener"
                   topic="com.intellij.openapi.roots.ModuleRootListener$TOPIC"/>
     </projectListeners>
 

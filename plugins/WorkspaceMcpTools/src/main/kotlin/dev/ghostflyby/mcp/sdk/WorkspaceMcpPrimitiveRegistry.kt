@@ -22,46 +22,47 @@ internal class WorkspaceMcpPrimitiveRegistry(
         val nextTemplateUris = linkedSetOf<String>()
 
         snapshot.resources.forEach { entry ->
-            nextResourceUris += entry.uri
-            if (entry.uri !in resourceUris) {
-                activeServer.addResource(
-                    uri = entry.uri,
-                    name = entry.name,
-                    description = entry.description,
-                    mimeType = entry.mimeType,
-                ) { request ->
-                    entry.handler(
-                        WorkspaceMcpCall(
-                            connection = this,
-                            request = request,
-                            ancestors = AncestorContext(emptyMap()),
-                            sessionState = sessionState,
-                        ),
-                    )
-                }
-            }
-        }
-
-        snapshot.templates.forEach { entry ->
-            nextTemplateUris += entry.uri
-            if (entry.uri !in templateUris) {
-                activeServer.addResourceTemplate(
-                    uriTemplate = entry.uri,
-                    name = entry.name,
-                    description = entry.description,
-                    mimeType = entry.mimeType,
-                ) { request, vars ->
-                    val segmentIndex = entry.paramToSegmentId.entries.associate { (paramName, segmentId) ->
-                        segmentId to (vars[paramName] ?: "")
+            if (entry.isParameterized) {
+                nextTemplateUris += entry.uri
+                if (entry.uri !in templateUris) {
+                    activeServer.addResourceTemplate(
+                        uriTemplate = entry.uri,
+                        name = entry.name,
+                        description = entry.description,
+                        mimeType = entry.mimeType,
+                    ) { request, vars ->
+                        val segmentIndex = entry.paramToSegmentId.entries.associate { (paramName, segmentId) ->
+                            segmentId to (vars[paramName] ?: "")
+                        }
+                        entry.handler(
+                            WorkspaceMcpCall(
+                                connection = this,
+                                request = request,
+                                ancestors = AncestorContext(vars, segmentIndex),
+                                sessionState = sessionState,
+                            ),
+                        )
                     }
-                    entry.handler(
-                        WorkspaceMcpCall(
-                            connection = this,
-                            request = request,
-                            ancestors = AncestorContext(vars, segmentIndex),
-                            sessionState = sessionState,
-                        ),
-                    )
+                }
+            } else {
+                val concreteUri = entry.uri.withCurrentInstanceKey()
+                nextResourceUris += concreteUri
+                if (concreteUri !in resourceUris) {
+                    activeServer.addResource(
+                        uri = concreteUri,
+                        name = entry.name,
+                        description = entry.description,
+                        mimeType = entry.mimeType,
+                    ) { request ->
+                        entry.handler(
+                            WorkspaceMcpCall(
+                                connection = this,
+                                request = request,
+                                ancestors = AncestorContext(emptyMap()),
+                                sessionState = sessionState,
+                            ),
+                        )
+                    }
                 }
             }
         }
@@ -79,5 +80,7 @@ internal class WorkspaceMcpPrimitiveRegistry(
         resourceUris.clear()
         templateUris.clear()
     }
-}
 
+    private fun String.withCurrentInstanceKey(): String =
+        replace("{instanceKey}", workspaceInstanceKey())
+}

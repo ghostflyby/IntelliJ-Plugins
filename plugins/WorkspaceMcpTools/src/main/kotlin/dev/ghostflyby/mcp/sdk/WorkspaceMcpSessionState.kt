@@ -16,6 +16,7 @@ internal class WorkspaceMcpSessionState(
     private val lock = Any()
     private val resourceSubscriptionsBySession = linkedMapOf<String, MutableSet<String>>()
     private val subscriptionHandlerSessionIds = linkedSetOf<String>()
+    private var rootsVersion: Long = 0L
 
     suspend fun getRoots(sessionId: String): List<String> {
         return rootsCache.getOrPut(sessionId) {
@@ -28,12 +29,16 @@ internal class WorkspaceMcpSessionState(
         }
     }
 
+    fun getRootsVersion(): Long = synchronized(lock) { rootsVersion }
+
     fun clearRoots(sessionId: String) {
         rootsCache.remove(sessionId)
+        synchronized(lock) { rootsVersion++ }
     }
 
     fun clearAllRoots() {
         rootsCache.clear()
+        synchronized(lock) { rootsVersion++ }
     }
 
     fun rememberSubscriptionHandler(sessionId: String): Boolean =
@@ -62,3 +67,4 @@ internal class WorkspaceMcpSessionState(
         }
     }
 }
+

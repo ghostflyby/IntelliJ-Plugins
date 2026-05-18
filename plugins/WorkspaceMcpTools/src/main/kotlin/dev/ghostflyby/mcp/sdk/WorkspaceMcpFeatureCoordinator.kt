@@ -20,6 +20,7 @@ internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
     private val projectResolver: WorkspaceProjectResolver,
     private val primitiveRegistry: WorkspaceMcpPrimitiveRegistry,
+    private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
 ) {
     private val logger: Logger = logger<WorkspaceMcpFeatureCoordinator>()
@@ -81,6 +82,7 @@ internal class WorkspaceMcpFeatureCoordinator(
     fun syncResources(activeServer: Server) {
         val snapshot = compileSnapshot()
         onSnapshotChanged(snapshot)
+        catalog.updateSnapshot(snapshot)
         primitiveRegistry.syncResources(activeServer, snapshot)
     }
 

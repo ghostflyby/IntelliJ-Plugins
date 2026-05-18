@@ -6,19 +6,16 @@
 
 package dev.ghostflyby.mcp.resource.segment
 
-/**
- * Resource segment tree registration entry point.
- *
- * Features receive a [ResourceSegmentBuilder] root and attach resource
- * segments via [segment], [template], and [under].
- */
 internal interface ResourceSegmentBuilder {
-    /**
-     * Register a static (literal) path segment and recurse via [block].
-     * @param id Optional unique identifier; generated via [SegmentId.next] by default.
-     */
     fun segment(
         name: String,
+        id: SegmentId = SegmentId.next(),
+        extensible: Boolean = false,
+        block: ResourceSegmentBuilder.() -> Unit = {},
+    )
+
+    fun parameter(
+        paramName: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
         block: ResourceSegmentBuilder.() -> Unit = {},
@@ -28,33 +25,25 @@ internal interface ResourceSegmentBuilder {
         name: String,
         id: SegmentId = SegmentId.next(),
         extensible: Boolean = false,
+        listProvider: ConcreteResourceListProvider? = null,
         handler: ResourceReadHandler,
     )
 
-    /**
-     * Register a template (parameterised) path segment.
-     * The [paramName] is the URL parameter name, e.g. `"projectKey"` for `{projectKey}`.
-     * @param id Optional unique identifier.
-     */
+    fun resource(
+        listProvider: ConcreteResourceListProvider? = null,
+        handler: ResourceReadHandler,
+    )
+
     fun template(
-        paramName: String,
-        id: SegmentId = SegmentId.next(),
-        extensible: Boolean = false,
-        handler: ResourceReadHandler,
+        listProvider: TemplateResourceListProvider? = null,
     )
 
-    /**
-     * Hang a sub-tree under an anchor segment exported by another feature.
-     * The anchor must have [extensible] set to `true`.
-     */
     fun under(anchor: SegmentId, block: ResourceSegmentBuilder.() -> Unit = {})
 }
 
-/**
- * Internal implementation of [ResourceSegmentBuilder] that accumulates into a
- * list of root-level [ResourceSegment] entries.
- */
-internal class ResourceSegmentCollector : ResourceSegmentBuilder {
+internal class ResourceSegmentCollector(
+    private val current: ResourceSegment? = null,
+) : ResourceSegmentBuilder {
     private val _roots: MutableList<ResourceSegment> = mutableListOf()
     private val _pendingAnchors: MutableList<PendingAnchor> = mutableListOf()
 
@@ -67,49 +56,68 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
         extensible: Boolean,
         block: ResourceSegmentBuilder.() -> Unit,
     ) {
-        val collector = ResourceSegmentCollector()
-        collector.block()
-        val seg = StaticSegment(
+        val segment = LiteralPathSegment(
             segmentId = id,
             name = name,
             extensible = extensible,
-            handler = { error("Resource segment '$name' is not directly readable.") },
         )
-        seg.children.putAll(collector.roots.associateBy { it.name })
-        _roots.add(seg)
-        _pendingAnchors.addAll(collector.pendingAnchors)
+        collectChild(segment, block)
+    }
+
+    override fun parameter(
+        paramName: String,
+        id: SegmentId,
+        extensible: Boolean,
+        block: ResourceSegmentBuilder.() -> Unit,
+    ) {
+        val segment = ParameterPathSegment(
+            segmentId = id,
+            name = "{$paramName}",
+            paramName = paramName,
+            extensible = extensible,
+        )
+        collectChild(segment, block)
     }
 
     override fun resource(
         name: String,
         id: SegmentId,
         extensible: Boolean,
+        listProvider: ConcreteResourceListProvider?,
         handler: ResourceReadHandler,
     ) {
-        _roots.add(
-            StaticSegment(
-                segmentId = id,
-                name = name,
-                extensible = extensible,
-                handler = handler,
-            ),
+        val segment = LiteralPathSegment(
+            segmentId = id,
+            name = name,
+            extensible = extensible,
+        )
+        segment.resourceEndpoint = ResourceEndpoint(
+            handler = handler,
+            listProvider = listProvider,
+        )
+        attachChild(segment)
+    }
+
+    override fun resource(
+        listProvider: ConcreteResourceListProvider?,
+        handler: ResourceReadHandler,
+    ) {
+        val target = current ?: error("Inline resource endpoint requires a current path segment.")
+        check(target.resourceEndpoint == null) {
+            "Resource endpoint is already registered for segment '${target.name}'."
+        }
+        target.resourceEndpoint = ResourceEndpoint(
+            handler = handler,
+            listProvider = listProvider,
         )
     }
 
-    override fun template(
-        paramName: String,
-        id: SegmentId,
-        extensible: Boolean,
-        handler: ResourceReadHandler,
-    ) {
-        val seg = TemplateSegment(
-            segmentId = id,
-            name = "{$paramName}",
-            paramName = paramName,
-            extensible = extensible,
-            handler = handler,
-        )
-        _roots.add(seg)
+    override fun template(listProvider: TemplateResourceListProvider?) {
+        val target = current ?: error("Template endpoint requires a current path segment.")
+        check(target.templateEndpoint == null) {
+            "Resource template endpoint is already registered for segment '${target.name}'."
+        }
+        target.templateEndpoint = ResourceTemplateEndpoint(listProvider = listProvider)
     }
 
     override fun under(anchor: SegmentId, block: ResourceSegmentBuilder.() -> Unit) {
@@ -121,13 +129,30 @@ internal class ResourceSegmentCollector : ResourceSegmentBuilder {
                 segments = collector.roots,
             ),
         )
+        _pendingAnchors.addAll(collector.pendingAnchors)
+    }
+
+    private fun collectChild(
+        segment: ResourceSegment,
+        block: ResourceSegmentBuilder.() -> Unit,
+    ) {
+        val collector = ResourceSegmentCollector(segment)
+        collector.block()
+        segment.children.putAll(collector.roots.associateBy { it.name })
+        attachChild(segment)
+        _pendingAnchors.addAll(collector.pendingAnchors)
+    }
+
+    private fun attachChild(segment: ResourceSegment) {
+        val parent = current
+        if (parent == null) {
+            _roots.add(segment)
+        } else {
+            parent.children[segment.name] = segment
+        }
     }
 }
 
-/**
- * A deferred cross-feature anchor mount. Collected during registration and
- * resolved by [ResourceRouteCompiler] after all features have registered.
- */
 internal data class PendingAnchor(
     val targetId: SegmentId,
     val segments: List<ResourceSegment>,

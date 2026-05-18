@@ -18,6 +18,9 @@ internal data class ResourceRouteResource(
     val mimeType: String,
     val ownerFeatureName: String,
     val handler: ResourceReadHandler,
+    val resourceListProvider: ConcreteResourceListProvider?,
+    val paramToSegmentId: Map<String, SegmentId>,
+    val isParameterized: Boolean,
 )
 
 internal data class ResourceRouteTemplate(
@@ -26,23 +29,23 @@ internal data class ResourceRouteTemplate(
     val description: String,
     val mimeType: String,
     val ownerFeatureName: String,
-    val handler: ResourceReadHandler,
-    val segmentId: SegmentId,
+    val templateListProvider: TemplateResourceListProvider?,
     val paramToSegmentId: Map<String, SegmentId>,
 )
 
 internal data class ResourceRouteSnapshot(
     val resources: List<ResourceRouteResource> = emptyList(),
     val templates: List<ResourceRouteTemplate> = emptyList(),
-    private val roots: Map<String, ResourceSegment> = emptyMap(),
-    private val templateUriBySegmentId: Map<SegmentId, String> = emptyMap(),
+    val routeRoots: Map<String, ResourceSegment> = emptyMap(),
+    private val parameterizedResourceByUri: Map<String, ResourceRouteResource> = emptyMap(),
 ) {
-    fun templateUri(segmentId: SegmentId): String? = templateUriBySegmentId[segmentId]
+    fun parameterizedResource(uriTemplate: String): ResourceRouteResource? =
+        parameterizedResourceByUri[uriTemplate]
 
     fun segmentMatch(uri: String): ResourceRouteMatch? {
         val parsed = parseWorkspaceUri(uri) ?: return null
         val parts = parsed.path.removePrefix("/").split("/")
-        val root = roots[parts.firstOrNull()] ?: return null
+        val root = routeRoots[parts.firstOrNull()] ?: return null
         return matchSegment(
             segment = root,
             parts = parts,
@@ -74,9 +77,9 @@ internal data class ResourceRouteSnapshot(
         segmentIndex: List<Pair<SegmentId, String>>,
     ): ResourceRouteMatch? {
         when (segment) {
-            is StaticSegment -> {
+            is LiteralPathSegment -> {
                 if (index >= parts.size) {
-                    return if (segment.children.isEmpty() && segment.anchors.isEmpty()) {
+                    return if (segment.resourceEndpoint != null || segment.templateEndpoint != null) {
                         ResourceRouteMatch(segment, AncestorContext(params, segmentIndex.toMap()))
                     } else {
                         null
@@ -86,7 +89,7 @@ internal data class ResourceRouteSnapshot(
                 segment.children[nextPart]?.let { child ->
                     matchSegment(child, parts, index + 1, params, segmentIndex)?.let { return it }
                 }
-                segment.children.values.filterIsInstance<TemplateSegment>().forEach { child ->
+                segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
                     matchSegment(child, parts, index, params, segmentIndex)?.let { return it }
                 }
                 segment.anchors.values.forEach { anchor ->
@@ -95,7 +98,7 @@ internal data class ResourceRouteSnapshot(
                 return null
             }
 
-            is TemplateSegment -> {
+            is ParameterPathSegment -> {
                 if (index >= parts.size) return null
                 val value = if (segment.children.isEmpty() && segment.anchors.isEmpty()) {
                     parts.drop(index).joinToString("/")
@@ -110,13 +113,17 @@ internal data class ResourceRouteSnapshot(
                     index + 1
                 }
                 if (nextPartIndex >= parts.size) {
-                    return ResourceRouteMatch(segment, AncestorContext(nextParams, nextIndex.toMap()))
+                    return if (segment.resourceEndpoint != null || segment.templateEndpoint != null) {
+                        ResourceRouteMatch(segment, AncestorContext(nextParams, nextIndex.toMap()))
+                    } else {
+                        null
+                    }
                 }
                 val nextPart = parts[nextPartIndex]
                 segment.children[nextPart]?.let { child ->
                     matchSegment(child, parts, nextPartIndex + 1, nextParams, nextIndex)?.let { return it }
                 }
-                segment.children.values.filterIsInstance<TemplateSegment>().forEach { child ->
+                segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
                     matchSegment(child, parts, nextPartIndex, nextParams, nextIndex)?.let { return it }
                 }
                 segment.anchors.values.forEach { anchor ->
@@ -135,7 +142,7 @@ internal data class ResourceRouteSnapshot(
         segmentIndex: List<Pair<SegmentId, String>>,
     ): ResourceRouteMatch? {
         return when (anchor) {
-            is StaticSegment -> {
+            is LiteralPathSegment -> {
                 if (anchor.name == parts.getOrNull(index)) {
                     matchSegment(anchor, parts, index + 1, params, segmentIndex)
                 } else {
@@ -143,7 +150,7 @@ internal data class ResourceRouteSnapshot(
                 }
             }
 
-            is TemplateSegment -> matchSegment(anchor, parts, index, params, segmentIndex)
+            is ParameterPathSegment -> matchSegment(anchor, parts, index, params, segmentIndex)
         }
     }
 }
@@ -176,10 +183,10 @@ internal class SegmentTreeTemplateMatcher(
 ) : ResourceTemplateMatcher {
     override fun match(resourceUri: String): MatchResult? {
         val snapshot = snapshotRef.get()
+        val entry = snapshot.parameterizedResource(resourceTemplate.uriTemplate) ?: return null
         val segmentMatch = snapshot.segmentMatch(resourceUri) ?: return null
-        val templateSegment = segmentMatch.segment as? TemplateSegment ?: return null
-        val matchedTemplateUri = snapshot.templateUri(templateSegment.segmentId) ?: return null
-        if (matchedTemplateUri != resourceTemplate.uriTemplate) return null
+        val endpoint = segmentMatch.segment.resourceEndpoint ?: return null
+        if (endpoint.handler !== entry.handler) return null
         return MatchResult(variables = segmentMatch.ancestors, score = 100)
     }
 }
