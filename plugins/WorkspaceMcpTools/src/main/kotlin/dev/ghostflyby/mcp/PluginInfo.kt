@@ -8,4 +8,4 @@ package dev.ghostflyby.mcp
 
 import dev.ghostflyby.intellij.PluginInfoProvider
 
-internal object WorkspaceMcpPluginInfo : PluginInfoProvider(WorkspaceMcpPluginInfo::class.java)
+internal object PluginInfo : PluginInfoProvider(PluginInfo::class.java)
