@@ -18,7 +18,7 @@ import dev.ghostflyby.mcp.resource.validateProjectRelativePath
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
 
 internal class ContentReadException(message: String) : RuntimeException(message)
@@ -41,8 +41,7 @@ internal suspend fun resolveFileByRelativePath(
         is WorkspaceProjectResolution.Resolved -> resolved.project
         is WorkspaceProjectResolution.Unresolved -> contentFail(resolved.message)
     }
-    val basePath = project.basePath
-        ?: contentFail("Project $projectKey has no base path.")
+    val basePath = project.basePath ?: contentFail("Project $projectKey has no base path.")
     val fullPath = "$basePath/$relativePath"
     return readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
         ?: contentFail("File not found at '$relativePath' in project '$projectKey': $fullPath")
@@ -93,11 +92,13 @@ private fun buildContentResult(file: VirtualFile, data: ReadData): ContentResult
         mimeType = "application/json",
         isBinary = false,
     )
+
     is BinaryReadData -> ContentResult(
         payload = Base64.encode(data.bytes),
         mimeType = file.inferMimeType(),
         isBinary = true,
     )
+
     is TextReadData -> ContentResult(
         payload = data.text,
         mimeType = file.inferMimeType(),
@@ -105,12 +106,66 @@ private fun buildContentResult(file: VirtualFile, data: ReadData): ContentResult
     )
 }
 
+// -- metadata read --
+
+@Serializable
+internal data class FileMeta(
+    val name: String,
+    val url: String,
+    val path: String,
+    val isDirectory: Boolean,
+    val length: Long,
+    val lastModified: Long,
+    val isWritable: Boolean,
+    val fileType: String,
+    val isBinary: Boolean,
+    val charset: String = "",
+    val textLength: Int? = null,
+    val lineCount: Int? = null,
+    val modificationStamp: Long? = null,
+    val dirty: Boolean? = null,
+)
+
+internal suspend fun readMetaResult(file: VirtualFile, fields: String /* ""=all; "a,b"=subset */): ContentResult {
+    val meta = readAction {
+        val doc = FileDocumentManager.getInstance().getDocument(file)
+        FileMeta(
+            name = file.name,
+            url = file.url,
+            path = file.path,
+            isDirectory = file.isDirectory,
+            length = file.length,
+            lastModified = file.timeStamp,
+            isWritable = file.isWritable,
+            fileType = file.fileType.name,
+            isBinary = file.fileType.isBinary,
+            charset = file.charset.name(),
+            textLength = doc?.textLength,
+            lineCount = doc?.lineCount,
+            modificationStamp = doc?.modificationStamp,
+            dirty = doc?.let { FileDocumentManager.getInstance().isDocumentUnsaved(it) },
+        )
+    }
+    val json = filterAndSerialize(meta, fields)
+    return ContentResult(payload = json, mimeType = "application/json", isBinary = false)
+}
+
+private fun filterAndSerialize(meta: FileMeta, fields: String): String {
+    if (fields.isBlank()) return JSON.encodeToString(FileMeta.serializer(), meta)
+    val set = fields.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    val map = linkedMapOf<String, JsonElement>()
+    val jsonObj = JSON.encodeToJsonElement(FileMeta.serializer(), meta).jsonObject
+    jsonObj.forEach { (k, v) ->
+        if (k in set) map[k] = v
+    }
+    return JSON.encodeToString(JsonObject.serializer(), buildJsonObject { map.forEach { (k, v) -> put(k, v) } })
+}
+
 // -- write --
 
 internal suspend fun writeContent(file: VirtualFile, text: String) {
     val document = readAction {
-        FileDocumentManager.getInstance().getDocument(file)
-            ?: contentFail("No editable document for: ${file.url}")
+        FileDocumentManager.getInstance().getDocument(file) ?: contentFail("No editable document for: ${file.url}")
     }
     runWriteAction {
         document.setText(text)
@@ -136,6 +191,7 @@ private fun VirtualFile.inferMimeType(): String {
             } else if (ft.isBinary) {
                 "application/octet-stream"
             } else {
+                // Tier 3: text fallback
                 "text/plain"
             }
         }

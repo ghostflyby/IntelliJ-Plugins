@@ -205,7 +205,11 @@ internal data class ResourceRouteSnapshot(
             val actualValue = actualParams[token.key]
             when {
                 token.paramName != null && token.optional -> {
-                    if (actualValue != null) queryCaptures[token.paramName] = actualValue
+                    // Capture as empty string when key is present without value (boolean flag)
+                    // or capture the actual value when provided
+                    if (actualParams.containsKey(token.key)) {
+                        queryCaptures[token.paramName] = actualValue ?: ""
+                    }
                 }
                 token.paramName != null -> {
                     if (actualValue == null) return null

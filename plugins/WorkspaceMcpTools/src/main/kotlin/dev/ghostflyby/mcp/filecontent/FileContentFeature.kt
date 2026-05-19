@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.filecontent
 
+import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
@@ -20,8 +21,15 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
  * Unified content access feature.
  *
  * Routes:
- * - `vfs/{+rawVfsUrl}` — project-independent, read-only raw VFS access
- * - `files/{+relativePath}` — project-scoped file access via Document API (read+write)
+ * - `vfs/{+rawVfsUrl}{?meta,content}` — project-independent, read-only raw VFS access
+ * - `projects/{projectKey}/files/{+relativePath}{?meta,content}` — project-scoped file access via Document API (read+write)
+ *
+ * Query params:
+ * - no query → content only
+ * - `?meta` → metadata JSON (all fields)
+ * - `?meta=length,name` → metadata with field filter
+ * - `?content` → content only
+ * - `?meta&content` → both content + metadata
  */
 internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
@@ -31,14 +39,12 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
         segments {
             // -- project-independent raw VFS (read only) --
-            route("vfs/{+rawVfsUrl}") {
+            route("vfs/{+rawVfsUrl}{?meta,content}") {
                 resource { call ->
-                    val rawVfsUrl = call.ancestors["rawVfsUrl"] ?: ""
-                    val uri = call.request.params.uri
-                    val file = resolveFileByRawUrl(rawVfsUrl)
-                    val result = readContentResult(file)
-                    ReadResourceResult(
-                        contents = result.toResourceContents(uri),
+                    readContentOrMeta(
+                        uri = call.request.params.uri,
+                        file = resolveFileByRawUrl(call.ancestors["rawVfsUrl"] ?: ""),
+                        ancestors = call.ancestors,
                     )
                 }
                 template()
@@ -46,16 +52,18 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
             // -- project-scoped files (via Document) --
             under(projectAnchor) {
-                route("files/{+relativePath}") {
+                route("files/{+relativePath}{?meta,content}") {
                     resource { call ->
                         val anc = call.ancestors
-                        val projectKey = anc["projectKey"] ?: ""
-                        val relativePath = anc["relativePath"] ?: ""
-                        val uri = call.request.params.uri
-                        val file = resolveFileByRelativePath(projectKey, relativePath, projectResolver)
-                        val result = readContentResult(file)
-                        ReadResourceResult(
-                            contents = result.toResourceContents(uri),
+                        val file = resolveFileByRelativePath(
+                            projectKey = anc["projectKey"] ?: "",
+                            relativePath = anc["relativePath"] ?: "",
+                            projectResolver = projectResolver,
+                        )
+                        readContentOrMeta(
+                            uri = call.request.params.uri,
+                            file = file,
+                            ancestors = anc,
                         )
                     }
                     template()
@@ -104,13 +112,31 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         return buildRegistration()
     }
 
-    private fun ContentResult.toResourceContents(uri: String): List<ResourceContents> {
-        return listOf(
-            if (isBinary) {
-                BlobResourceContents(uri = uri, mimeType = mimeType, blob = payload)
+    private suspend fun readContentOrMeta(uri: String, file: VirtualFile, ancestors: Map<String, String>): ReadResourceResult {
+        val metaFields = ancestors["meta"]           // null: no meta; "": all; "a,b": subset
+        val wantsContent = "content" in ancestors    // no key: fallback to content-only
+
+        val items = mutableListOf<ResourceContents>()
+
+        // Content
+        if (wantsContent || metaFields == null) {
+            val result = readContentResult(file)
+            items += if (result.isBinary) {
+                BlobResourceContents(uri = uri, mimeType = result.mimeType, blob = result.payload)
             } else {
-                TextResourceContents(uri = uri, mimeType = mimeType, text = payload)
+                TextResourceContents(uri = uri, mimeType = result.mimeType, text = result.payload)
             }
-        )
+        }
+
+        // Metadata
+        if (metaFields != null) {
+            val metaResult = readMetaResult(file, metaFields)
+            items += TextResourceContents(uri = uri, mimeType = metaResult.mimeType, text = metaResult.payload)
+        }
+
+        if (items.isEmpty()) {
+            items += TextResourceContents(uri = uri, mimeType = "text/plain", text = "Empty result")
+        }
+        return ReadResourceResult(contents = items)
     }
 }

@@ -156,11 +156,18 @@ internal data class RoutePattern(
         private fun parseQuery(query: String): List<QueryToken> {
             val trimmed = query.trimStart('?')
             if (trimmed.startsWith("{?")) {
-                // {?param} — optional query, no literal key=
-                val name = trimmed.substring(2, trimmed.length - 1)
-                require(name.isNotBlank()) { "Query param name must not be empty" }
-                require(PARAM_NAME_RE.matches(name)) { "Invalid query param name '$name'" }
-                return listOf(QueryToken(key = name, paramName = name, optional = true))
+                // {?name1,name2,...} — independently optional query keys
+                val inner = trimmed.substring(2, trimmed.length - 1)
+                require(inner.isNotBlank()) { "Query param name must not be empty" }
+                val names = inner.split(',').map { it.trim() }
+                names.forEach { name ->
+                    require(PARAM_NAME_RE.matches(name)) {
+                        "Invalid query param name '$name' in '$trimmed'"
+                    }
+                }
+                return names.map { name ->
+                    QueryToken(key = name, paramName = name, optional = true)
+                }
             }
             return trimmed.split('&').filter { it.isNotBlank() }.map { pair ->
                 val eqIdx = pair.indexOf('=')
