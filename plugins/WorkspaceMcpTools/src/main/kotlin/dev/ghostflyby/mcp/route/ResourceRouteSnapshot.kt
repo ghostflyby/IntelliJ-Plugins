@@ -19,7 +19,6 @@ internal data class ResourceRouteResource(
     val ownerFeatureName: String,
     val handler: ResourceReadHandler,
     val resourceListProvider: ConcreteResourceListProvider?,
-    val paramToSegmentId: Map<String, SegmentId>,
     val isParameterized: Boolean,
 )
 
@@ -30,7 +29,6 @@ internal data class ResourceRouteTemplate(
     val mimeType: String,
     val ownerFeatureName: String,
     val templateListProvider: TemplateResourceListProvider?,
-    val paramToSegmentId: Map<String, SegmentId>,
 )
 
 internal data class ResourceRouteSnapshot(
@@ -44,15 +42,22 @@ internal data class ResourceRouteSnapshot(
 
     fun segmentMatch(uri: String): ResourceRouteMatch? {
         val parsed = parseWorkspaceUri(uri) ?: return null
-        val parts = parsed.path.removePrefix("/").split("/")
-        val root = routeRoots[parts.firstOrNull()] ?: return null
-        return matchSegment(
-            segment = root,
-            parts = parts,
-            index = 1,
-            params = mapOf("instanceKey" to parsed.instanceKey),
-            segmentIndex = emptyList(),
-        )
+        for (candidate in parsed.pathCandidates()) {
+            val parts = candidate.path.removePrefix("/").split("/")
+            val root = routeRoots[parts.firstOrNull()] ?: continue
+            val match = matchSegment(
+                segment = root,
+                parts = parts,
+                index = 1,
+                params = mapOf("instanceKey" to parsed.instanceKey),
+                segmentIndex = emptyList(),
+            ) ?: continue
+            if (candidate.embedsQuestionMark && match.segment.routePattern?.hasReservedParam != true) {
+                continue
+            }
+            return matchQueryOnMatch(match, candidate.queryString) ?: continue
+        }
+        return null
     }
 
     private fun parseWorkspaceUri(uri: String): ParsedWorkspaceUri? {
@@ -65,7 +70,7 @@ internal data class ResourceRouteSnapshot(
         if (instanceKey.isBlank()) return null
         return ParsedWorkspaceUri(
             instanceKey = instanceKey,
-            path = afterScheme.substring(firstSlash),
+            pathAndQuery = afterScheme.substring(firstSlash),
         )
     }
 
@@ -80,7 +85,7 @@ internal data class ResourceRouteSnapshot(
             is LiteralPathSegment -> {
                 if (index >= parts.size) {
                     return if (segment.resourceEndpoint != null || segment.templateEndpoint != null) {
-                        ResourceRouteMatch(segment, AncestorContext(params, segmentIndex.toMap()))
+                        ResourceRouteMatch(segment, AncestorContext(params))
                     } else {
                         null
                     }
@@ -114,7 +119,7 @@ internal data class ResourceRouteSnapshot(
                 }
                 if (nextPartIndex >= parts.size) {
                     return if (segment.resourceEndpoint != null || segment.templateEndpoint != null) {
-                        ResourceRouteMatch(segment, AncestorContext(nextParams, nextIndex.toMap()))
+                        ResourceRouteMatch(segment, AncestorContext(nextParams))
                     } else {
                         null
                     }
@@ -149,15 +154,78 @@ internal data class ResourceRouteSnapshot(
                     null
                 }
             }
-
             is ParameterPathSegment -> matchSegment(anchor, parts, index, params, segmentIndex)
         }
+    }
+
+    /**
+     * Validate query tokens from the matched segment's routePattern against
+     * the URI's query string. Captures param tokens into [AncestorContext].
+     * Returns null when a required literal or key-only token fails to match.
+     */
+    private fun matchQueryOnMatch(
+        match: ResourceRouteMatch,
+        queryString: String,
+    ): ResourceRouteMatch? {
+        val queryTokens = match.segment.routePattern?.queryTokens ?: return match
+        if (queryTokens.isEmpty()) return if (queryString.isEmpty()) match else null
+        val actualParams = queryString.split("&").filter { it.isNotBlank() }.associate { pair ->
+            val eqIdx = pair.indexOf('=')
+            if (eqIdx < 0) pair to null else pair.substring(0, eqIdx) to pair.substring(eqIdx + 1)
+        }
+        val queryCaptures = mutableMapOf<String, String>()
+        for (token in queryTokens) {
+            val actualValue = actualParams[token.key]
+            when {
+                token.paramName != null -> {
+                    if (actualValue == null) return null
+                    queryCaptures[token.paramName] = actualValue
+                }
+                token.literalValue != null -> {
+                    if (actualValue != token.literalValue) return null
+                }
+                else -> {
+                    if (!actualParams.containsKey(token.key)) return null
+                }
+            }
+        }
+        if (queryCaptures.isEmpty()) return match
+        return ResourceRouteMatch(
+            segment = match.segment,
+            ancestors = AncestorContext(match.ancestors.toMutableMap().apply { putAll(queryCaptures) }),
+        )
     }
 }
 
 private data class ParsedWorkspaceUri(
     val instanceKey: String,
+    val pathAndQuery: String,
+) {
+    fun pathCandidates(): Sequence<ParsedWorkspacePathCandidate> = sequence {
+        val questionMarks = pathAndQuery.indices.filter { pathAndQuery[it] == '?' }
+        yield(
+            ParsedWorkspacePathCandidate(
+                path = pathAndQuery,
+                queryString = "",
+                embedsQuestionMark = questionMarks.isNotEmpty(),
+            ),
+        )
+        for (questionMark in questionMarks.asReversed()) {
+            yield(
+                ParsedWorkspacePathCandidate(
+                    path = pathAndQuery.substring(0, questionMark),
+                    queryString = pathAndQuery.substring(questionMark + 1),
+                    embedsQuestionMark = false,
+                ),
+            )
+        }
+    }
+}
+
+private data class ParsedWorkspacePathCandidate(
     val path: String,
+    val queryString: String,
+    val embedsQuestionMark: Boolean,
 )
 
 internal data class ResourceRouteMatch(
@@ -171,7 +239,6 @@ internal class ResourceRouteSnapshotRef(
     private val ref = AtomicReference(initialSnapshot)
 
     fun get(): ResourceRouteSnapshot = ref.get()
-
     fun set(snapshot: ResourceRouteSnapshot) {
         ref.set(snapshot)
     }

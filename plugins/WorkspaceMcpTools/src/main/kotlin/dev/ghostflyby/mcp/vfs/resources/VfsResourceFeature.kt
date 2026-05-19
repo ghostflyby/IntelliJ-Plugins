@@ -20,65 +20,60 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
- * and per-project listable resources via the segment-based URI tree.
+ * via the Ktor-like route DSL. Attached to the CoreResourceFeature.PROJECT_ROUTE anchor.
  */
 internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
-        // VFS resource templates via segment DSL
-        val projectAnchor = CoreResourceFeature.PROJECT_SEGMENT
+        val projectAnchor = CoreResourceFeature.PROJECT_ROUTE
 
         segments {
             under(projectAnchor) {
-                segment("files") {
-                    parameter("relativePath") {
-                        resource { call ->
-                            val anc = call.ancestors
-                            val projectKey = anc[projectAnchor] ?: ""
-                            val relativePath = anc["relativePath"] ?: ""
-                            val instanceKey = workspaceInstanceKey()
-                            val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
-                            val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = TEXT_PLAIN_MIME_TYPE,
-                                        text = text
-                                    )
-                                )
-                            )
-                        }
-                        template()
+                route("files/{+relativePath}") {
+                    resource { call ->
+                        val anc = call.ancestors
+                        val projectKey = anc["projectKey"] ?: ""
+                        val relativePath = anc["relativePath"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
+                        val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
+                                ),
+                            ),
+                        )
                     }
+                    template()
                 }
-                segment("vfs") {
-                    parameter("rawVfsUrl") {
-                        resource { call ->
-                            val anc = call.ancestors
-                            val projectKey = anc[projectAnchor] ?: ""
-                            val rawVfsUrl = anc["rawVfsUrl"] ?: ""
-                            val instanceKey = workspaceInstanceKey()
-                            val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
-                            val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = TEXT_PLAIN_MIME_TYPE,
-                                        text = text
-                                    )
-                                )
-                            )
-                        }
-                        template()
+                route("vfs/{+rawVfsUrl}") {
+                    resource { call ->
+                        val anc = call.ancestors
+                        val projectKey = anc["projectKey"] ?: ""
+                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
+                        val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
+                                ),
+                            ),
+                        )
                     }
+                    template()
                 }
             }
         }
 
-        // Register SDK tools (inline handler)
+        // Register SDK tools (unchanged)
         registerTool<VfsExistsArgs>(
             name = "vfs_exists",
             description = "Check whether a VFS URL or project-relative path currently resolves to an existing file or directory.",

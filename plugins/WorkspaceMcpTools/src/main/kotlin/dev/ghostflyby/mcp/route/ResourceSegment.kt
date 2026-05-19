@@ -32,6 +32,8 @@ internal sealed class ResourceSegment {
     var ownerFeatureName: String? = null
     var resourceEndpoint: ResourceEndpoint? = null
     var templateEndpoint: ResourceTemplateEndpoint? = null
+    var routePattern: RoutePattern? = null
+    var routeAnchor: RouteAnchor? = null
 
     val children: MutableMap<String, ResourceSegment> = linkedMapOf()
     val anchors: MutableMap<SegmentId, ResourceSegment> = linkedMapOf()

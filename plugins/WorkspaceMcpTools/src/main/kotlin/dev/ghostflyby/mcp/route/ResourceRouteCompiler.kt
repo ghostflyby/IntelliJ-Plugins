@@ -11,6 +11,7 @@ internal object ResourceRouteCompiler {
         val roots = linkedMapOf<String, ResourceSegment>()
         val segmentById = linkedMapOf<SegmentId, ResourceSegment>()
         val pendingAnchors = mutableListOf<PendingAnchor>()
+        val routeAnchorAnchors = mutableListOf<PendingAnchor>()
 
         registrations.forEach { contribution ->
             contribution.roots.forEach { root ->
@@ -19,17 +20,36 @@ internal object ResourceRouteCompiler {
                 roots[clonedRoot.name] = clonedRoot
                 indexTree(clonedRoot, segmentById)
             }
-            pendingAnchors += contribution.pendingAnchors.map { anchor ->
-                PendingAnchor(
-                    targetId = anchor.targetId,
-                    segments = anchor.segments.map { it.cloneWithoutAnchors() },
-                )
+            contribution.pendingAnchors.forEach { anchor ->
+                if (anchor.routeAnchor != null) {
+                    routeAnchorAnchors.add(anchor)
+                } else {
+                    pendingAnchors += PendingAnchor(
+                        targetId = anchor.targetId,
+                        segments = anchor.segments.map { it.cloneWithoutAnchors() },
+                    )
+                }
             }
         }
 
+        // Resolve legacy SegmentId-based anchors
         pendingAnchors.forEach { anchor ->
             val target = segmentById[anchor.targetId] ?: return@forEach
             if (!target.extensible) return@forEach
+            anchor.segments.forEach { segment ->
+                target.anchors[segment.segmentId] = segment
+                indexTree(segment, segmentById)
+            }
+        }
+
+        // Build route anchor index from segment.routeAnchor markings
+        val routeAnchorIndex = mutableMapOf<String, ResourceSegment>()
+        roots.values.forEach { root -> indexRouteAnchors(root, routeAnchorIndex) }
+
+        // Resolve RouteAnchor-based anchors by match key
+        routeAnchorAnchors.forEach { anchor ->
+            val anchorKey = anchor.routeAnchor?.key ?: return@forEach
+            val target = routeAnchorIndex[anchorKey] ?: return@forEach
             anchor.segments.forEach { segment ->
                 target.anchors[segment.segmentId] = segment
                 indexTree(segment, segmentById)
@@ -42,11 +62,10 @@ internal object ResourceRouteCompiler {
             enumerate(
                 segment = root,
                 inheritedOwnerFeatureName = ownerByRootName(registrations, root.name),
-                prefix = "",
-                resources = resources,
-                templates = templates,
+                prefix = "", resources = resources, templates = templates,
             )
         }
+
         return ResourceRouteSnapshot(
             resources = resources.toList(),
             templates = templates.toList(),
@@ -57,10 +76,18 @@ internal object ResourceRouteCompiler {
         )
     }
 
-    private fun indexTree(
+    private fun indexRouteAnchors(
         segment: ResourceSegment,
-        segmentById: MutableMap<SegmentId, ResourceSegment>,
+        index: MutableMap<String, ResourceSegment>,
     ) {
+        if (segment.routeAnchor != null) {
+            index[segment.routeAnchor!!.key] = segment
+        }
+        segment.children.values.forEach { indexRouteAnchors(it, index) }
+        segment.anchors.values.forEach { indexRouteAnchors(it, index) }
+    }
+
+    private fun indexTree(segment: ResourceSegment, segmentById: MutableMap<SegmentId, ResourceSegment>) {
         require(segment.segmentId !in segmentById) { "Duplicate SegmentId: ${segment.segmentId}" }
         segmentById[segment.segmentId] = segment
         segment.children.values.forEach { indexTree(it, segmentById) }
@@ -73,54 +100,45 @@ internal object ResourceRouteCompiler {
         prefix: String,
         resources: MutableList<ResourceRouteResource>,
         templates: MutableList<ResourceRouteTemplate>,
-        paramToSegmentId: Map<String, SegmentId> = emptyMap(),
         hasParameter: Boolean = false,
     ) {
         val ownerFeatureName = segment.ownerFeatureName ?: inheritedOwnerFeatureName
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
-        val currentParams = when (segment) {
-            is LiteralPathSegment -> paramToSegmentId
-            is ParameterPathSegment -> paramToSegmentId + (segment.paramName to segment.segmentId)
-        }
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
         segment.resourceEndpoint?.let { endpoint ->
+            val querySuffix = segment.routePattern?.queryTemplate ?: ""
+            val baseUri = "ij-workspace://{instanceKey}/$currentPath"
+            val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
             resources += ResourceRouteResource(
-                uri = "ij-workspace://{instanceKey}/$currentPath",
-                name = segment.name,
-                description = endpoint.description,
-                mimeType = endpoint.mimeType,
-                ownerFeatureName = ownerFeatureName,
-                handler = endpoint.handler,
+                uri = uri,
+                name = segment.name, description = endpoint.description, mimeType = endpoint.mimeType,
+                ownerFeatureName = ownerFeatureName, handler = endpoint.handler,
                 resourceListProvider = endpoint.listProvider,
-                paramToSegmentId = currentParams,
                 isParameterized = currentHasParameter,
             )
         }
         segment.templateEndpoint?.let { endpoint ->
+            val querySuffix = segment.routePattern?.queryTemplate ?: ""
+            val baseUri = "ij-workspace://{instanceKey}/$currentPath"
+            val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
             templates += ResourceRouteTemplate(
-                uri = "ij-workspace://{instanceKey}/$currentPath",
-                name = segment.name,
-                description = endpoint.description,
-                mimeType = endpoint.mimeType,
+                uri = uri,
+                name = segment.name, description = endpoint.description, mimeType = endpoint.mimeType,
                 ownerFeatureName = ownerFeatureName,
                 templateListProvider = endpoint.listProvider,
-                paramToSegmentId = currentParams,
             )
         }
 
         segment.children.values.forEach {
-            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentParams, currentHasParameter)
+            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
         }
         segment.anchors.values.forEach {
-            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentParams, currentHasParameter)
+            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
         }
     }
 
-    private fun ownerByRootName(
-        registrations: Collection<WorkspaceResourceRouteContribution>,
-        rootName: String,
-    ): String {
+    private fun ownerByRootName(registrations: Collection<WorkspaceResourceRouteContribution>, rootName: String): String {
         return registrations.firstOrNull { contribution ->
             contribution.roots.any { it.name == rootName }
         }?.featureName ?: "unknown"
@@ -128,22 +146,14 @@ internal object ResourceRouteCompiler {
 
     private fun ResourceSegment.cloneWithoutAnchors(): ResourceSegment {
         val clone = when (this) {
-            is LiteralPathSegment -> LiteralPathSegment(
-                segmentId = segmentId,
-                name = name,
-                extensible = extensible,
-            )
-
-            is ParameterPathSegment -> ParameterPathSegment(
-                segmentId = segmentId,
-                name = name,
-                paramName = paramName,
-                extensible = extensible,
-            )
+            is LiteralPathSegment -> LiteralPathSegment(segmentId = segmentId, name = name, extensible = extensible)
+            is ParameterPathSegment -> ParameterPathSegment(segmentId = segmentId, name = name, paramName = paramName, extensible = extensible)
         }
         clone.ownerFeatureName = ownerFeatureName
         clone.resourceEndpoint = resourceEndpoint
         clone.templateEndpoint = templateEndpoint
+        clone.routePattern = routePattern
+        clone.routeAnchor = routeAnchor
         children.values.forEach { child ->
             val childClone = child.cloneWithoutAnchors()
             clone.children[childClone.name] = childClone

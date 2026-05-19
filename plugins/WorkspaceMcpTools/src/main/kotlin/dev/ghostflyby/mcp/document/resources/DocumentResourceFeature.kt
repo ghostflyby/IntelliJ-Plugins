@@ -20,64 +20,55 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * Document resource feature: provides project-scoped document resource templates
- * and per-project listable resources for open document snapshots.
- *
- * This feature owns the `documents/{relativePath}` and `document-vfs/{rawVfsUrl}` templates
- * and the SDK document tools (document_is_writable, document_get_modification_stamp,
- * document_insert_string, document_delete_string, document_replace_string, document_set_text).
+ * via the Ktor-like route DSL. Attached to the CoreResourceFeature.PROJECT_ROUTE anchor.
  */
 internal class DocumentResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "document-resources"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
-        val projectAnchor = CoreResourceFeature.PROJECT_SEGMENT
+        val projectAnchor = CoreResourceFeature.PROJECT_ROUTE
 
-        // Document resource templates via segment DSL
         segments {
             under(projectAnchor) {
-                segment("documents") {
-                    parameter("relativePath") {
-                        resource { call ->
-                            val anc = call.ancestors
-                            val projectKey = anc[projectAnchor] ?: ""
-                            val relativePath = anc["relativePath"] ?: ""
-                            val instanceKey = workspaceInstanceKey()
-                            val uri = workspaceDocumentUri(instanceKey, projectKey, relativePath)
-                            val text = readDocumentByRelativePath(relativePath, projectKey, projectResolver)
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = TEXT_PLAIN_MIME_TYPE,
-                                        text = text,
-                                    ),
+                route("documents/{+relativePath}") {
+                    resource { call ->
+                        val anc = call.ancestors
+                        val projectKey = anc["projectKey"] ?: ""
+                        val relativePath = anc["relativePath"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceDocumentUri(instanceKey, projectKey, relativePath)
+                        val text = readDocumentByRelativePath(relativePath, projectKey, projectResolver)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
                                 ),
-                            )
-                        }
-                        template()
+                            ),
+                        )
                     }
+                    template()
                 }
-                segment("document-vfs") {
-                    parameter("rawVfsUrl") {
-                        resource { call ->
-                            val anc = call.ancestors
-                            val projectKey = anc[projectAnchor] ?: ""
-                            val rawVfsUrl = anc["rawVfsUrl"] ?: ""
-                            val instanceKey = workspaceInstanceKey()
-                            val uri = workspaceDocumentVfsUri(instanceKey, projectKey, rawVfsUrl)
-                            val text = readDocumentByVfsUrl(rawVfsUrl)
-                            ReadResourceResult(
-                                contents = listOf(
-                                    TextResourceContents(
-                                        uri = uri,
-                                        mimeType = TEXT_PLAIN_MIME_TYPE,
-                                        text = text,
-                                    ),
+                route("document-vfs/{+rawVfsUrl}") {
+                    resource { call ->
+                        val anc = call.ancestors
+                        val projectKey = anc["projectKey"] ?: ""
+                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
+                        val instanceKey = workspaceInstanceKey()
+                        val uri = workspaceDocumentVfsUri(instanceKey, projectKey, rawVfsUrl)
+                        val text = readDocumentByVfsUrl(rawVfsUrl)
+                        ReadResourceResult(
+                            contents = listOf(
+                                TextResourceContents(
+                                    uri = uri,
+                                    mimeType = TEXT_PLAIN_MIME_TYPE,
+                                    text = text,
                                 ),
-                            )
-                        }
-                        template()
+                            ),
+                        )
                     }
+                    template()
                 }
             }
         }

@@ -23,18 +23,13 @@
 package dev.ghostflyby.mcp.route
 
 /**
- * Merged params + ancestor-segment index. Implements [Map] by delegation to
- * the MCP SDK template variables, while also supporting semantic lookup via
- * [SegmentId] with [get] operator.
+ * Merged params from route match. Implements [Map] by delegation to
+ * the MCP SDK template variables.
  *
  * Usage:
- *   anc["projectKey"]        — standard Map access (delegates to vars map)
- *   anc[PROJECT_SEGMENT]     — semantic access via SegmentId
+ *   anc["projectKey"]     — standard Map access (delegates to vars map)
+ *   anc["relativePath"]   — access a route parameter
  */
 internal class AncestorContext(
     params: Map<String, String>,
-    segmentIndex: Map<SegmentId, String> = emptyMap(),
-) : Map<String, String> by params {
-    private val index: Map<SegmentId, String> = segmentIndex
-    operator fun get(segmentId: SegmentId): String? = index[segmentId]
-}
+) : Map<String, String> by params

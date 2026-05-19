@@ -11,6 +11,10 @@ import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
 import dev.ghostflyby.mcp.route.WorkspaceMcpCall
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 
+/**
+ * Synchronizes compiled route snapshot with the MCP SDK server's
+ * addResource/addResourceTemplate lifecycle.
+ */
 internal class WorkspaceMcpPrimitiveRegistry(
     private val sessionState: WorkspaceMcpSessionState,
 ) {
@@ -31,14 +35,11 @@ internal class WorkspaceMcpPrimitiveRegistry(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request, vars ->
-                        val segmentIndex = entry.paramToSegmentId.entries.associate { (paramName, segmentId) ->
-                            segmentId to (vars[paramName] ?: "")
-                        }
                         entry.handler(
                             WorkspaceMcpCall(
                                 connection = this,
                                 request = request,
-                                ancestors = AncestorContext(vars, segmentIndex),
+                                ancestors = AncestorContext(vars),
                                 sessionState = sessionState,
                             ),
                         )
