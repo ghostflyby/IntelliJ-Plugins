@@ -6,6 +6,9 @@
 
 package dev.ghostflyby.mcp.route
 
+import kotlinx.collections.immutable.persistentHashMapOf
+import kotlinx.collections.immutable.persistentListOf
+
 internal object ResourceRouteCompiler {
     fun compile(registrations: Collection<WorkspaceResourceRouteContribution>): ResourceRouteSnapshot {
         val roots = linkedMapOf<String, ResourceSegment>()
@@ -33,7 +36,7 @@ internal object ResourceRouteCompiler {
         pendingAnchors.forEach { anchor ->
             val target = routeAnchorIndex[anchor.routeAnchor.key] ?: return@forEach
             anchor.segments.forEach { segment ->
-                target.attachedSegments += segment
+                target.attachedSegments = target.attachedSegments.builder().apply { add(segment) }.build()
             }
         }
 
@@ -128,13 +131,15 @@ internal object ResourceRouteCompiler {
         clone.templateEndpoint = templateEndpoint
         clone.routePattern = routePattern
         clone.routeAnchor = routeAnchor
-        children.values.forEach { child ->
+        clone.children = children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
             val childClone = child.cloneWithoutAnchors()
-            clone.children[childClone.name] = childClone
-        }
-        attachedSegments.forEach { child ->
-            clone.attachedSegments += child.cloneWithoutAnchors()
-        }
+            builder.put(childClone.name, childClone)
+            builder
+        }.build()
+        clone.attachedSegments = attachedSegments.fold(persistentListOf<ResourceSegment>().builder()) { builder, child ->
+            builder.add(child.cloneWithoutAnchors())
+            builder
+        }.build()
         return clone
     }
 }

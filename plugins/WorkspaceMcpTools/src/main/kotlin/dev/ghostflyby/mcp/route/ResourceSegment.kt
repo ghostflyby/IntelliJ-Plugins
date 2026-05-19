@@ -7,6 +7,10 @@
 package dev.ghostflyby.mcp.route
 
 import io.modelcontextprotocol.kotlin.sdk.types.*
+import kotlinx.collections.immutable.PersistentList
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.persistentHashMapOf
+import kotlinx.collections.immutable.persistentListOf
 
 internal typealias ResourceReadHandler = suspend (WorkspaceMcpCall<ReadResourceRequest>) -> ReadResourceResult
 internal typealias ResourceListProvider<R, T> = suspend WorkspaceMcpCall<R>.() -> ResourceListDecision<T>
@@ -34,8 +38,8 @@ internal sealed class ResourceSegment {
     var routePattern: RoutePattern? = null
     var routeAnchor: RouteAnchor? = null
 
-    val children: MutableMap<String, ResourceSegment> = linkedMapOf()
-    val attachedSegments: MutableList<ResourceSegment> = mutableListOf()
+    var children: PersistentMap<String, ResourceSegment> = persistentHashMapOf()
+    var attachedSegments: PersistentList<ResourceSegment> = persistentListOf()
 }
 
 internal data class ResourceEndpoint(

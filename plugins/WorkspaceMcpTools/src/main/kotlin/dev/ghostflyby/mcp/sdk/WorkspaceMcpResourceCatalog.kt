@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.sdk
 
 import dev.ghostflyby.mcp.route.*
 import io.modelcontextprotocol.kotlin.sdk.types.*
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Session-specific projection of resource routes into MCP list responses.
@@ -20,17 +21,14 @@ internal class WorkspaceMcpResourceCatalog(
     private val sessionState: WorkspaceMcpSessionState,
     private val projectResolver: WorkspaceProjectResolver,
 ) {
-    private val lock = Any()
-    private var currentSnapshot: ResourceRouteSnapshot = ResourceRouteSnapshot()
+    private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
 
     fun updateSnapshot(snapshot: ResourceRouteSnapshot) {
-        synchronized(lock) {
-            currentSnapshot = snapshot
-        }
+        snapshotRef.set(snapshot)
     }
 
     suspend fun listResources(sessionId: String, request: ListResourcesRequest): ListResourcesResult {
-        val snapshot = synchronized(lock) { currentSnapshot }
+        val snapshot = snapshotRef.get()
         val call = listCall(sessionId, request)
         return ListResourcesResult(
             resources = buildList {
@@ -47,7 +45,7 @@ internal class WorkspaceMcpResourceCatalog(
         sessionId: String,
         request: ListResourceTemplatesRequest,
     ): ListResourceTemplatesResult {
-        val snapshot = synchronized(lock) { currentSnapshot }
+        val snapshot = snapshotRef.get()
         val call = listCall(sessionId, request)
         return ListResourceTemplatesResult(
             resourceTemplates = buildList {

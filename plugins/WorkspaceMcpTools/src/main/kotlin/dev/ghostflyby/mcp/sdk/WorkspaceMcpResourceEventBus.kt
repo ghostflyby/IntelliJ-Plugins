@@ -12,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -26,31 +27,33 @@ internal class WorkspaceMcpResourceEventBus(
     private val serverProvider: () -> Server?,
 ) {
     private val logger = logger<WorkspaceMcpResourceEventBus>()
-    private val lock = Any()
-    private val pendingSessionIds = linkedSetOf<String>()
+    private val pendingRef = AtomicReference<Set<String>>(emptySet())
     private var flushJob: Job? = null
 
     /**
      * Schedule a resource list changed notification for a single session.
      */
     fun scheduleSessionListChanged(sessionId: String) {
-        synchronized(lock) {
-            pendingSessionIds.add(sessionId)
-            scheduleFlush()
+        while (true) {
+            val current = pendingRef.get()
+            if (pendingRef.compareAndSet(current, current + sessionId)) break
         }
+        scheduleFlush()
     }
 
     /**
      * Schedule a resource list changed notification for all sessions.
      */
     fun scheduleAllSessionsListChanged() {
-        synchronized(lock) {
-            val activeServer = serverProvider()
-            if (activeServer != null) {
-                pendingSessionIds.addAll(activeServer.sessions.keys)
+        val activeServer = serverProvider()
+        if (activeServer != null) {
+            val keys = activeServer.sessions.keys
+            while (true) {
+                val current = pendingRef.get()
+                if (pendingRef.compareAndSet(current, current + keys)) break
             }
-            scheduleFlush()
         }
+        scheduleFlush()
     }
 
     private fun scheduleFlush() {
@@ -62,12 +65,8 @@ internal class WorkspaceMcpResourceEventBus(
     }
 
     private suspend fun flush() {
-        val targetSessionIds: Set<String>
-        synchronized(lock) {
-            targetSessionIds = pendingSessionIds.toSet()
-            pendingSessionIds.clear()
-            flushJob = null
-        }
+        val targetSessionIds: Set<String> = pendingRef.getAndSet(emptySet())
+        flushJob = null
         val activeServer = serverProvider() ?: return
         val aliveIds = activeServer.sessions.keys
         targetSessionIds.intersect(aliveIds).forEach { sessionId ->

@@ -36,6 +36,7 @@ import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
 import kotlinx.coroutines.*
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 
 @Service(Service.Level.APP)
@@ -60,8 +61,7 @@ internal class WorkspaceMcpSdkServerService(
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
-    private val resourceUpdateStateLock = Any()
-    private val pendingResourceUpdateUris = linkedSetOf<String>()
+    private val pendingUpdateRef = AtomicReference<Set<String>>(emptySet())
     private var resourceUpdateFlushJob: Job? = null
 
     @Volatile
@@ -238,13 +238,14 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun scheduleResourceUpdated(resourceUri: String) {
-        synchronized(resourceUpdateStateLock) {
-            pendingResourceUpdateUris.add(resourceUri)
-            if (resourceUpdateFlushJob != null) return
-            resourceUpdateFlushJob = scope.launch {
-                delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
-                flushPendingResourceUpdates()
-            }
+        while (true) {
+            val current = pendingUpdateRef.get()
+            if (pendingUpdateRef.compareAndSet(current, current + resourceUri)) break
+        }
+        if (resourceUpdateFlushJob != null) return
+        resourceUpdateFlushJob = scope.launch {
+            delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
+            flushPendingResourceUpdates()
         }
     }
 
@@ -253,12 +254,8 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private suspend fun flushPendingResourceUpdates() {
-        val resourceUris = synchronized(resourceUpdateStateLock) {
-            val snapshot = pendingResourceUpdateUris.toList()
-            pendingResourceUpdateUris.clear()
-            resourceUpdateFlushJob = null
-            snapshot
-        }
+        val resourceUris = pendingUpdateRef.getAndSet(emptySet()).toList()
+        resourceUpdateFlushJob = null
         val activeServer = server ?: return
         resourceUris.forEach { uri -> sendResourceUpdated(activeServer, uri) }
     }

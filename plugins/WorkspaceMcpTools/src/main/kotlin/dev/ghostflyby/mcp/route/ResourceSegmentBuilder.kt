@@ -133,7 +133,7 @@ internal open class ResourceSegmentCollector(
     ) {
         val collector = ResourceSegmentCollector(segment)
         collector.block()
-        segment.children.putAll(collector.roots.associateBy { it.name })
+        segment.children = segment.children.builder().apply { collector.roots.forEach { put(it.name, it) } }.build()
         attachChild(segment)
         _pendingAnchors.addAll(collector.pendingAnchors)
     }
@@ -143,7 +143,7 @@ internal open class ResourceSegmentCollector(
         if (parent == null) {
             _roots.add(segment)
         } else {
-            parent.children[segment.name] = segment
+            parent.children = parent.children.builder().apply { put(segment.name, segment) }.build()
         }
     }
 }
@@ -177,7 +177,7 @@ internal fun buildTreeFromPattern(
     var current = root
     for (i in 1 until tokens.size) {
         val child = tokenToSegment(tokens[i])
-        current.children[child.name] = child
+        current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
     if (resourceEndpoint != null) current.resourceEndpoint = resourceEndpoint
