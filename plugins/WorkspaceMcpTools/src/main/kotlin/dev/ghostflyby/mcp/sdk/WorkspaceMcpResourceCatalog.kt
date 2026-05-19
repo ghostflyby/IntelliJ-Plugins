@@ -6,18 +6,8 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import dev.ghostflyby.mcp.route.AncestorContext
-import dev.ghostflyby.mcp.route.ParameterPathSegment
-import dev.ghostflyby.mcp.route.ResourceListDecision
-import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
-import dev.ghostflyby.mcp.route.ResourceSegment
-import dev.ghostflyby.mcp.route.WorkspaceMcpCall
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesResult
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesResult
-import io.modelcontextprotocol.kotlin.sdk.types.Resource
-import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
+import dev.ghostflyby.mcp.route.*
+import io.modelcontextprotocol.kotlin.sdk.types.*
 
 /**
  * Session-specific projection of resource routes into MCP list responses.
@@ -32,12 +22,10 @@ internal class WorkspaceMcpResourceCatalog(
 ) {
     private val lock = Any()
     private var currentSnapshot: ResourceRouteSnapshot = ResourceRouteSnapshot()
-    private var currentVersion: Long = 0L
 
     fun updateSnapshot(snapshot: ResourceRouteSnapshot) {
         synchronized(lock) {
             currentSnapshot = snapshot
-            currentVersion++
         }
     }
 
@@ -47,7 +35,7 @@ internal class WorkspaceMcpResourceCatalog(
         return ListResourcesResult(
             resources = buildList {
                 snapshot.routeRoots.values.forEach { root ->
-                    addAll(root.listResources(call, path = root.name, hasParameter = root is ParameterPathSegment))
+                    addAll(root.traverse({ resourceDecision(call, it) }, root.name))
                 }
             },
             nextCursor = null,
@@ -64,7 +52,7 @@ internal class WorkspaceMcpResourceCatalog(
         return ListResourceTemplatesResult(
             resourceTemplates = buildList {
                 snapshot.routeRoots.values.forEach { root ->
-                    addAll(root.listTemplates(call, path = root.name))
+                    addAll(root.traverse({ templateDecision(call, it) }, root.name))
                 }
             },
             nextCursor = null,
@@ -72,7 +60,7 @@ internal class WorkspaceMcpResourceCatalog(
         )
     }
 
-    private fun <R : io.modelcontextprotocol.kotlin.sdk.types.Request> listCall(
+    private fun <R : Request> listCall(
         sessionId: String,
         request: R,
     ): WorkspaceMcpCall<R> {
@@ -86,49 +74,41 @@ internal class WorkspaceMcpResourceCatalog(
         )
     }
 
-    private suspend fun ResourceSegment.listResources(
-        call: WorkspaceMcpCall<ListResourcesRequest>,
+    // -- traversal --
+
+    private suspend fun <T> ResourceSegment.traverse(
+        decide: suspend ResourceSegment.(String) -> ResourceListDecision<T>,
         path: String,
-        hasParameter: Boolean,
-    ): List<Resource> {
-        val endpoint = resourceEndpoint
-        val decision = if (endpoint != null) {
-            endpoint.listProvider?.let { provider ->
-                call.provider()
-            } ?: if (hasParameter) {
-                ResourceListDecision()
-            } else {
-                defaultResourceDecision(path, endpoint.mimeType)
+    ): List<T> {
+        val decision = decide(path)
+        return if (decision.includeChildren) {
+            decision.entries + childrenAndAnchors().flatMap { child ->
+                child.traverse(decide, "$path/${child.name}")
             }
         } else {
-            ResourceListDecision()
-        }
-        if (!decision.includeChildren) return decision.entries
-        return decision.entries + childrenAndAnchors().flatMap { child ->
-            child.listResources(
-                call = call,
-                path = "$path/${child.name}",
-                hasParameter = hasParameter || child is ParameterPathSegment,
-            )
+            decision.entries
         }
     }
 
-    private suspend fun ResourceSegment.listTemplates(
+    // -- per-segment decisions (no child recursion) --
+
+    private suspend fun ResourceSegment.resourceDecision(
+        call: WorkspaceMcpCall<ListResourcesRequest>,
+        path: String,
+    ): ResourceListDecision<Resource> {
+        val ep = resourceEndpoint ?: return ResourceListDecision()
+        return ep.listProvider?.invoke(call)
+            ?: if (this is ParameterPathSegment) ResourceListDecision()
+            else defaultResourceDecision(path, ep.mimeType)
+    }
+
+    private suspend fun ResourceSegment.templateDecision(
         call: WorkspaceMcpCall<ListResourceTemplatesRequest>,
         path: String,
-    ): List<ResourceTemplate> {
-        val endpoint = templateEndpoint
-        val decision = if (endpoint != null) {
-            endpoint.listProvider?.let { provider ->
-                call.provider()
-            } ?: defaultTemplateDecision(path, endpoint.mimeType)
-        } else {
-            ResourceListDecision()
-        }
-        if (!decision.includeChildren) return decision.entries
-        return decision.entries + childrenAndAnchors().flatMap { child ->
-            child.listTemplates(call, "$path/${child.name}")
-        }
+    ): ResourceListDecision<ResourceTemplate> {
+        val ep = templateEndpoint ?: return ResourceListDecision()
+        return ep.listProvider?.invoke(call)
+            ?: defaultTemplateDecision(path, ep.mimeType)
     }
 
     private fun ResourceSegment.defaultResourceDecision(
