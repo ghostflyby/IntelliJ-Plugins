@@ -10,14 +10,24 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.vfs.*
+import com.intellij.openapi.fileTypes.LanguageFileType
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.resource.validateProjectRelativePath
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlin.io.encoding.Base64
 
 internal class ContentReadException(message: String) : RuntimeException(message)
+
+internal data class ContentResult(
+    val payload: String,
+    val mimeType: String,
+    val isBinary: Boolean,
+)
 
 // -- resolve VirtualFile --
 
@@ -46,10 +56,53 @@ internal suspend fun resolveFileByRawUrl(rawVfsUrl: String): VirtualFile {
 
 // -- unified read --
 
-internal suspend fun readContent(file: VirtualFile): String = readAction {
-    if (file.isDirectory) return@readAction directoryListingContent(file)
-    val document = FileDocumentManager.getInstance().getDocument(file)
-    document?.text ?: readVfsTextOrFail(file)
+private sealed interface ReadData
+
+private data class DirReadData(val listing: VfsDirectoryListing) : ReadData
+private data class BinaryReadData(val bytes: ByteArray) : ReadData {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is BinaryReadData) return false
+        return bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        return bytes.contentHashCode()
+    }
+}
+
+private data class TextReadData(val text: String) : ReadData
+
+internal suspend fun readContentResult(file: VirtualFile): ContentResult {
+    val data = readAction {
+        if (file.isDirectory) {
+            DirReadData(file.readDirectoryListing())
+        } else if (file.fileType.isBinary) {
+            BinaryReadData(file.contentsToByteArray())
+        } else {
+            val document = FileDocumentManager.getInstance().getDocument(file)
+            TextReadData(document?.text ?: String(file.contentsToByteArray(), file.charset))
+        }
+    }
+    return buildContentResult(file, data)
+}
+
+private fun buildContentResult(file: VirtualFile, data: ReadData): ContentResult = when (data) {
+    is DirReadData -> ContentResult(
+        payload = JSON.encodeToString(VfsDirectoryListing.serializer(), data.listing),
+        mimeType = "application/json",
+        isBinary = false,
+    )
+    is BinaryReadData -> ContentResult(
+        payload = Base64.encode(data.bytes),
+        mimeType = file.inferMimeType(),
+        isBinary = true,
+    )
+    is TextReadData -> ContentResult(
+        payload = data.text,
+        mimeType = file.inferMimeType(),
+        isBinary = false,
+    )
 }
 
 // -- write --
@@ -64,28 +117,36 @@ internal suspend fun writeContent(file: VirtualFile, text: String) {
     }
 }
 
-// -- private --
+// -- private helpers --
 
-private fun readVfsTextOrFail(file: VirtualFile): String {
-    if (file.isTooLargeForIntellijSense()) {
-        contentFail("File is too large and not indexed by IntelliJ: ${file.url}")
+private fun VirtualFile.inferMimeType(): String {
+    val ft = this.fileType
+    // Tier 1: Language-based MIME (most accurate)
+    if (ft is LanguageFileType) {
+        ft.language.mimeTypes.firstOrNull()?.let { return it }
     }
-    if (file.fileType.isBinary || isBinaryTypeName(file.fileType.name)) {
-        contentFail("Binary file cannot be read as text: ${file.url} (type=${file.fileType.name})")
+    // Tier 2: Special-case mappings
+    return when (ft.name.uppercase()) {
+        "ARCHIVE" -> "application/zip"
+        "CLASS" -> "application/java-vm"
+        "NATIVE", "UNKNOWN" -> "application/octet-stream"
+        else -> {
+            if (ft.name.startsWith("Image", ignoreCase = true)) {
+                this.extension?.let { ext -> "image/$ext" } ?: "application/octet-stream"
+            } else if (ft.isBinary) {
+                "application/octet-stream"
+            } else {
+                "text/plain"
+            }
+        }
     }
-    return VfsUtil.loadText(file)
 }
 
-private fun isBinaryTypeName(name: String): Boolean {
-    val upper = name.uppercase()
-    return upper in setOf("CLASS", "ARCHIVE", "NATIVE", "UNKNOWN")
-}
-
-private fun directoryListingContent(file: VirtualFile): String {
-    val listing = VfsDirectoryListing(
-        url = file.url,
-        path = file.path,
-        children = file.children.map { child ->
+private fun VirtualFile.readDirectoryListing(): VfsDirectoryListing {
+    return VfsDirectoryListing(
+        url = this.url,
+        path = this.path,
+        children = this.children.map { child ->
             VfsFileStat(
                 name = child.name,
                 url = child.url,
@@ -97,7 +158,6 @@ private fun directoryListingContent(file: VirtualFile): String {
             )
         },
     )
-    return JSON.encodeToString(VfsDirectoryListing.serializer(), listing)
 }
 
 private fun contentFail(message: String): Nothing {

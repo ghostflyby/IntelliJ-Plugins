@@ -8,11 +8,12 @@ package dev.ghostflyby.mcp.filecontent
 
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.document.tools.*
-import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import io.modelcontextprotocol.kotlin.sdk.types.BlobResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.ResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
@@ -35,15 +36,9 @@ internal class FileContentFeature : WorkspaceMcpFeature {
                     val rawVfsUrl = call.ancestors["rawVfsUrl"] ?: ""
                     val uri = call.request.params.uri
                     val file = resolveFileByRawUrl(rawVfsUrl)
-                    val text = readContent(file)
+                    val result = readContentResult(file)
                     ReadResourceResult(
-                        contents = listOf(
-                            TextResourceContents(
-                                uri = uri,
-                                mimeType = TEXT_PLAIN_MIME_TYPE,
-                                text = text,
-                            ),
-                        ),
+                        contents = result.toResourceContents(uri),
                     )
                 }
                 template()
@@ -58,15 +53,9 @@ internal class FileContentFeature : WorkspaceMcpFeature {
                         val relativePath = anc["relativePath"] ?: ""
                         val uri = call.request.params.uri
                         val file = resolveFileByRelativePath(projectKey, relativePath, projectResolver)
-                        val text = readContent(file)
+                        val result = readContentResult(file)
                         ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text,
-                                ),
-                            ),
+                            contents = result.toResourceContents(uri),
                         )
                     }
                     template()
@@ -113,5 +102,15 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         )
 
         return buildRegistration()
+    }
+
+    private fun ContentResult.toResourceContents(uri: String): List<ResourceContents> {
+        return listOf(
+            if (isBinary) {
+                BlobResourceContents(uri = uri, mimeType = mimeType, blob = payload)
+            } else {
+                TextResourceContents(uri = uri, mimeType = mimeType, text = payload)
+            }
+        )
     }
 }
