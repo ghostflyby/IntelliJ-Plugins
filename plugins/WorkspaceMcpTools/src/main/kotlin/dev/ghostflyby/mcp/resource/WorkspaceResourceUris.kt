@@ -30,13 +30,11 @@ internal const val PROJECTS_SEGMENT = "/projects/"
 internal const val KIND_FILES = "files"
 internal const val KIND_DOCUMENTS = "documents"
 internal const val KIND_VFS = "vfs"
-internal const val KIND_DOCUMENT_VFS = "document-vfs"
 
 internal enum class WorkspaceResourceKind {
     FILES,
     DOCUMENTS,
     VFS,
-    DOCUMENT_VFS,
 }
 
 /// Decoded workspace resource URI.
@@ -93,15 +91,6 @@ internal fun workspaceVfsUri(
     return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_VFS}/${rawIntellijVfsUrl}"
 }
 
-internal fun workspaceDocumentVfsUri(
-    instanceKey: String,
-    projectKey: String,
-    rawIntellijVfsUrl: String,
-): String {
-    require(rawIntellijVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
-    return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_DOCUMENT_VFS}/${rawIntellijVfsUrl}"
-}
-
 // ---- decoder ----
 
 internal fun tryDecodeWorkspaceResourceUri(uri: String): WorkspaceResourceUri? {
@@ -126,7 +115,6 @@ internal fun tryDecodeWorkspaceResourceUri(uri: String): WorkspaceResourceUri? {
         KIND_FILES -> WorkspaceResourceKind.FILES
         KIND_DOCUMENTS -> WorkspaceResourceKind.DOCUMENTS
         KIND_VFS -> WorkspaceResourceKind.VFS
-        KIND_DOCUMENT_VFS -> WorkspaceResourceKind.DOCUMENT_VFS
         else -> return null
     }
     val tail = afterProjectKey.substring(kindEnd + 1)
