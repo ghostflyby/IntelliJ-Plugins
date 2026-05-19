@@ -48,12 +48,10 @@ internal class WorkspaceMcpSdkServerService(
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val sessionState = WorkspaceMcpSessionState { server }
     private val catalog = WorkspaceMcpResourceCatalog(sessionState, projectResolver)
-    private val eventBus = WorkspaceMcpResourceEventBus(scope) { server }
-    private val primitiveRegistry = WorkspaceMcpPrimitiveRegistry(sessionState)
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
-        primitiveRegistry = primitiveRegistry,
+        sessionState = sessionState,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
     )
@@ -61,6 +59,8 @@ internal class WorkspaceMcpSdkServerService(
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
+    private val listChangedRef = AtomicReference<Set<String>>(emptySet())
+    private var listChangedFlushJob: Job? = null
     private val pendingUpdateRef = AtomicReference<Set<String>>(emptySet())
     private var resourceUpdateFlushJob: Job? = null
 
@@ -210,7 +210,7 @@ internal class WorkspaceMcpSdkServerService(
             Method.Defined.NotificationsRootsListChanged,
         ) {
             clearSessionRoots(session.sessionId)
-            eventBus.scheduleSessionListChanged(session.sessionId)
+            scheduleSessionListChanged(session.sessionId)
             CompletableDeferred(Unit)
         }
     }
@@ -250,7 +250,48 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     internal fun scheduleResourceListChanged() {
-        eventBus.scheduleAllSessionsListChanged()
+        scheduleAllSessionsListChanged()
+    }
+
+    private fun scheduleSessionListChanged(sessionId: String) {
+        while (true) {
+            val current = listChangedRef.get()
+            if (listChangedRef.compareAndSet(current, current + sessionId)) break
+        }
+        scheduleListChangedFlush()
+    }
+
+    private fun scheduleAllSessionsListChanged() {
+        val activeServer = server
+        if (activeServer != null) {
+            val keys = activeServer.sessions.keys
+            while (true) {
+                val current = listChangedRef.get()
+                if (listChangedRef.compareAndSet(current, current + keys)) break
+            }
+        }
+        scheduleListChangedFlush()
+    }
+
+    private fun scheduleListChangedFlush() {
+        if (listChangedFlushJob != null) return
+        listChangedFlushJob = scope.launch {
+            delay(RESOURCE_LIST_CHANGED_COALESCE_MILLIS.milliseconds)
+            flushListChanged()
+        }
+    }
+
+    private suspend fun flushListChanged() {
+        val targetSessionIds = listChangedRef.getAndSet(emptySet())
+        listChangedFlushJob = null
+        val activeServer = server ?: return
+        val aliveIds = activeServer.sessions.keys
+        targetSessionIds.intersect(aliveIds).forEach { sessionId ->
+            runCatching { activeServer.sendResourceListChanged(sessionId) }
+                .onFailure { error ->
+                    logger.warn("Failed to send resource list changed to session $sessionId", error)
+                }
+        }
     }
 
     private suspend fun flushPendingResourceUpdates() {
@@ -283,5 +324,6 @@ internal class WorkspaceMcpSdkServerService(
         private const val LOOPBACK_HOST = "127.0.0.1"
         private const val MCP_ENDPOINT_PATH = "/mcp"
         private const val RESOURCE_UPDATE_COALESCE_MILLIS = 100L
+        private const val RESOURCE_LIST_CHANGED_COALESCE_MILLIS = 100L
     }
 }

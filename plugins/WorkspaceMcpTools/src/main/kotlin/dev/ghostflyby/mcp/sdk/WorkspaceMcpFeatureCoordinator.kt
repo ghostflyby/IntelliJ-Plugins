@@ -8,18 +8,17 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.logger
-import dev.ghostflyby.mcp.route.ResourceRouteCompiler
-import dev.ghostflyby.mcp.route.ResourceRouteSnapshot
-import dev.ghostflyby.mcp.route.WorkspaceResourceRouteContribution
+import dev.ghostflyby.mcp.route.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 
+
 internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
     private val projectResolver: WorkspaceProjectResolver,
-    private val primitiveRegistry: WorkspaceMcpPrimitiveRegistry,
+    private val sessionState: WorkspaceMcpSessionState,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
 ) {
@@ -83,7 +82,71 @@ internal class WorkspaceMcpFeatureCoordinator(
         val snapshot = compileSnapshot()
         onSnapshotChanged(snapshot)
         catalog.updateSnapshot(snapshot)
-        primitiveRegistry.syncResources(activeServer, snapshot)
+        diffResources(activeServer, snapshot)
+    }
+
+    private val resourceUris = linkedSetOf<String>()
+    private val templateUris = linkedSetOf<String>()
+
+    private fun diffResources(activeServer: Server, snapshot: ResourceRouteSnapshot) {
+        val nextResourceUris = linkedSetOf<String>()
+        val nextTemplateUris = linkedSetOf<String>()
+
+        snapshot.resources.forEach { entry ->
+            if (entry.isParameterized) {
+                nextTemplateUris += entry.uri
+                if (entry.uri !in templateUris) {
+                    activeServer.addResourceTemplate(
+                        uriTemplate = entry.uri,
+                        name = entry.name,
+                        description = entry.description,
+                        mimeType = entry.mimeType,
+                    ) { request, vars ->
+                        entry.handler(
+                            WorkspaceMcpCall(
+                                connection = this,
+                                request = request,
+                                ancestors = AncestorContext(vars),
+                                sessionState = sessionState,
+                            ),
+                        )
+                    }
+                }
+            } else {
+                val concreteUri = entry.uri.replace("{instanceKey}", workspaceInstanceKey())
+                nextResourceUris += concreteUri
+                if (concreteUri !in resourceUris) {
+                    activeServer.addResource(
+                        uri = concreteUri,
+                        name = entry.name,
+                        description = entry.description,
+                        mimeType = entry.mimeType,
+                    ) { request ->
+                        entry.handler(
+                            WorkspaceMcpCall(
+                                connection = this,
+                                request = request,
+                                ancestors = AncestorContext(emptyMap()),
+                                sessionState = sessionState,
+                            ),
+                        )
+                    }
+                }
+            }
+        }
+
+        (resourceUris - nextResourceUris).forEach { activeServer.removeResource(it) }
+        (templateUris - nextTemplateUris).forEach { activeServer.removeResourceTemplate(it) }
+
+        resourceUris.clear()
+        resourceUris += nextResourceUris
+        templateUris.clear()
+        templateUris += nextTemplateUris
+    }
+
+    fun clearPrimitives() {
+        resourceUris.clear()
+        templateUris.clear()
     }
 
     private fun compileSnapshot(): ResourceRouteSnapshot {
