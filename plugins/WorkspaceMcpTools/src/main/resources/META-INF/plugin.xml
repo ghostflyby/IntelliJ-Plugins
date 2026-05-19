@@ -20,7 +20,6 @@
         <workspaceFeature implementation="dev.ghostflyby.mcp.core.CoreResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.filecontent.FileContentFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature"/>
-        <workspaceFeature implementation="dev.ghostflyby.mcp.document.resources.DocumentResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.quality.QualityFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.scope.search.ScopeFileSearchFeature"/>

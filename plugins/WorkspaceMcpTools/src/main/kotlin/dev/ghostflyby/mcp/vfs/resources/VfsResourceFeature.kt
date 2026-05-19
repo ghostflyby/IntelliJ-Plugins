@@ -6,17 +6,10 @@
 
 package dev.ghostflyby.mcp.vfs.resources
 
-import dev.ghostflyby.mcp.core.CoreResourceFeature
-import dev.ghostflyby.mcp.resource.TEXT_PLAIN_MIME_TYPE
-import dev.ghostflyby.mcp.resource.workspaceFileUri
-import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.vfs.tools.*
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
  * VFS resource feature: provides project-scoped file and VFS resource templates
@@ -26,52 +19,6 @@ internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
-        val projectAnchor = CoreResourceFeature.PROJECT_ROUTE
-
-        segments {
-            under(projectAnchor) {
-                route("files/{+relativePath}") {
-                    resource { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc["projectKey"] ?: ""
-                        val relativePath = anc["relativePath"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceFileUri(instanceKey, projectKey, relativePath)
-                        val text = readFileByRelativePath(uri, projectKey, relativePath, projectResolver)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text,
-                                ),
-                            ),
-                        )
-                    }
-                    template()
-                }
-                route("vfs/{+rawVfsUrl}") {
-                    resource { call ->
-                        val anc = call.ancestors
-                        val projectKey = anc["projectKey"] ?: ""
-                        val rawVfsUrl = anc["rawVfsUrl"] ?: ""
-                        val instanceKey = workspaceInstanceKey()
-                        val uri = workspaceVfsUri(instanceKey, projectKey, rawVfsUrl)
-                        val text = readFileByVfsUrl(uri, rawVfsUrl, projectResolver)
-                        ReadResourceResult(
-                            contents = listOf(
-                                TextResourceContents(
-                                    uri = uri,
-                                    mimeType = TEXT_PLAIN_MIME_TYPE,
-                                    text = text,
-                                ),
-                            ),
-                        )
-                    }
-                    template()
-                }
-            }
-        }
 
         // Register SDK tools (unchanged)
         registerTool<VfsExistsArgs>(
