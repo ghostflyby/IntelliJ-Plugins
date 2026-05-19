@@ -33,6 +33,8 @@ internal data class QueryToken(
     val paramName: String? = null,
     /** Non-null when literal `key=value` match. */
     val literalValue: String? = null,
+    /** True when the query param is optional (`{?param}` syntax). */
+    val optional: Boolean = false,
 )
 
 /**
@@ -92,9 +94,19 @@ internal data class RoutePattern(
          * @throws IllegalArgumentException if the pattern is invalid.
          */
         fun parse(pattern: String): RoutePattern {
-            val queryIdx = pattern.indexOf('?')
+            // Split at '{?' (optional query marker) or literal '?'
+            val optQueryIdx = pattern.indexOf("{?")
+            val litQueryIdx = pattern.indexOf('?')
+            val queryIdx = if (optQueryIdx >= 0) {
+                // {?param} present: path is before it, query starts from {?
+                optQueryIdx
+            } else if (litQueryIdx >= 0) {
+                litQueryIdx
+            } else {
+                -1
+            }
             val pathPart = if (queryIdx >= 0) pattern.substring(0, queryIdx) else pattern
-            val queryPart = if (queryIdx >= 0) pattern.substring(queryIdx + 1) else ""
+            val queryPart = if (queryIdx >= 0) pattern.substring(queryIdx) else ""
 
             val pathTokens = parsePath(pathPart)
             val queryTokens = if (queryPart.isBlank()) emptyList() else parseQuery(queryPart)
@@ -142,7 +154,15 @@ internal data class RoutePattern(
         }
 
         private fun parseQuery(query: String): List<QueryToken> {
-            return query.split('&').filter { it.isNotBlank() }.map { pair ->
+            val trimmed = query.trimStart('?')
+            if (trimmed.startsWith("{?")) {
+                // {?param} — optional query, no literal key=
+                val name = trimmed.substring(2, trimmed.length - 1)
+                require(name.isNotBlank()) { "Query param name must not be empty" }
+                require(PARAM_NAME_RE.matches(name)) { "Invalid query param name '$name'" }
+                return listOf(QueryToken(key = name, paramName = name, optional = true))
+            }
+            return trimmed.split('&').filter { it.isNotBlank() }.map { pair ->
                 val eqIdx = pair.indexOf('=')
                 if (eqIdx < 0) {
                     // Literal key with no value
@@ -150,7 +170,14 @@ internal data class RoutePattern(
                 } else {
                     val key = pair.substring(0, eqIdx)
                     val value = pair.substring(eqIdx + 1)
-                    if (value.startsWith("{") && value.endsWith("}")) {
+                    if (value.startsWith("{?") && value.endsWith("}")) {
+                        val name = value.substring(2, value.length - 1)
+                        require(name.isNotBlank()) { "Query param name must not be empty in '$pair'" }
+                        require(PARAM_NAME_RE.matches(name)) {
+                            "Invalid query param name '$name' in '$pair'"
+                        }
+                        QueryToken(key = key, paramName = name, optional = true)
+                    } else if (value.startsWith("{") && value.endsWith("}")) {
                         val name = value.substring(1, value.length - 1)
                         require(name.isNotBlank()) { "Query param name must not be empty in '$pair'" }
                         require(PARAM_NAME_RE.matches(name)) {

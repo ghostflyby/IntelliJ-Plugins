@@ -17,8 +17,15 @@ internal object ResourceRouteCompiler {
         registrations.forEach { contribution ->
             contribution.roots.forEach { root ->
                 val clonedRoot = root.cloneWithoutAnchors()
-                require(clonedRoot.name !in roots) { "Duplicate root segment name: ${clonedRoot.name}" }
-                roots[clonedRoot.name] = clonedRoot
+                if (clonedRoot.name in roots) {
+                    val existing = roots[clonedRoot.name]!!
+                    existing.resourceEndpoints += clonedRoot.resourceEndpoints
+                    if (clonedRoot.templateEndpoint != null && existing.templateEndpoint == null) {
+                        existing.templateEndpoint = clonedRoot.templateEndpoint
+                    }
+                } else {
+                    roots[clonedRoot.name] = clonedRoot
+                }
             }
             contribution.pendingAnchors.forEach { pendingAnchor ->
                 pendingAnchors += PendingAnchor(
@@ -83,8 +90,9 @@ internal object ResourceRouteCompiler {
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
-        segment.resourceEndpoint?.let { endpoint ->
-            val querySuffix = segment.routePattern?.queryTemplate ?: ""
+        segment.resourceEndpoints.forEach { entry ->
+            val endpoint = entry.endpoint
+            val querySuffix = entry.queryTemplate ?: segment.routePattern?.queryTemplate ?: ""
             val baseUri = "ij-workspace://{instanceKey}/$currentPath"
             val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
             resources += ResourceRouteResource(
@@ -127,7 +135,7 @@ internal object ResourceRouteCompiler {
             is ParameterPathSegment -> ParameterPathSegment(name = name, paramName = paramName, extensible = extensible)
         }
         clone.ownerFeatureName = ownerFeatureName
-        clone.resourceEndpoint = resourceEndpoint
+        resourceEndpoints.forEach { clone.resourceEndpoints += it }
         clone.templateEndpoint = templateEndpoint
         clone.routePattern = routePattern
         clone.routeAnchor = routeAnchor

@@ -83,10 +83,9 @@ internal open class ResourceSegmentCollector(
         handler: ResourceReadHandler,
     ) {
         val target = current ?: error("Inline resource endpoint requires a current path segment.")
-        check(target.resourceEndpoint == null) {
-            "Resource endpoint is already registered for segment '${target.name}'."
-        }
-        target.resourceEndpoint = ResourceEndpoint(handler = handler, listProvider = listProvider)
+        target.resourceEndpoints += ResourceEndpointEntry(
+            endpoint = ResourceEndpoint(handler = handler, listProvider = listProvider),
+        )
     }
 
     override fun template(listProvider: TemplateResourceListProvider?) {
@@ -105,13 +104,21 @@ internal open class ResourceSegmentCollector(
         val patternObj = RoutePattern.parse(pattern)
         val dsb = RouteDslBuilder().apply(block)
         val segments = buildTreeFromPattern(patternObj, dsb.resourceEndpoint, dsb.templateEndpoint)
-        // Route is a root — it stays in _roots, NOT a pending anchor
         segments.forEach { seg ->
             if (anchor != null) {
                 val leaf = findLeaf(seg)
                 leaf.routeAnchor = anchor
             }
-            _roots.add(seg)
+            // Merge into existing root with same name
+            val existing = _roots.find { it.name == seg.name }
+            if (existing != null) {
+                existing.resourceEndpoints += seg.resourceEndpoints
+                if (seg.templateEndpoint != null && existing.templateEndpoint == null) {
+                    existing.templateEndpoint = seg.templateEndpoint
+                }
+            } else {
+                _roots.add(seg)
+            }
         }
     }
 
@@ -180,7 +187,12 @@ internal fun buildTreeFromPattern(
         current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
-    if (resourceEndpoint != null) current.resourceEndpoint = resourceEndpoint
+    if (resourceEndpoint != null) {
+        current.resourceEndpoints += ResourceEndpointEntry(
+            endpoint = resourceEndpoint,
+            queryTokens = pattern.queryTokens,
+        )
+    }
     if (templateEndpoint != null) current.templateEndpoint = templateEndpoint
     current.routePattern = pattern
 

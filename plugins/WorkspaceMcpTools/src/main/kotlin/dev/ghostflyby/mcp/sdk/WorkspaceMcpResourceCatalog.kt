@@ -94,7 +94,7 @@ internal class WorkspaceMcpResourceCatalog(
         call: WorkspaceMcpCall<ListResourcesRequest>,
         path: String,
     ): ResourceListDecision<Resource> {
-        val ep = resourceEndpoint ?: return ResourceListDecision()
+        val ep = resourceEndpoints.firstOrNull()?.endpoint ?: return ResourceListDecision()
         return ep.listProvider?.invoke(call)
             ?: if (this is ParameterPathSegment) ResourceListDecision()
             else defaultResourceDecision(path, ep.mimeType)

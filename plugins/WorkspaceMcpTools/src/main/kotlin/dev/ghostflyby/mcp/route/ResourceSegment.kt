@@ -33,7 +33,7 @@ internal sealed class ResourceSegment {
     abstract val name: String
     abstract val extensible: Boolean
     var ownerFeatureName: String? = null
-    var resourceEndpoint: ResourceEndpoint? = null
+    val resourceEndpoints: MutableList<ResourceEndpointEntry> = mutableListOf()
     var templateEndpoint: ResourceTemplateEndpoint? = null
     var routePattern: RoutePattern? = null
     var routeAnchor: RouteAnchor? = null
@@ -48,6 +48,23 @@ internal data class ResourceEndpoint(
     val description: String = "",
     val mimeType: String = "application/json",
 )
+
+internal data class ResourceEndpointEntry(
+    val endpoint: ResourceEndpoint,
+    val queryTokens: List<QueryToken> = emptyList(),
+)
+
+internal val ResourceEndpointEntry.queryTemplate: String
+    get() {
+        if (queryTokens.isEmpty()) return ""
+        return queryTokens.joinToString("&", prefix = "?") { token ->
+            when {
+                token.paramName != null -> "${token.key}={${token.paramName}}"
+                token.literalValue != null -> "${token.key}=${token.literalValue}"
+                else -> token.key
+            }
+        }
+    }
 
 internal data class ResourceTemplateEndpoint(
     val listProvider: TemplateResourceListProvider? = null,
