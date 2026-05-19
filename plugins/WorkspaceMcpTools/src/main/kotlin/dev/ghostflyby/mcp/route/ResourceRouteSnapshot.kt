@@ -49,9 +49,8 @@ internal data class ResourceRouteSnapshot(
                 segment = root,
                 parts = parts,
                 index = 1,
-                params = mapOf("instanceKey" to parsed.instanceKey),
-                segmentIndex = emptyList(),
-            ) ?: continue
+            params = mapOf("instanceKey" to parsed.instanceKey),
+        ) ?: continue
             if (candidate.embedsQuestionMark && match.segment.routePattern?.hasReservedParam != true) {
                 continue
             }
@@ -79,7 +78,6 @@ internal data class ResourceRouteSnapshot(
         parts: List<String>,
         index: Int,
         params: Map<String, String>,
-        segmentIndex: List<Pair<SegmentId, String>>,
     ): ResourceRouteMatch? {
         when (segment) {
             is LiteralPathSegment -> {
@@ -92,27 +90,26 @@ internal data class ResourceRouteSnapshot(
                 }
                 val nextPart = parts[index]
                 segment.children[nextPart]?.let { child ->
-                    matchSegment(child, parts, index + 1, params, segmentIndex)?.let { return it }
+                    matchSegment(child, parts, index + 1, params)?.let { return it }
                 }
                 segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
-                    matchSegment(child, parts, index, params, segmentIndex)?.let { return it }
+                    matchSegment(child, parts, index, params)?.let { return it }
                 }
-                segment.anchors.values.forEach { anchor ->
-                    matchAnchor(anchor, parts, index, params, segmentIndex)?.let { return it }
+                segment.attachedSegments.forEach { anchor ->
+                    matchAnchor(anchor, parts, index, params)?.let { return it }
                 }
                 return null
             }
 
             is ParameterPathSegment -> {
                 if (index >= parts.size) return null
-                val value = if (segment.children.isEmpty() && segment.anchors.isEmpty()) {
+                val value = if (segment.children.isEmpty() && segment.attachedSegments.isEmpty()) {
                     parts.drop(index).joinToString("/")
                 } else {
                     parts[index]
                 }
                 val nextParams = params + (segment.paramName to value)
-                val nextIndex = segmentIndex + (segment.segmentId to value)
-                val nextPartIndex = if (segment.children.isEmpty() && segment.anchors.isEmpty()) {
+                val nextPartIndex = if (segment.children.isEmpty() && segment.attachedSegments.isEmpty()) {
                     parts.size
                 } else {
                     index + 1
@@ -126,13 +123,13 @@ internal data class ResourceRouteSnapshot(
                 }
                 val nextPart = parts[nextPartIndex]
                 segment.children[nextPart]?.let { child ->
-                    matchSegment(child, parts, nextPartIndex + 1, nextParams, nextIndex)?.let { return it }
+                    matchSegment(child, parts, nextPartIndex + 1, nextParams)?.let { return it }
                 }
                 segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
-                    matchSegment(child, parts, nextPartIndex, nextParams, nextIndex)?.let { return it }
+                    matchSegment(child, parts, nextPartIndex, nextParams)?.let { return it }
                 }
-                segment.anchors.values.forEach { anchor ->
-                    matchAnchor(anchor, parts, nextPartIndex, nextParams, nextIndex)?.let { return it }
+                segment.attachedSegments.forEach { anchor ->
+                    matchAnchor(anchor, parts, nextPartIndex, nextParams)?.let { return it }
                 }
                 return null
             }
@@ -144,17 +141,16 @@ internal data class ResourceRouteSnapshot(
         parts: List<String>,
         index: Int,
         params: Map<String, String>,
-        segmentIndex: List<Pair<SegmentId, String>>,
     ): ResourceRouteMatch? {
         return when (anchor) {
             is LiteralPathSegment -> {
                 if (anchor.name == parts.getOrNull(index)) {
-                    matchSegment(anchor, parts, index + 1, params, segmentIndex)
+                    matchSegment(anchor, parts, index + 1, params)
                 } else {
                     null
                 }
             }
-            is ParameterPathSegment -> matchSegment(anchor, parts, index, params, segmentIndex)
+            is ParameterPathSegment -> matchSegment(anchor, parts, index, params)
         }
     }
 

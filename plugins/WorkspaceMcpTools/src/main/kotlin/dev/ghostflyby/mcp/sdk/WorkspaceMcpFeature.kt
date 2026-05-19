@@ -89,12 +89,10 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         val pendingAnchors = segmentCollector.pendingAnchors.toList()
         segmentCollector.roots.forEach { it.markOwner(featureName) }
         pendingAnchors.flatMap { it.segments }.forEach { it.markOwner(featureName) }
-        val segmentIds = segmentCollector.roots.map { it.segmentId }.toSet()
         return WorkspaceMcpFeatureRegistration(
             featureName = featureName,
             job = featureScope.coroutineContext[Job] ?: Job(),
             registeredTools = trackedTools.toSet(),
-            segmentIds = segmentIds,
             pendingAnchors = pendingAnchors,
             roots = segmentCollector.roots.toList(),
         )
@@ -104,7 +102,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
 private fun ResourceSegment.markOwner(featureName: String) {
     ownerFeatureName = featureName
     children.values.forEach { it.markOwner(featureName) }
-    anchors.values.forEach { it.markOwner(featureName) }
+    attachedSegments.forEach { it.markOwner(featureName) }
 }
 
 /**
@@ -115,7 +113,6 @@ internal data class WorkspaceMcpFeatureRegistration(
     val featureName: String,
     val job: Job,
     val registeredTools: Set<String>,
-    val segmentIds: Set<SegmentId> = emptySet(),
     val pendingAnchors: List<PendingAnchor> = emptyList(),
     val roots: List<ResourceSegment> = emptyList(),
 )

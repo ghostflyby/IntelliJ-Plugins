@@ -9,36 +9,19 @@ package dev.ghostflyby.mcp.route
 internal object ResourceRouteCompiler {
     fun compile(registrations: Collection<WorkspaceResourceRouteContribution>): ResourceRouteSnapshot {
         val roots = linkedMapOf<String, ResourceSegment>()
-        val segmentById = linkedMapOf<SegmentId, ResourceSegment>()
         val pendingAnchors = mutableListOf<PendingAnchor>()
-        val routeAnchorAnchors = mutableListOf<PendingAnchor>()
 
         registrations.forEach { contribution ->
             contribution.roots.forEach { root ->
                 val clonedRoot = root.cloneWithoutAnchors()
                 require(clonedRoot.name !in roots) { "Duplicate root segment name: ${clonedRoot.name}" }
                 roots[clonedRoot.name] = clonedRoot
-                indexTree(clonedRoot, segmentById)
             }
-            contribution.pendingAnchors.forEach { anchor ->
-                if (anchor.routeAnchor != null) {
-                    routeAnchorAnchors.add(anchor)
-                } else {
-                    pendingAnchors += PendingAnchor(
-                        targetId = anchor.targetId,
-                        segments = anchor.segments.map { it.cloneWithoutAnchors() },
-                    )
-                }
-            }
-        }
-
-        // Resolve legacy SegmentId-based anchors
-        pendingAnchors.forEach { anchor ->
-            val target = segmentById[anchor.targetId] ?: return@forEach
-            if (!target.extensible) return@forEach
-            anchor.segments.forEach { segment ->
-                target.anchors[segment.segmentId] = segment
-                indexTree(segment, segmentById)
+            contribution.pendingAnchors.forEach { pendingAnchor ->
+                pendingAnchors += PendingAnchor(
+                    routeAnchor = pendingAnchor.routeAnchor,
+                    segments = pendingAnchor.segments.map { it.cloneWithoutAnchors() },
+                )
             }
         }
 
@@ -47,12 +30,10 @@ internal object ResourceRouteCompiler {
         roots.values.forEach { root -> indexRouteAnchors(root, routeAnchorIndex) }
 
         // Resolve RouteAnchor-based anchors by match key
-        routeAnchorAnchors.forEach { anchor ->
-            val anchorKey = anchor.routeAnchor?.key ?: return@forEach
-            val target = routeAnchorIndex[anchorKey] ?: return@forEach
+        pendingAnchors.forEach { anchor ->
+            val target = routeAnchorIndex[anchor.routeAnchor.key] ?: return@forEach
             anchor.segments.forEach { segment ->
-                target.anchors[segment.segmentId] = segment
-                indexTree(segment, segmentById)
+                target.attachedSegments += segment
             }
         }
 
@@ -84,14 +65,7 @@ internal object ResourceRouteCompiler {
             index[segment.routeAnchor!!.key] = segment
         }
         segment.children.values.forEach { indexRouteAnchors(it, index) }
-        segment.anchors.values.forEach { indexRouteAnchors(it, index) }
-    }
-
-    private fun indexTree(segment: ResourceSegment, segmentById: MutableMap<SegmentId, ResourceSegment>) {
-        require(segment.segmentId !in segmentById) { "Duplicate SegmentId: ${segment.segmentId}" }
-        segmentById[segment.segmentId] = segment
-        segment.children.values.forEach { indexTree(it, segmentById) }
-        segment.anchors.values.forEach { indexTree(it, segmentById) }
+        segment.attachedSegments.forEach { indexRouteAnchors(it, index) }
     }
 
     private fun enumerate(
@@ -133,7 +107,7 @@ internal object ResourceRouteCompiler {
         segment.children.values.forEach {
             enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
         }
-        segment.anchors.values.forEach {
+        segment.attachedSegments.forEach {
             enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
         }
     }
@@ -146,8 +120,8 @@ internal object ResourceRouteCompiler {
 
     private fun ResourceSegment.cloneWithoutAnchors(): ResourceSegment {
         val clone = when (this) {
-            is LiteralPathSegment -> LiteralPathSegment(segmentId = segmentId, name = name, extensible = extensible)
-            is ParameterPathSegment -> ParameterPathSegment(segmentId = segmentId, name = name, paramName = paramName, extensible = extensible)
+            is LiteralPathSegment -> LiteralPathSegment(name = name, extensible = extensible)
+            is ParameterPathSegment -> ParameterPathSegment(name = name, paramName = paramName, extensible = extensible)
         }
         clone.ownerFeatureName = ownerFeatureName
         clone.resourceEndpoint = resourceEndpoint
@@ -157,6 +131,9 @@ internal object ResourceRouteCompiler {
         children.values.forEach { child ->
             val childClone = child.cloneWithoutAnchors()
             clone.children[childClone.name] = childClone
+        }
+        attachedSegments.forEach { child ->
+            clone.attachedSegments += child.cloneWithoutAnchors()
         }
         return clone
     }

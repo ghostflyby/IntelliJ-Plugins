@@ -9,11 +9,9 @@ package dev.ghostflyby.mcp.route
 /**
  * String-keyed anchor for cross-feature route mount points.
  *
- * Replaces [SegmentId] for inter-feature route tree attachment.
  * Features use [RouteAnchor] in `under(anchor)` to hook sub-trees
  * under another feature's route. The anchor [key] is the string
  * key used in the ancestor map (e.g. `"projectKey"`).
  */
 @JvmInline
 internal value class RouteAnchor(val key: String)
-

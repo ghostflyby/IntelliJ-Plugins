@@ -164,7 +164,7 @@ internal class WorkspaceMcpResourceCatalog(
     }
 
     private fun ResourceSegment.childrenAndAnchors(): List<ResourceSegment> {
-        return children.values.toList() + anchors.values
+        return children.values.toList() + attachedSegments
     }
 
     private fun concreteInstanceUri(path: String): String =

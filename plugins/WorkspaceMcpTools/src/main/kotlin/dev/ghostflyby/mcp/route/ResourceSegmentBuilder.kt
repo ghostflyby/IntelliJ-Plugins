@@ -7,30 +7,6 @@
 package dev.ghostflyby.mcp.route
 
 internal interface ResourceSegmentBuilder {
-    // -- existing facade methods (transition) --
-
-    fun segment(
-        name: String,
-        id: SegmentId = SegmentId.next(),
-        extensible: Boolean = false,
-        block: ResourceSegmentBuilder.() -> Unit = {},
-    )
-
-    fun parameter(
-        paramName: String,
-        id: SegmentId = SegmentId.next(),
-        extensible: Boolean = false,
-        block: ResourceSegmentBuilder.() -> Unit = {},
-    )
-
-    fun resource(
-        name: String,
-        id: SegmentId = SegmentId.next(),
-        extensible: Boolean = false,
-        listProvider: ConcreteResourceListProvider? = null,
-        handler: ResourceReadHandler,
-    )
-
     fun resource(
         listProvider: ConcreteResourceListProvider? = null,
         handler: ResourceReadHandler,
@@ -39,10 +15,6 @@ internal interface ResourceSegmentBuilder {
     fun template(
         listProvider: TemplateResourceListProvider? = null,
     )
-
-    fun under(anchor: SegmentId, block: ResourceSegmentBuilder.() -> Unit = {})
-
-    // -- new Ktor-like DSL methods --
 
     /**
      * Define a route using a Ktor-like pattern string.
@@ -91,10 +63,8 @@ internal class RouteDslBuilder {
 // ---- Pending anchor ----
 
 internal data class PendingAnchor(
-    val targetId: SegmentId,
     val segments: List<ResourceSegment>,
-    /** non-null when this is a RouteAnchor-based pending anchor. */
-    val routeAnchor: RouteAnchor? = null,
+    val routeAnchor: RouteAnchor,
 )
 
 // ---- ResourceSegmentCollector ----
@@ -107,40 +77,6 @@ internal open class ResourceSegmentCollector(
 
     val roots: List<ResourceSegment> get() = _roots.toList()
     val pendingAnchors: List<PendingAnchor> get() = _pendingAnchors.toList()
-
-    override fun segment(
-        name: String,
-        id: SegmentId,
-        extensible: Boolean,
-        block: ResourceSegmentBuilder.() -> Unit,
-    ) {
-        val segment = LiteralPathSegment(segmentId = id, name = name, extensible = extensible)
-        collectChild(segment, block)
-    }
-
-    override fun parameter(
-        paramName: String,
-        id: SegmentId,
-        extensible: Boolean,
-        block: ResourceSegmentBuilder.() -> Unit,
-    ) {
-        val segment = ParameterPathSegment(
-            segmentId = id, name = "{$paramName}", paramName = paramName, extensible = extensible,
-        )
-        collectChild(segment, block)
-    }
-
-    override fun resource(
-        name: String,
-        id: SegmentId,
-        extensible: Boolean,
-        listProvider: ConcreteResourceListProvider?,
-        handler: ResourceReadHandler,
-    ) {
-        val segment = LiteralPathSegment(segmentId = id, name = name, extensible = extensible)
-        segment.resourceEndpoint = ResourceEndpoint(handler = handler, listProvider = listProvider)
-        attachChild(segment)
-    }
 
     override fun resource(
         listProvider: ConcreteResourceListProvider?,
@@ -160,15 +96,6 @@ internal open class ResourceSegmentCollector(
         }
         target.templateEndpoint = ResourceTemplateEndpoint(listProvider = listProvider)
     }
-
-    override fun under(anchor: SegmentId, block: ResourceSegmentBuilder.() -> Unit) {
-        val collector = ResourceSegmentCollector()
-        collector.block()
-        _pendingAnchors.add(PendingAnchor(targetId = anchor, segments = collector.roots))
-        _pendingAnchors.addAll(collector.pendingAnchors)
-    }
-
-    // -- New DSL implementations --
 
     override fun route(
         pattern: String,
@@ -193,7 +120,6 @@ internal open class ResourceSegmentCollector(
         block(collector)
         _pendingAnchors.add(
             PendingAnchor(
-                targetId = SegmentId.next(),
                 segments = collector.roots.toList(),
                 routeAnchor = anchor,
             ),
@@ -263,8 +189,8 @@ internal fun buildTreeFromPattern(
 
 private fun tokenToSegment(token: PathToken): ResourceSegment {
     return when (token) {
-        is LiteralToken -> LiteralPathSegment(segmentId = SegmentId.next(), name = token.text)
-        is ParamToken -> ParameterPathSegment(segmentId = SegmentId.next(), name = "{${token.name}}", paramName = token.name)
-        is ReservedParamToken -> ParameterPathSegment(segmentId = SegmentId.next(), name = "{+${token.name}}", paramName = token.name, extensible = true)
+        is LiteralToken -> LiteralPathSegment(name = token.text)
+        is ParamToken -> ParameterPathSegment(name = "{${token.name}}", paramName = token.name)
+        is ReservedParamToken -> ParameterPathSegment(name = "{+${token.name}}", paramName = token.name, extensible = true)
     }
 }

@@ -26,7 +26,6 @@ internal data class WorkspaceMcpListProject(
 )
 
 internal sealed class ResourceSegment {
-    abstract val segmentId: SegmentId
     abstract val name: String
     abstract val extensible: Boolean
     var ownerFeatureName: String? = null
@@ -36,7 +35,7 @@ internal sealed class ResourceSegment {
     var routeAnchor: RouteAnchor? = null
 
     val children: MutableMap<String, ResourceSegment> = linkedMapOf()
-    val anchors: MutableMap<SegmentId, ResourceSegment> = linkedMapOf()
+    val attachedSegments: MutableList<ResourceSegment> = mutableListOf()
 }
 
 internal data class ResourceEndpoint(
@@ -53,13 +52,11 @@ internal data class ResourceTemplateEndpoint(
 )
 
 internal class LiteralPathSegment(
-    override val segmentId: SegmentId,
     override val name: String,
     override val extensible: Boolean = false,
 ) : ResourceSegment()
 
 internal class ParameterPathSegment(
-    override val segmentId: SegmentId,
     override val name: String,
     val paramName: String,
     override val extensible: Boolean = false,
