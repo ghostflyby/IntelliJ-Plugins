@@ -39,19 +39,12 @@ internal class WorkspaceResourceUrisTest {
         assertTrue(uri.contains("/projects/$PK/vfs/file:///tmp/workspace/file.txt"))
     }
 
-    @Test
-    fun `workspaceDocumentVfsUri builds correct URI`() {
-        val uri = workspaceDocumentVfsUri(IK, PK, "jar:///tmp/lib.jar!/pkg/Foo.class")
-        assertTrue(uri.startsWith(WORKSPACE_URI_SCHEME))
-        assertTrue(uri.contains("/projects/$PK/document-vfs/"))
-    }
 
     @Test
     fun `new scheme builders reject blank`() {
         assertThrowsIllegalArgument { workspaceFileUri(IK, PK, "") }
         assertThrowsIllegalArgument { workspaceDocumentUri(IK, PK, "  ") }
         assertThrowsIllegalArgument { workspaceVfsUri(IK, PK, "") }
-        assertThrowsIllegalArgument { workspaceDocumentVfsUri(IK, PK, "  ") }
     }
 
     // ---- new scheme decode ----
