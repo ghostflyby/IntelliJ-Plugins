@@ -83,6 +83,7 @@ internal fun workspaceDocumentUri(
     return "${WORKSPACE_URI_SCHEME}${instanceKey}/projects/${projectKey}/${KIND_DOCUMENTS}/${relativePath}"
 }
 
+
 internal fun workspaceVfsUri(
     instanceKey: String,
     projectKey: String,

@@ -18,6 +18,7 @@
 
     <extensions defaultExtensionNs="dev.ghostflyby.mcp.workspace">
         <workspaceFeature implementation="dev.ghostflyby.mcp.core.CoreResourceFeature"/>
+        <workspaceFeature implementation="dev.ghostflyby.mcp.filecontent.FileContentFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.vfs.resources.VfsResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.document.resources.DocumentResourceFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorFeature"/>
