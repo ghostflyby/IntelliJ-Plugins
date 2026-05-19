@@ -14,7 +14,6 @@ import dev.ghostflyby.mcp.route.RouteAnchor
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
-import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 import kotlinx.serialization.json.Json
 
@@ -101,18 +100,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                 template {
                     val projects = visibleProjects()
                     ResourceListDecision(
-                        entries = if (projects.isEmpty()) {
-                            emptyList()
-                        } else {
-                            listOf(
-                                ResourceTemplate(
-                                    uriTemplate = "ij-workspace://$instanceKey/projects/{projectKey}",
-                                    name = "{projectKey}",
-                                    description = null,
-                                    mimeType = APPLICATION_JSON_MIME_TYPE,
-                                ),
-                            )
-                        },
+                        entries = emptyList(),
                         includeChildren = projects.isNotEmpty(),
                     )
                 }
