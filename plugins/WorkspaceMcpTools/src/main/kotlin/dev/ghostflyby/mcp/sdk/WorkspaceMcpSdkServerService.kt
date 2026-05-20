@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -21,12 +20,13 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
+import com.intellij.util.asDisposable
 import dev.ghostflyby.mcp.PluginInfo
-import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
-import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
 import dev.ghostflyby.mcp.resource.workspaceDocumentUri
 import dev.ghostflyby.mcp.resource.workspaceVfsUri
+import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
+import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -42,7 +42,7 @@ import kotlin.time.Duration.Companion.milliseconds
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
     private val scope: CoroutineScope,
-) : Disposable {
+) {
     private val logger = logger<WorkspaceMcpSdkServerService>()
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
@@ -64,42 +64,26 @@ internal class WorkspaceMcpSdkServerService(
     private var resourceUpdateFlushJob: Job? = null
 
     @Volatile
-    private var engine: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
-
-    @Volatile
     private var server: Server? = null
 
     init {
         subscribeToResourceUpdateEvents()
         subscribeToFeatureEvents()
         scope.launch {
-            runCatching {
-                val createdServer = createServer()
+            val createdServer = createServer()
+            try {
                 val port = service<WorkspaceMcpSdkServerSettings>().port
-                val started = embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
-                }.start(wait = false)
                 server = createdServer
-                engine = started
+                embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
+                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
+                }.startSuspend(wait = true)
                 logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
-            }.onFailure { error ->
-                logger.warn("Failed to start Workspace MCP SDK server", error)
+            } finally {
+                server = null
+                runCatching { createdServer.close() }
+                    .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
             }
         }
-    }
-
-    override fun dispose() {
-        scope.launch { closeServer() }
-    }
-
-    private suspend fun closeServer() {
-        val stoppedEngine = engine
-        val stoppedServer = server
-        engine = null
-        server = null
-        runCatching { stoppedServer?.close() }
-            .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
-        stoppedEngine?.stop()
     }
 
     private fun createServer(): Server {
@@ -161,10 +145,10 @@ internal class WorkspaceMcpSdkServerService(
                     scheduleDocumentResourceUpdate(event.document)
                 }
             },
-            this,
+            scope.asDisposable(),
         )
 
-        val connection = ApplicationManager.getApplication().messageBus.connect(this)
+        val connection = ApplicationManager.getApplication().messageBus.connect(scope)
         connection.subscribe(
             VirtualFileManager.VFS_CHANGES,
             object : BulkFileListener {
@@ -201,11 +185,19 @@ internal class WorkspaceMcpSdkServerService(
         }
         session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
             val connection = server?.clientConnection(session.sessionId)
-            if (connection != null) catalog.listResources(connection, request) else ListResourcesResult(emptyList(), null, null)
+            if (connection != null) catalog.listResources(connection, request) else ListResourcesResult(
+                emptyList(),
+                null,
+                null,
+            )
         }
         session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
             val connection = server?.clientConnection(session.sessionId)
-            if (connection != null) catalog.listTemplates(connection, request) else ListResourceTemplatesResult(emptyList(), null, null)
+            if (connection != null) catalog.listTemplates(connection, request) else ListResourceTemplatesResult(
+                emptyList(),
+                null,
+                null,
+            )
         }
         session.setNotificationHandler<RootsListChangedNotification>(
             Method.Defined.NotificationsRootsListChanged,
