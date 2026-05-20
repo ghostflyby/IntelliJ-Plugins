@@ -56,6 +56,14 @@ internal class ToolReflectionTest {
         val r = reflectFirst(NoSchemaTool::class) as ToolReflectionResult.Rejected
         assertEquals(setOf(ToolRejectReason.NO_SCHEMA), r.reasons)
     }
+
+    @Test fun `multi param accepted`() {
+        assertTrue(reflectFirst(MultiParamTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test fun `zero param accepted`() {
+        assertTrue(reflectFirst(ZeroParamTool::class) is ToolReflectionResult.Accepted)
+    }
 }
 
 internal class ValidTool {
@@ -102,5 +110,18 @@ internal class NoReceiverTool {
 
     @Schema
     suspend fun noReceiver(a: NrIn): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = "ok")))
+}
+internal class MultiParamTool {
+    @Serializable data class A(val x: Int)
+    data class B(val y: String)
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doMulti(a: A, b: B): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = "${a.x}, ${b.y}")))
+}
+
+internal class ZeroParamTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doNothing(): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }

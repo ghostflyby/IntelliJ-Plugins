@@ -24,7 +24,6 @@ internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallT
 
 internal enum class ToolRejectReason {
     NOT_SUSPEND,
-    WRONG_PARAM_COUNT,
     NO_RECEIVER,
     WRONG_RECEIVER,
     NO_SCHEMA,
@@ -69,9 +68,8 @@ internal fun reflectOneTool(
             required = (params?.get("required") as? JsonArray)?.map { it.jsonPrimitive.content },
         ),
     )
-    val paramClass = func.valueParameters.first().type.classifier as? KClass<*>
-        ?: return ToolReflectionResult.Rejected(setOf(ToolRejectReason.WRONG_PARAM_COUNT))
-    val info = ToolMethodInfo(func.name, paramClass)
+    val paramClasses = func.valueParameters.map { it.type }
+    val info = ToolMethodInfo(func.name, paramClasses)
     return ToolReflectionResult.Accepted(tool, buildHandler(instance, func, info))
 }
 
@@ -82,8 +80,18 @@ private fun buildHandler(
 ): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
         val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
-        val decoded: Any = try {
-            toolArgsJson.decodeFromJsonElement(serializer(info.paramClass.java), jsonArgs)
+        val decoded = try {
+            func.valueParameters.mapIndexed { i, param ->
+                val key = jsonArgs.keys.firstOrNull { it == param.name } ?: param.name
+                val element = jsonArgs[key] ?: return@handleRequest CallToolResult(
+                    content = listOf(TextContent(text = "Missing argument '${param.name}' for ${info.name}")),
+                    isError = true,
+                )
+                toolArgsJson.decodeFromJsonElement(
+                    serializer(info.paramClasses[i]),
+                    element,
+                )
+            }
         } catch (e: SerializationException) {
             return CallToolResult(
                 content = listOf(TextContent(text = "Invalid arguments for ${info.name}: ${e.message}")),
@@ -103,7 +111,7 @@ private fun buildHandler(
                 parameters = AncestorContext(emptyMap()),
             ),
         )
-        val result = func.callSuspend(instance, mcpCall, decoded)
+        val result = func.callSuspend(instance, mcpCall, *decoded.toTypedArray())
         return result.toMcpCallToolResult()
     }
     return ::handleRequest
@@ -150,13 +158,12 @@ internal fun toMcpCallToolResult(result: Any?, type: KType): CallToolResult {
 
 internal class ToolMethodInfo(
     val name: String,
-    val paramClass: KClass<*>,
+    val paramClasses: List<KType>,
 ) {
     companion object {
         fun classify(func: KFunction<*>): Set<ToolRejectReason> {
             val reasons = mutableSetOf<ToolRejectReason>()
             if (!func.isSuspend) reasons += ToolRejectReason.NOT_SUSPEND
-            if (func.valueParameters.size != 1) reasons += ToolRejectReason.WRONG_PARAM_COUNT
             val receiver = func.extensionReceiverParameter
             if (receiver == null) reasons += ToolRejectReason.NO_RECEIVER
             else {
