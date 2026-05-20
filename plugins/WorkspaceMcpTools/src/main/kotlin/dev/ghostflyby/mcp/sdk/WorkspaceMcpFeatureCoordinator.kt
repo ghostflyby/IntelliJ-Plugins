@@ -102,10 +102,12 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request, vars ->
                         entry.handler(
-                            WorkspaceMcpCall(
-                                connection = this,
-                                request = request,
-                                ancestors = AncestorContext(vars),
+                            McpCallContext(
+                                WorkspaceMcpCall(
+                                    connection = this,
+                                    request = request,
+                                    parameters = AncestorContext(vars),
+                                ),
                             ),
                         )
                     }
@@ -121,10 +123,12 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request ->
                         entry.handler(
-                            WorkspaceMcpCall(
-                                connection = this,
-                                request = request,
-                                ancestors = AncestorContext(emptyMap()),
+                            McpCallContext(
+                                WorkspaceMcpCall(
+                                    connection = this,
+                                    request = request,
+                                    parameters = AncestorContext(emptyMap()),
+                                ),
                             ),
                         )
                     }

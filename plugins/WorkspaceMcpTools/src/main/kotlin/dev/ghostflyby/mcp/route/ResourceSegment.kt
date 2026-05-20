@@ -12,11 +12,14 @@ import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentHashMapOf
 import kotlinx.collections.immutable.persistentListOf
 
-internal typealias ResourceReadHandler = suspend (WorkspaceMcpCall<ReadResourceRequest>) -> ReadResourceResult
-internal typealias ResourceListProvider<R, T> = suspend WorkspaceMcpCall<R>.() -> ResourceListDecision<T>
+internal typealias ResourceReadHandler = suspend McpCallContext<ReadResourceRequest>.() -> ReadResourceResult
+internal typealias ResourceListProvider<R, T> = suspend McpCallContext<R>.() -> ResourceListDecision<T>
 
 internal typealias ConcreteResourceListProvider = ResourceListProvider<ListResourcesRequest, Resource>
 internal typealias TemplateResourceListProvider = ResourceListProvider<ListResourceTemplatesRequest, ResourceTemplate>
+
+@JvmInline
+internal value class McpCallContext<R : Request>(val call: WorkspaceMcpCall<R>)
 
 internal data class ResourceListDecision<T>(
     val entries: List<T> = emptyList(),

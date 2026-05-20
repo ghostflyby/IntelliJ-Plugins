@@ -19,7 +19,7 @@ import kotlin.io.path.exists
 internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
-    val ancestors: AncestorContext,
+    val parameters: AncestorContext,
     private val projectResolver: WorkspaceProjectResolver? = null,
 ) {
     val sessionId: String get() = connection.sessionId

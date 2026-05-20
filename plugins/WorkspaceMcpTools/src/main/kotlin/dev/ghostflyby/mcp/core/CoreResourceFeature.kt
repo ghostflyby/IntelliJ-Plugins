@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.PluginInfo
+import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_ROUTE
 import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
 import dev.ghostflyby.mcp.route.ResourceListDecision
 import dev.ghostflyby.mcp.route.RouteAnchor
@@ -38,7 +39,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         segments {
             // server/info — static listable resource via route pattern
             route("server/info") {
-                read { call ->
+                read {
                     val instanceKey = workspaceInstanceKey()
                     val info = readAction {
                         mapOf("instanceKey" to instanceKey, "version" to PluginInfo.version)
@@ -58,22 +59,22 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
             // projects/{projectKey} — parameterized route with anchor
             route("projects/{projectKey}", anchor = PROJECT_ROUTE) {
                 listResources {
-                        val projects = visibleProjects()
-                        ResourceListDecision(
-                            entries = projects.map { project ->
-                                Resource(
-                                    uri = "ij-workspace://$instanceKey/projects/${project.projectKey}",
-                                    name = project.projectKey,
-                                    description = project.basePath ?: project.name,
-                                    mimeType = APPLICATION_JSON_MIME_TYPE,
-                                    title = project.name,
-                                )
-                            },
-                            includeChildren = projects.isNotEmpty(),
-                        )
-                    }
-                read { call ->
-                    val anc = call.ancestors
+                    val projects = call.visibleProjects()
+                    ResourceListDecision(
+                        entries = projects.map { project ->
+                            Resource(
+                                uri = "ij-workspace://${call.instanceKey}/projects/${project.projectKey}",
+                                name = project.projectKey,
+                                description = project.basePath ?: project.name,
+                                mimeType = APPLICATION_JSON_MIME_TYPE,
+                                title = project.name,
+                            )
+                        },
+                        includeChildren = projects.isNotEmpty(),
+                    )
+                }
+                read {
+                    val anc = call.parameters
                     val projectKey = anc["projectKey"] ?: ""
                     val info = when (val resolved = projectResolver.resolve(projectKey)) {
                         is WorkspaceProjectResolution.Resolved -> mapOf(
@@ -81,6 +82,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                             "name" to resolved.project.name,
                             "basePath" to (resolved.project.basePath ?: ""),
                         )
+
                         is WorkspaceProjectResolution.Unresolved -> mapOf(
                             "error" to resolved.message,
                             "projectKey" to projectKey,
@@ -97,7 +99,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                     )
                 }
                 listTemplates {
-                    val projects = visibleProjects()
+                    val projects = call.visibleProjects()
                     ResourceListDecision(
                         entries = emptyList(),
                         includeChildren = projects.isNotEmpty(),
