@@ -174,6 +174,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun installWorkspaceSubscriptionHandlers(session: ServerSession) {
+        val activeServer = server ?: return
         val shouldInstall =
             sessionState.rememberSubscriptionHandler(session.sessionId)
         if (!shouldInstall) return
@@ -184,20 +185,10 @@ internal class WorkspaceMcpSdkServerService(
             removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
         session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
-            val connection = server?.clientConnection(session.sessionId)
-            if (connection != null) catalog.listResources(connection, request) else ListResourcesResult(
-                emptyList(),
-                null,
-                null,
-            )
+            catalog.listResources(activeServer.clientConnection(session.sessionId), request)
         }
         session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
-            val connection = server?.clientConnection(session.sessionId)
-            if (connection != null) catalog.listTemplates(connection, request) else ListResourceTemplatesResult(
-                emptyList(),
-                null,
-                null,
-            )
+            catalog.listTemplates(activeServer.clientConnection(session.sessionId), request)
         }
         session.setNotificationHandler<RootsListChangedNotification>(
             Method.Defined.NotificationsRootsListChanged,
