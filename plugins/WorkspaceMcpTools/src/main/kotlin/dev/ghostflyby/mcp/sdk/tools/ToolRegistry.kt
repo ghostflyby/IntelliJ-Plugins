@@ -17,11 +17,16 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*
 import kotlinx.serialization.serializer
+import java.lang.invoke.MethodHandle
+import java.lang.invoke.MethodHandles
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
 import kotlin.reflect.KType
 import kotlin.reflect.full.*
+import kotlin.reflect.jvm.javaMethod
 import kotlin.reflect.typeOf
+import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
+import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
 
 internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallToolResult
 
@@ -80,40 +85,11 @@ private fun buildHandler(
     info: ToolMethodInfo,
 ): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
-        val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
-        val decoded = try {
-            func.valueParameters.mapIndexed { i, param ->
-                val key = jsonArgs.keys.firstOrNull { it == param.name } ?: param.name
-                val element = jsonArgs[key] ?: return@handleRequest CallToolResult(
-                    content = listOf(TextContent(text = "Missing argument '${param.name}' for ${info.name}")),
-                    isError = true,
-                )
-                toolArgsJson.decodeFromJsonElement(
-                    serializer(info.paramClasses[i]),
-                    element,
-                )
-            }
-        } catch (e: SerializationException) {
-            return CallToolResult(
-                content = listOf(TextContent(text = "Invalid arguments for ${info.name}: ${e.message}")),
-                isError = true,
-            )
-        } catch (e: IllegalArgumentException) {
-            return CallToolResult(
-                content = listOf(TextContent(text = "Invalid arguments for ${info.name}: ${e.message}")),
-                isError = true,
-            )
+        val decoded = when (val result = decodeToolArguments(request, func, info)) {
+            is ToolArgumentDecodeResult.Decoded -> result.values
+            is ToolArgumentDecodeResult.Failed -> return result.result
         }
-
-        val mcpCall = McpCallContext(
-            WorkspaceMcpCall(
-                connection = conn,
-                request = request,
-                parameters = AncestorContext(emptyMap()),
-            ),
-        )
-        val isExt = func.extensionReceiverParameter != null
-        val args = if (isExt) listOf(instance, mcpCall) + decoded else listOf(instance) + decoded
+        val args = buildToolInvocationArgs(instance, func, conn, request, decoded)
         val result = if (func.isSuspend) {
             func.callSuspend(*args.toTypedArray())
         } else {
@@ -126,6 +102,128 @@ private fun buildHandler(
         return result.toMcpCallToolResult(func.returnType)
     }
     return ::handleRequest
+}
+
+internal fun buildMethodHandleHandler(
+    instance: Any,
+    func: KFunction<*>,
+    info: ToolMethodInfo,
+): Handler {
+    val invoker = MethodHandleToolInvoker.from(func)
+    suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
+        val decoded = when (val result = decodeToolArguments(request, func, info)) {
+            is ToolArgumentDecodeResult.Decoded -> result.values
+            is ToolArgumentDecodeResult.Failed -> return result.result
+        }
+        val args = buildToolInvocationArgs(instance, func, conn, request, decoded)
+        val result = invoker.invoke(args)
+        return result.toMcpCallToolResult(func.returnType)
+    }
+    return ::handleRequest
+}
+
+private sealed class ToolArgumentDecodeResult {
+    data class Decoded(val values: List<Any?>) : ToolArgumentDecodeResult()
+    data class Failed(val result: CallToolResult) : ToolArgumentDecodeResult()
+}
+
+private fun decodeToolArguments(
+    request: CallToolRequest,
+    func: KFunction<*>,
+    info: ToolMethodInfo,
+): ToolArgumentDecodeResult {
+    val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
+    val decoded = try {
+        func.valueParameters.mapIndexed { i, param ->
+            val key = jsonArgs.keys.firstOrNull { it == param.name } ?: param.name
+            val element = jsonArgs[key] ?: return ToolArgumentDecodeResult.Failed(
+                missingArgumentResult(info.name, param.name),
+            )
+            toolArgsJson.decodeFromJsonElement(
+                serializer(info.paramClasses[i]),
+                element,
+            )
+        }
+    } catch (e: SerializationException) {
+        return ToolArgumentDecodeResult.Failed(invalidArgumentsResult(info.name, e.message))
+    } catch (e: IllegalArgumentException) {
+        return ToolArgumentDecodeResult.Failed(invalidArgumentsResult(info.name, e.message))
+    }
+    return ToolArgumentDecodeResult.Decoded(decoded)
+}
+
+private fun buildToolInvocationArgs(
+    instance: Any,
+    func: KFunction<*>,
+    conn: ClientConnection,
+    request: CallToolRequest,
+    decoded: List<Any?>,
+): List<Any?> {
+    val mcpCall = McpCallContext(
+        WorkspaceMcpCall(
+            connection = conn,
+            request = request,
+            parameters = AncestorContext(emptyMap()),
+        ),
+    )
+    val isExt = func.extensionReceiverParameter != null
+    return if (isExt) listOf(instance, mcpCall) + decoded else listOf(instance) + decoded
+}
+
+private fun missingArgumentResult(toolName: String, argumentName: String?): CallToolResult =
+    CallToolResult(
+        content = listOf(TextContent(text = "Missing argument '$argumentName' for $toolName")),
+        isError = true,
+    )
+
+private fun invalidArgumentsResult(toolName: String, message: String?): CallToolResult =
+    CallToolResult(
+        content = listOf(TextContent(text = "Invalid arguments for $toolName: $message")),
+        isError = true,
+    )
+
+private class MethodHandleToolInvoker(
+    private val handle: MethodHandle,
+    private val isSuspend: Boolean,
+    private val parameterTypes: List<Class<*>>,
+) {
+    suspend fun invoke(args: List<Any?>): Any? {
+        val adaptedArgs = adaptValueClassArguments(args)
+        return if (isSuspend) {
+            suspendCoroutineUninterceptedOrReturn { continuation ->
+                val result = handle.invokeWithArguments(adaptedArgs + continuation)
+                if (result === COROUTINE_SUSPENDED) COROUTINE_SUSPENDED else result
+            }
+        } else {
+            withContext(Dispatchers.IO) {
+                runInterruptible {
+                    handle.invokeWithArguments(adaptedArgs)
+                }
+            }
+        }
+    }
+
+    private fun adaptValueClassArguments(args: List<Any?>): List<Any?> {
+        return args.mapIndexed { index, value ->
+            val parameterType = parameterTypes[index]
+            if (value is McpCallContext<*> && parameterType.isInstance(value.call)) value.call else value
+        }
+    }
+
+    companion object {
+        fun from(func: KFunction<*>): MethodHandleToolInvoker {
+            val method = func.javaMethod
+                ?: throw IllegalArgumentException("No Java method for ${func.name}")
+            method.isAccessible = true
+            val lookup = MethodHandles.privateLookupIn(method.declaringClass, MethodHandles.lookup())
+            return MethodHandleToolInvoker(
+                handle = lookup.unreflect(method),
+                isSuspend = func.isSuspend,
+                parameterTypes = listOf(method.declaringClass) +
+                    method.parameterTypes.dropLast(if (func.isSuspend) 1 else 0),
+            )
+        }
+    }
 }
 
 private fun tryResolveFunctionSchema(funcName: String, toolClass: KClass<*>): JsonObject {

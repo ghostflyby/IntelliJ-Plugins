@@ -19,14 +19,29 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
+import kotlin.reflect.KFunction
 import kotlin.reflect.full.declaredMemberExtensionFunctions
 import kotlin.reflect.full.declaredMemberFunctions
+import kotlin.reflect.full.valueParameters
 
 internal class ToolReflectionInvocationTest {
 
     @Test
     fun `valid tool invocation`() = runBlocking {
         val result = callAcceptedTool(
+            toolClass = ValidTool::class,
+            functionName = "doThing",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", 1) })
+            },
+        )
+
+        assertText(result, "ok")
+    }
+
+    @Test
+    fun `methodhandle valid tool invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
             functionName = "doThing",
             arguments = buildJsonObject {
@@ -51,8 +66,34 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
+    fun `methodhandle non-suspend invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NonSuspendTool::class,
+            functionName = "notSuspend",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", 1) })
+            },
+        )
+
+        assertText(result, "ok")
+    }
+
+    @Test
     fun `regular member invocation`() = runBlocking {
         val result = callAcceptedTool(
+            toolClass = NoReceiverTool::class,
+            functionName = "noReceiver",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", 1) })
+            },
+        )
+
+        assertText(result, "ok")
+    }
+
+    @Test
+    fun `methodhandle regular member invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
             toolClass = NoReceiverTool::class,
             functionName = "noReceiver",
             arguments = buildJsonObject {
@@ -78,8 +119,33 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
+    fun `methodhandle multi param invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = MultiParamTool::class,
+            functionName = "doMulti",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", 1) })
+                put("b", buildJsonObject { put("y", "z") })
+            },
+        )
+
+        assertText(result, "1, z")
+    }
+
+    @Test
     fun `zero param invocation`() = runBlocking {
         val result = callAcceptedTool(
+            toolClass = ZeroParamTool::class,
+            functionName = "doNothing",
+            arguments = buildJsonObject { },
+        )
+
+        assertText(result, "ok")
+    }
+
+    @Test
+    fun `methodhandle zero param invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
             toolClass = ZeroParamTool::class,
             functionName = "doNothing",
             arguments = buildJsonObject { },
@@ -100,8 +166,32 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
+    fun `methodhandle valid tool reports missing argument`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = ValidTool::class,
+            functionName = "doThing",
+            arguments = buildJsonObject { },
+        )
+
+        assertErrorContains(result, "a")
+    }
+
+    @Test
     fun `multi param reports missing argument`() = runBlocking {
         val result = callAcceptedTool(
+            toolClass = MultiParamTool::class,
+            functionName = "doMulti",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", 1) })
+            },
+        )
+
+        assertErrorContains(result, "b")
+    }
+
+    @Test
+    fun `methodhandle multi param reports missing argument`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
             toolClass = MultiParamTool::class,
             functionName = "doMulti",
             arguments = buildJsonObject {
@@ -125,13 +215,66 @@ internal class ToolReflectionInvocationTest {
         assertErrorContains(result, "Invalid arguments")
     }
 
+    @Test
+    fun `methodhandle valid tool reports invalid argument`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = ValidTool::class,
+            functionName = "doThing",
+            arguments = buildJsonObject {
+                put("a", buildJsonObject { put("x", "bad") })
+            },
+        )
+
+        assertErrorContains(result, "Invalid arguments")
+    }
+
     private suspend fun callAcceptedTool(
         toolClass: KClass<*>,
         functionName: String,
         arguments: JsonObject,
     ): CallToolResult {
-        val accepted = acceptedTool(toolClass, functionName)
-        return accepted.handler.invoke(
+        return callAcceptedTool(
+            toolClass = toolClass,
+            functionName = functionName,
+            arguments = arguments,
+            handlerFactory = { _, _, accepted -> accepted.handler },
+        )
+    }
+
+    private suspend fun callAcceptedToolWithMethodHandle(
+        toolClass: KClass<*>,
+        functionName: String,
+        arguments: JsonObject,
+    ): CallToolResult {
+        return callAcceptedTool(
+            toolClass = toolClass,
+            functionName = functionName,
+            arguments = arguments,
+            handlerFactory = { instance, func, _ ->
+                buildMethodHandleHandler(
+                    instance = instance,
+                    func = func,
+                    info = ToolMethodInfo(
+                        name = func.name,
+                        paramClasses = func.valueParameters.map { it.type },
+                    ),
+                )
+            },
+        )
+    }
+
+    private suspend fun callAcceptedTool(
+        toolClass: KClass<*>,
+        functionName: String,
+        arguments: JsonObject,
+        handlerFactory: (Any, KFunction<*>, ToolReflectionResult.Accepted) -> Handler,
+    ): CallToolResult {
+        val func = (toolClass.declaredMemberFunctions + toolClass.declaredMemberExtensionFunctions)
+            .single { it.name == functionName }
+        val instance = toolClass.java.getDeclaredConstructor().newInstance()
+        val accepted = acceptedTool(toolClass, instance, func)
+        val handler = handlerFactory(instance, func, accepted)
+        return handler.invoke(
             fakeClientConnection(),
             CallToolRequest(
                 CallToolRequestParams(
@@ -144,14 +287,12 @@ internal class ToolReflectionInvocationTest {
 
     private fun acceptedTool(
         toolClass: KClass<*>,
-        functionName: String,
+        instance: Any,
+        func: KFunction<*>,
     ): ToolReflectionResult.Accepted {
-        val func = (toolClass.declaredMemberFunctions + toolClass.declaredMemberExtensionFunctions)
-            .single { it.name == functionName }
-        val instance = toolClass.java.getDeclaredConstructor().newInstance()
         return when (val result = reflectOneTool(toolClass, instance, func)) {
             is ToolReflectionResult.Accepted -> result
-            is ToolReflectionResult.Rejected -> fail("Expected $functionName to be accepted, rejected: ${result.reasons}")
+            is ToolReflectionResult.Rejected -> fail("Expected ${func.name} to be accepted, rejected: ${result.reasons}")
         } as ToolReflectionResult.Accepted
     }
 
