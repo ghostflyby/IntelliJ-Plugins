@@ -11,6 +11,9 @@ import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.WorkspaceMcpCall
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.*
 import kotlinx.serialization.serializer
@@ -23,8 +26,6 @@ import kotlin.reflect.typeOf
 internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallToolResult
 
 internal enum class ToolRejectReason {
-    NOT_SUSPEND,
-    NO_RECEIVER,
     WRONG_RECEIVER,
     NO_SCHEMA,
 }
@@ -41,7 +42,7 @@ internal fun <T : Any> reflectTools(
         ?: toolClass.java.getDeclaredConstructor().newInstance()
 
     return buildSet {
-        for (func in toolClass.declaredMemberExtensionFunctions) {
+        for (func in toolClass.declaredMemberFunctions + toolClass.declaredMemberExtensionFunctions) {
             when (val r = reflectOneTool(toolClass, instance, func)) {
                 is ToolReflectionResult.Accepted -> add(Pair(r.tool, r.handler))
                 is ToolReflectionResult.Rejected -> continue
@@ -111,8 +112,18 @@ private fun buildHandler(
                 parameters = AncestorContext(emptyMap()),
             ),
         )
-        val result = func.callSuspend(instance, mcpCall, *decoded.toTypedArray())
-        return result.toMcpCallToolResult()
+        val isExt = func.extensionReceiverParameter != null
+        val args = if (isExt) listOf(instance, mcpCall) + decoded else listOf(instance) + decoded
+        val result = if (func.isSuspend) {
+            func.callSuspend(*args.toTypedArray())
+        } else {
+            withContext(Dispatchers.IO) {
+                runInterruptible {
+                    func.call(*args.toTypedArray())
+                }
+            }
+        }
+        return result.toMcpCallToolResult(func.returnType)
     }
     return ::handleRequest
 }
@@ -131,24 +142,24 @@ private fun tryResolveFunctionSchema(funcName: String, toolClass: KClass<*>): Js
 }
 
 internal inline fun <reified T> T.toMcpCallToolResult(): CallToolResult {
-    return toMcpCallToolResult(this, typeOf<T>())
+    return this.toMcpCallToolResult(typeOf<T>())
 }
 
-internal fun toMcpCallToolResult(result: Any?, type: KType): CallToolResult {
-    return when (result) {
-        is CallToolResult -> result
-        is JsonObject -> CallToolResult(content = emptyList(), structuredContent = result)
+internal fun Any?.toMcpCallToolResult(type: KType): CallToolResult {
+    return when (this) {
+        is CallToolResult -> this
+        is JsonObject -> CallToolResult(content = emptyList(), structuredContent = this)
         is List<*> if (type.arguments[0].type?.classifier as? KClass<*>)?.isSubclassOf(ContentBlock::class) == true -> {
-            val blocks = result.filterIsInstance<ContentBlock>()
+            val blocks = this.filterIsInstance<ContentBlock>()
             if (blocks.isEmpty()) CallToolResult(content = emptyList())
             else CallToolResult(content = blocks)
         }
 
-        is ContentBlock -> CallToolResult(content = listOf(result))
+        is ContentBlock -> CallToolResult(content = listOf(this))
         null, is Unit -> CallToolResult(content = emptyList())
-        is String -> CallToolResult(content = listOf(TextContent(text = result)))
+        is String -> CallToolResult(content = listOf(TextContent(text = this)))
         else -> {
-            val json = toolArgsJson.encodeToJsonElement(serializer(type), result)
+            val json = toolArgsJson.encodeToJsonElement(serializer(type), this)
             if (json is JsonObject)
                 CallToolResult(content = emptyList(), structuredContent = json) else
                 CallToolResult(content = emptyList(), structuredContent = buildJsonObject { put("result", json) })
@@ -163,10 +174,7 @@ internal class ToolMethodInfo(
     companion object {
         fun classify(func: KFunction<*>): Set<ToolRejectReason> {
             val reasons = mutableSetOf<ToolRejectReason>()
-            if (!func.isSuspend) reasons += ToolRejectReason.NOT_SUSPEND
-            val receiver = func.extensionReceiverParameter
-            if (receiver == null) reasons += ToolRejectReason.NO_RECEIVER
-            else {
+            func.extensionReceiverParameter?.let { receiver ->
                 val c = receiver.type.classifier as? KClass<*>
                 if (c != McpCallContext::class) reasons += ToolRejectReason.WRONG_RECEIVER
             }

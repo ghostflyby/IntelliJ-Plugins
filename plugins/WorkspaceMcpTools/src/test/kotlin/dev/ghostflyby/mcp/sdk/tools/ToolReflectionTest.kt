@@ -34,15 +34,13 @@ internal class ToolReflectionTest {
     }
 
     @Test
-    fun `not suspend rejected`() {
-        val r = reflectFirst(NonSuspendTool::class) as ToolReflectionResult.Rejected
-        assertEquals(setOf(ToolRejectReason.NOT_SUSPEND), r.reasons)
+    fun `non-suspend accepted`() {
+        assertTrue(reflectFirst(NonSuspendTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
-    fun `no receiver rejected`() {
-        val r = reflectFirst(NoReceiverTool::class) as ToolReflectionResult.Rejected
-        assertEquals(setOf(ToolRejectReason.NO_RECEIVER), r.reasons)
+    fun `regular member accepted`() {
+        assertTrue(reflectFirst(NoReceiverTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
