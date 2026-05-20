@@ -112,6 +112,7 @@ internal class NoReceiverTool {
 }
 internal class MultiParamTool {
     @Serializable data class A(val x: Int)
+    @Serializable
     data class B(val y: String)
     @Schema
     suspend fun McpCallContext<CallToolRequest>.doMulti(a: A, b: B): CallToolResult =
