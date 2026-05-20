@@ -22,45 +22,63 @@ internal class ToolResultMappingTest {
     @Test
     fun `passes through CallToolResult`() {
         val expected = CallToolResult(content = listOf(TextContent(text = "ok")))
-        assertSame(expected, mapToolResult(expected))
+        assertSame(expected, expected.toMcpCallToolResult<CallToolResult>())
     }
 
     @Test
     fun `String to TextContent`() {
-        val result = mapToolResult("hello")
+        val result = "hello".toMcpCallToolResult()
         assertEquals("hello", (result.content.first() as TextContent).text)
     }
 
     @Test
-    fun `Unit to empty`() = assertEquals(0, mapToolResult(Unit).content.size)
+    fun `Unit to empty`() = assertEquals(0, Unit.toMcpCallToolResult().content.size)
 
     @Test
-    fun `null to empty`() = assertEquals(0, mapToolResult(null).content.size)
+    fun `null to empty`() = assertEquals(0, null.toMcpCallToolResult().content.size)
 
     @Test
     fun `wraps ContentBlock`() {
         val block = TextContent(text = "x")
-        assertEquals(listOf(block), mapToolResult(block).content)
+        assertEquals(listOf(block), block.toMcpCallToolResult().content)
     }
 
     @Test
     fun `passes List of ContentBlock`() =
         assertEquals(
             2,
-            mapToolResult(listOf<ContentBlock>(TextContent(text = "a"), TextContent(text = "b"))).content.size,
+            listOf<ContentBlock>(TextContent(text = "a"), TextContent(text = "b")).toMcpCallToolResult().content.size,
         )
 
     @Test
     fun `unknown type to JSON structuredContent`() {
         val value = TestResultMappingInput(listOf("x"), 1)
-        val result = mapToolResult(value)
+        val result = value.toMcpCallToolResult()
         assertEquals(result.structuredContent, Json.encodeToJsonElement(value) as? JsonObject)
     }
 
     @Test
-    fun `empty List to empty result`() {
-        val result = mapToolResult(emptyList<ContentBlock>())
+    fun `empty ContentBlock List to empty result`() {
+        val result = emptyList<ContentBlock>().toMcpCallToolResult()
         assertEquals(0, result.content.size)
+    }
+
+    @Test
+    fun `list to JSON`() {
+        val result = listOf("x", "y").toMcpCallToolResult()
+        assertEquals(result.structuredContent?.get("result"), Json.encodeToJsonElement(listOf("x", "y")))
+    }
+
+    @Test
+    fun `empty string list to JSON`() {
+        val result = emptyList<String>().toMcpCallToolResult()
+        assertEquals(result.structuredContent?.get("result"), Json.encodeToJsonElement(emptyList<String>()))
+    }
+
+    @Test
+    fun `int to JSON`() {
+        val result = 1.toMcpCallToolResult()
+        assertEquals(result.structuredContent?.get("result"), Json.encodeToJsonElement(1))
     }
 }
 

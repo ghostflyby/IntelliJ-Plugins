@@ -16,10 +16,9 @@ import kotlinx.serialization.json.*
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
-import kotlin.reflect.full.callSuspend
-import kotlin.reflect.full.declaredMemberExtensionFunctions
-import kotlin.reflect.full.extensionReceiverParameter
-import kotlin.reflect.full.valueParameters
+import kotlin.reflect.KType
+import kotlin.reflect.full.*
+import kotlin.reflect.typeOf
 
 internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallToolResult
 
@@ -105,7 +104,7 @@ private fun buildHandler(
             ),
         )
         val result = func.callSuspend(instance, mcpCall, decoded)
-        return mapToolResult(result)
+        return result.toMcpCallToolResult()
     }
     return ::handleRequest
 }
@@ -123,10 +122,15 @@ private fun tryResolveFunctionSchema(funcName: String, toolClass: KClass<*>): Js
     }
 }
 
-internal fun mapToolResult(result: Any?): CallToolResult {
+internal inline fun <reified T> T.toMcpCallToolResult(): CallToolResult {
+    return toMcpCallToolResult(this, typeOf<T>())
+}
+
+internal fun toMcpCallToolResult(result: Any?, type: KType): CallToolResult {
     return when (result) {
         is CallToolResult -> result
-        is List<*> -> {
+        is JsonObject -> CallToolResult(content = emptyList(), structuredContent = result)
+        is List<*> if (type.arguments[0].type?.classifier as? KClass<*>)?.isSubclassOf(ContentBlock::class) == true -> {
             val blocks = result.filterIsInstance<ContentBlock>()
             if (blocks.isEmpty()) CallToolResult(content = emptyList())
             else CallToolResult(content = blocks)
@@ -136,7 +140,7 @@ internal fun mapToolResult(result: Any?): CallToolResult {
         null, is Unit -> CallToolResult(content = emptyList())
         is String -> CallToolResult(content = listOf(TextContent(text = result)))
         else -> {
-            val json = toolArgsJson.encodeToJsonElement(serializer(result::class.java), result)
+            val json = toolArgsJson.encodeToJsonElement(serializer(type), result)
             if (json is JsonObject)
                 CallToolResult(content = emptyList(), structuredContent = json) else
                 CallToolResult(content = emptyList(), structuredContent = buildJsonObject { put("result", json) })
