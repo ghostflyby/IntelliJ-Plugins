@@ -47,11 +47,10 @@ internal class WorkspaceMcpSdkServerService(
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val sessionState = WorkspaceMcpSessionState { server }
-    private val catalog = WorkspaceMcpResourceCatalog(sessionState, projectResolver)
+    private val catalog = WorkspaceMcpResourceCatalog(projectResolver)
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
-        sessionState = sessionState,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
     )
@@ -201,10 +200,12 @@ internal class WorkspaceMcpSdkServerService(
             removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
         session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
-            catalog.listResources(session.sessionId, request)
+            val connection = server?.clientConnection(session.sessionId)
+            if (connection != null) catalog.listResources(connection, request) else ListResourcesResult(emptyList(), null, null)
         }
         session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
-            catalog.listTemplates(session.sessionId, request)
+            val connection = server?.clientConnection(session.sessionId)
+            if (connection != null) catalog.listTemplates(connection, request) else ListResourceTemplatesResult(emptyList(), null, null)
         }
         session.setNotificationHandler<RootsListChangedNotification>(
             Method.Defined.NotificationsRootsListChanged,

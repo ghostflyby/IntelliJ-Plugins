@@ -7,7 +7,6 @@
 package dev.ghostflyby.mcp.route
 
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionState
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
@@ -18,18 +17,16 @@ import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
 
 internal class WorkspaceMcpCall<out R : Request>(
-    val connection: ClientConnection?,
+    val connection: ClientConnection,
     val request: R,
     val ancestors: AncestorContext,
-    private val sessionState: WorkspaceMcpSessionState,
-    private val sessionIdOverride: String? = null,
     private val projectResolver: WorkspaceProjectResolver? = null,
 ) {
-    val sessionId: String get() = sessionIdOverride ?: connection?.sessionId.orEmpty()
+    val sessionId: String get() = connection.sessionId
     val instanceKey: String get() = workspaceInstanceKey()
 
     suspend fun roots(): List<String> {
-        return sessionState.getRoots(sessionId)
+        return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
     }
 
     suspend fun visibleProjects(): List<WorkspaceMcpListProject> {

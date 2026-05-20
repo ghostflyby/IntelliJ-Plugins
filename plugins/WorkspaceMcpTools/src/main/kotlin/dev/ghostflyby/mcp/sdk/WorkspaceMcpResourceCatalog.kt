@@ -7,6 +7,7 @@
 package dev.ghostflyby.mcp.sdk
 
 import dev.ghostflyby.mcp.route.*
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import java.util.concurrent.atomic.AtomicReference
 
@@ -18,7 +19,6 @@ import java.util.concurrent.atomic.AtomicReference
  * per-segment list providers.
  */
 internal class WorkspaceMcpResourceCatalog(
-    private val sessionState: WorkspaceMcpSessionState,
     private val projectResolver: WorkspaceProjectResolver,
 ) {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
@@ -27,9 +27,9 @@ internal class WorkspaceMcpResourceCatalog(
         snapshotRef.set(snapshot)
     }
 
-    suspend fun listResources(sessionId: String, request: ListResourcesRequest): ListResourcesResult {
+    suspend fun listResources(connection: ClientConnection, request: ListResourcesRequest): ListResourcesResult {
         val snapshot = snapshotRef.get()
-        val call = listCall(sessionId, request)
+        val call = listCall(connection, request)
         return ListResourcesResult(
             resources = buildList {
                 snapshot.routeRoots.values.forEach { root ->
@@ -41,12 +41,9 @@ internal class WorkspaceMcpResourceCatalog(
         )
     }
 
-    suspend fun listTemplates(
-        sessionId: String,
-        request: ListResourceTemplatesRequest,
-    ): ListResourceTemplatesResult {
+    suspend fun listTemplates(connection: ClientConnection, request: ListResourceTemplatesRequest): ListResourceTemplatesResult {
         val snapshot = snapshotRef.get()
-        val call = listCall(sessionId, request)
+        val call = listCall(connection, request)
         return ListResourceTemplatesResult(
             resourceTemplates = buildList {
                 snapshot.routeRoots.values.forEach { root ->
@@ -59,15 +56,13 @@ internal class WorkspaceMcpResourceCatalog(
     }
 
     private fun <R : Request> listCall(
-        sessionId: String,
+        connection: ClientConnection,
         request: R,
     ): WorkspaceMcpCall<R> {
         return WorkspaceMcpCall(
-            connection = null,
+            connection = connection,
             request = request,
             ancestors = AncestorContext(emptyMap()),
-            sessionState = sessionState,
-            sessionIdOverride = sessionId,
             projectResolver = projectResolver,
         )
     }

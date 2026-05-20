@@ -18,7 +18,6 @@ import kotlinx.coroutines.SupervisorJob
 internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
     private val projectResolver: WorkspaceProjectResolver,
-    private val sessionState: WorkspaceMcpSessionState,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
 ) {
@@ -107,7 +106,6 @@ internal class WorkspaceMcpFeatureCoordinator(
                                 connection = this,
                                 request = request,
                                 ancestors = AncestorContext(vars),
-                                sessionState = sessionState,
                             ),
                         )
                     }
@@ -127,7 +125,6 @@ internal class WorkspaceMcpFeatureCoordinator(
                                 connection = this,
                                 request = request,
                                 ancestors = AncestorContext(emptyMap()),
-                                sessionState = sessionState,
                             ),
                         )
                     }
