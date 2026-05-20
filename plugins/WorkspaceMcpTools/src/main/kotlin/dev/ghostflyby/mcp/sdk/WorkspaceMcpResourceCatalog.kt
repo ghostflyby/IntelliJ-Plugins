@@ -94,19 +94,23 @@ internal class WorkspaceMcpResourceCatalog(
         call: WorkspaceMcpCall<ListResourcesRequest>,
         path: String,
     ): ResourceListDecision<Resource> {
-        val ep = resourceEndpoints.firstOrNull()?.endpoint ?: return ResourceListDecision()
-        return ep.listProvider?.invoke(call)
-            ?: if (this is ParameterPathSegment) ResourceListDecision()
-            else defaultResourceDecision(path, ep.mimeType)
+        val lp = resourceList?.listProvider
+        if (lp != null) {
+            val decision = lp.invoke(call)
+            if (decision.entries.isNotEmpty() || !decision.includeChildren) return decision
+        }
+        val ep = readEntries.firstOrNull()
+        return if (ep == null || this is ParameterPathSegment) ResourceListDecision()
+        else defaultResourceDecision(path, ep.mimeType)
     }
 
     private suspend fun ResourceSegment.templateDecision(
         call: WorkspaceMcpCall<ListResourceTemplatesRequest>,
         path: String,
     ): ResourceListDecision<ResourceTemplate> {
-        val ep = templateEndpoint ?: return ResourceListDecision()
-        return ep.listProvider?.invoke(call)
-            ?: defaultTemplateDecision(path, ep.mimeType)
+        val spec = templateList ?: return ResourceListDecision()
+        return spec.listProvider?.invoke(call)
+            ?: defaultTemplateDecision(path, spec.mimeType)
     }
 
     private fun ResourceSegment.defaultResourceDecision(

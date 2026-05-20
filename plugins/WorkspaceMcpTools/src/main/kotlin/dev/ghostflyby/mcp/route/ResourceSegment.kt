@@ -29,48 +29,64 @@ internal data class WorkspaceMcpListProject(
     val basePath: String?,
 )
 
+// -- Segment tree node --
+
 internal sealed class ResourceSegment {
     abstract val name: String
     abstract val extensible: Boolean
     var ownerFeatureName: String? = null
-    val resourceEndpoints: MutableList<ResourceEndpointEntry> = mutableListOf()
-    var templateEndpoint: ResourceTemplateEndpoint? = null
     var routePattern: RoutePattern? = null
     var routeAnchor: RouteAnchor? = null
 
     var children: PersistentMap<String, ResourceSegment> = persistentHashMapOf()
     var attachedSegments: PersistentList<ResourceSegment> = persistentListOf()
+
+    /** Read handlers, each optionally bound to query parameters. */
+    var readEntries: PersistentList<ReadEntry> = persistentListOf()
+
+    /** Behaviour for resources/list at this segment. Null means no resource listing. */
+    var resourceList: ResourceListSpec? = null
+
+    /** Behaviour for resources/templates/list at this segment. Null means no template listing. */
+    var templateList: TemplateListSpec? = null
 }
 
-internal data class ResourceEndpoint(
+// -- Read --
+
+internal data class ReadEntry(
     val handler: ResourceReadHandler,
+    val description: String = "",
+    val mimeType: String = "application/json",
+    val queryTokens: List<QueryToken> = emptyList(),
+) {
+    val queryTemplate: String
+        get() {
+            if (queryTokens.isEmpty()) return ""
+            return queryTokens.joinToString("&", prefix = "?") { token ->
+                when {
+                    token.paramName != null -> "${token.key}={${token.paramName}}"
+                    token.literalValue != null -> "${token.key}=${token.literalValue}"
+                    else -> token.key
+                }
+            }
+        }
+}
+
+// -- List specs --
+
+internal data class ResourceListSpec(
     val listProvider: ConcreteResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "application/json",
 )
 
-internal data class ResourceEndpointEntry(
-    val endpoint: ResourceEndpoint,
-    val queryTokens: List<QueryToken> = emptyList(),
-)
-
-internal val ResourceEndpointEntry.queryTemplate: String
-    get() {
-        if (queryTokens.isEmpty()) return ""
-        return queryTokens.joinToString("&", prefix = "?") { token ->
-            when {
-                token.paramName != null -> "${token.key}={${token.paramName}}"
-                token.literalValue != null -> "${token.key}=${token.literalValue}"
-                else -> token.key
-            }
-        }
-    }
-
-internal data class ResourceTemplateEndpoint(
+internal data class TemplateListSpec(
     val listProvider: TemplateResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "text/plain",
 )
+
+// -- Segment subtypes --
 
 internal class LiteralPathSegment(
     override val name: String,

@@ -38,7 +38,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         segments {
             // server/info — static listable resource via route pattern
             route("server/info") {
-                resource { call ->
+                read { call ->
                     val instanceKey = workspaceInstanceKey()
                     val info = readAction {
                         mapOf("instanceKey" to instanceKey, "version" to PluginInfo.version)
@@ -57,8 +57,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
 
             // projects/{projectKey} — parameterized route with anchor
             route("projects/{projectKey}", anchor = PROJECT_ROUTE) {
-                resource(
-                    listProvider = {
+                listResources {
                         val projects = visibleProjects()
                         ResourceListDecision(
                             entries = projects.map { project ->
@@ -72,8 +71,8 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                             },
                             includeChildren = projects.isNotEmpty(),
                         )
-                    },
-                ) { call ->
+                    }
+                read { call ->
                     val anc = call.ancestors
                     val projectKey = anc["projectKey"] ?: ""
                     val info = when (val resolved = projectResolver.resolve(projectKey)) {
@@ -97,7 +96,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                         ),
                     )
                 }
-                template {
+                listTemplates {
                     val projects = visibleProjects()
                     ResourceListDecision(
                         entries = emptyList(),

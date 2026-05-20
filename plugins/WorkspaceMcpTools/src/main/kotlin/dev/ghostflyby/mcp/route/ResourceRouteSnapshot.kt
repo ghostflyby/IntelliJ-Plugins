@@ -82,7 +82,7 @@ internal data class ResourceRouteSnapshot(
         when (segment) {
             is LiteralPathSegment -> {
                 if (index >= parts.size) {
-                    return if (segment.resourceEndpoints.isNotEmpty() || segment.templateEndpoint != null) {
+                    return if (segment.readEntries.isNotEmpty() || segment.templateList != null) {
                         ResourceRouteMatch(segment, AncestorContext(params))
                     } else {
                         null
@@ -115,7 +115,7 @@ internal data class ResourceRouteSnapshot(
                     index + 1
                 }
                 if (nextPartIndex >= parts.size) {
-                    return if (segment.resourceEndpoints.isNotEmpty() || segment.templateEndpoint != null) {
+                    return if (segment.readEntries.isNotEmpty() || segment.templateList != null) {
                         ResourceRouteMatch(segment, AncestorContext(nextParams))
                     } else {
                         null
@@ -165,7 +165,7 @@ internal data class ResourceRouteSnapshot(
     ): ResourceRouteMatch? {
         val segment = match.segment
         // Try each resource endpoint on this segment — pick first that matches query
-        val endpoints = segment.resourceEndpoints
+        val endpoints = segment.readEntries
         if (endpoints.isEmpty()) {
             // No resource endpoints on this segment: just check template endpoint
             val qt = segment.routePattern?.queryTokens
@@ -286,8 +286,8 @@ internal class SegmentTreeTemplateMatcher(
         val snapshot = snapshotRef.get()
         val entry = snapshot.parameterizedResource(resourceTemplate.uriTemplate) ?: return null
         val segmentMatch = snapshot.segmentMatch(resourceUri) ?: return null
-        val epEntry = segmentMatch.segment.resourceEndpoints
-            .firstOrNull { it.endpoint.handler === entry.handler } ?: return null
+        val epEntry = segmentMatch.segment.readEntries
+            .firstOrNull { it.handler === entry.handler } ?: return null
         return MatchResult(variables = segmentMatch.ancestors, score = 100)
     }
 }

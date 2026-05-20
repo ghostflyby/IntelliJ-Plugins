@@ -236,22 +236,22 @@ internal class ResourceRouteSnapshotTest {
     private fun testSnapshot(): ResourceRouteSnapshot {
         val c1 = ResourceSegmentCollector()
         c1.route("server/info") {
-            resource { ReadResourceResult(emptyList()) }
+            read { ReadResourceResult(emptyList()) }
         }
         c1.route("projects/{projectKey}", anchor = RouteAnchor("projectKey")) {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
 
         val c2 = ResourceSegmentCollector()
         c2.under(RouteAnchor("projectKey")) {
             route("files/{+relativePath}") {
-                resource { ReadResourceResult(emptyList()) }
-                template()
+                read { ReadResourceResult(emptyList()) }
+                listTemplates()
             }
             route("vfs/{+rawVfsUrl}") {
-                resource { ReadResourceResult(emptyList()) }
-                template()
+                read { ReadResourceResult(emptyList()) }
+                listTemplates()
             }
         }
 
@@ -275,8 +275,8 @@ internal class ResourceRouteSnapshotTest {
     private fun withOptionalQuerySnapshot(): ResourceRouteSnapshot {
         val c = ResourceSegmentCollector()
         c.route("search{?query}") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         return ResourceRouteCompiler.compile(
             listOf(
@@ -330,8 +330,8 @@ internal class ResourceRouteSnapshotTest {
     private fun withSoloOptionalQuerySnapshot(): ResourceRouteSnapshot {
         val c = ResourceSegmentCollector()
         c.route("search{?q}") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         return ResourceRouteCompiler.compile(
             listOf(
@@ -347,12 +347,12 @@ internal class ResourceRouteSnapshotTest {
     private fun withCoexistingQuerySnapshot(): ResourceRouteSnapshot {
         val c = ResourceSegmentCollector()
         c.route("target") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         c.route("target{?q}") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         return ResourceRouteCompiler.compile(
             listOf(
@@ -368,8 +368,8 @@ internal class ResourceRouteSnapshotTest {
     private fun withSearchQuerySnapshot(): ResourceRouteSnapshot {
         val c = ResourceSegmentCollector()
         c.route("search?query={query}&limit=10") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         return ResourceRouteCompiler.compile(
             listOf(
@@ -385,8 +385,8 @@ internal class ResourceRouteSnapshotTest {
     private fun withReservedAndQuerySnapshot(): ResourceRouteSnapshot {
         val c = ResourceSegmentCollector()
         c.route("raw/{+rawVfsUrl}?format={format}") {
-            resource { ReadResourceResult(emptyList()) }
-            template()
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
         return ResourceRouteCompiler.compile(
             listOf(

@@ -19,9 +19,9 @@ internal object ResourceRouteCompiler {
                 val clonedRoot = root.cloneWithoutAnchors()
                 if (clonedRoot.name in roots) {
                     val existing = roots[clonedRoot.name]!!
-                    existing.resourceEndpoints += clonedRoot.resourceEndpoints
-                    if (clonedRoot.templateEndpoint != null && existing.templateEndpoint == null) {
-                        existing.templateEndpoint = clonedRoot.templateEndpoint
+                    existing.readEntries = existing.readEntries.addAll(clonedRoot.readEntries)
+                    if (clonedRoot.templateList != null && existing.templateList == null) {
+                        existing.templateList = clonedRoot.templateList
                     }
                 } else {
                     roots[clonedRoot.name] = clonedRoot
@@ -90,28 +90,27 @@ internal object ResourceRouteCompiler {
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
-        segment.resourceEndpoints.forEach { entry ->
-            val endpoint = entry.endpoint
+        segment.readEntries.forEach { entry ->
             val querySuffix = entry.queryTemplate ?: segment.routePattern?.queryTemplate ?: ""
             val baseUri = "ij-workspace://{instanceKey}/$currentPath"
             val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
             resources += ResourceRouteResource(
                 uri = uri,
-                name = segment.name, description = endpoint.description, mimeType = endpoint.mimeType,
-                ownerFeatureName = ownerFeatureName, handler = endpoint.handler,
-                resourceListProvider = endpoint.listProvider,
+                name = segment.name, description = entry.description, mimeType = entry.mimeType,
+                ownerFeatureName = ownerFeatureName, handler = entry.handler,
+                resourceListProvider = segment.resourceList?.listProvider,
                 isParameterized = currentHasParameter,
             )
         }
-        segment.templateEndpoint?.let { endpoint ->
+        segment.templateList?.let { spec ->
             val querySuffix = segment.routePattern?.queryTemplate ?: ""
             val baseUri = "ij-workspace://{instanceKey}/$currentPath"
             val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
             templates += ResourceRouteTemplate(
                 uri = uri,
-                name = segment.name, description = endpoint.description, mimeType = endpoint.mimeType,
+                name = segment.name, description = spec.description, mimeType = spec.mimeType,
                 ownerFeatureName = ownerFeatureName,
-                templateListProvider = endpoint.listProvider,
+                templateListProvider = spec.listProvider,
             )
         }
 
@@ -123,7 +122,10 @@ internal object ResourceRouteCompiler {
         }
     }
 
-    private fun ownerByRootName(registrations: Collection<WorkspaceResourceRouteContribution>, rootName: String): String {
+    private fun ownerByRootName(
+        registrations: Collection<WorkspaceResourceRouteContribution>,
+        rootName: String,
+    ): String {
         return registrations.firstOrNull { contribution ->
             contribution.roots.any { it.name == rootName }
         }?.featureName ?: "unknown"
@@ -135,19 +137,21 @@ internal object ResourceRouteCompiler {
             is ParameterPathSegment -> ParameterPathSegment(name = name, paramName = paramName, extensible = extensible)
         }
         clone.ownerFeatureName = ownerFeatureName
-        resourceEndpoints.forEach { clone.resourceEndpoints += it }
-        clone.templateEndpoint = templateEndpoint
+        clone.readEntries = readEntries
+        clone.templateList = templateList
         clone.routePattern = routePattern
         clone.routeAnchor = routeAnchor
-        clone.children = children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
-            val childClone = child.cloneWithoutAnchors()
-            builder.put(childClone.name, childClone)
-            builder
-        }.build()
-        clone.attachedSegments = attachedSegments.fold(persistentListOf<ResourceSegment>().builder()) { builder, child ->
-            builder.add(child.cloneWithoutAnchors())
-            builder
-        }.build()
+        clone.children =
+            children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
+                val childClone = child.cloneWithoutAnchors()
+                builder[childClone.name] = childClone
+                builder
+            }.build()
+        clone.attachedSegments =
+            attachedSegments.fold(persistentListOf<ResourceSegment>().builder()) { builder, child ->
+                builder.add(child.cloneWithoutAnchors())
+                builder
+            }.build()
         return clone
     }
 }

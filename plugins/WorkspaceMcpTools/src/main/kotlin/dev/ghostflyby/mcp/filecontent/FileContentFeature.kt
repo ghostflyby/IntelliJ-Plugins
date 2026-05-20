@@ -40,20 +40,20 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         segments {
             // -- project-independent raw VFS (read only) --
             route("vfs/{+rawVfsUrl}{?meta,content}") {
-                resource { call ->
+                read { call ->
                     readContentOrMeta(
                         uri = call.request.params.uri,
                         file = resolveFileByRawUrl(call.ancestors["rawVfsUrl"] ?: ""),
                         ancestors = call.ancestors,
                     )
                 }
-                template()
+                listTemplates()
             }
 
             // -- project-scoped files (via Document) --
             under(projectAnchor) {
                 route("files/{+relativePath}{?meta,content}") {
-                    resource { call ->
+                    read { call ->
                         val anc = call.ancestors
                         val file = resolveFileByRelativePath(
                             projectKey = anc["projectKey"] ?: "",
@@ -66,7 +66,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
                             ancestors = anc,
                         )
                     }
-                    template()
+                    listTemplates()
                 }
             }
         }

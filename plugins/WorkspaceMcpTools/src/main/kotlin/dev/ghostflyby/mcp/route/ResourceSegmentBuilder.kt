@@ -7,14 +7,14 @@
 package dev.ghostflyby.mcp.route
 
 internal interface ResourceSegmentBuilder {
-    fun resource(
-        listProvider: ConcreteResourceListProvider? = null,
-        handler: ResourceReadHandler,
-    )
+    /** Register a read handler for the current path segment. */
+    fun read(handler: ResourceReadHandler)
 
-    fun template(
-        listProvider: TemplateResourceListProvider? = null,
-    )
+    /** Set the resource list provider for the current path segment. */
+    fun listResources(listProvider: ConcreteResourceListProvider? = null)
+
+    /** Set the template list provider for the current path segment. */
+    fun listTemplates(listProvider: TemplateResourceListProvider? = null)
 
     /**
      * Define a route using a Ktor-like pattern string.
@@ -34,29 +34,31 @@ internal interface ResourceSegmentBuilder {
     fun under(anchor: RouteAnchor, block: ResourceSegmentBuilder.() -> Unit)
 }
 
-// ---- RouteDslBuilder (standalone, does NOT implement ResourceSegmentBuilder) ----
+// ---- RouteDslBuilder ----
 
 /**
- * Collects only resource/template endpoints for a single route pattern.
- * Does NOT expose segment/parameter/under — those don't apply inside a route block.
+ * Collects read/list endpoints for a single route pattern.
  */
 internal class RouteDslBuilder {
-    var resourceEndpoint: ResourceEndpoint? = null
+    var readHandler: ReadEntry? = null
         private set
-    var templateEndpoint: ResourceTemplateEndpoint? = null
+    var resourceList: ResourceListSpec? = null
+        private set
+    var templateList: TemplateListSpec? = null
         private set
 
-    fun resource(
-        listProvider: ConcreteResourceListProvider? = null,
-        handler: ResourceReadHandler,
-    ) {
-        check(resourceEndpoint == null) { "Resource endpoint is already set for this route" }
-        resourceEndpoint = ResourceEndpoint(handler = handler, listProvider = listProvider)
+    fun read(handler: ResourceReadHandler) {
+        check(readHandler == null) { "Read handler is already set for this route" }
+        readHandler = ReadEntry(handler = handler)
     }
 
-    fun template(listProvider: TemplateResourceListProvider? = null) {
-        check(templateEndpoint == null) { "Template endpoint is already set for this route" }
-        templateEndpoint = ResourceTemplateEndpoint(listProvider = listProvider)
+    fun listResources(listProvider: ConcreteResourceListProvider? = null) {
+        resourceList = ResourceListSpec(listProvider = listProvider)
+    }
+
+    fun listTemplates(listProvider: TemplateResourceListProvider? = null) {
+        check(templateList == null) { "Template list is already set for this route" }
+        templateList = TemplateListSpec(listProvider = listProvider)
     }
 }
 
@@ -78,22 +80,23 @@ internal open class ResourceSegmentCollector(
     val roots: List<ResourceSegment> get() = _roots.toList()
     val pendingAnchors: List<PendingAnchor> get() = _pendingAnchors.toList()
 
-    override fun resource(
-        listProvider: ConcreteResourceListProvider?,
-        handler: ResourceReadHandler,
-    ) {
-        val target = current ?: error("Inline resource endpoint requires a current path segment.")
-        target.resourceEndpoints += ResourceEndpointEntry(
-            endpoint = ResourceEndpoint(handler = handler, listProvider = listProvider),
-        )
+    override fun read(handler: ResourceReadHandler) {
+        val target = current ?: error("Inline read handler requires a current path segment.")
+        val entry = ReadEntry(handler = handler)
+        target.readEntries = target.readEntries.builder().apply { add(entry) }.build()
     }
 
-    override fun template(listProvider: TemplateResourceListProvider?) {
-        val target = current ?: error("Template endpoint requires a current path segment.")
-        check(target.templateEndpoint == null) {
-            "Resource template endpoint is already registered for segment '${target.name}'."
+    override fun listResources(listProvider: ConcreteResourceListProvider?) {
+        val target = current ?: error("Resource list requires a current path segment.")
+        target.resourceList = ResourceListSpec(listProvider = listProvider)
+    }
+
+    override fun listTemplates(listProvider: TemplateResourceListProvider?) {
+        val target = current ?: error("Template list requires a current path segment.")
+        check(target.templateList == null) {
+            "Template list is already set for segment '${target.name}'."
         }
-        target.templateEndpoint = ResourceTemplateEndpoint(listProvider = listProvider)
+        target.templateList = TemplateListSpec(listProvider = listProvider)
     }
 
     override fun route(
@@ -103,18 +106,22 @@ internal open class ResourceSegmentCollector(
     ) {
         val patternObj = RoutePattern.parse(pattern)
         val dsb = RouteDslBuilder().apply(block)
-        val segments = buildTreeFromPattern(patternObj, dsb.resourceEndpoint, dsb.templateEndpoint)
+        val segments = buildTreeFromPattern(patternObj, dsb)
         segments.forEach { seg ->
             if (anchor != null) {
                 val leaf = findLeaf(seg)
                 leaf.routeAnchor = anchor
             }
-            // Merge into existing root with same name
             val existing = _roots.find { it.name == seg.name }
             if (existing != null) {
-                existing.resourceEndpoints += seg.resourceEndpoints
-                if (seg.templateEndpoint != null && existing.templateEndpoint == null) {
-                    existing.templateEndpoint = seg.templateEndpoint
+                existing.readEntries = existing.readEntries.builder()
+                    .apply { seg.readEntries.forEach { add(it) } }
+                    .build()
+                if (seg.resourceList != null && existing.resourceList == null) {
+                    existing.resourceList = seg.resourceList
+                }
+                if (seg.templateList != null && existing.templateList == null) {
+                    existing.templateList = seg.templateList
                 }
             } else {
                 _roots.add(seg)
@@ -134,32 +141,17 @@ internal open class ResourceSegmentCollector(
         _pendingAnchors.addAll(collector.pendingAnchors)
     }
 
-    private fun collectChild(
-        segment: ResourceSegment,
-        block: ResourceSegmentBuilder.() -> Unit,
-    ) {
-        val collector = ResourceSegmentCollector(segment)
-        collector.block()
-        segment.children = segment.children.builder().apply { collector.roots.forEach { put(it.name, it) } }.build()
-        attachChild(segment)
-        _pendingAnchors.addAll(collector.pendingAnchors)
-    }
-
     private fun attachChild(segment: ResourceSegment) {
-        val parent = current
-        if (parent == null) {
+        if (current == null) {
             _roots.add(segment)
         } else {
-            parent.children = parent.children.builder().apply { put(segment.name, segment) }.build()
+            current.children = current.children.builder().apply { put(segment.name, segment) }.build()
         }
     }
 }
 
 // ---- Tree-building helpers ----
 
-/**
- * Walk down a single-chain segment tree to find the leaf (deepest node).
- */
 internal fun findLeaf(segment: ResourceSegment): ResourceSegment {
     var current = segment
     while (current.children.isNotEmpty()) {
@@ -168,14 +160,9 @@ internal fun findLeaf(segment: ResourceSegment): ResourceSegment {
     return current
 }
 
-/**
- * Build a segment tree from a parsed [RoutePattern].
- * Each path token becomes a segment node; the last token (leaf) gets the endpoints.
- */
 internal fun buildTreeFromPattern(
     pattern: RoutePattern,
-    resourceEndpoint: ResourceEndpoint?,
-    templateEndpoint: ResourceTemplateEndpoint?,
+    dsb: RouteDslBuilder,
 ): List<ResourceSegment> {
     val tokens = pattern.pathTokens
     if (tokens.isEmpty()) return emptyList()
@@ -187,13 +174,12 @@ internal fun buildTreeFromPattern(
         current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
-    if (resourceEndpoint != null) {
-        current.resourceEndpoints += ResourceEndpointEntry(
-            endpoint = resourceEndpoint,
-            queryTokens = pattern.queryTokens,
-        )
+    if (dsb.readHandler != null) {
+        val entry = dsb.readHandler!!.copy(queryTokens = pattern.queryTokens)
+        current.readEntries = current.readEntries.builder().apply { add(entry) }.build()
     }
-    if (templateEndpoint != null) current.templateEndpoint = templateEndpoint
+    if (dsb.resourceList != null) current.resourceList = dsb.resourceList
+    if (dsb.templateList != null) current.templateList = dsb.templateList
     current.routePattern = pattern
 
     return listOf(root)
