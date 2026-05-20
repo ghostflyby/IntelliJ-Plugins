@@ -12,6 +12,7 @@ import dev.ghostflyby.mcp.route.PendingAnchor
 import dev.ghostflyby.mcp.route.ResourceSegment
 import dev.ghostflyby.mcp.route.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.route.ResourceSegmentCollector
+import dev.ghostflyby.mcp.sdk.tools.registerToolClass
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -76,6 +77,17 @@ internal class WorkspaceMcpFeatureRegistrationContext(
             this.handler(decoded, request)
         }
         trackedTools.add(name)
+    }
+
+    /**
+     * Register a tool class via reflection.
+     *
+     * Discovers `suspend fun McpCallContext<CallToolRequest>.name(args: @Serializable P): R`
+     * functions and registers each as an MCP tool. Input schema is obtained
+     * from the KSP-generated `KClass<P>.jsonSchema` convention.
+     */
+    inline fun <reified T : Any> registerToolClass() {
+        registerToolClass(server, T::class, projectResolver, trackedTools)
     }
 
     /**

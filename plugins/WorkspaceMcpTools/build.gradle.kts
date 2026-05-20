@@ -24,7 +24,6 @@ dependencies {
 }
 
 ksp {
-    arg("kotlinx.schema.rootPackage", "dev.ghostflyby.mcp")
     arg("kotlinx.schema.withSchemaObject", "true")
     arg("kotlinx.schema.visibility", "internal")
 }
