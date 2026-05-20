@@ -12,7 +12,7 @@ import dev.ghostflyby.mcp.route.PendingAnchor
 import dev.ghostflyby.mcp.route.ResourceSegment
 import dev.ghostflyby.mcp.route.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.route.ResourceSegmentCollector
-import dev.ghostflyby.mcp.sdk.tools.registerToolClass
+import dev.ghostflyby.mcp.sdk.tools.reflectTools
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -87,7 +87,10 @@ internal class WorkspaceMcpFeatureRegistrationContext(
      * from the KSP-generated `KClass<P>.jsonSchema` convention.
      */
     inline fun <reified T : Any> registerToolClass() {
-        registerToolClass(server, T::class, projectResolver, trackedTools)
+        for ((tool, handler) in reflectTools(T::class, projectResolver)) {
+            server.addTool(tool.name, tool.description ?: "", tool.inputSchema) { handler(it) }
+            trackedTools.add(tool.name)
+        }
     }
 
     /**

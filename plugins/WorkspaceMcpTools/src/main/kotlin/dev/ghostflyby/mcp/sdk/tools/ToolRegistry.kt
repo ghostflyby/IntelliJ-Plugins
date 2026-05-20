@@ -10,11 +10,8 @@ import dev.ghostflyby.mcp.route.AncestorContext
 import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.WorkspaceMcpCall
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.ContentBlock
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
+import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
+import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -28,18 +25,95 @@ import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.instanceParameter
 import kotlin.reflect.full.valueParameters
 
-internal fun <T : Any> registerToolClass(
-    server: Server,
+internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallToolResult
+
+internal fun <T : Any> reflectTools(
     toolClass: KClass<T>,
     projectResolver: WorkspaceProjectResolver,
-    trackedTools: MutableSet<String>,
-) {
+): Set<Pair<Tool, Handler>> {
     val instance = toolClass.objectInstance
         ?: toolClass.java.getDeclaredConstructor().newInstance()
 
-    for (func in toolClass.declaredMemberFunctions) {
-        val pinfo = ToolMethodInfo.from(func) ?: continue
-        registerMethod(server, instance, func, pinfo, projectResolver, trackedTools)
+    return buildSet {
+        for (func in toolClass.declaredMemberFunctions) {
+            val info = ToolMethodInfo.from(func) ?: continue
+            val schema = tryResolveKspSchema(info.paramClass)
+            val tool = Tool(
+                name = info.name,
+                inputSchema = ToolSchema(
+                    properties = schema["properties"] as? JsonObject,
+                    required = (schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content },
+                ),
+            )
+            add(Pair(tool, buildHandler(instance, func, info, projectResolver)))
+        }
+    }
+}
+
+private fun <T : Any> buildHandler(
+    instance: T,
+    func: KFunction<*>,
+    info: ToolMethodInfo,
+    projectResolver: WorkspaceProjectResolver,
+): Handler {
+    suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
+        val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
+        val decoded: Any = try {
+            toolArgsJson.decodeFromJsonElement(serializer(info.paramClass.java), jsonArgs)
+        } catch (e: SerializationException) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "Invalid arguments for ${info.name}: ${e.message}")),
+                isError = true,
+            )
+        } catch (e: IllegalArgumentException) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "Invalid arguments for ${info.name}: ${e.message}")),
+                isError = true,
+            )
+        }
+
+        val mcpCall = McpCallContext(
+            WorkspaceMcpCall(
+                connection = conn,
+                request = request,
+                parameters = AncestorContext(emptyMap()),
+                projectResolver = projectResolver,
+            ),
+        )
+        val result = func.callSuspend(instance, mcpCall, decoded)
+        return mapToolResult(result)
+    }
+    return ::handleRequest
+}
+
+private fun tryResolveKspSchema(paramClass: KClass<*>): JsonObject {
+    return try {
+        val pkg = paramClass.java.`package`?.name ?: return JsonObject(emptyMap())
+        val simpleName = paramClass.simpleName ?: return JsonObject(emptyMap())
+        val extFqName = "$pkg.${simpleName}SchemaExtensionsKt"
+        val extClass = Class.forName(extFqName)
+        val method = extClass.getMethod("getJsonSchema", KClass::class.java)
+        method.invoke(null, paramClass) as JsonObject
+    } catch (_: Exception) {
+        JsonObject(emptyMap())
+    }
+}
+
+internal fun mapToolResult(result: Any?): CallToolResult {
+    return when (result) {
+        is CallToolResult -> result
+        is List<*> -> {
+            val blocks = result.mapNotNull { it as? ContentBlock }
+            if (blocks.isEmpty()) CallToolResult(content = emptyList())
+            else CallToolResult(content = blocks)
+        }
+        is ContentBlock -> CallToolResult(content = listOf(result))
+        null, is Unit -> CallToolResult(content = emptyList())
+        is String -> CallToolResult(content = listOf(TextContent(text = result)))
+        else -> {
+            val json = toolArgsJson.encodeToString(serializer(result::class.java), result)
+            CallToolResult(content = listOf(TextContent(text = json)))
+        }
     }
 }
 
@@ -57,89 +131,6 @@ private class ToolMethodInfo private constructor(
             if (receiverClassifier != McpCallContext::class) return null
             val paramClass = (valueParams.first().type.classifier as? KClass<*>) ?: return null
             return ToolMethodInfo(name = func.name, paramClass = paramClass)
-        }
-    }
-}
-
-private fun <T : Any> registerMethod(
-    server: Server,
-    instance: T,
-    func: KFunction<*>,
-    info: ToolMethodInfo,
-    projectResolver: WorkspaceProjectResolver,
-    trackedTools: MutableSet<String>,
-) {
-    val schema = tryResolveKspSchema(info.paramClass)
-    val name = info.name
-
-    server.addTool(
-        name = name,
-        description = "",
-        inputSchema = ToolSchema(
-            properties = schema["properties"] as? JsonObject,
-            required = (schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content },
-        ),
-    ) { request ->
-        val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
-        val decoded: Any = try {
-            toolArgsJson.decodeFromJsonElement(
-                serializer(info.paramClass.java),
-                jsonArgs,
-            )
-        } catch (e: SerializationException) {
-            return@addTool CallToolResult(
-                content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
-                isError = true,
-            )
-        } catch (e: IllegalArgumentException) {
-            return@addTool CallToolResult(
-                content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
-                isError = true,
-            )
-        }
-
-        val mcpCall = McpCallContext(
-            WorkspaceMcpCall(
-                connection = this,
-                request = request,
-                parameters = AncestorContext(emptyMap()),
-                projectResolver = projectResolver,
-            ),
-        )
-
-        val result = func.callSuspend(instance, mcpCall, decoded)
-        mapToolResult(result)
-    }
-    trackedTools.add(name)
-}
-
-private fun tryResolveKspSchema(paramClass: KClass<*>): JsonObject {
-    return try {
-        val pkg = paramClass.java.`package`?.name ?: return JsonObject(emptyMap())
-        val simpleName = paramClass.simpleName ?: return JsonObject(emptyMap())
-        val extFqName = "$pkg.${simpleName}SchemaExtensionsKt"
-        val extClass = Class.forName(extFqName)
-        val method = extClass.getMethod("getJsonSchema", KClass::class.java)
-        method.invoke(null, paramClass) as JsonObject
-    } catch (_: Exception) {
-        JsonObject(emptyMap())
-    }
-}
-
-private fun mapToolResult(result: Any?): CallToolResult {
-    return when (result) {
-        is CallToolResult -> result
-        is List<*> -> {
-            val blocks = result.mapNotNull { it as? ContentBlock }
-            if (blocks.isEmpty()) CallToolResult(content = emptyList())
-            else CallToolResult(content = blocks)
-        }
-        is ContentBlock -> CallToolResult(content = listOf(result))
-        null, is Unit -> CallToolResult(content = emptyList())
-        is String -> CallToolResult(content = listOf(TextContent(text = result)))
-        else -> {
-            val json = toolArgsJson.encodeToString(serializer(result::class.java), result)
-            CallToolResult(content = listOf(TextContent(text = json)))
         }
     }
 }
