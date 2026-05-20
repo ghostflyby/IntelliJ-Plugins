@@ -18,6 +18,7 @@ internal class HelloTool {
     @Serializable
     internal data class MyInput(val list: List<String>, val i: Int)
 
+    @Schema
     internal suspend fun McpCallContext<CallToolRequest>.someTool(a: MyInput): CallToolResult {
         return CallToolResult(
             content = listOf(
