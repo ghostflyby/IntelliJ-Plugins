@@ -7,11 +7,13 @@
 package dev.ghostflyby.mcp.route
 
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
+import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.Request
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
@@ -20,7 +22,7 @@ internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
     val parameters: AncestorContext,
-    private val projectResolver: WorkspaceProjectResolver? = null,
+    private val projectResolver: WorkspaceProjectResolver,
 ) {
     val sessionId: String get() = connection.sessionId
     val instanceKey: String get() = workspaceInstanceKey()
@@ -29,9 +31,22 @@ internal class WorkspaceMcpCall<out R : Request>(
         return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
     }
 
+    suspend fun project(): Project {
+        val project = when (val r = projectResolver.resolve(projectKey = parameters["projectKey"])) {
+            is WorkspaceProjectResolution.Resolved -> r.project
+            is WorkspaceProjectResolution.Unresolved -> error(r.message)
+        }
+        coroutineScope {
+            val projectJob = project.scope.coroutineContext[Job]
+            projectJob?.invokeOnCompletion { cause ->
+                if (cause != null) cancel(CancellationException("Project closed", cause))
+            }
+        }
+        return project
+    }
+
     suspend fun visibleProjects(): List<WorkspaceMcpListProject> {
-        val resolver = projectResolver ?: return emptyList()
-        return visibleProjectInstances(resolver).map { project ->
+        return visibleProjectInstances(projectResolver).map { project ->
             WorkspaceMcpListProject(
                 projectKey = workspaceProjectKey(project),
                 name = project.name,

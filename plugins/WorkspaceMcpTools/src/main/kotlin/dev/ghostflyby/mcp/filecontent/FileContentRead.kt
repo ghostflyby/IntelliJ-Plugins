@@ -11,12 +11,11 @@ import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.LanguageFileType
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.resource.validateProjectRelativePath
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
@@ -32,19 +31,14 @@ internal data class ContentResult(
 // -- resolve VirtualFile --
 
 internal suspend fun resolveFileByRelativePath(
-    projectKey: String,
+    project: Project,
     relativePath: String,
-    projectResolver: WorkspaceProjectResolver,
 ): VirtualFile {
     validateProjectRelativePath(relativePath)
-    val project = when (val resolved = projectResolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> resolved.project
-        is WorkspaceProjectResolution.Unresolved -> contentFail(resolved.message)
-    }
-    val basePath = project.basePath ?: contentFail("Project $projectKey has no base path.")
+    val basePath = project.basePath ?: contentFail("Project ${project.name} has no base path.")
     val fullPath = "$basePath/$relativePath"
     return readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
-        ?: contentFail("File not found at '$relativePath' in project '$projectKey': $fullPath")
+        ?: contentFail("File not found at '$relativePath' in project '${project.name}': $fullPath")
 }
 
 internal suspend fun resolveFileByRawUrl(rawVfsUrl: String): VirtualFile {

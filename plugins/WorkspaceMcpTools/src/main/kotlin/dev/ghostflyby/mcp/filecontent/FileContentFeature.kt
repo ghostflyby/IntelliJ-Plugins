@@ -54,16 +54,14 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             under(projectAnchor) {
                 route("files/{+relativePath}{?meta,content}") {
                     read {
-                        val anc = call.parameters
                         val file = resolveFileByRelativePath(
-                            projectKey = anc["projectKey"] ?: "",
-                            relativePath = anc["relativePath"] ?: "",
-                            projectResolver = projectResolver,
+                            project = call.project(),
+                            relativePath = call.parameters["relativePath"] ?: "",
                         )
                         readContentOrMeta(
                             uri = call.request.params.uri,
                             file = file,
-                            ancestors = anc,
+                            ancestors = call.parameters,
                         )
                     }
                     listTemplates()
