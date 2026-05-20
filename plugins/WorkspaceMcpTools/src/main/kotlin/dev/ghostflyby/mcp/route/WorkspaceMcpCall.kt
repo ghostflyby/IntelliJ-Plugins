@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.route
 
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
@@ -22,7 +23,6 @@ internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
     val parameters: AncestorContext,
-    private val projectResolver: WorkspaceProjectResolver,
 ) {
     val sessionId: String get() = connection.sessionId
     val instanceKey: String get() = workspaceInstanceKey()
@@ -30,54 +30,66 @@ internal class WorkspaceMcpCall<out R : Request>(
     suspend fun roots(): List<String> {
         return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
     }
+}
 
-    suspend fun project(): Project {
-        val project = when (val r = projectResolver.resolve(projectKey = parameters["projectKey"])) {
-            is WorkspaceProjectResolution.Resolved -> r.project
-            is WorkspaceProjectResolution.Unresolved -> error(r.message)
-        }
-        coroutineScope {
-            val projectJob = project.scope.coroutineContext[Job]
-            projectJob?.invokeOnCompletion { cause ->
-                if (cause != null) cancel(CancellationException("Project closed", cause))
-            }
-        }
-        return project
+// -- project resolution (extension with service default + overload for testing) --
+
+internal suspend fun WorkspaceMcpCall<*>.project(): Project =
+    project(service<WorkspaceProjectResolver>())
+
+internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectResolver): Project {
+    val project = when (val r = resolver.resolve(projectKey = parameters["projectKey"])) {
+        is WorkspaceProjectResolution.Resolved -> r.project
+        is WorkspaceProjectResolution.Unresolved -> error(r.message)
     }
-
-    suspend fun visibleProjects(): List<WorkspaceMcpListProject> {
-        return visibleProjectInstances(projectResolver).map { project ->
-            WorkspaceMcpListProject(
-                projectKey = workspaceProjectKey(project),
-                name = project.name,
-                basePath = project.basePath,
-            )
+    coroutineScope {
+        val projectJob = project.scope.coroutineContext[Job]
+        projectJob?.invokeOnCompletion { cause ->
+            if (cause != null) cancel(CancellationException("Project closed", cause))
         }
     }
+    return project
+}
 
-    private suspend fun visibleProjectInstances(resolver: WorkspaceProjectResolver): List<Project> {
-        val projects = resolver.openProjects()
-        val roots = roots()
-        if (roots.isEmpty()) return projects
-        val normalizedRoots = roots.map(::normalizePath)
-        return projects.filter { project ->
-            val basePath = project.basePath?.let(::normalizePath) ?: return@filter false
-            normalizedRoots.any { root ->
-                basePath == root || basePath.startsWith("$root/") || root.startsWith("$basePath/")
-            }
+// -- visible projects (extension with service default + overload) --
+
+internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpListProject> =
+    visibleProjects(service<WorkspaceProjectResolver>())
+
+internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProjectResolver): List<WorkspaceMcpListProject> {
+    return visibleProjectInstances(resolver).map { project ->
+        WorkspaceMcpListProject(
+            projectKey = workspaceProjectKey(project),
+            name = project.name,
+            basePath = project.basePath,
+        )
+    }
+}
+
+// -- impl --
+
+private suspend fun WorkspaceMcpCall<*>.visibleProjectInstances(resolver: WorkspaceProjectResolver): List<Project> {
+    val projects = resolver.openProjects()
+    val roots = roots()
+    if (roots.isEmpty()) return projects
+    val normalizedRoots = roots.map { normalizePath(it) }
+    return projects.filter { project ->
+        val basePath = project.basePath?.let { normalizePath(it) } ?: return@filter false
+        normalizedRoots.any { root ->
+            basePath == root || basePath.startsWith("$root/") || root.startsWith("$basePath/")
         }
     }
+}
 
-    private fun normalizePath(path: String): String {
-        return runCatching {
-            val nioPath = Path.of(path)
-            if (nioPath.exists()) {
-                nioPath.toRealPath().absolutePathString()
-            } else {
-                nioPath.toAbsolutePath().normalize().absolutePathString()
-            }
-        }.getOrElse {
-            path.trim().trimEnd('/')
+private fun normalizePath(path: String): String {
+    return runCatching {
+        val nioPath = Path.of(path)
+        if (nioPath.exists()) {
+            nioPath.toRealPath().absolutePathString()
+        } else {
+            nioPath.toAbsolutePath().normalize().absolutePathString()
         }
+    }.getOrElse {
+        path.trim().trimEnd('/')
     }
 }

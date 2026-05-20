@@ -107,7 +107,6 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     connection = this,
                                     request = request,
                                     parameters = AncestorContext(vars),
-                                    projectResolver = projectResolver,
                                 ),
                             ),
                         )
@@ -129,7 +128,6 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     connection = this,
                                     request = request,
                                     parameters = AncestorContext(emptyMap()),
-                                    projectResolver = projectResolver,
                                 ),
                             ),
                         )

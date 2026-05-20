@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.document.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration

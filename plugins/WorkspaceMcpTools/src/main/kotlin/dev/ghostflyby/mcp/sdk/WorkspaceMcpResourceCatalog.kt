@@ -63,7 +63,6 @@ internal class WorkspaceMcpResourceCatalog(
             connection = connection,
             request = request,
             parameters = AncestorContext(emptyMap()),
-            projectResolver = projectResolver,
         )
     }
 

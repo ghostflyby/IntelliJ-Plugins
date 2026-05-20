@@ -11,6 +11,7 @@ import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_ROUTE
 import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
 import dev.ghostflyby.mcp.route.ResourceListDecision
+import dev.ghostflyby.mcp.route.visibleProjects
 import dev.ghostflyby.mcp.route.RouteAnchor
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult

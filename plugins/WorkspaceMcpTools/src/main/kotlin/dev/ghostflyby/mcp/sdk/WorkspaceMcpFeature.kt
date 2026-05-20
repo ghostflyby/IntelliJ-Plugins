@@ -87,7 +87,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
      * from the KSP-generated `KClass<P>.jsonSchema` convention.
      */
     inline fun <reified T : Any> registerToolClass() {
-        for ((tool, handler) in reflectTools(T::class, projectResolver)) {
+        for ((tool, handler) in reflectTools(T::class)) {
             server.addTool(tool.name, tool.description ?: "", tool.inputSchema) { handler(it) }
             trackedTools.add(tool.name)
         }

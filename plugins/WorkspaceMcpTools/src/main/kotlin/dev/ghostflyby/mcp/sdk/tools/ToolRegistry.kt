@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.sdk.tools
 import dev.ghostflyby.mcp.route.AncestorContext
 import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.WorkspaceMcpCall
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.serialization.SerializationException
@@ -23,13 +22,13 @@ import kotlin.reflect.KFunction
 import kotlin.reflect.full.callSuspend
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.instanceParameter
+import kotlin.reflect.KParameter
 import kotlin.reflect.full.valueParameters
 
 internal typealias Handler = suspend ClientConnection.(CallToolRequest) -> CallToolResult
 
 internal fun <T : Any> reflectTools(
     toolClass: KClass<T>,
-    projectResolver: WorkspaceProjectResolver,
 ): Set<Pair<Tool, Handler>> {
     val instance = toolClass.objectInstance
         ?: toolClass.java.getDeclaredConstructor().newInstance()
@@ -45,7 +44,7 @@ internal fun <T : Any> reflectTools(
                     required = (schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content },
                 ),
             )
-            add(Pair(tool, buildHandler(instance, func, info, projectResolver)))
+            add(Pair(tool, buildHandler(instance, func, info)))
         }
     }
 }
@@ -54,7 +53,6 @@ private fun <T : Any> buildHandler(
     instance: T,
     func: KFunction<*>,
     info: ToolMethodInfo,
-    projectResolver: WorkspaceProjectResolver,
 ): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
         val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
@@ -77,7 +75,6 @@ private fun <T : Any> buildHandler(
                 connection = conn,
                 request = request,
                 parameters = AncestorContext(emptyMap()),
-                projectResolver = projectResolver,
             ),
         )
         val result = func.callSuspend(instance, mcpCall, decoded)
@@ -126,9 +123,19 @@ private class ToolMethodInfo private constructor(
             if (!func.isSuspend) return null
             val valueParams = func.valueParameters
             if (valueParams.size != 1) return null
-            val receiver = func.instanceParameter ?: return null
+            // instanceParameter works for top-level extensions;
+            // For member extensions, find receiver in parameters (INSTANCE or EXTENSION_RECEIVER kind).
+            val receiver = func.instanceParameter
+                ?: func.parameters.firstOrNull { p ->
+                    p.kind == KParameter.Kind.EXTENSION_RECEIVER || p.kind == KParameter.Kind.INSTANCE
+                }
+                ?: return null
             val receiverClassifier = receiver.type.classifier as? KClass<*> ?: return null
-            if (receiverClassifier != McpCallContext::class) return null
+            if (receiverClassifier == McpCallContext::class) {
+                val paramClass = (valueParams.first().type.classifier as? KClass<*>) ?: return null
+                return ToolMethodInfo(name = func.name, paramClass = paramClass)
+            }
+            return null
             val paramClass = (valueParams.first().type.classifier as? KClass<*>) ?: return null
             return ToolMethodInfo(name = func.name, paramClass = paramClass)
         }
