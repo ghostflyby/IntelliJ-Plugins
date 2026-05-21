@@ -245,7 +245,16 @@ internal class ToolReflectionInvocationTest {
             toolClass = toolClass,
             functionName = functionName,
             arguments = arguments,
-            handlerFactory = { _, _, accepted -> accepted.handler },
+            handlerFactory = { instance, func, _ ->
+                buildKotlinReflectHandler(
+                    instance = instance,
+                    func = func,
+                    info = ToolMethodInfo(
+                        name = func.name,
+                        paramClasses = func.valueParameters.map { it.type },
+                    ),
+                )
+            },
         )
     }
 

@@ -79,12 +79,11 @@ internal fun reflectOneTool(
             required = (params?.get("required") as? JsonArray)?.map { it.jsonPrimitive.content },
         ),
     )
-    val paramClasses = func.valueParameters.map { it.type }
-    val info = ToolMethodInfo(func.name, paramClasses)
-    return ToolReflectionResult.Accepted(tool, buildHandler(instance, func, info))
+    val plan = compileToolInvocationPlan(instance, func)
+    return ToolReflectionResult.Accepted(tool, buildMethodHandleHandler(plan))
 }
 
-private fun buildHandler(
+internal fun buildKotlinReflectHandler(
     instance: Any,
     func: KFunction<*>,
     info: ToolMethodInfo,
@@ -112,7 +111,7 @@ private fun buildHandler(
 internal data class ToolInvocationPlan(
     val name: String,
     val argumentDecoders: List<ToolArgumentDecoder>,
-    val invocationArgsBuilder: ToolInvocationArgsBuilder,
+    val callArgsBuilder: ToolCallArgsBuilder,
     val methodHandle: MethodHandle,
     val isSuspend: Boolean,
     val resultMapper: ToolResultMapper,
@@ -123,11 +122,10 @@ internal data class ToolArgumentDecoder(
     val serializer: KSerializer<Any?>,
 )
 
-internal fun interface ToolInvocationArgsBuilder {
+internal fun interface ToolCallArgsBuilder {
     fun build(
         conn: ClientConnection,
         request: CallToolRequest,
-        decoded: List<Any?>,
     ): Array<Any?>
 }
 
@@ -136,15 +134,16 @@ internal fun compileToolInvocationPlan(
     func: KFunction<*>,
 ): ToolInvocationPlan {
     val hasExtensionReceiver = func.extensionReceiverParameter != null
+    val valueParameterCount = func.valueParameters.size
     return ToolInvocationPlan(
         name = func.name,
         argumentDecoders = func.valueParameters.map { param ->
             ToolArgumentDecoder(param.name, serializerForToolType(param.type))
         },
-        invocationArgsBuilder = ToolInvocationArgsBuilder { conn, request, decoded ->
-            buildToolInvocationArgs(instance, hasExtensionReceiver, conn, request, decoded)
+        callArgsBuilder = { conn, request ->
+            newToolCallArgs(hasExtensionReceiver, valueParameterCount, conn, request)
         },
-        methodHandle = adaptToolFunctionHandle(func, toolFunctionMethodHandle(func)),
+        methodHandle = adaptToolFunctionHandle(func, toolFunctionMethodHandle(func).bindTo(instance)),
         isSuspend = func.isSuspend,
         resultMapper = toolResultMapper(func.returnType),
     )
@@ -152,20 +151,20 @@ internal fun compileToolInvocationPlan(
 
 internal fun buildMethodHandleHandler(plan: ToolInvocationPlan): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
-        val decoded = when (val result = decodeToolArguments(request, plan.name, plan.argumentDecoders)) {
-            is ToolArgumentDecodeResult.Decoded -> result.values
+        val args = plan.callArgsBuilder.build(conn, request)
+        when (val result = decodeToolArguments(request, plan.name, plan.argumentDecoders, args)) {
+            is ToolArgumentDecodeResult.Decoded -> Unit
             is ToolArgumentDecodeResult.Failed -> return result.result
         }
-        val args = plan.invocationArgsBuilder.build(conn, request, decoded)
         val result = if (plan.isSuspend) {
             suspendCoroutineUninterceptedOrReturn { continuation ->
-                val callResult = plan.methodHandle.invokeWithArguments(args, continuation)
+                val callResult = plan.methodHandle.invokeExact(args, continuation)
                 if (callResult === COROUTINE_SUSPENDED) COROUTINE_SUSPENDED else callResult
             }
         } else {
             withContext(Dispatchers.IO) {
                 runInterruptible {
-                    plan.methodHandle.invokeWithArguments(args)
+                    plan.methodHandle.invokeExact(args)
                 }
             }
         }
@@ -197,25 +196,29 @@ private fun decodeToolArguments(
     request: CallToolRequest,
     toolName: String,
     argumentDecoders: List<ToolArgumentDecoder>,
+    target: Array<Any?>? = null,
 ): ToolArgumentDecodeResult {
     val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
-    val decoded = try {
-        argumentDecoders.map { decoder ->
+    val decodedValues = if (target == null) ArrayList<Any?>(argumentDecoders.size) else null
+    try {
+        argumentDecoders.forEachIndexed { i, decoder ->
             val key = jsonArgs.keys.firstOrNull { it == decoder.name } ?: decoder.name
             val element = jsonArgs[key] ?: return ToolArgumentDecodeResult.Failed(
                 missingArgumentResult(toolName, decoder.name),
             )
-            toolArgsJson.decodeFromJsonElement(
+            val decoded = toolArgsJson.decodeFromJsonElement(
                 decoder.serializer,
                 element,
             )
+            if (target != null) target[target.size - argumentDecoders.size + i] = decoded
+            else decodedValues?.add(decoded)
         }
     } catch (e: SerializationException) {
         return ToolArgumentDecodeResult.Failed(invalidArgumentsResult(toolName, e.message))
     } catch (e: IllegalArgumentException) {
         return ToolArgumentDecodeResult.Failed(invalidArgumentsResult(toolName, e.message))
     }
-    return ToolArgumentDecodeResult.Decoded(decoded)
+    return ToolArgumentDecodeResult.Decoded(decodedValues ?: emptyList())
 }
 
 private fun buildToolInvocationArgs(
@@ -225,34 +228,34 @@ private fun buildToolInvocationArgs(
     request: CallToolRequest,
     decoded: List<Any?>,
 ): List<Any?> {
-    return buildToolInvocationArgs(
-        instance = instance,
-        hasExtensionReceiver = func.extensionReceiverParameter != null,
-        conn = conn,
-        request = request,
-        decoded = decoded,
-    ).toList()
-}
-
-private fun buildToolInvocationArgs(
-    instance: Any,
-    hasExtensionReceiver: Boolean,
-    conn: ClientConnection,
-    request: CallToolRequest,
-    decoded: List<Any?>,
-): Array<Any?> {
-    val mcpCall = McpCallContext(
-        WorkspaceMcpCall(
-            connection = conn,
-            request = request,
-            parameters = AncestorContext(emptyMap()),
-        ),
-    )
+    val hasExtensionReceiver = func.extensionReceiverParameter != null
     val args = ArrayList<Any?>(decoded.size + if (hasExtensionReceiver) 2 else 1)
     args.add(instance)
-    if (hasExtensionReceiver) args.add(mcpCall)
+    if (hasExtensionReceiver) args.add(McpCallContext(newWorkspaceMcpCall(conn, request)))
     args.addAll(decoded)
-    return args.toTypedArray()
+    return args
+}
+
+private fun newToolCallArgs(
+    hasExtensionReceiver: Boolean,
+    valueParameterCount: Int,
+    conn: ClientConnection,
+    request: CallToolRequest,
+): Array<Any?> {
+    val args = arrayOfNulls<Any>(valueParameterCount + if (hasExtensionReceiver) 1 else 0)
+    if (hasExtensionReceiver) args[0] = newWorkspaceMcpCall(conn, request)
+    return args
+}
+
+private fun newWorkspaceMcpCall(
+    conn: ClientConnection,
+    request: CallToolRequest,
+): WorkspaceMcpCall<CallToolRequest> {
+    return WorkspaceMcpCall(
+        connection = conn,
+        request = request,
+        parameters = AncestorContext(emptyMap()),
+    )
 }
 
 private fun missingArgumentResult(toolName: String, argumentName: String?): CallToolResult =
@@ -276,25 +279,12 @@ private fun toolFunctionMethodHandle(func: KFunction<*>): MethodHandle {
 }
 
 private fun adaptToolFunctionHandle(func: KFunction<*>, rawHandle: MethodHandle): MethodHandle {
-    val filtered = filterValueClassExtensionReceiver(func, rawHandle)
     return if (func.isSuspend) {
-        spreadSuspendToolFunctionHandle(filtered)
+        spreadSuspendToolFunctionHandle(rawHandle)
     } else {
-        filtered.asSpreader(toolArgsArrayClass, filtered.type().parameterCount())
+        rawHandle.asSpreader(toolArgsArrayClass, rawHandle.type().parameterCount())
             .asType(MethodType.methodType(Any::class.java, toolArgsArrayClass))
     }
-}
-
-private fun filterValueClassExtensionReceiver(func: KFunction<*>, handle: MethodHandle): MethodHandle {
-    if (func.extensionReceiverParameter == null) return handle
-    val extensionReceiverIndex = 1
-    val parameterType = handle.type().parameterType(extensionReceiverIndex)
-    if (parameterType != WorkspaceMcpCall::class.java) return handle
-    return MethodHandles.filterArguments(
-        handle,
-        extensionReceiverIndex,
-        mcpCallContextUnboxHandle(parameterType),
-    )
 }
 
 private fun spreadSuspendToolFunctionHandle(handle: MethodHandle): MethodHandle {
@@ -317,13 +307,6 @@ private fun spreadSuspendToolFunctionHandle(handle: MethodHandle): MethodHandle 
         1,
         0,
     )
-}
-
-private fun mcpCallContextUnboxHandle(returnType: Class<*>): MethodHandle {
-    val method = McpCallContext::class.java.getDeclaredMethod("unbox-impl")
-    method.isAccessible = true
-    return MethodHandles.lookup().unreflect(method)
-        .asType(MethodType.methodType(returnType, McpCallContext::class.java))
 }
 
 private val toolArgsArrayClass: Class<Array<Any?>> = Array<Any?>::class.java
