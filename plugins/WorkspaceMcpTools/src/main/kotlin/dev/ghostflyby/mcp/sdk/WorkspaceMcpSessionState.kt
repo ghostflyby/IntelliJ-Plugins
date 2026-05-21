@@ -77,7 +77,11 @@ internal class WorkspaceMcpSessionState(
             subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
             when (selector) {
                 ResourceListSelector.AllSessions -> activeSessionIds
-                is ResourceListSelector.Session -> setOf(selector.sessionId)
+                is ResourceListSelector.Session -> if (selector.sessionId in activeSessionIds) {
+                    setOf(selector.sessionId)
+                } else {
+                    emptySet()
+                }
                 is ResourceListSelector.Uri -> sessionsSubscribedTo(activeSessionIds, selector.uri)
                 is ResourceListSelector.UriPrefix -> resourceSubscriptionsBySession
                     .filterValues { subscriptions -> subscriptions.any { it.startsWith(selector.uriPrefix) } }

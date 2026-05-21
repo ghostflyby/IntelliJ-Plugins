@@ -38,15 +38,21 @@ internal class WorkspaceMcpSdkServerService(
     private val catalog = WorkspaceMcpResourceCatalog(projectResolver)
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
         sessionState = sessionState,
+    )
+    private val notificationDispatcher = WorkspaceMcpNotificationDispatcher(
+        subscriptionService = subscriptionService,
         serverSupplier = { server },
+    )
+    private val invalidationBus = WorkspaceMcpInvalidationBus(
         scope = scope,
+        dispatcher = notificationDispatcher,
     )
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
-        invalidationSink = subscriptionService,
+        invalidationSink = invalidationBus,
     )
 
     private val features: List<WorkspaceMcpFeature>
@@ -111,7 +117,7 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.register(activeServer, extension)
-                        subscriptionService.invalidateResourceList()
+                        invalidationBus.invalidateResourceList()
                     }
                 }
 
@@ -119,7 +125,7 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.unregister(activeServer, extension.featureName)
-                        subscriptionService.invalidateResourceList()
+                        invalidationBus.invalidateResourceList()
                     }
                 }
             },
@@ -151,7 +157,7 @@ internal class WorkspaceMcpSdkServerService(
             Method.Defined.NotificationsRootsListChanged,
         ) {
             clearSessionRoots(session.sessionId)
-            subscriptionService.invalidateResourceList(ResourceListSelector.Session(session.sessionId))
+            invalidationBus.invalidateResourceList(ResourceListSelector.Session(session.sessionId))
             CompletableDeferred(Unit)
         }
     }
