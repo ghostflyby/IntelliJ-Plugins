@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.filecontent
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.route.project
-import dev.ghostflyby.mcp.document.tools.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -71,42 +70,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         }
 
         // -- document write tools --
-        registerTool<DocumentSdkUrlArgs>(
-            name = "document_is_writable",
-            description = "Document.isWritable(): return whether document text is writable.",
-            schema = DocumentSdkUrlArgs::class.jsonSchema,
-            handler = { args, request -> documentIsWritableHandler(args, request) },
-        )
-        registerTool<DocumentSdkUrlArgs>(
-            name = "document_get_modification_stamp",
-            description = "Document.getModificationStamp(): return current modification stamp.",
-            schema = DocumentSdkUrlArgs::class.jsonSchema,
-            handler = { args, request -> documentGetModificationStampHandler(args, request) },
-        )
-        registerTool<DocumentSdkInsertArgs>(
-            name = "document_insert_string",
-            description = "Document.insertString(offset, text).",
-            schema = DocumentSdkInsertArgs::class.jsonSchema,
-            handler = { args, request -> documentInsertStringHandler(args, request) },
-        )
-        registerTool<DocumentSdkDeleteArgs>(
-            name = "document_delete_string",
-            description = "Document.deleteString(startOffset, endOffset).",
-            schema = DocumentSdkDeleteArgs::class.jsonSchema,
-            handler = { args, request -> documentDeleteStringHandler(args, request) },
-        )
-        registerTool<DocumentSdkReplaceArgs>(
-            name = "document_replace_string",
-            description = "Document.replaceString(startOffset, endOffset, text).",
-            schema = DocumentSdkReplaceArgs::class.jsonSchema,
-            handler = { args, request -> documentReplaceStringHandler(args, request) },
-        )
-        registerTool<DocumentSdkSetTextArgs>(
-            name = "document_set_text",
-            description = "Document.setText(text): replace whole document with new text.",
-            schema = DocumentSdkSetTextArgs::class.jsonSchema,
-            handler = { args, request -> documentSetTextHandler(args, request) },
-        )
+        registerToolClass<FileContentWriteTools>()
 
         return buildRegistration()
     }

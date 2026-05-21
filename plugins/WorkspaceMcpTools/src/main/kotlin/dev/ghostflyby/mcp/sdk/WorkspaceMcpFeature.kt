@@ -88,7 +88,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
      */
     inline fun <reified T : Any> registerToolClass() {
         for ((tool, handler) in reflectTools(T::class)) {
-            server.addTool(tool.name, tool.description ?: "", tool.inputSchema) { handler(it) }
+            server.addTool(tool, handler)
             trackedTools.add(tool.name)
         }
     }

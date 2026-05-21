@@ -145,7 +145,7 @@ internal suspend fun ClientConnection.documentIsWritableHandler(args: DocumentSd
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (_, document) = resolveTextDocument(args.url)
+        val (_, document) = resolveTextDocumentForTool(args.url)
         val writable = readAction { document.isWritable }
         CallToolResult(
             content = listOf(TextContent(text = toolArgsJson.encodeToString(DocumentSdkWritableResult(writable = writable)))),
@@ -159,7 +159,7 @@ internal suspend fun ClientConnection.documentGetModificationStampHandler(args: 
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (_, document) = resolveTextDocument(args.url)
+        val (_, document) = resolveTextDocumentForTool(args.url)
         val stamp = readAction { document.modificationStamp }
         CallToolResult(
             content = listOf(TextContent(text = toolArgsJson.encodeToString(DocumentSdkModificationStampResult(modificationStamp = stamp)))),
@@ -173,16 +173,16 @@ internal suspend fun ClientConnection.documentInsertStringHandler(args: Document
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (file, document) = resolveTextDocument(args.url)
+        val (file, document) = resolveTextDocumentForTool(args.url)
         val textLength = readAction { document.textLength }
-        validateDocumentRange(document, args.offset, args.offset) // validate single offset
-        ensureWritable(file, document, args.url)
+        validateToolRange(document, args.offset, args.offset) // validate single offset
+        ensureToolWritable(file, document, args.url)
         backgroundWriteAction {
             document.insertString(args.offset, args.text)
-            commitAndMaybeSave(project, document, args.saveAfterWrite)
+            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
         }
         CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotWriteResult(document)))),
+            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
         )
     }
 }
@@ -193,15 +193,15 @@ internal suspend fun ClientConnection.documentDeleteStringHandler(args: Document
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (file, document) = resolveTextDocument(args.url)
-        validateRange(document, args.startOffset, args.endOffset)
-        ensureWritable(file, document, args.url)
+        val (file, document) = resolveTextDocumentForTool(args.url)
+        validateToolRange(document, args.startOffset, args.endOffset)
+        ensureToolWritable(file, document, args.url)
         backgroundWriteAction {
             document.deleteString(args.startOffset, args.endOffset)
-            commitAndMaybeSave(project, document, args.saveAfterWrite)
+            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
         }
         CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotWriteResult(document)))),
+            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
         )
     }
 }
@@ -212,15 +212,15 @@ internal suspend fun ClientConnection.documentReplaceStringHandler(args: Documen
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (file, document) = resolveTextDocument(args.url)
-        validateRange(document, args.startOffset, args.endOffset)
-        ensureWritable(file, document, args.url)
+        val (file, document) = resolveTextDocumentForTool(args.url)
+        validateToolRange(document, args.startOffset, args.endOffset)
+        ensureToolWritable(file, document, args.url)
         backgroundWriteAction {
             document.replaceString(args.startOffset, args.endOffset, args.text)
-            commitAndMaybeSave(project, document, args.saveAfterWrite)
+            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
         }
         CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotWriteResult(document)))),
+            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
         )
     }
 }
@@ -231,52 +231,52 @@ internal suspend fun ClientConnection.documentSetTextHandler(args: DocumentSdkSe
         projectArgs = args,
         vfsUrl = args.url,
     ) { project ->
-        val (file, document) = resolveTextDocument(args.url)
-        ensureWritable(file, document, args.url)
+        val (file, document) = resolveTextDocumentForTool(args.url)
+        ensureToolWritable(file, document, args.url)
         backgroundWriteAction {
             document.setText(args.text)
-            commitAndMaybeSave(project, document, args.saveAfterWrite)
+            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
         }
         CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotWriteResult(document)))),
+            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
         )
     }
 }
 
-private suspend fun resolveTextDocument(url: String): Pair<VirtualFile, Document> = readAction {
+internal suspend fun resolveTextDocumentForTool(url: String): Pair<VirtualFile, Document> = readAction {
     val vfsManager = service<VirtualFileManager>()
-    val file = vfsManager.findFileByUrl(url) ?: mcpFail("File not found for URL: $url")
+    val file = vfsManager.findFileByUrl(url) ?: throwToolError("File not found for URL: $url")
     if (file.isDirectory) {
-        mcpFail("URL points to a directory, not a file: $url")
+        throwToolError("URL points to a directory, not a file: $url")
     }
     val document = FileDocumentManager.getInstance().getDocument(file)
-        ?: mcpFail("File at URL \u0027$url\u0027 is binary or has no text document.")
+        ?: throwToolError("File at URL \u0027$url\u0027 is binary or has no text document.")
     file to document
 }
 
-private suspend fun validateRange(document: Document, startOffset: Int, endOffset: Int) {
+internal suspend fun validateToolRange(document: Document, startOffset: Int, endOffset: Int) {
     if (startOffset > endOffset) {
-        mcpFail("startOffset must be <= endOffset.")
+        throwToolError("startOffset must be <= endOffset.")
     }
     val textLength = readAction { document.textLength }
-    validateOffset(startOffset, textLength, "startOffset")
-    validateOffset(endOffset, textLength, "endOffset")
+    validateToolOffset(startOffset, textLength, "startOffset")
+    validateToolOffset(endOffset, textLength, "endOffset")
 }
 
-private fun validateOffset(value: Int, max: Int, name: String) {
+internal fun validateToolOffset(value: Int, max: Int, name: String) {
     if (value !in 0..max) {
-        mcpFail("$name must be in [0, $max], but was $value.")
+        throwToolError("$name must be in [0, $max], but was $value.")
     }
 }
 
-private suspend fun ensureWritable(file: VirtualFile, document: Document, url: String) {
+internal suspend fun ensureToolWritable(file: VirtualFile, document: Document, url: String) {
     val writable = readAction { file.isWritable && document.isWritable }
     if (!writable) {
-        mcpFail("Document is not writable: $url")
+        throwToolError("Document is not writable: $url")
     }
 }
 
-private suspend fun snapshotWriteResult(document: Document): DocumentSdkWriteResult {
+internal suspend fun snapshotToolWriteResult(document: Document): DocumentSdkWriteResult {
     val snapshot = readAction {
         Triple(document.textLength, document.lineCount, document.modificationStamp)
     }
@@ -287,7 +287,7 @@ private suspend fun snapshotWriteResult(document: Document): DocumentSdkWriteRes
     )
 }
 
-private fun commitAndMaybeSave(
+internal fun commitToolAndMaybeSave(
     project: Project,
     document: Document,
     saveAfterWrite: Boolean,
@@ -300,6 +300,6 @@ private fun commitAndMaybeSave(
     }
 }
 
-private fun mcpFail(message: String): Nothing {
+internal fun throwToolError(message: String): Nothing {
     throw WorkspaceResourceException(message)
 }
