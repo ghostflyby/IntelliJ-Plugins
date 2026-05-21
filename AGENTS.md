@@ -8,13 +8,13 @@
 - `Dispatchers.EDT` = UI 线程 + writeAction。不需要写权限时使用 `Dispatchers.UI`。
 
 ```kotlin
-import com.intellij.openapi.application.backgroundWirteAction
+import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 // 读 PSI — 不需要 writeAction
 val text = readAction { psiFile.text }
 
 // 写 Document — 需要 writeAction
-backgroundWirteAction { document.setText("new") }
+backgroundWriteAction { document.setText("new") }
 ```
 
 - 使用显式可见性修饰符，默认使用 `internal`。
