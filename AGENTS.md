@@ -2,127 +2,75 @@
 
 ## Coding
 
-1. use kotlin for plugin development
-2. use kotlin coroutines whenever possible for asynchronous operations, including Psi/Vfs
-   read/write actions, progress reporting,
-   background tasks, and some cancelable registrations. Avoid blocking the UI thread.
-3. you should declare `CoroutineScope` in Service as primary constructor property when needed,
-   ensuring proper lifecycle, e.g. cancellation on plugin unload.
-4. make dynamic plugins, registering should pass a `Disposable`
-   or `CoroutineScope` to ensure proper cleanup on unload.
-5. clean data in `UserDataHolder` with `Disposable` or `CoroutineScope` to prevent memory leaks.
-6. DO NOT run blocking operations on UI Thread.
-7. `Dispatchers.EDT` means UI thread and `writeAction`, use `Dispatchers.UI` if no write access needed
-8. use explicit visibility modifiers, mostly should use `internal`
-9. DO NOT use `@ApiStatus.Internal` APIs, which will be prevented on marketplace, check before writing
-10. Use `@ApiStatus.Experimental` APIs with caution, as they may change without deprecation.
-    If you must use them, `Suppress` the `UnstableApiUsage` warning and document the usage clearly in code comments,
-    so future maintainers understand the risks and can track API changes in IntelliJ releases.
+- 使用 **Kotlin** 开发插件。
+- 异步操作（PSI/VFS 读写、进度报告、后台任务、可取消注册等）使用 **Kotlin 协程**，避免阻塞 UI 线程。
+- 不要在 UI 线程上运行阻塞操作。
+- `Dispatchers.EDT` = UI 线程 + writeAction。不需要写权限时使用 `Dispatchers.UI`。
+
+```kotlin
+import com.intellij.openapi.application.backgroundWirteAction
+import com.intellij.openapi.application.readAction
+// 读 PSI — 不需要 writeAction
+val text = readAction { psiFile.text }
+
+// 写 Document — 需要 writeAction
+backgroundWirteAction { document.setText("new") }
+```
+
+- 使用显式可见性修饰符，默认使用 `internal`。
+- **禁止**使用 `@ApiStatus.Internal` API（Marketplace 会上会被拦截），使用前务必检查。
+- 谨慎使用 `@ApiStatus.Experimental` API（可能无废弃期变更）。若必须使用，`@Suppress("UnstableApiUsage")` 并在注释中说明原因，方便后续跟踪 IntelliJ 版本变更。
+
+Disposable 生命周期与清理模式参见 [intellij-disposable](.agents/skills/intellij-disposable/SKILL.md)。
 
 ## Project Structure
 
-1. this repository is a Gradle monorepo; `settings.gradle.kts` auto-includes each
-   directory under `plugins/` as `:plugins:<pluginName>`.
-2. current plugin directories:
-   `EnhancedHotSwapEnabler`, `GradleMcpTools`, `IdeaVimToggleIME`,
-   `LiveTemplatesWithSelection`, `macOSRecents`, `SpotlessIntegration`,
-   `VitePress`, `WorkspaceMcpTools`.
-3. most plugin modules should keep this layout:
-   `build.gradle.kts`, `src/`, `README.md`, `CHANGELOG.md`, `TODO.md`, and `api/*.api`
-   when the plugin exposes a stable external API.
-4. some plugins can have nested Gradle subprojects via `projects.txt`
-   (current example: `plugins/SpotlessIntegration/projects.txt` includes `ModelBuilderService`).
-   when adding/removing entries, keep directory names and Gradle includes in sync.
-5. `VitePress` currently does not fully follow the common documentation/layout convention.
-   if you touch it, align it with the common plugin layout where practical.
-6. treat generated/local artifacts as non-source: `**/build/`, `**/.gradle/`, `.idea/`,
-   `.intellijPlatform/`, and `**/.DS_Store`.
-7. every plugin should keep a root `TODO.md` for current planned/refactor work.
-   keep it short, actionable, and written in English.
-8. once a `TODO.md` plan is implemented, move its finalized notes into plugin-local `docs/`
-   using a descriptive filename (for example `<PluginName>-<Topic>.md`), then refresh `TODO.md`
-   with the next active plan items.
-
-## Tooling and MCP
-
-1. MUST use domain specific MCP tools if available instead of using terminal/shell tools
-2. for API lookup, prioritize MCP flow: search to get VFS URL, use VFS tools for content,
-   and use navigation/symbol tools for documentation whenever possible.
-
-## PSI/VFS Read-Write Safety
-
-1. all PSI reads must run inside `readAction`/`runReadAction`, unless a specific PSI API explicitly documents a
-   different safe access contract.
-2. `Document` reads that must stay consistent with PSI, committed offsets, or navigation/symbol resolution must use a
-   committed document and run under read access.
-   for pure document-only reads, follow the specific document API's contract when weaker locking is acceptable.
-3. for VFS reads/writes, follow the specific API's locking annotations and documented contract.
-   acquire read/write access when required by that contract, or when a consistent snapshot with PSI/document state is
-   needed.
-4. do not assume caller context for internal helpers that read PSI/document or require VFS access constraints.
-   add explicit guards where useful (for example read-access assertions in deep helper functions, committed-document
-   checks, or checks that match the VFS API contract being used).
-5. after mutating editor `Document` in write action, call
-   `PsiDocumentManager.doPostponedOperationsAndUnblockDocument(document)` and
-   `PsiDocumentManager.commitDocument(document)` before returning.
-6. for offset-based navigation/symbol tools, prefer committed documents from
-   `PsiDocumentManager.getLastCommittedDocument(psiFile)` to keep PSI/document consistent.
-7. if committed document is unavailable, fail with a clear retriable message
-   (ask caller to commit/retry) instead of silently using potentially stale/uncommitted state.
-
-## MCP Tool Contract
-
-1. prefer MCP-first design for library/code insight lookup.
-   do not parse IDE jars via shell tools unless MCP lookup path is exhausted and failure reasons are recorded.
-2. provide first-call shortcuts for agent usage with stable, non-interactive defaults.
-3. batch tools should provide `continueOnError` and per-item error payloads.
-4. use `reportActivity` for start/progress/finish on long-running tools.
-5. validate parameters early and use precise `mcpFail` messages with actionable guidance.
-6. extract repeated descriptions/logic to shared `common` helpers and constants.
-
-## Serialization Compatibility
-
-1. treat tool DTOs/enums as external contracts once released.
-2. when renaming enum values, keep backward-compatible aliases using `@JsonNames`, except when for MCP tools, where
-   AGENTS can understand the changes without notice.
-3. prefer additive changes over breaking removals; if removal is required, document migration.
-4. keep quick presets and scope/token contracts backward-compatible across versions.
-
-## Build and Gradle
-
-1. NEVER run `verifyPlugin`, which is time-consuming and can be done on CI
-2. a single Gradle sync takes about 1.5-2 minutes
-3. a single `buildPlugin` Gradle task may take about 2 minutes
-4. update the kotlin ABI file when changing public APIs
-5. use delicated MCP tools instead of commandline whenever possible
-
-## Diagnostics and Docs
-
-1. keep activity keys/messages in sync with tool lifecycle and remove stale keys when tool interfaces are removed.
-2. when adding/changing toolsets, update `README.md` and related design docs in `docs/`.
-3. maintain clear separation between implemented and planned items in docs to reduce agent confusion.
-4. record newly discovered first-call shortcuts and failure/retry patterns in docs incrementally.
-5. treat plugin `TODO.md` as a staging document only; completed work must be archived in `docs/`
-   with a topic-specific filename to keep planning and historical records separated.
-6. changelog entries should describe the final user-visible or integrator-visible outcome of a change.
-   do not list internal refactor steps, test-only work, or implementation mechanics unless they change external
-   behavior.
-7. manually add changelog entries only under the `Unreleased` section.
-   do not manually convert `Unreleased` entries into a dated version section unless the release automation itself is
-   being changed.
-8. version bumps are still required when preparing a release-oriented change.
-   CI owns the changelog rollover, but it does not replace updating the plugin version in Gradle metadata.
-
-## Common Pattern
-
-### plugin level disposable
-
-```kotlin
-@Service
-private class MyDisposable : Disposable.Default
-
-@Suppress("LocalVariableName")
-internal val PluginDisposable
-get() = service<PluginDisposable>()
+本仓库为 Gradle monorepo：`settings.gradle.kts` 自动将 `plugins/` 下每个目录注册为 `:plugins:<pluginName>`，`modules/` 下注册为 `:modules:<moduleName>`。
 
 ```
+IntelliJ-Plugins/
+├── plugins/
+│   ├── EnhancedHotSwapEnabler/
+│   ├── GradleMcpTools/
+│   ├── IdeaVimToggleIME/
+│   ├── LiveTemplatesWithSelection/
+│   ├── macOSRecents/
+│   ├── SpotlessIntegration/
+│   ├── VitePress/
+│   └── WorkspaceMcpTools/
+├── modules/
+│   └── intellij-shared/
+├── settings.gradle.kts
+└── build.gradle.kts
+```
+
+- 插件标准布局：`build.gradle.kts`、`src/`、`README.md`、`CHANGELOG.md`、`TODO.md`。
+- 部分插件通过 `projects.txt` 声明嵌套 Gradle 子项目（例：`plugins/SpotlessIntegration/projects.txt` 含 `ModelBuilderService`）。增删条目时保持目录名与 Gradle include 一致。
+- 每个插件根目录维护 `TODO.md`，记录当前计划/重构项，简短、可执行、英文。
+- 计划项完成后，将最终说明移入插件内的 `docs/<PluginName>-<Topic>.md`，然后刷新 `TODO.md` 为下一阶段计划。
+
+## PSI / VFS / Document
+
+PSI、VFS、Document 读写必须遵循 IntelliJ 线程模型与锁合同。
+
+参见 [intellij-psi-vfs-safety](.agents/skills/intellij-psi-vfs-safety/SKILL.md)。
+
+## Build & Gradle
+
+- **禁止**运行 `verifyPlugin`（耗时长，留给 CI）。
+- 单次 Gradle sync 约 1.5–2 分钟。
+- 单次 `buildPlugin` 约 2 分钟。
+- 修改 public API 时更新 Kotlin ABI 文件。
+- 使用专用 MCP 工具代替命令行操作。
+
+## Diagnostics & Docs
+
+- 文档中明确区分已实现项与计划项，减少 agent 困惑。
+- 插件 `TODO.md` 仅作为过渡文档；完成的工作必须归档到 `docs/`，使用主题明确的文件名，保持计划与历史记录分离。
+- Changelog 条目描述对最终用户或集成者可见的变更结果，不列出内部重构步骤、纯测试工作或实现细节。
+- 仅手动在 `Unreleased` 部分添加 changelog 条目。不要手动将 `Unreleased` 转为带日期的版本号段落（CI 负责 changelog rollover）。
+- 版本号提升仍需在发布变更时手动更新 Gradle metadata。
+
+## Shared Modules
+
+`AutoCleanKey` 使用指南参见 [intellij-shared-AutoCleanKey](.agents/skills/intellij-shared-AutoCleanKey/SKILL.md)。
