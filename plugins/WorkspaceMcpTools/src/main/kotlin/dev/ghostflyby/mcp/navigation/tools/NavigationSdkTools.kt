@@ -26,221 +26,99 @@ import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.navigation.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import kotlinx.schema.Description
 import kotlinx.schema.Schema
-import kotlinx.serialization.Serializable
 
 // ---------------------------------------------------------------------------
-// Argument DTOs — each tool gets a typed args class implementing
-// WorkspaceMcpProjectToolArguments for project resolution.
+// NavigationTools class — 14 @Schema-annotated MCP tool functions
 // ---------------------------------------------------------------------------
 
-@Schema
-@Serializable
-internal data class NavigationSymbolInfoArgs(
-    @Description("VFS URL of the target source file.")
-    val uri: String,
-    @Description("1-based line number.")
-    val row: Int,
-    @Description("1-based column number.")
-    val column: Int,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
 
-@Schema
-@Serializable
-internal data class NavigationSymbolInfoByOffsetArgs(
-    @Description("VFS URL of the target source file.")
-    val uri: String,
-    @Description("0-based source offset.")
-    val offset: Int,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationSymbolInfoAutoPositionArgs(
-    @Description("VFS URL of the target source file.")
-    val uri: String,
-    @Description("Positioning input with optional row, column, or offset fields.")
-    val input: NavigationSymbolInfoAutoPositionInput,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationSymbolInfoBatchArgs(
-    @Description("Source positions to resolve symbol info from.")
-    val inputs: List<NavigationSymbolInfoPosition>,
-    @Description("Whether to continue collecting results after a single input fails.")
-    val continueOnError: Boolean = true,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationSourcePositionArgs(
-    @Description("VFS URL of the target source file.")
-    val uri: String,
-    @Description("1-based line number.")
-    val row: Int,
-    @Description("1-based column number.")
-    val column: Int,
-    @Description("Maximum number of results to return (default 50).")
-    val limit: Int = 50,
-    @Description("If true, fallback to navigation_find_references when primary search returns empty.")
-    val fallbackToReferencesWhenEmpty: Boolean = false,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationFindReferencesArgs(
-    @Description("VFS URL of the target source file.")
-    val uri: String,
-    @Description("1-based line number.")
-    val row: Int,
-    @Description("1-based column number.")
-    val column: Int,
-    @Description("Maximum number of results to return (default 50).")
-    val limit: Int = 50,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationToReferenceBatchArgs(
-    @Description("Source positions to resolve symbol info from.")
-    val inputs: List<NavigationSourcePosition>,
-    @Description("Whether to continue collecting results after a single input fails.")
-    val continueOnError: Boolean = true,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class NavigationFindReferencesBatchArgs(
-    @Description("Source positions to resolve symbol info from.")
-    val inputs: List<NavigationSourcePosition>,
-    @Description("Maximum number of results to return (default 50).")
-    val limit: Int = 50,
-    @Description("Whether to continue collecting results after a single input fails.")
-    val continueOnError: Boolean = true,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-// ---------------------------------------------------------------------------
-// Handlers — 14 public implementations
-// ---------------------------------------------------------------------------
-
-internal suspend fun ClientConnection.navigationGetSymbolInfoHandler(args: NavigationSymbolInfoArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_symbol_info: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val result = resolveSymbolInfo(project, args.uri, args.row, args.column)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+internal class NavigationTools {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info(
+        uri: String,
+        row: Int,
+        column: Int,
+    ): CallToolResult {
+        reportActivity("navigation_get_symbol_info: $uri:$row:$column")
+        val project = project()
+        val result = resolveSymbolInfo(project, uri, row, column)
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationGetSymbolInfoByOffsetHandler(args: NavigationSymbolInfoByOffsetArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_symbol_info_by_offset: ${args.uri} offset=${args.offset}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_by_offset(
+        uri: String,
+        offset: Int,
+    ): CallToolResult {
+        reportActivity("navigation_get_symbol_info_by_offset: $uri offset=$offset")
+        val project = project()
         val position = runNavigationRead(project) {
-            resolvePositionFromOffset(project, args.uri, args.offset)
+            resolvePositionFromOffset(project, uri, offset)
         }
-        val info = resolveSymbolInfo(project, args.uri, position.row, position.column)
+        val info = resolveSymbolInfo(project, uri, position.row, position.column)
         val result = NavigationSymbolInfoResolvedResult(
             documentation = info.documentation,
             row = position.row,
             column = position.column,
             offset = position.offset,
             recommendedNextCalls = listOf(
-                "navigation_get_symbol_info(uri='${args.uri}', row=${position.row}, column=${position.column})",
+                "navigation_get_symbol_info(uri='$uri', row=${position.row}, column=${position.column})",
             ),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationGetSymbolInfoAutoPositionHandler(args: NavigationSymbolInfoAutoPositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_symbol_info_auto_position: ${args.uri}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_auto_position(
+        uri: String,
+        row: Int? = null,
+        column: Int? = null,
+        offset: Int? = null,
+    ): CallToolResult {
+        reportActivity("navigation_get_symbol_info_auto_position: $uri")
+        val project = project()
+        val input = NavigationInternalAutoPositionInput(row = row, column = column, offset = offset)
         val position = runNavigationRead(project) {
-            resolveAutoPosition(project, args.uri, args.input)
+            resolveAutoPosition(project, uri, input)
         }
-        val info = resolveSymbolInfo(project, args.uri, position.row, position.column)
+        val info = resolveSymbolInfo(project, uri, position.row, position.column)
         val result = NavigationSymbolInfoResolvedResult(
             documentation = info.documentation,
             row = position.row,
             column = position.column,
             offset = position.offset,
             recommendedNextCalls = listOf(
-                "navigation_get_symbol_info(uri='${args.uri}', row=${position.row}, column=${position.column})",
-                "navigation_get_symbol_info_by_offset(uri='${args.uri}', offset=${position.offset})",
+                "navigation_get_symbol_info(uri='$uri', row=${position.row}, column=${position.column})",
+                "navigation_get_symbol_info_by_offset(uri='$uri', offset=${position.offset})",
             ),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationGetSymbolInfoQuickHandler(args: NavigationSymbolInfoArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_symbol_info_quick: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_quick(
+        uri: String,
+        row: Int,
+        column: Int,
+    ): CallToolResult {
+        reportActivity("navigation_get_symbol_info_quick: $uri:$row:$column")
+        val project = project()
         val position = runNavigationRead(project) {
-            ResolvedSourcePosition(row = args.row, column = args.column, offset = -1)
+            ResolvedSourcePosition(row = row, column = column, offset = -1)
         }
-        val info = resolveSymbolInfo(project, args.uri, position.row, position.column)
+        val info = resolveSymbolInfo(project, uri, position.row, position.column)
         val sourceDocument = runNavigationRead(project) {
-            resolveCommittedSourceDocument(project, args.uri)
+            resolveCommittedSourceDocument(project, uri)
         }
         val computedOffset = runNavigationRead(project) {
-            resolveSourceOffset(sourceDocument, args.row, args.column)
+            resolveSourceOffset(sourceDocument, row, column)
         }
         val result = NavigationSymbolInfoResolvedResult(
             documentation = info.documentation,
@@ -248,24 +126,24 @@ internal suspend fun ClientConnection.navigationGetSymbolInfoQuickHandler(args: 
             column = position.column,
             offset = computedOffset,
             recommendedNextCalls = listOf(
-                "navigation_get_symbol_info(uri='${args.uri}', row=${position.row}, column=${position.column})",
+                "navigation_get_symbol_info(uri='$uri', row=${position.row}, column=${position.column})",
             ),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationGetSymbolInfoBatchHandler(args: NavigationSymbolInfoBatchArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_symbol_info_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_batch(
+        inputs: List<NavigationSymbolInfoPosition>,
+        continueOnError: Boolean = true,
+    ): CallToolResult {
+        reportActivity("navigation_get_symbol_info_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
+        val project = project()
         val items = mutableListOf<NavigationBatchSymbolInfoItem>()
         var successCount = 0
         var failureCount = 0
-        for (input in args.inputs) {
-            val output = batchTry(args.continueOnError) {
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
                 resolveSymbolInfo(project, input.uri, input.row, input.column)
             }
             if (output.error == null) {
@@ -284,54 +162,56 @@ internal suspend fun ClientConnection.navigationGetSymbolInfoBatchHandler(args: 
             successCount = successCount,
             failureCount = failureCount,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationToReferenceHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_to_reference: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_to_reference(
+        uri: String,
+        row: Int,
+        column: Int,
+    ): CallToolResult {
+        reportActivity("navigation_to_reference: $uri:$row:$column")
+        val project = project()
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             toNavigationResult(context.resolvedTarget, context.psiDocumentManager)
                 ?: throw WorkspaceResourceException("Resolved target has no physical text location")
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationToTypeDefinitionHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_to_type_definition: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_to_type_definition(
+        uri: String,
+        row: Int,
+        column: Int,
+    ): CallToolResult {
+        reportActivity("navigation_to_type_definition: $uri:$row:$column")
+        val project = project()
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val typeTarget = findTypeDefinitionTarget(context.resolvedTarget)
-                ?: throw WorkspaceResourceException("Type definition not found at ${args.uri}:${args.row}:${args.column}")
+                ?: throw WorkspaceResourceException("Type definition not found at $uri:$row:$column")
             toNavigationResult(typeTarget, context.psiDocumentManager)
                 ?: throw WorkspaceResourceException("Resolved type definition has no physical text location")
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationToImplementationHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_to_implementation: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 20 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_to_implementation(
+        uri: String,
+        row: Int,
+        column: Int,
+        limit: Int = 50,
+        fallbackToReferencesWhenEmpty: Boolean = false,
+    ): CallToolResult {
+        reportActivity("navigation_to_implementation: $uri:$row:$column")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
             val primaryItems = collectDefinitions(
                 searchTarget = searchTarget,
@@ -342,27 +222,29 @@ internal suspend fun ClientConnection.navigationToImplementationHandler(args: Na
             )
             fallbackToReferences(
                 primaryItems = primaryItems,
-                fallbackToReferencesWhenEmpty = args.fallbackToReferencesWhenEmpty,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
                 reason = "Implementation search returned no results.",
                 searchTarget = searchTarget,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = effectiveLimit,
             )
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationFindOverridesHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_find_overrides: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 20 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_find_overrides(
+        uri: String,
+        row: Int,
+        column: Int,
+        limit: Int = 50,
+        fallbackToReferencesWhenEmpty: Boolean = false,
+    ): CallToolResult {
+        reportActivity("navigation_find_overrides: $uri:$row:$column")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
             val primaryItems = collectDefinitions(
                 searchTarget = searchTarget,
@@ -373,29 +255,31 @@ internal suspend fun ClientConnection.navigationFindOverridesHandler(args: Navig
             )
             fallbackToReferences(
                 primaryItems = primaryItems,
-                fallbackToReferencesWhenEmpty = args.fallbackToReferencesWhenEmpty,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
                 reason = "Override search returned no results.",
                 searchTarget = searchTarget,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = effectiveLimit,
             )
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationFindInheritorsHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_find_inheritors: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 20 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_find_inheritors(
+        uri: String,
+        row: Int,
+        column: Int,
+        limit: Int = 50,
+        fallbackToReferencesWhenEmpty: Boolean = false,
+    ): CallToolResult {
+        reportActivity("navigation_find_inheritors: $uri:$row:$column")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val typeTarget = findTypeDefinitionTarget(context.resolvedTarget)
-                ?: throw WorkspaceResourceException("Inheritor search: no type definition found at ${args.uri}:${args.row}:${args.column}. Ensure navigation_to_type_definition resolves first.")
+                ?: throw WorkspaceResourceException("Inheritor search: no type definition found at $uri:$row:$column. Ensure navigation_to_type_definition resolves first.")
             val primaryItems = collectDefinitions(
                 searchTarget = typeTarget.navigationElement,
                 psiDocumentManager = context.psiDocumentManager,
@@ -405,77 +289,69 @@ internal suspend fun ClientConnection.navigationFindInheritorsHandler(args: Navi
             )
             fallbackToReferences(
                 primaryItems = primaryItems,
-                fallbackToReferencesWhenEmpty = args.fallbackToReferencesWhenEmpty,
+                fallbackToReferencesWhenEmpty = fallbackToReferencesWhenEmpty,
                 reason = "Inheritor search returned no results.",
                 searchTarget = typeTarget.navigationElement,
                 psiDocumentManager = context.psiDocumentManager,
                 limit = effectiveLimit,
             )
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationFindReferencesHandler(args: NavigationFindReferencesArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_find_references: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 50 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_find_references(
+        uri: String,
+        row: Int,
+        column: Int,
+        limit: Int = 50,
+    ): CallToolResult {
+        reportActivity("navigation_find_references: $uri:$row:$column")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 50 else limit
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
             NavigationResults(
                 items = collectReferences(searchTarget, context.psiDocumentManager, effectiveLimit),
             )
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationGetCallersHandler(args: NavigationSourcePositionArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_get_callers: ${args.uri}:${args.row}:${args.column}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.uri,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 50 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_get_callers(
+        uri: String,
+        row: Int,
+        column: Int,
+        limit: Int = 50,
+    ): CallToolResult {
+        reportActivity("navigation_get_callers: $uri:$row:$column")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 50 else limit
         val result = runNavigationRead(project) {
-            val context = resolveReferenceContext(project, args.uri, args.row, args.column)
+            val context = resolveReferenceContext(project, uri, row, column)
             val searchTarget = context.resolvedTarget.navigationElement
-            val primaryItems = collectReferences(
-                searchTarget = searchTarget,
-                psiDocumentManager = context.psiDocumentManager,
-                limit = effectiveLimit,
-                referenceFilter = ::isLikelyCallReference,
-            )
-            fallbackToReferences(
-                primaryItems = primaryItems,
-                fallbackToReferencesWhenEmpty = args.fallbackToReferencesWhenEmpty,
-                reason = "Caller heuristic returned no results.",
-                searchTarget = searchTarget,
-                psiDocumentManager = context.psiDocumentManager,
-                limit = effectiveLimit,
+            val callFilter: (PsiReference) -> Boolean = { isLikelyCallReference(it) }
+            NavigationResults(
+                items = collectReferences(searchTarget, context.psiDocumentManager, effectiveLimit, callFilter),
             )
         }
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationToReferenceBatchHandler(args: NavigationToReferenceBatchArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_to_reference_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_to_reference_batch(
+        inputs: List<NavigationSourcePosition>,
+        continueOnError: Boolean = true,
+    ): CallToolResult {
+        reportActivity("navigation_to_reference_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
+        val project = project()
         val items = mutableListOf<NavigationBatchSingleItem>()
         var successCount = 0
         var failureCount = 0
-        for (input in args.inputs) {
-            val output = batchTry(args.continueOnError) {
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
                 runNavigationRead(project) {
                     val context = resolveReferenceContext(project, input.uri, input.row, input.column)
                     toNavigationResult(context.resolvedTarget, context.psiDocumentManager)
@@ -498,22 +374,23 @@ internal suspend fun ClientConnection.navigationToReferenceBatchHandler(args: Na
             successCount = successCount,
             failureCount = failureCount,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-internal suspend fun ClientConnection.navigationFindReferencesBatchHandler(args: NavigationFindReferencesBatchArgs, request: CallToolRequest): CallToolResult {
-    reportActivity("navigation_find_references_batch: ${args.inputs.size} inputs, continueOnError=${args.continueOnError}")
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-    ) { project ->
-        val effectiveLimit = if (args.limit < 1) 50 else args.limit
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.navigation_find_references_batch(
+        inputs: List<NavigationSourcePosition>,
+        limit: Int = 50,
+        continueOnError: Boolean = true,
+    ): CallToolResult {
+        reportActivity("navigation_find_references_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
+        val project = project()
+        val effectiveLimit = if (limit < 1) 50 else limit
         val items = mutableListOf<NavigationBatchMultiItem>()
         var successCount = 0
         var failureCount = 0
-        for (input in args.inputs) {
-            val output = batchTry(args.continueOnError) {
+        for (input in inputs) {
+            val output = batchTry(continueOnError) {
                 runNavigationRead(project) {
                     val context = resolveReferenceContext(project, input.uri, input.row, input.column)
                     val searchTarget = context.resolvedTarget.navigationElement
@@ -538,11 +415,20 @@ internal suspend fun ClientConnection.navigationFindReferencesBatchHandler(args:
             successCount = successCount,
             failureCount = failureCount,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }
 
 // ---------------------------------------------------------------------------
+// Internal helper — replaces NavigationSymbolInfoAutoPositionInput
+// ---------------------------------------------------------------------------
+
+private data class NavigationInternalAutoPositionInput(
+    val row: Int? = null,
+    val column: Int? = null,
+    val offset: Int? = null,
+)
+
 // Shared helpers — replicated from SymbolNavigationMcpTools internals
 // ---------------------------------------------------------------------------
 
@@ -587,7 +473,7 @@ private suspend fun resolveSymbolInfo(
 private fun resolveAutoPosition(
     project: Project,
     uri: String,
-    input: NavigationSymbolInfoAutoPositionInput,
+    input: NavigationInternalAutoPositionInput,
 ): ResolvedSourcePosition {
     assertReadAccess()
     val hasOffset = input.offset != null

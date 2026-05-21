@@ -2,33 +2,14 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.sdk
 
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import dev.ghostflyby.mcp.vfs.tools.VfsExistsResult
-import dev.ghostflyby.mcp.vfs.tools.encodeVfsExistsResult
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -108,16 +89,6 @@ internal class WorkspaceMcpRequestRunnerTest {
         val args = MyArgs(url = "/test", projectKey = "my-key", projectPath = "/tmp")
         assertEquals("my-key", args.projectKey)
         assertEquals("/tmp", args.projectPath)
-    }    @Test
-    fun `vfs exists result encodes deterministic json`() {
-        assertEquals(
-            """{"url":"file:///tmp/example.txt","exists":true}""",
-            encodeVfsExistsResult(VfsExistsResult(url = "file:///tmp/example.txt", exists = true)),
-        )
     }
 
-    private fun io.modelcontextprotocol.kotlin.sdk.types.ToolSchema.propertyType(name: String): String? {
-        val property = properties?.get(name) as? JsonObject ?: return null
-        return (property["type"] as? JsonPrimitive)?.content
-    }
 }

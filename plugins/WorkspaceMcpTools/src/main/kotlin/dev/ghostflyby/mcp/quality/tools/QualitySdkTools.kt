@@ -37,11 +37,10 @@ import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.relativizePathOrNull
 import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -55,256 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Predicate
 import kotlin.time.Duration.Companion.milliseconds
-
-// ---------------------------------------------------------------------------
-// Args DTOs
-// ---------------------------------------------------------------------------
-
-@Description("Arguments for QualityGetFileProblemsArgs")
-@Schema
-@Serializable
-internal data class QualityGetFileProblemsArgs(
-    @Description("VFS URL of the file to clean up.")
-    val fileUrl: String,
-    @Description("Whether to include only errors or include both errors and warnings.")
-    val errorsOnly: Boolean = true,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityGetScopeProblemsArgs")
-@Schema
-@Serializable
-internal data class QualityGetScopeProblemsArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Whether to include only errors or include both errors and warnings.")
-    val errorsOnly: Boolean = true,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Maximum number of problems to collect.")
-    val maxProblemCount: Int = 5000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityGetScopeProblemsQuickArgs")
-@Schema
-@Serializable
-internal data class QualityGetScopeProblemsQuickArgs(
-    @Description("Preset scope identifier.")
-    val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Whether to include only errors or include both errors and warnings.")
-    val errorsOnly: Boolean = true,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Maximum number of problems to collect.")
-    val maxProblemCount: Int = 5000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityReformatFileArgs")
-@Schema
-@Serializable
-internal data class QualityReformatFileArgs(
-    @Description("VFS URL of the file to clean up.")
-    val fileUrl: String,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityOptimizeImportsFileArgs")
-@Schema
-@Serializable
-internal data class QualityOptimizeImportsFileArgs(
-    @Description("VFS URL of the file to clean up.")
-    val fileUrl: String,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityReformatScopeFilesArgs")
-@Schema
-@Serializable
-internal data class QualityReformatScopeFilesArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 180000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityOptimizeImportsScopeFilesArgs")
-@Schema
-@Serializable
-internal data class QualityOptimizeImportsScopeFilesArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 180000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityGetScopeProblemsBySeverityArgs")
-@Schema
-@Serializable
-internal data class QualityGetScopeProblemsBySeverityArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Minimum severity threshold.")
-    val minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Maximum number of problems to collect.")
-    val maxProblemCount: Int = 5000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    @Description("Keep files with no problems after filtering.")
-    val includeFilesWithoutMatchingProblems: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityGetScopeProblemsBySeverityQuickArgs")
-@Schema
-@Serializable
-internal data class QualityGetScopeProblemsBySeverityQuickArgs(
-    @Description("Preset scope identifier.")
-    val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Minimum severity threshold.")
-    val minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Maximum number of problems to collect.")
-    val maxProblemCount: Int = 5000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Keep files with no problems after filtering.")
-    val includeFilesWithoutMatchingProblems: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityFixFileQuickArgs")
-@Schema
-@Serializable
-internal data class QualityFixFileQuickArgs(
-    @Description("VFS URL of the file to clean up.")
-    val fileUrl: String,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 120000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityFixScopeQuickArgs")
-@Schema
-@Serializable
-internal data class QualityFixScopeQuickArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 180000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityFixScopeQuickByPresetArgs")
-@Schema
-@Serializable
-internal data class QualityFixScopeQuickByPresetArgs(
-    @Description("Preset scope identifier.")
-    val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 180000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityListInspectionProfilesArgs")
-@Schema
-@Serializable
-internal data class QualityListInspectionProfilesArgs(
-    @Description("Whether to include application-level profile names.")
-    val includeApplicationProfiles: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityCodeCleanupFileArgs")
-@Schema
-@Serializable
-internal data class QualityCodeCleanupFileArgs(
-    @Description("VFS URL of the file to clean up.")
-    val fileUrl: String,
-    @Description("Inspection profile name. Defaults to current active profile.")
-    val inspectionProfileName: String? = null,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 300000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for QualityCodeCleanupScopeFilesArgs")
-@Schema
-@Serializable
-internal data class QualityCodeCleanupScopeFilesArgs(
-    val scope: ScopeProgramDescriptorDto,
-    @Description("Inspection profile name. Defaults to current active profile.")
-    val inspectionProfileName: String? = null,
-    @Description("Maximum number of files to process.")
-    val maxFileCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 300000,
-    @Description("Continue on single file failure.")
-    val continueOnError: Boolean = true,
-    @Description("Allow UI-interactive scopes.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
 
 // ---------------------------------------------------------------------------
 // Result DTOs
@@ -968,358 +717,391 @@ private fun encodeJson(obj: Any): String {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Tool factories
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Handlers
-// ---------------------------------------------------------------------------
-
-internal suspend fun ClientConnection.qualityGetFileProblemsHandler(args: QualityGetFileProblemsArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        validateTimeout(args.timeoutMillis)
-        val file = resolveFileByUrl(project, args.fileUrl)
+internal class QualityTools {
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_get_file_problems(
+        @Description("VFS URL of the file to clean up.")
+        fileUrl: String,
+        @Description("Whether to include only errors or include both errors and warnings.")
+        errorsOnly: Boolean = true,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+    ): CallToolResult {
+        val project = call.project()
+        validateTimeout(timeoutMillis)
+        val file = resolveFileByUrl(project, fileUrl)
         val filePath = relativizePath(project.basePath, file.path)
         var timedOut = false
-        val problems = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
-            withBackgroundProgress(
-                project,
-                "Analyzing problems in ${file.name}",
-                cancellable = true,
-            ) {
-                analyzeProblemsInFile(project, file, args.errorsOnly)
+        val problems = withTimeoutOrNull(timeoutMillis.milliseconds) {
+            withBackgroundProgress(project, "Analyzing problems in ${file.name}", cancellable = true) {
+                analyzeProblemsInFile(project, file, errorsOnly)
             }
-        } ?: run {
-            timedOut = true
-            emptyList()
-        }
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityFileProblemsResultDto(
-                    fileUrl = file.url,
-                    filePath = filePath,
-                    problems = problems,
-                    timedOut = timedOut,
-                )
-            ))),
+        } ?: run { timedOut = true; emptyList() }
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityFileProblemsResultDto(
+                            fileUrl = file.url,
+                            filePath = filePath,
+                            problems = problems,
+                            timedOut = timedOut,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsHandler(args: QualityGetScopeProblemsArgs, request: CallToolRequest): CallToolResult {
-    if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
-    if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
-    validateTimeout(args.timeoutMillis)
-
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether to include only errors or include both errors and warnings.")
+        errorsOnly: Boolean = true,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Maximum number of problems to collect.")
+        maxProblemCount: Int = 5000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
+        if (maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
+        validateTimeout(timeoutMillis)
+        val project = call.project()
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
-            project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,
+            project,
+            scope,
+            maxFileCount,
+            allowUiInteractiveScopes,
         )
         val diagnostics = mutableListOf<String>()
-        if (scopeFiles.truncatedByFileLimit) {
-            diagnostics += "Matched files exceed maxFileCount=${args.maxFileCount}; analysis was truncated."
-        }
-        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) {
-            diagnostics += "Scope traversal analyzes project content files; external library files are skipped."
-        }
-
-        val scanCount = AtomicInteger(0)
-        val finished = AtomicBoolean(false)
-        val items = mutableListOf<QualityFileProblemsItemDto>()
-        var analyzedFileCount = 0
-        var totalProblemCount = 0
-        var filesWithProblems = 0
-        var timedOut = false
-        var probablyHasMoreProblems = scopeFiles.truncatedByFileLimit
-        var probablyHasMoreMatchingFiles = scopeFiles.truncatedByFileLimit
-
-        coroutineScope {
-            val progressJob = launch {
-                while (isActive && !finished.get()) {
-                    delay(1000.milliseconds)
-                    reportActivity("Scope problems: scanned ${scanCount.get()}, analyzed $analyzedFileCount, total $totalProblemCount")
-                }
-            }
-            try {
-                timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
-                    withBackgroundProgress(
-                        project,
-                        "Scope analysis: ${resolvedScope.displayName}",
-                        cancellable = true,
-                    ) {
-                        for (file in scopeFiles.files) {
-                            checkCanceled()
-                            scanCount.incrementAndGet()
-                            if (totalProblemCount >= args.maxProblemCount) {
-                                probablyHasMoreProblems = true
-                                break
-                            }
-                            val output = batchTry(args.continueOnError) {
-                                analyzeProblemsInFile(project, file, args.errorsOnly)
-                            }
-                            val filePath = relativizePath(project.basePath, file.path)
-                            if (output.error == null) {
-                                analyzedFileCount++
-                                val remaining = args.maxProblemCount - totalProblemCount
-                                val problems = output.value.orEmpty()
-                                val selected = if (problems.size > remaining) {
-                                    probablyHasMoreProblems = true
-                                    problems.take(remaining)
-                                } else {
-                                    problems
-                                }
-                                totalProblemCount += selected.size
-                                if (selected.isNotEmpty()) filesWithProblems++
-                                items += QualityFileProblemsItemDto(
-                                    fileUrl = file.url,
-                                    filePath = filePath,
-                                    problems = selected,
-                                )
-                            } else {
-                                items += QualityFileProblemsItemDto(
-                                    fileUrl = file.url,
-                                    filePath = filePath,
-                                    problems = emptyList(),
-                                    error = output.error,
-                                )
-                            }
-                        }
-                    }
-                    false
-                } ?: true
-            } finally {
-                finished.set(true)
-                progressJob.cancel()
-            }
-        }
-
-        if (timedOut) diagnostics += "Scope problem analysis timed out."
-        if (scanCount.get() < scopeFiles.files.size) probablyHasMoreMatchingFiles = true
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityScopeProblemsResultDto(
-                    scopeDisplayName = resolvedScope.displayName,
-                    scopeShape = resolvedScope.scopeShape,
-                    errorsOnly = args.errorsOnly,
-                    scannedFileCount = scopeFiles.scannedFileCount,
-                    analyzedFileCount = analyzedFileCount,
-                    filesWithProblems = filesWithProblems,
-                    problemCount = totalProblemCount,
-                    items = items,
-                    probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
-                    probablyHasMoreProblems = probablyHasMoreProblems,
-                    timedOut = timedOut,
-                    canceled = false,
-                    diagnostics = args.scope.combinedDiagnostics(resolvedScope, diagnostics),
-                )
-            ))),
+        if (scopeFiles.truncatedByFileLimit) diagnostics += "Matched files exceed maxFileCount=$maxFileCount; analysis was truncated."
+        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) diagnostics += "Scope traversal analyzes project content files; external library files are skipped."
+        val base = qualityGetScopeProblemsInner(
+            project,
+            scope,
+            errorsOnly,
+            maxFileCount,
+            maxProblemCount,
+            timeoutMillis,
+            continueOnError,
+            allowUiInteractiveScopes,
         )
+        return CallToolResult(content = listOf(TextContent(text = encodeJson(base))))
     }
-}
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsQuickHandler(args: QualityGetScopeProblemsQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
-        val innerArgs = QualityGetScopeProblemsArgs(
-            scope = descriptor,
-            errorsOnly = args.errorsOnly,
-            maxFileCount = args.maxFileCount,
-            maxProblemCount = args.maxProblemCount,
-            timeoutMillis = args.timeoutMillis,
-            continueOnError = args.continueOnError,
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_quick(
+        @Description("Preset scope identifier.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Whether to include only errors or include both errors and warnings.")
+        errorsOnly: Boolean = true,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Maximum number of problems to collect.")
+        maxProblemCount: Int = 5000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
+        val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
+        return quality_get_scope_problems(
+            descriptor,
+            errorsOnly,
+            maxFileCount,
+            maxProblemCount,
+            timeoutMillis,
+            continueOnError,
             allowUiInteractiveScopes = false,
         )
-        qualityGetScopeProblemsHandler(innerArgs, request)
     }
-}
 
-internal suspend fun ClientConnection.qualityReformatFileHandler(args: QualityReformatFileArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        validateTimeout(args.timeoutMillis)
-        val file = resolveFileByUrl(project, args.fileUrl)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_reformat_file(
+        @Description("VFS URL of the file to clean up.")
+        fileUrl: String,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+    ): CallToolResult {
+        val project = call.project()
+        validateTimeout(timeoutMillis)
+        val file = resolveFileByUrl(project, fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
-        val timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+        val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             runCodeProcessor(ReformatCodeProcessor(psiFile, false))
             false
         } ?: true
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityFileOperationResultDto(
-                    operation = QualityOperationKind.REFORMAT,
-                    fileUrl = file.url,
-                    filePath = relativizePath(project.basePath, file.path),
-                    success = !timedOut,
-                    timedOut = timedOut,
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityFileOperationResultDto(
+                            operation = QualityOperationKind.REFORMAT,
+                            fileUrl = file.url,
+                            filePath = relativizePath(project.basePath, file.path),
+                            success = !timedOut,
+                            timedOut = timedOut,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityOptimizeImportsFileHandler(args: QualityOptimizeImportsFileArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        validateTimeout(args.timeoutMillis)
-        val file = resolveFileByUrl(project, args.fileUrl)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_optimize_imports_file(
+        @Description("VFS URL of the file to clean up.")
+        fileUrl: String,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+    ): CallToolResult {
+        val project = call.project()
+        validateTimeout(timeoutMillis)
+        val file = resolveFileByUrl(project, fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
-        val timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+        val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             runCodeProcessor(OptimizeImportsProcessor(project, psiFile))
             false
         } ?: true
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityFileOperationResultDto(
-                    operation = QualityOperationKind.OPTIMIZE_IMPORTS,
-                    fileUrl = file.url,
-                    filePath = relativizePath(project.basePath, file.path),
-                    success = !timedOut,
-                    timedOut = timedOut,
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityFileOperationResultDto(
+                            operation = QualityOperationKind.OPTIMIZE_IMPORTS,
+                            fileUrl = file.url,
+                            filePath = relativizePath(project.basePath, file.path),
+                            success = !timedOut,
+                            timedOut = timedOut,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityReformatScopeFilesHandler(args: QualityReformatScopeFilesArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        processScopeFilesWithOp(project, args.scope, QualityOperationKind.REFORMAT,
-            args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_reformat_scope_files(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 180000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        return processScopeFilesWithOp(
+            project,
+            scope,
+            QualityOperationKind.REFORMAT,
+            maxFileCount,
+            timeoutMillis,
+            continueOnError,
+            allowUiInteractiveScopes,
+        )
     }
-}
 
-internal suspend fun ClientConnection.qualityOptimizeImportsScopeFilesHandler(args: QualityOptimizeImportsScopeFilesArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        processScopeFilesWithOp(project, args.scope, QualityOperationKind.OPTIMIZE_IMPORTS,
-            args.maxFileCount, args.timeoutMillis, args.continueOnError, args.allowUiInteractiveScopes)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_optimize_imports_scope_files(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 180000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        return processScopeFilesWithOp(
+            project,
+            scope,
+            QualityOperationKind.OPTIMIZE_IMPORTS,
+            maxFileCount,
+            timeoutMillis,
+            continueOnError,
+            allowUiInteractiveScopes,
+        )
     }
-}
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityHandler(args: QualityGetScopeProblemsBySeverityArgs, request: CallToolRequest): CallToolResult {
-    if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
-    if (args.maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
-
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_by_severity(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Minimum severity threshold.")
+        minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Maximum number of problems to collect.")
+        maxProblemCount: Int = 5000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+        @Description("Keep files with no problems after filtering.")
+        includeFilesWithoutMatchingProblems: Boolean = false,
+    ): CallToolResult {
+        if (maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
+        if (maxProblemCount < 1) return errorResult("maxProblemCount must be >= 1.")
+        validateTimeout(timeoutMillis)
+        val project = call.project()
         val base = qualityGetScopeProblemsInner(
-            project = project,
-            scope = args.scope,
-            errorsOnly = args.minSeverity == QualitySeverityThreshold.ERROR,
-            maxFileCount = args.maxFileCount,
-            maxProblemCount = args.maxProblemCount,
-            timeoutMillis = args.timeoutMillis,
-            continueOnError = args.continueOnError,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            project,
+            scope,
+            minSeverity == QualitySeverityThreshold.ERROR,
+            maxFileCount,
+            maxProblemCount,
+            timeoutMillis,
+            continueOnError,
+            allowUiInteractiveScopes,
         )
-        val thresholdRank = severityRank(args.minSeverity)
+        val thresholdRank = severityRank(minSeverity)
         val severityCounts = LinkedHashMap<String, Int>()
         val items = mutableListOf<QualityFileProblemsItemDto>()
         var filesWithProblems = 0
         var problemCount = 0
-
         base.items.forEach { item ->
             val filtered = item.problems.filter { p -> severityRank(p.severity) >= thresholdRank }
             val sevMap = linkedMapOf<String, Int>()
-            filtered.forEach { p ->
-                val sev = normalizeSeverity(p.severity)
-                sevMap[sev] = (sevMap[sev] ?: 0) + 1
-            }
-            sevMap.forEach { (sev, cnt) ->
-                severityCounts[sev] = (severityCounts[sev] ?: 0) + cnt
-            }
-            if (filtered.isNotEmpty() || args.includeFilesWithoutMatchingProblems) {
+            filtered.forEach { p -> val sev = normalizeSeverity(p.severity); sevMap[sev] = (sevMap[sev] ?: 0) + 1 }
+            sevMap.forEach { (sev, cnt) -> severityCounts[sev] = (severityCounts[sev] ?: 0) + cnt }
+            if (filtered.isNotEmpty() || includeFilesWithoutMatchingProblems) {
                 if (filtered.isNotEmpty()) filesWithProblems++
                 problemCount += filtered.size
                 items += item.copy(problems = filtered)
             }
         }
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityScopeProblemsBySeverityResultDto(
-                    scopeDisplayName = base.scopeDisplayName,
-                    scopeShape = base.scopeShape,
-                    minSeverity = args.minSeverity,
-                    scannedFileCount = base.scannedFileCount,
-                    analyzedFileCount = base.analyzedFileCount,
-                    filesWithProblems = filesWithProblems,
-                    problemCount = problemCount,
-                    severityCounts = severityCounts.map { (s, c) -> QualitySeverityCountDto(s, c) },
-                    items = items,
-                    probablyHasMoreMatchingFiles = base.probablyHasMoreMatchingFiles,
-                    probablyHasMoreProblems = base.probablyHasMoreProblems,
-                    timedOut = base.timedOut,
-                    canceled = base.canceled,
-                    diagnostics = base.diagnostics,
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityScopeProblemsBySeverityResultDto(
+                            scopeDisplayName = base.scopeDisplayName,
+                            scopeShape = base.scopeShape,
+                            minSeverity = minSeverity,
+                            scannedFileCount = base.scannedFileCount,
+                            analyzedFileCount = base.analyzedFileCount,
+                            filesWithProblems = filesWithProblems,
+                            problemCount = problemCount,
+                            severityCounts = severityCounts.map { (s, c) -> QualitySeverityCountDto(s, c) },
+                            items = items,
+                            probablyHasMoreMatchingFiles = base.probablyHasMoreMatchingFiles,
+                            probablyHasMoreProblems = base.probablyHasMoreProblems,
+                            timedOut = base.timedOut,
+                            canceled = base.canceled,
+                            diagnostics = base.diagnostics,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityGetScopeProblemsBySeverityQuickHandler(args: QualityGetScopeProblemsBySeverityQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
-        val innerArgs = QualityGetScopeProblemsBySeverityArgs(
-            scope = descriptor,
-            minSeverity = args.minSeverity,
-            maxFileCount = args.maxFileCount,
-            maxProblemCount = args.maxProblemCount,
-            timeoutMillis = args.timeoutMillis,
-            continueOnError = args.continueOnError,
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_by_severity_quick(
+        @Description("Preset scope identifier.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Minimum severity threshold.")
+        minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Maximum number of problems to collect.")
+        maxProblemCount: Int = 5000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Keep files with no problems after filtering.")
+        includeFilesWithoutMatchingProblems: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
+        return quality_get_scope_problems_by_severity(
+            descriptor,
+            minSeverity,
+            maxFileCount,
+            maxProblemCount,
+            timeoutMillis,
+            continueOnError,
             allowUiInteractiveScopes = false,
-            includeFilesWithoutMatchingProblems = args.includeFilesWithoutMatchingProblems,
+            includeFilesWithoutMatchingProblems,
         )
-        qualityGetScopeProblemsBySeverityHandler(innerArgs, request)
     }
-}
 
-internal suspend fun ClientConnection.qualityFixFileQuickHandler(args: QualityFixFileQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        validateTimeout(args.timeoutMillis)
-        val file = resolveFileByUrl(project, args.fileUrl)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_file_quick(
+        @Description("VFS URL of the file to clean up.")
+        fileUrl: String,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 120000,
+    ): CallToolResult {
+        val project = call.project()
+        validateTimeout(timeoutMillis)
+        val file = resolveFileByUrl(project, fileUrl)
         var optimizeImportsApplied = false
         var reformatApplied = false
-        val timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+        val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             withBackgroundProgress(project, "Quick fix: ${file.name}", cancellable = true) {
-                processSingleFileOperation(project, file, QualityOperationKind.OPTIMIZE_IMPORTS)
-                optimizeImportsApplied = true
-                processSingleFileOperation(project, file, QualityOperationKind.REFORMAT)
-                reformatApplied = true
+                processSingleFileOperation(
+                    project,
+                    file,
+                    QualityOperationKind.OPTIMIZE_IMPORTS,
+                ); optimizeImportsApplied = true
+                processSingleFileOperation(project, file, QualityOperationKind.REFORMAT); reformatApplied = true
             }
             false
         } ?: true
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityQuickFixFileResultDto(
-                    fileUrl = file.url,
-                    filePath = relativizePath(project.basePath, file.path),
-                    optimizeImportsApplied = optimizeImportsApplied,
-                    reformatApplied = reformatApplied,
-                    success = !timedOut && optimizeImportsApplied && reformatApplied,
-                    timedOut = timedOut,
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityQuickFixFileResultDto(
+                            fileUrl = file.url, filePath = relativizePath(project.basePath, file.path),
+                            optimizeImportsApplied = optimizeImportsApplied, reformatApplied = reformatApplied,
+                            success = !timedOut && optimizeImportsApplied && reformatApplied, timedOut = timedOut,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityFixScopeQuickArgs, request: CallToolRequest): CallToolResult {
-    if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
-    validateTimeout(args.timeoutMillis)
-
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_scope_quick(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 180000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
+        validateTimeout(timeoutMillis)
+        val project = call.project()
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
-            project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,
+            project,
+            scope,
+            maxFileCount,
+            allowUiInteractiveScopes,
         )
         val diagnostics = mutableListOf<String>()
-        if (scopeFiles.truncatedByFileLimit) {
-            diagnostics += "Matched files exceed maxFileCount=${args.maxFileCount}; quick fix was truncated."
-        }
-        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) {
-            diagnostics += "Scope traversal processes project content files; external library files are skipped."
-        }
-
+        if (scopeFiles.truncatedByFileLimit) diagnostics += "Matched files exceed maxFileCount=$maxFileCount; quick fix was truncated."
+        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) diagnostics += "Scope traversal processes project content files; external library files are skipped."
         val processedProgress = AtomicInteger(0)
         val finished = AtomicBoolean(false)
         val items = mutableListOf<QualityScopeQuickFixItemDto>()
@@ -1328,47 +1110,54 @@ internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityF
         var failureCount = 0
         var timedOut = false
         var probablyHasMoreMatchingFiles = scopeFiles.truncatedByFileLimit
-
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000.milliseconds)
-                    reportActivity("Scope quick fix: processed $processedProgress, success $successCount, failure $failureCount")
+                    delay(1000.milliseconds); reportActivity("Scope quick fix: processed $processedProgress, success $successCount, failure $failureCount")
                 }
             }
             try {
-                timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+                timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
                     withBackgroundProgress(
-                        project, "Scope quick fix: ${resolvedScope.displayName}",
+                        project,
+                        "Scope quick fix: ${resolvedScope.displayName}",
                         cancellable = true,
                     ) {
                         for (file in scopeFiles.files) {
-                            checkCanceled()
-                            processedProgress.incrementAndGet()
+                            checkCanceled(); processedProgress.incrementAndGet()
                             var optimizeImportsApplied = false
                             var reformatApplied = false
-                            val output = batchTry(args.continueOnError) {
-                                processSingleFileOperation(project, file, QualityOperationKind.OPTIMIZE_IMPORTS)
-                                optimizeImportsApplied = true
-                                processSingleFileOperation(project, file, QualityOperationKind.REFORMAT)
-                                reformatApplied = true
+                            val output = batchTry(continueOnError) {
+                                processSingleFileOperation(
+                                    project,
+                                    file,
+                                    QualityOperationKind.OPTIMIZE_IMPORTS,
+                                ); optimizeImportsApplied = true
+                                processSingleFileOperation(
+                                    project,
+                                    file,
+                                    QualityOperationKind.REFORMAT,
+                                ); reformatApplied = true
                             }
                             val filePath = relativizePath(project.basePath, file.path)
                             if (output.error == null) {
-                                processedFileCount++
-                                successCount++
+                                processedFileCount++; successCount++
                                 items += QualityScopeQuickFixItemDto(
-                                    fileUrl = file.url, filePath = filePath,
-                                    success = true, optimizeImportsApplied = optimizeImportsApplied,
+                                    fileUrl = file.url,
+                                    filePath = filePath,
+                                    success = true,
+                                    optimizeImportsApplied = optimizeImportsApplied,
                                     reformatApplied = reformatApplied,
                                 )
                             } else {
-                                processedFileCount++
-                                failureCount++
+                                processedFileCount++; failureCount++
                                 items += QualityScopeQuickFixItemDto(
-                                    fileUrl = file.url, filePath = filePath,
-                                    success = false, optimizeImportsApplied = optimizeImportsApplied,
-                                    reformatApplied = reformatApplied, error = output.error,
+                                    fileUrl = file.url,
+                                    filePath = filePath,
+                                    success = false,
+                                    optimizeImportsApplied = optimizeImportsApplied,
+                                    reformatApplied = reformatApplied,
+                                    error = output.error,
                                 )
                             }
                         }
@@ -1376,64 +1165,70 @@ internal suspend fun ClientConnection.qualityFixScopeQuickHandler(args: QualityF
                     false
                 } ?: true
             } finally {
-                finished.set(true)
-                progressJob.cancel()
+                finished.set(true); progressJob.cancel()
             }
         }
-
         if (timedOut) {
-            diagnostics += "Scope quick fix timed out."
-            probablyHasMoreMatchingFiles = true
-        } else if (processedProgress.get() < scopeFiles.files.size) {
-            probablyHasMoreMatchingFiles = true
-        }
+            diagnostics += "Scope quick fix timed out."; probablyHasMoreMatchingFiles = true
+        } else if (processedProgress.get() < scopeFiles.files.size) probablyHasMoreMatchingFiles = true
         val skippedCount = scopeFiles.files.size - processedFileCount
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityScopeQuickFixResultDto(
-                    scopeDisplayName = resolvedScope.displayName,
-                    scopeShape = resolvedScope.scopeShape,
-                    scannedFileCount = scopeFiles.scannedFileCount,
-                    processedFileCount = processedFileCount,
-                    successCount = successCount,
-                    failureCount = failureCount,
-                    skippedCount = skippedCount,
-                    items = items,
-                    probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
-                    timedOut = timedOut,
-                    canceled = false,
-                    diagnostics = args.scope.combinedDiagnostics(resolvedScope, diagnostics),
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityScopeQuickFixResultDto(
+                            scopeDisplayName = resolvedScope.displayName,
+                            scopeShape = resolvedScope.scopeShape,
+                            scannedFileCount = scopeFiles.scannedFileCount,
+                            processedFileCount = processedFileCount,
+                            successCount = successCount,
+                            failureCount = failureCount,
+                            skippedCount = skippedCount,
+                            items = items,
+                            probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
+                            timedOut = timedOut,
+                            canceled = false,
+                            diagnostics = scope.combinedDiagnostics(resolvedScope, diagnostics),
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityFixScopeQuickByPresetHandler(args: QualityFixScopeQuickByPresetArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        val descriptor = buildPresetScopeDescriptor(project, args.scopePreset, allowUiInteractiveScopes = false)
-        val innerArgs = QualityFixScopeQuickArgs(
-            scope = descriptor,
-            maxFileCount = args.maxFileCount,
-            timeoutMillis = args.timeoutMillis,
-            continueOnError = args.continueOnError,
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_scope_quick_by_preset(
+        @Description("Preset scope identifier.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 180000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
+        val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
+        return quality_fix_scope_quick(
+            descriptor,
+            maxFileCount,
+            timeoutMillis,
+            continueOnError,
             allowUiInteractiveScopes = false,
         )
-        qualityFixScopeQuickHandler(innerArgs, request)
     }
-}
 
-internal suspend fun ClientConnection.qualityListInspectionProfilesHandler(args: QualityListInspectionProfilesArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_list_inspection_profiles(
+        @Description("Whether to include application-level profile names.")
+        includeApplicationProfiles: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
         val result = readAction {
             val projectManager = InspectionProjectProfileManager.getInstance(project)
             val projectProfiles = projectManager.profiles.map { it.name }
-            val applicationProfiles = if (args.includeApplicationProfiles) {
-                InspectionProfileManager.getInstance().profiles.map { it.name }
-            } else {
-                emptyList()
-            }
+            val applicationProfiles =
+                if (includeApplicationProfiles) InspectionProfileManager.getInstance().profiles.map { it.name } else emptyList()
             val names = (projectProfiles + applicationProfiles).distinct().sorted()
             val currentProfileName = projectManager.currentProfile.name
             val projectProfileSet = projectProfiles.toSet()
@@ -1448,60 +1243,80 @@ internal suspend fun ClientConnection.qualityListInspectionProfilesHandler(args:
                 },
             )
         }
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(result))),
-        )
+        return CallToolResult(content = listOf(TextContent(text = encodeJson(result))))
     }
-}
 
-internal suspend fun ClientConnection.qualityCodeCleanupFileHandler(args: QualityCodeCleanupFileArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        validateTimeout(args.timeoutMillis)
-        val file = resolveFileByUrl(project, args.fileUrl)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_code_cleanup_file(
+        @Description("VFS URL of the file to clean up.")
+        fileUrl: String,
+        @Description("Inspection profile name. Defaults to current active profile.")
+        inspectionProfileName: String? = null,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 300000,
+    ): CallToolResult {
+        val project = call.project()
+        validateTimeout(timeoutMillis)
+        val file = resolveFileByUrl(project, fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
-        val profile = resolveInspectionProfile(project, args.inspectionProfileName)
-        val timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+        val profile = resolveInspectionProfile(project, inspectionProfileName)
+        val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             withBackgroundProgress(project, "Cleanup: ${file.name}", cancellable = true) {
-                runCodeCleanup(project, profile, listOf(psiFile))
+                runCodeCleanup(
+                    project,
+                    profile,
+                    listOf(psiFile),
+                )
             }
             false
         } ?: true
-        val diags = if (timedOut) {
-            listOf("Code cleanup timed out; background task may still continue in IDE.")
-        } else emptyList()
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityCleanupFileResultDto(
-                    fileUrl = file.url,
-                    filePath = relativizePath(project.basePath, file.path),
-                    inspectionProfileName = profile.name,
-                    success = !timedOut,
-                    timedOut = timedOut,
-                    diagnostics = diags,
-                )
-            ))),
+        val diags =
+            if (timedOut) listOf("Code cleanup timed out; background task may still continue in IDE.") else emptyList()
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityCleanupFileResultDto(
+                            fileUrl = file.url,
+                            filePath = relativizePath(project.basePath, file.path),
+                            inspectionProfileName = profile.name,
+                            success = !timedOut,
+                            timedOut = timedOut,
+                            diagnostics = diags,
+                        ),
+                    ),
+                ),
+            ),
         )
     }
-}
 
-internal suspend fun ClientConnection.qualityCodeCleanupScopeFilesHandler(args: QualityCodeCleanupScopeFilesArgs, request: CallToolRequest): CallToolResult {
-    if (args.maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
-    validateTimeout(args.timeoutMillis)
-
-    return callToolWithProject(sessionId = this.sessionId, projectArgs = args) { project ->
-        val profile = resolveInspectionProfile(project, args.inspectionProfileName)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.quality_code_cleanup_scope_files(
+        scope: ScopeProgramDescriptorDto,
+        @Description("Inspection profile name. Defaults to current active profile.")
+        inspectionProfileName: String? = null,
+        @Description("Maximum number of files to process.")
+        maxFileCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 300000,
+        @Description("Continue on single file failure.")
+        continueOnError: Boolean = true,
+        @Description("Allow UI-interactive scopes.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (maxFileCount < 1) return errorResult("maxFileCount must be >= 1.")
+        validateTimeout(timeoutMillis)
+        val project = call.project()
+        val profile = resolveInspectionProfile(project, inspectionProfileName)
         val (resolvedScope, scopeFiles) = resolveScopeAndCollectFiles(
-            project, args.scope, args.maxFileCount, args.allowUiInteractiveScopes,
+            project,
+            scope,
+            maxFileCount,
+            allowUiInteractiveScopes,
         )
         val diagnostics = mutableListOf<String>()
-        if (scopeFiles.truncatedByFileLimit) {
-            diagnostics += "Matched files exceed maxFileCount=${args.maxFileCount}; cleanup was truncated."
-        }
-        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) {
-            diagnostics += "Scope traversal processes project content files; external library files are skipped."
-        }
-
+        if (scopeFiles.truncatedByFileLimit) diagnostics += "Matched files exceed maxFileCount=$maxFileCount; cleanup was truncated."
+        if (resolvedScope.scopeShape == ScopeShape.GLOBAL) diagnostics += "Scope traversal processes project content files; external library files are skipped."
         val processedProgress = AtomicInteger(0)
         val finished = AtomicBoolean(false)
         val items = mutableListOf<QualityScopeCleanupItemDto>()
@@ -1510,40 +1325,39 @@ internal suspend fun ClientConnection.qualityCodeCleanupScopeFilesHandler(args: 
         var failureCount = 0
         var timedOut = false
         var probablyHasMoreMatchingFiles = scopeFiles.truncatedByFileLimit
-
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(1000.milliseconds)
-                    reportActivity("Scope cleanup: processed $processedProgress, success $successCount, failure $failureCount")
+                    delay(1000.milliseconds); reportActivity("Scope cleanup: processed $processedProgress, success $successCount, failure $failureCount")
                 }
             }
             try {
-                timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
-                    withBackgroundProgress(
-                        project, "Scope cleanup: ${resolvedScope.displayName}",
-                        cancellable = true,
-                    ) {
+                timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
+                    withBackgroundProgress(project, "Scope cleanup: ${resolvedScope.displayName}", cancellable = true) {
                         for (file in scopeFiles.files) {
-                            checkCanceled()
-                            processedProgress.incrementAndGet()
-                            val output = batchTry(args.continueOnError) {
-                                val psiFile = resolveWritablePsiFile(project, file)
-                                runCodeCleanup(project, profile, listOf(psiFile))
+                            checkCanceled(); processedProgress.incrementAndGet()
+                            val output = batchTry(continueOnError) {
+                                val psiFile = resolveWritablePsiFile(project, file); runCodeCleanup(
+                                project,
+                                profile,
+                                listOf(psiFile),
+                            )
                             }
                             val filePath = relativizePath(project.basePath, file.path)
                             if (output.error == null) {
-                                processedFileCount++
-                                successCount++
+                                processedFileCount++; successCount++
                                 items += QualityScopeCleanupItemDto(
-                                    fileUrl = file.url, filePath = filePath, success = true,
+                                    fileUrl = file.url,
+                                    filePath = filePath,
+                                    success = true,
                                 )
                             } else {
-                                processedFileCount++
-                                failureCount++
+                                processedFileCount++; failureCount++
                                 items += QualityScopeCleanupItemDto(
-                                    fileUrl = file.url, filePath = filePath,
-                                    success = false, error = output.error,
+                                    fileUrl = file.url,
+                                    filePath = filePath,
+                                    success = false,
+                                    error = output.error,
                                 )
                             }
                         }
@@ -1551,37 +1365,36 @@ internal suspend fun ClientConnection.qualityCodeCleanupScopeFilesHandler(args: 
                     false
                 } ?: true
             } finally {
-                finished.set(true)
-                progressJob.cancel()
+                finished.set(true); progressJob.cancel()
             }
         }
-
         if (timedOut) {
-            diagnostics += "Scope cleanup timed out; running cleanup tasks may continue in IDE."
-            probablyHasMoreMatchingFiles = true
-        } else if (processedProgress.get() < scopeFiles.files.size) {
-            probablyHasMoreMatchingFiles = true
-        }
+            diagnostics += "Scope cleanup timed out; running cleanup tasks may continue in IDE."; probablyHasMoreMatchingFiles =
+                true
+        } else if (processedProgress.get() < scopeFiles.files.size) probablyHasMoreMatchingFiles = true
         val skippedCount = scopeFiles.files.size - processedFileCount
-
-        CallToolResult(
-            content = listOf(TextContent(text = encodeJson(
-                QualityScopeCleanupResultDto(
-                    scopeDisplayName = resolvedScope.displayName,
-                    scopeShape = resolvedScope.scopeShape,
-                    inspectionProfileName = profile.name,
-                    scannedFileCount = scopeFiles.scannedFileCount,
-                    processedFileCount = processedFileCount,
-                    successCount = successCount,
-                    failureCount = failureCount,
-                    skippedCount = skippedCount,
-                    items = items,
-                    probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
-                    timedOut = timedOut,
-                    canceled = false,
-                    diagnostics = args.scope.combinedDiagnostics(resolvedScope, diagnostics),
-                )
-            ))),
+        return CallToolResult(
+            content = listOf(
+                TextContent(
+                    text = encodeJson(
+                        QualityScopeCleanupResultDto(
+                            scopeDisplayName = resolvedScope.displayName,
+                            scopeShape = resolvedScope.scopeShape,
+                            inspectionProfileName = profile.name,
+                            scannedFileCount = scopeFiles.scannedFileCount,
+                            processedFileCount = processedFileCount,
+                            successCount = successCount,
+                            failureCount = failureCount,
+                            skippedCount = skippedCount,
+                            items = items,
+                            probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
+                            timedOut = timedOut,
+                            canceled = false,
+                            diagnostics = scope.combinedDiagnostics(resolvedScope, diagnostics),
+                        ),
+                    ),
+                ),
+            ),
         )
     }
 }

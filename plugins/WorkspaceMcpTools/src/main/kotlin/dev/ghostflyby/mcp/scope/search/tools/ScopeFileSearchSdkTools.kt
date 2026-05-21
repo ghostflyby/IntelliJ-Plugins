@@ -17,18 +17,16 @@ import com.intellij.psi.search.GlobalSearchScope
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
-import kotlinx.serialization.Serializable
 import java.nio.file.FileSystems
 import java.nio.file.Path
 import java.nio.file.PathMatcher
@@ -38,80 +36,334 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private val WHITESPACE_REGEX = Regex("\\s+")
 
-// ── Tool registration entrypoint ─────────────────────────────────
+internal class ScopeFileSearchTools {
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_files(
+        @Description("Query string")
+        query: String = "",
+        @Description("Optional explicit ordered keywords.")
+        keywords: List<String> = emptyList(),
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
+        matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
+        @Description("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @Description("VFS directory URL to search within.")
+        directoryUrl: String? = null,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        if (maxResults < 1) return CallToolResult(
+            content = listOf(TextContent(text = "maxResults must be >= 1.")),
+            isError = true,
+        )
+        if (timeoutMillis < 1) return CallToolResult(
+            content = listOf(TextContent(text = "timeoutMillis must be >= 1.")),
+            isError = true,
+        )
+        return runFileSearch(
+            project,
+            query,
+            keywords,
+            scope,
+            matchMode,
+            caseSensitive,
+            directoryUrl,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes,
+        )
+    }
 
-// ── scope_search_files ────────────────────────────────────────────
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_files_quick(
+        @Description("Query string")
+        query: String = "",
+        @Description("Optional explicit ordered keywords.")
+        keywords: List<String> = emptyList(),
+        @Description("Preset scope identifier.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
+        matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
+        @Description("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @Description("VFS directory URL to search within.")
+        directoryUrl: String? = null,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 500,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+    ): CallToolResult {
+        val project = call.project()
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.quick",
+                scopePreset.name,
+                matchMode.name,
+                maxResults,
+                timeoutMillis,
+            ),
+        )
+        val descriptor =
+            buildPresetScopeDescriptor(project = project, preset = scopePreset, allowUiInteractiveScopes = false)
+        return runFileSearch(
+            project,
+            query,
+            keywords,
+            descriptor,
+            matchMode,
+            caseSensitive,
+            directoryUrl,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes = false,
+        )
+    }
 
-@Description("Arguments for ScopeFileSearchArgs")
-@Schema
-@Serializable
-internal data class ScopeFileSearchArgs(
-    val query: String = "",
-    @Description("Optional explicit ordered keywords.")
-    val keywords: List<String> = emptyList(),
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
-    val matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
-    @Description("Whether matching is case-sensitive.")
-    val caseSensitive: Boolean = false,
-    @Description("VFS directory URL to search within.")
-    val directoryUrl: String? = null,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_find_files_by_name_keyword(
+        @Description("Filename keyword text.")
+        nameKeyword: String = "",
+        @Description("Optional explicit ordered keywords.")
+        keywords: List<String> = emptyList(),
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.by.name",
+                previewKeywordCount(nameKeyword, keywords),
+            ),
+        )
+        return runFileSearch(
+            project,
+            nameKeyword,
+            keywords,
+            scope,
+            ScopeFileSearchMode.NAME,
+            caseSensitive,
+            null,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes,
+        )
+    }
 
-internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSearchArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        if (args.maxResults < 1) {
-            return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(text = "maxResults must be >= 1.")),
-                isError = true,
-            )
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_find_files_by_path_keyword(
+        @Description("Path keyword text.")
+        pathKeyword: String = "",
+        @Description("Optional explicit ordered keywords.")
+        keywords: List<String> = emptyList(),
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.by.path",
+                previewKeywordCount(pathKeyword, keywords),
+            ),
+        )
+        return runFileSearch(
+            project,
+            pathKeyword,
+            keywords,
+            scope,
+            ScopeFileSearchMode.PATH,
+            caseSensitive,
+            null,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes,
+        )
+    }
+
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.find_in_directory_using_glob(
+        @Description("VFS directory URL to search within.")
+        directoryUrl: String,
+        @Description("Glob pattern to match against file path.")
+        globPattern: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (directoryUrl.isBlank()) return CallToolResult(
+            content = listOf(TextContent(text = "directoryUrl must not be blank.")),
+            isError = true,
+        )
+        if (globPattern.isBlank()) return CallToolResult(
+            content = listOf(TextContent(text = "globPattern must not be blank.")),
+            isError = true,
+        )
+        val project = call.project()
+        reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", globPattern.length))
+        return runFileSearch(
+            project,
+            globPattern,
+            emptyList(),
+            scope,
+            ScopeFileSearchMode.GLOB,
+            caseSensitive = true,
+            directoryUrl,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes,
+        )
+    }
+
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_find_source_file_by_class_name(
+        @Description("Class name, simple or qualified.")
+        className: String,
+        @Description("Scope program descriptor. Defaults to All Places if omitted.")
+        scope: ScopeProgramDescriptorDto? = null,
+        @Description("Whether to prioritize source-like paths over binary/artifact paths.")
+        preferSources: Boolean = true,
+        @Description("Whether matching is case-sensitive.")
+        caseSensitive: Boolean = false,
+        @Description("Maximum number of matched files to return.")
+        maxResults: Int = 100,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (className.isBlank()) return CallToolResult(
+            content = listOf(TextContent(text = "className must not be blank.")),
+            isError = true,
+        )
+        val project = call.project()
+        reportActivity(
+            Bundle.message(
+                "tool.activity.scope.search.files.by.class.name",
+                className,
+                preferSources,
+                maxResults,
+            ),
+        )
+
+        val effectiveScope = scope ?: buildStandardScopeDescriptor(
+            project = project,
+            standardScopeId = "All Places",
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+        )
+        val simpleName = className.substringAfterLast('.').substringAfterLast('$').trim()
+        if (simpleName.isEmpty()) return CallToolResult(
+            content = listOf(TextContent(text = "className '$className' does not contain a usable simple name.")),
+            isError = true,
+        )
+
+        val searchResult = runFileSearch(
+            project,
+            simpleName,
+            listOf(simpleName),
+            effectiveScope,
+            ScopeFileSearchMode.NAME,
+            caseSensitive,
+            null,
+            maxResults,
+            timeoutMillis,
+            allowUiInteractiveScopes,
+        )
+        if (searchResult.isError == true) return searchResult
+
+        val searchDto = toolArgsJson.decodeFromString<ScopeFileSearchResultDto>(
+            (searchResult.content.firstOrNull() as? TextContent)?.text ?: return searchResult,
+        )
+        val ranked = if (preferSources) {
+            searchDto.matchedFileUrls.sortedWith(compareBy({ sourceRank(it) }, { it.lowercase() }))
+        } else {
+            searchDto.matchedFileUrls
         }
-        if (args.timeoutMillis < 1) {
-            return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(text = "timeoutMillis must be >= 1.")),
-                isError = true,
-            )
-        }
-        val normalizedSearchInput = normalizeSearchInput(args.matchMode, args.query, args.keywords)
+        val result = searchDto.copy(
+            query = className,
+            matchedFileUrls = ranked,
+            diagnostics = (searchDto.diagnostics + buildList {
+                add("Heuristic class-name lookup used simpleName='$simpleName'.")
+                if (preferSources) add("Results were ranked to prefer source-like paths.")
+            }).distinct(),
+        )
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+    }
+
+    // ── Shared search logic ───────────────────────────────────────
+
+    private suspend fun McpCallContext<CallToolRequest>.runFileSearch(
+        project: com.intellij.openapi.project.Project,
+        query: String,
+        keywords: List<String>,
+        scopeDescriptor: ScopeProgramDescriptorDto,
+        matchMode: ScopeFileSearchMode,
+        caseSensitive: Boolean,
+        directoryUrl: String?,
+        maxResults: Int,
+        timeoutMillis: Int,
+        allowUiInteractiveScopes: Boolean,
+    ): CallToolResult {
+        if (maxResults < 1) return CallToolResult(
+            content = listOf(TextContent(text = "maxResults must be >= 1.")),
+            isError = true,
+        )
+        if (timeoutMillis < 1) return CallToolResult(
+            content = listOf(TextContent(text = "timeoutMillis must be >= 1.")),
+            isError = true,
+        )
+        val normalizedSearchInput = normalizeSearchInput(matchMode, query, keywords)
 
         reportActivity(
             Bundle.message(
                 "tool.activity.scope.search.files.start",
-                args.matchMode.name,
+                matchMode.name,
                 normalizedSearchInput.textKeywords.size,
-                args.maxResults,
-                args.timeoutMillis,
+                maxResults,
+                timeoutMillis,
             ),
         )
 
         val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
             project = project,
-            descriptor = args.scope,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            descriptor = scopeDescriptor,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
         val projectRootPath = project.basePath?.let { Path.of(it) }
-        val rootDirectory = args.directoryUrl?.let { resolveDirectory(it) }
+        val rootDirectory = directoryUrl?.let { resolveDirectory(it) }
         val (globMatcher, lowerCaseGlobMatcher) = buildGlobMatchers(
-            args.matchMode,
+            matchMode,
             normalizedSearchInput.queryForDisplay,
-            args.caseSensitive,
+            caseSensitive,
         )
-        val normalizedKeywords = if (args.caseSensitive) {
-            normalizedSearchInput.textKeywords
-        } else {
-            normalizedSearchInput.textKeywords.map { it.lowercase() }
-        }
+        val normalizedKeywords =
+            if (caseSensitive) normalizedSearchInput.textKeywords else normalizedSearchInput.textKeywords.map { it.lowercase() }
 
         val scannedCounter = AtomicInteger(0)
         val matchedCounter = AtomicInteger(0)
@@ -122,7 +374,7 @@ internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSear
         var probablyHasMoreMatchingFiles = false
         val indexSearchScope = resolved.scope as? GlobalSearchScope
         val useFilenameIndexForName = rootDirectory == null &&
-                args.matchMode == ScopeFileSearchMode.NAME &&
+                matchMode == ScopeFileSearchMode.NAME &&
                 resolved.scopeShape == ScopeShape.GLOBAL &&
                 indexSearchScope != null
 
@@ -140,7 +392,7 @@ internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSear
                 }
             }
             try {
-                timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+                timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
                     withBackgroundProgress(
                         project,
                         Bundle.message("progress.title.scope.search.files", normalizedSearchInput.queryForDisplay),
@@ -151,27 +403,27 @@ internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSear
                                 searchScope = indexSearchScope,
                                 rootDirectory = rootDirectory,
                                 normalizedKeywords = normalizedKeywords,
-                                caseSensitive = args.caseSensitive,
-                                maxResults = args.maxResults,
+                                caseSensitive = caseSensitive,
+                                maxResults = maxResults,
                                 scannedCounter = scannedCounter,
                                 matchedCounter = matchedCounter,
                                 matched = matched,
                             )
                         } else {
-                            if (args.matchMode == ScopeFileSearchMode.NAME && resolved.scopeShape != ScopeShape.GLOBAL) {
+                            if (matchMode == ScopeFileSearchMode.NAME && resolved.scopeShape != ScopeShape.GLOBAL) {
                                 diagnostics += "NAME mode uses traversal fallback because resolved scope shape is ${resolved.scopeShape.name}."
                             }
                             probablyHasMoreMatchingFiles = scanByTraversal(
                                 project = project,
                                 resolvedScope = resolved.scope,
                                 rootDirectory = rootDirectory,
-                                mode = args.matchMode,
+                                mode = matchMode,
                                 normalizedKeywords = normalizedKeywords,
-                                caseSensitive = args.caseSensitive,
+                                caseSensitive = caseSensitive,
                                 projectRootPath = projectRootPath,
                                 globMatcher = globMatcher,
                                 lowerCaseGlobMatcher = lowerCaseGlobMatcher,
-                                maxResults = args.maxResults,
+                                maxResults = maxResults,
                                 scannedCounter = scannedCounter,
                                 matchedCounter = matchedCounter,
                                 matched = matched,
@@ -189,322 +441,18 @@ internal suspend fun ClientConnection.scopeFileSearchHandler(args: ScopeFileSear
         val result = ScopeFileSearchResultDto(
             scopeDisplayName = resolved.displayName,
             scopeShape = resolved.scopeShape,
-            mode = args.matchMode,
-            query = args.query,
+            mode = matchMode,
+            query = query,
             keywords = normalizedSearchInput.textKeywords,
-            directoryUrl = args.directoryUrl,
+            directoryUrl = directoryUrl,
             matchedFileUrls = matched,
             scannedFileCount = scannedCounter.get(),
             probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
             timedOut = timedOut,
             canceled = false,
-            diagnostics = (args.scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
+            diagnostics = (scopeDescriptor.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
-    }
-}
-
-// ── scope_search_files_quick ──────────────────────────────────────
-
-@Description("Arguments for ScopeFileSearchQuickArgs")
-@Schema
-@Serializable
-internal data class ScopeFileSearchQuickArgs(
-    val query: String = "",
-    @Description("Optional explicit ordered keywords.")
-    val keywords: List<String> = emptyList(),
-    @Description("Preset scope identifier.")
-    val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Search mode: NAME, PATH, NAME_OR_PATH, or GLOB.")
-    val matchMode: ScopeFileSearchMode = ScopeFileSearchMode.NAME_OR_PATH,
-    @Description("Whether matching is case-sensitive.")
-    val caseSensitive: Boolean = false,
-    @Description("VFS directory URL to search within.")
-    val directoryUrl: String? = null,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 500,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFileSearchQuickHandler(args: ScopeFileSearchQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        reportActivity(
-            Bundle.message(
-                "tool.activity.scope.search.files.quick",
-                args.scopePreset.name,
-                args.matchMode.name,
-                args.maxResults,
-                args.timeoutMillis,
-            ),
-        )
-        val descriptor = buildPresetScopeDescriptor(
-            project = project,
-            preset = args.scopePreset,
-            allowUiInteractiveScopes = false,
-        )
-        val innerArgs = ScopeFileSearchArgs(
-            query = args.query,
-            keywords = args.keywords,
-            scope = descriptor,
-            matchMode = args.matchMode,
-            caseSensitive = args.caseSensitive,
-            directoryUrl = args.directoryUrl,
-            maxResults = args.maxResults,
-            timeoutMillis = args.timeoutMillis,
-            allowUiInteractiveScopes = false,
-        )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
-    }
-}
-
-// ── scope_find_files_by_name_keyword ──────────────────────────────
-
-@Description("Arguments for ScopeFindFilesByNameArgs")
-@Schema
-@Serializable
-internal data class ScopeFindFilesByNameArgs(
-    @Description("Filename keyword text.")
-    val nameKeyword: String = "",
-    @Description("Optional explicit ordered keywords.")
-    val keywords: List<String> = emptyList(),
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether matching is case-sensitive.")
-    val caseSensitive: Boolean = false,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFindFilesByNameHandler(args: ScopeFindFilesByNameArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        reportActivity(
-            Bundle.message(
-                "tool.activity.scope.search.files.by.name",
-                previewKeywordCount(args.nameKeyword, args.keywords),
-            ),
-        )
-        val innerArgs = ScopeFileSearchArgs(
-            query = args.nameKeyword,
-            keywords = args.keywords,
-            scope = args.scope,
-            matchMode = ScopeFileSearchMode.NAME,
-            caseSensitive = args.caseSensitive,
-            directoryUrl = null,
-            maxResults = args.maxResults,
-            timeoutMillis = args.timeoutMillis,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
-    }
-}
-
-// ── scope_find_files_by_path_keyword ──────────────────────────────
-
-@Description("Arguments for ScopeFindFilesByPathArgs")
-@Schema
-@Serializable
-internal data class ScopeFindFilesByPathArgs(
-    @Description("Path keyword text.")
-    val pathKeyword: String = "",
-    @Description("Optional explicit ordered keywords.")
-    val keywords: List<String> = emptyList(),
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether matching is case-sensitive.")
-    val caseSensitive: Boolean = false,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFindFilesByPathHandler(args: ScopeFindFilesByPathArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        reportActivity(
-            Bundle.message(
-                "tool.activity.scope.search.files.by.path",
-                previewKeywordCount(args.pathKeyword, args.keywords),
-            ),
-        )
-        val innerArgs = ScopeFileSearchArgs(
-            query = args.pathKeyword,
-            keywords = args.keywords,
-            scope = args.scope,
-            matchMode = ScopeFileSearchMode.PATH,
-            caseSensitive = args.caseSensitive,
-            directoryUrl = null,
-            maxResults = args.maxResults,
-            timeoutMillis = args.timeoutMillis,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
-    }
-}
-
-// ── find_in_directory_using_glob ─────────────────────────────────
-
-@Description("Arguments for ScopeFindInDirectoryGlobArgs")
-@Schema
-@Serializable
-internal data class ScopeFindInDirectoryGlobArgs(
-    @Description("VFS directory URL to search within.")
-    val directoryUrl: String,
-    @Description("Glob pattern to match against file path.")
-    val globPattern: String,
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFindInDirectoryGlobHandler(args: ScopeFindInDirectoryGlobArgs, request: CallToolRequest): CallToolResult {
-    if (args.directoryUrl.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "directoryUrl must not be blank.")),
-            isError = true,
-        )
-    }
-    if (args.globPattern.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "globPattern must not be blank.")),
-            isError = true,
-        )
-    }
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        reportActivity(Bundle.message("tool.activity.scope.search.files.by.glob", args.globPattern.length))
-        val innerArgs = ScopeFileSearchArgs(
-            query = args.globPattern,
-            keywords = emptyList(),
-            scope = args.scope,
-            matchMode = ScopeFileSearchMode.GLOB,
-            caseSensitive = true,
-            directoryUrl = args.directoryUrl,
-            maxResults = args.maxResults,
-            timeoutMillis = args.timeoutMillis,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        )
-        return@callToolWithProject scopeFileSearchHandler(innerArgs, request)
-    }
-}
-
-// ── scope_find_source_file_by_class_name ─────────────────────────
-
-@Description("Arguments for ScopeFindSourceFileByClassNameArgs")
-@Schema
-@Serializable
-internal data class ScopeFindSourceFileByClassNameArgs(
-    @Description("Class name, simple or qualified.")
-    val className: String,
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto? = null,
-    @Description("Whether to prioritize source-like paths over binary/artifact paths.")
-    val preferSources: Boolean = true,
-    @Description("Whether matching is case-sensitive.")
-    val caseSensitive: Boolean = false,
-    @Description("Maximum number of matched files to return.")
-    val maxResults: Int = 100,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFindSourceFileByClassNameHandler(args: ScopeFindSourceFileByClassNameArgs, request: CallToolRequest): CallToolResult {
-    if (args.className.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "className must not be blank.")),
-            isError = true,
-        )
-    }
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        reportActivity(
-            Bundle.message(
-                "tool.activity.scope.search.files.by.class.name",
-                args.className,
-                args.preferSources,
-                args.maxResults,
-            ),
-        )
-        val effectiveScope = args.scope ?: buildStandardScopeDescriptor(
-            project = project,
-            standardScopeId = "All Places",
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        )
-        val simpleName = args.className.substringAfterLast('.').substringAfterLast('$').trim()
-        if (simpleName.isEmpty()) {
-            return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(text = "className '${args.className}' does not contain a usable simple name.")),
-                isError = true,
-            )
-        }
-        val innerArgs = ScopeFileSearchArgs(
-            query = simpleName,
-            keywords = listOf(simpleName),
-            scope = effectiveScope,
-            matchMode = ScopeFileSearchMode.NAME,
-            caseSensitive = args.caseSensitive,
-            directoryUrl = null,
-            maxResults = args.maxResults,
-            timeoutMillis = args.timeoutMillis,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        )
-        val searchResult = scopeFileSearchHandler(innerArgs, request)
-
-        if (searchResult.isError == true) return@callToolWithProject searchResult
-
-        val searchDto = toolArgsJson.decodeFromString<ScopeFileSearchResultDto>(
-            (searchResult.content.firstOrNull() as? TextContent)?.text ?: return@callToolWithProject searchResult,
-        )
-        val ranked = if (args.preferSources) {
-            searchDto.matchedFileUrls.sortedWith(
-                compareBy(
-                    { sourceRank(it) },
-                    { it.lowercase() },
-                ),
-            )
-        } else {
-            searchDto.matchedFileUrls
-        }
-        val result = searchDto.copy(
-            query = args.className,
-            matchedFileUrls = ranked,
-            diagnostics = (searchDto.diagnostics + buildList {
-                add("Heuristic class-name lookup used simpleName='$simpleName'.")
-                if (args.preferSources) add("Results were ranked to prefer source-like paths.")
-            }).distinct(),
-        )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }
 

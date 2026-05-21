@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.scope.symbol.tools
 
-import com.intellij.ide.actions.searcheverywhere.FoundItemDescriptor
 import com.intellij.ide.util.gotoByName.*
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
@@ -31,11 +30,10 @@ import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.*
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -85,353 +83,187 @@ internal data class ScopeSymbolSearchHealthcheckResultDto(
     val diagnostics: List<String> = emptyList(),
 )
 
-// ── Tool argument DTOs ───────────────────────────────────────────
+// ── Tool class (reflective registration) ───────────────────────────
 
-@Description("Arguments for ScopeSymbolSearchArgs")
-@Schema
-@Serializable
-internal data class ScopeSymbolSearchArgs(
-    val query: String = "",
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    @Description("Maximum number of symbol items to return.")
-    val maxResultCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether to include library/dependency symbols.")
-    val includeNonProjectItems: Boolean = true,
-    @Description("Whether returned items must have physical file+position.")
-    val requirePhysicalLocation: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for ScopeSymbolSearchQuickArgs")
-@Schema
-@Serializable
-internal data class ScopeSymbolSearchQuickArgs(
-    val query: String = "",
-    @Description("Preset scope for quick symbol search.")
-    val scopePreset: ScopeSymbolQuickPreset = ScopeSymbolQuickPreset.PROJECT_FILES,
-    @Description("Maximum number of symbol items to return.")
-    val maxResultCount: Int = 50,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 20000,
-    @Description("Whether returned items must have physical file+position.")
-    val requirePhysicalLocation: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for ScopeSymbolSearchWithStageProgressArgs")
-@Schema
-@Serializable
-internal data class ScopeSymbolSearchWithStageProgressArgs(
-    val query: String = "",
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    @Description("Maximum number of symbol items to return.")
-    val maxResultCount: Int = 200,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether to include library/dependency symbols.")
-    val includeNonProjectItems: Boolean = true,
-    @Description("Whether returned items must have physical file+position.")
-    val requirePhysicalLocation: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Description("Arguments for ScopeSymbolSearchHealthcheckArgs")
-@Schema
-@Serializable
-internal data class ScopeSymbolSearchHealthcheckArgs(
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-// ── Tool registration entrypoint ─────────────────────────────────
-
-// ── scope_search_symbols ─────────────────────────────────────────
-
-internal suspend fun ClientConnection.scopeSymbolSearchHandler(args: ScopeSymbolSearchArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+internal class ScopeSymbolSearchTools {
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols(
+        @Description("Query string to search")
+        query: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+        @Description("Maximum number of symbol items to return.")
+        maxResultCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether to include library/dependency symbols.")
+        includeNonProjectItems: Boolean = true,
+        @Description("Whether returned items must have physical file+position.")
+        requirePhysicalLocation: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
         try {
-            if (args.query.isBlank()) {
-                return@callToolWithProject errorResult("query must not be blank.")
+            if (query.isBlank()) {
+                return errorResult("query must not be blank.")
             }
-            if (args.maxResultCount < 1) {
-                return@callToolWithProject errorResult("maxResultCount must be >= 1.")
+            if (maxResultCount < 1) {
+                return errorResult("maxResultCount must be >= 1.")
             }
-            if (args.timeoutMillis < 1) {
-                return@callToolWithProject errorResult("timeoutMillis must be >= 1.")
+            if (timeoutMillis < 1) {
+                return errorResult("timeoutMillis must be >= 1.")
             }
 
             reportActivity(
                 Bundle.message(
                     "tool.activity.scope.symbol.search.start",
-                    args.query.length,
-                    args.maxResultCount,
-                    args.timeoutMillis,
-                    args.includeNonProjectItems,
-                    args.requirePhysicalLocation,
+                    query.length,
+                    maxResultCount,
+                    timeoutMillis,
+                    includeNonProjectItems,
+                    requirePhysicalLocation,
                 ),
             )
 
-            ensureIndicesReady(project)
-
-            val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
+            val result = scopeSymbolSearchImpl(
                 project = project,
-                descriptor = args.scope,
-                allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+                query = query,
+                scope = scope,
+                allowUiInteractiveScopes = allowUiInteractiveScopes,
+                maxResultCount = maxResultCount,
+                timeoutMillis = timeoutMillis,
+                includeNonProjectItems = includeNonProjectItems,
+                requirePhysicalLocation = requirePhysicalLocation,
             )
-
-            val effectiveScope = buildEffectiveScope(project, resolved.scope)
-            val constrainedGlobalScope = if (args.includeNonProjectItems) {
-                effectiveScope.globalScope
-            } else {
-                effectiveScope.globalScope.intersectWith(ProjectScope.getProjectScope(project))
-            }
-            val findParameters = FindSymbolParameters.wrap(args.query, constrainedGlobalScope)
-
-            val modelDisposable = Disposer.newDisposable("ScopeSymbolSearchSdkTools.scope_search_symbols")
-            try {
-                val model = GotoSymbolModel2(project, modelDisposable)
-                val baseViewModel = StaticChooseByNameViewModel(
-                    project = project,
-                    model = model,
-                    maximumListSizeLimit = args.maxResultCount,
-                )
-                val provider = ChooseByNameModelEx.getItemProvider(model, null)
-
-                val observedCandidateCount = AtomicInteger(0)
-                val processedCandidateCount = AtomicInteger(0)
-                val finished = AtomicBoolean(false)
-                val probablyHasMore = AtomicBoolean(false)
-                val runtimeDiagnostics = mutableListOf<String>()
-                var timedOut = false
-                var converted = ConversionResult(items = emptyList(), diagnostics = emptyList())
-
-                if (provider !is ChooseByNameInScopeItemProvider) {
-                    runtimeDiagnostics +=
-                        "Item provider '${provider.javaClass.name}' is not ChooseByNameInScopeItemProvider; using contributor fallback path."
-                }
-
-                coroutineScope {
-                    val progressJob = launch {
-                        while (isActive && !finished.get()) {
-                            delay(800)
-                            reportActivity(
-                                Bundle.message(
-                                    "tool.activity.scope.symbol.search.progress",
-                                    observedCandidateCount.get(),
-                                    processedCandidateCount.get(),
-                                ),
-                            )
-                        }
-                    }
-                    try {
-                        timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
-                            withBackgroundProgress(
-                                project,
-                                Bundle.message("progress.title.scope.symbol.search", args.query),
-                                cancellable = true,
-                            ) {
-                                val collection =
-                                    coroutineToIndicator { indicator ->
-                                        runBlockingCancellable {
-                                            readAction {
-                                                if (provider is ChooseByNameInScopeItemProvider) {
-                                                    collectRawCandidatesByInScopeProvider(
-                                                        provider = provider,
-                                                        baseViewModel = baseViewModel,
-                                                        parameters = findParameters,
-                                                        indicator = indicator,
-                                                        maxResultCount = args.maxResultCount,
-                                                    )
-                                                } else {
-                                                    collectRawCandidatesByModelFallback(
-                                                        model = model,
-                                                        parameters = findParameters,
-                                                        indicator = indicator,
-                                                        maxResultCount = args.maxResultCount,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                observedCandidateCount.set(collection.observedCount)
-                                if (!collection.completed) {
-                                    probablyHasMore.set(true)
-                                }
-                                converted = convertCandidates(
-                                    project = project,
-                                    model = model,
-                                    candidates = collection.candidates,
-                                    postFilterPolicy = effectiveScope.postFilterPolicy,
-                                    requirePhysicalLocation = args.requirePhysicalLocation,
-                                    processedCandidateCount = processedCandidateCount,
-                                )
-                            }
-                            false
-                        } ?: true
-                    } finally {
-                        finished.set(true)
-                        progressJob.cancel()
-                    }
-                }
-
-                if (timedOut) {
-                    runtimeDiagnostics += "Symbol search timed out before completion."
-                    probablyHasMore.set(true)
-                }
-
-                var items = converted.items
-                    .sortedWith(
-                        compareByDescending<ScopeSymbolSearchItemDto> { it.score ?: Int.MIN_VALUE }
-                            .thenBy { it.name }
-                            .thenBy { it.filePath ?: "" }
-                            .thenBy { it.line ?: Int.MAX_VALUE }
-                            .thenBy { it.column ?: Int.MAX_VALUE },
-                    )
-
-                if (items.size > args.maxResultCount) {
-                    items = items.take(args.maxResultCount)
-                    probablyHasMore.set(true)
-                }
-                val result = ScopeSymbolSearchResultDto(
-                    scopeDisplayName = resolved.displayName,
-                    scopeShape = resolved.scopeShape,
-                    query = args.query,
-                    includeNonProjectItems = args.includeNonProjectItems,
-                    requirePhysicalLocation = args.requirePhysicalLocation,
-                    items = items,
-                    probablyHasMoreMatchingEntries = probablyHasMore.get(),
-                    timedOut = timedOut,
-                    canceled = false,
-                    diagnostics = (
-                            args.scope.diagnostics +
-                                    resolved.diagnostics +
-                                    effectiveScope.diagnostics +
-                                    converted.diagnostics +
-                                    runtimeDiagnostics
-                            ).distinct(),
-                )
-                reportActivity(
-                    Bundle.message(
-                        "tool.activity.scope.symbol.search.finish",
-                        result.items.size,
-                        result.probablyHasMoreMatchingEntries,
-                        result.timedOut,
-                        result.diagnostics.size,
-                    ),
-                )
-                okResult(toolArgsJson.encodeToString(result))
-            } catch (_: IndexNotReadyException) {
-                errorResult("Symbol search is temporarily unavailable while indexes are updating. Please retry.")
-            } finally {
-                Disposer.dispose(modelDisposable)
-            }
+            reportActivity(
+                Bundle.message(
+                    "tool.activity.scope.symbol.search.finish",
+                    result.items.size,
+                    result.probablyHasMoreMatchingEntries,
+                    result.timedOut,
+                    result.diagnostics.size,
+                ),
+            )
+            return okResult(toolArgsJson.encodeToString(result))
         } catch (e: IllegalArgumentException) {
-            errorResult(e.message ?: "Invalid argument.")
+            return errorResult(e.message ?: "Invalid argument.")
         } catch (e: WorkspaceResourceException) {
-            errorResult(e.message ?: "Resource error.")
+            return errorResult(e.message ?: "Resource error.")
         }
     }
-}
 
-// ── scope_search_symbols_quick ───────────────────────────────────
-
-internal suspend fun ClientConnection.scopeSymbolSearchQuickHandler(args: ScopeSymbolSearchQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_quick(
+        @Description("Query string to search")
+        query: String,
+        @Description("Preset scope for quick symbol search.")
+        scopePreset: ScopeSymbolQuickPreset = ScopeSymbolQuickPreset.PROJECT_FILES,
+        @Description("Maximum number of symbol items to return.")
+        maxResultCount: Int = 50,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 20000,
+        @Description("Whether returned items must have physical file+position.")
+        requirePhysicalLocation: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
         try {
-            if (args.query.isBlank()) {
-                return@callToolWithProject errorResult("query must not be blank.")
+            if (query.isBlank()) {
+                return errorResult("query must not be blank.")
             }
-            if (args.maxResultCount < 1) {
-                return@callToolWithProject errorResult("maxResultCount must be >= 1.")
+            if (maxResultCount < 1) {
+                return errorResult("maxResultCount must be >= 1.")
             }
-            if (args.timeoutMillis < 1) {
-                return@callToolWithProject errorResult("timeoutMillis must be >= 1.")
+            if (timeoutMillis < 1) {
+                return errorResult("timeoutMillis must be >= 1.")
             }
 
             reportActivity(
                 Bundle.message(
                     "tool.activity.scope.symbol.search.start",
-                    args.query.length,
-                    args.maxResultCount,
-                    args.timeoutMillis,
+                    query.length,
+                    maxResultCount,
+                    timeoutMillis,
                     false,
-                    args.requirePhysicalLocation,
+                    requirePhysicalLocation,
                 ),
             )
 
             val descriptor = buildPresetScopeDescriptor(
                 project = project,
-                preset = args.scopePreset.toScopeQuickPreset(),
+                preset = scopePreset.toScopeQuickPreset(),
                 allowUiInteractiveScopes = false,
             )
-            val includeNonProjectItems = args.scopePreset.includesNonProjectItems()
-            val innerArgs = ScopeSymbolSearchArgs(
-                query = args.query,
+            val includeNonProjectItems = scopePreset.includesNonProjectItems()
+            val result = scopeSymbolSearchImpl(
+                project = project,
+                query = query,
                 scope = descriptor,
                 allowUiInteractiveScopes = false,
-                maxResultCount = args.maxResultCount,
-                timeoutMillis = args.timeoutMillis,
+                maxResultCount = maxResultCount,
+                timeoutMillis = timeoutMillis,
                 includeNonProjectItems = includeNonProjectItems,
-                requirePhysicalLocation = args.requirePhysicalLocation,
+                requirePhysicalLocation = requirePhysicalLocation,
             )
-            return@callToolWithProject scopeSymbolSearchHandler(innerArgs, request)
+            reportActivity(
+                Bundle.message(
+                    "tool.activity.scope.symbol.search.finish",
+                    result.items.size,
+                    result.probablyHasMoreMatchingEntries,
+                    result.timedOut,
+                    result.diagnostics.size,
+                ),
+            )
+            return okResult(toolArgsJson.encodeToString(result))
         } catch (e: IllegalArgumentException) {
-            errorResult(e.message ?: "Invalid argument.")
+            return errorResult(e.message ?: "Invalid argument.")
         }
     }
-}
 
-// ── scope_search_symbols_with_stage_progress ─────────────────────
-
-internal suspend fun ClientConnection.scopeSymbolSearchWithStageProgressHandler(args: ScopeSymbolSearchWithStageProgressArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_with_stage_progress(
+        @Description("Query string to search")
+        query: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+        @Description("Maximum number of symbol items to return.")
+        maxResultCount: Int = 200,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether to include library/dependency symbols.")
+        includeNonProjectItems: Boolean = true,
+        @Description("Whether returned items must have physical file+position.")
+        requirePhysicalLocation: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
         try {
-            if (args.query.isBlank()) {
-                return@callToolWithProject errorResult("query must not be blank.")
+            if (query.isBlank()) {
+                return errorResult("query must not be blank.")
             }
-            if (args.maxResultCount < 1) {
-                return@callToolWithProject errorResult("maxResultCount must be >= 1.")
+            if (maxResultCount < 1) {
+                return errorResult("maxResultCount must be >= 1.")
             }
-            if (args.timeoutMillis < 1) {
-                return@callToolWithProject errorResult("timeoutMillis must be >= 1.")
+            if (timeoutMillis < 1) {
+                return errorResult("timeoutMillis must be >= 1.")
             }
 
-            val healthArgs = ScopeSymbolSearchHealthcheckArgs(
-                scope = args.scope,
-                allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            val healthResult = scopeSymbolSearchHealthcheckImpl(
+                project = project,
+                scope = scope,
+                allowUiInteractiveScopes = allowUiInteractiveScopes,
             )
-            val healthResult = scopeSymbolSearchHealthcheckImpl(project, healthArgs)
-            val searchArgs = ScopeSymbolSearchArgs(
-                query = args.query,
-                scope = args.scope,
-                allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-                maxResultCount = args.maxResultCount,
-                timeoutMillis = args.timeoutMillis,
-                includeNonProjectItems = args.includeNonProjectItems,
-                requirePhysicalLocation = args.requirePhysicalLocation,
+            val searchResult = scopeSymbolSearchImpl(
+                project = project,
+                query = query,
+                scope = scope,
+                allowUiInteractiveScopes = allowUiInteractiveScopes,
+                maxResultCount = maxResultCount,
+                timeoutMillis = timeoutMillis,
+                includeNonProjectItems = includeNonProjectItems,
+                requirePhysicalLocation = requirePhysicalLocation,
             )
-            val searchResult = scopeSymbolSearchImpl(project, searchArgs)
             val estimatedProcessed = searchResult.items.size +
                     searchResult.diagnostics.count { it.startsWith("Skipped ") }
             val result = ScopeSymbolSearchWithStageResultDto(
@@ -445,32 +277,37 @@ internal suspend fun ClientConnection.scopeSymbolSearchWithStageProgressHandler(
                     providerMode = healthResult.providerMode,
                 ),
             )
-            okResult(toolArgsJson.encodeToString(result))
+            return okResult(toolArgsJson.encodeToString(result))
         } catch (e: IllegalArgumentException) {
-            errorResult(e.message ?: "Invalid argument.")
+            return errorResult(e.message ?: "Invalid argument.")
         }
     }
-}
 
-// ── scope_search_symbols_healthcheck ─────────────────────────────
-
-internal suspend fun ClientConnection.scopeSymbolSearchHealthcheckHandler(args: ScopeSymbolSearchHealthcheckArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_healthcheck(
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
         try {
             reportActivity(
                 Bundle.message(
                     "tool.activity.scope.symbol.search.healthcheck",
-                    args.allowUiInteractiveScopes,
+                    allowUiInteractiveScopes,
                 ),
             )
-            val result = scopeSymbolSearchHealthcheckImpl(project, args)
-            okResult(toolArgsJson.encodeToString(result))
+            val result = scopeSymbolSearchHealthcheckImpl(
+                project = project,
+                scope = scope,
+                allowUiInteractiveScopes = allowUiInteractiveScopes,
+            )
+            return okResult(toolArgsJson.encodeToString(result))
         } catch (e: IllegalArgumentException) {
-            errorResult(e.message ?: "Invalid argument.")
+            return errorResult(e.message ?: "Invalid argument.")
         } catch (e: WorkspaceResourceException) {
-            errorResult(e.message ?: "Resource error.")
+            return errorResult(e.message ?: "Resource error.")
         }
     }
 }
@@ -479,23 +316,29 @@ internal suspend fun ClientConnection.scopeSymbolSearchHealthcheckHandler(args: 
 
 private suspend fun scopeSymbolSearchImpl(
     project: Project,
-    args: ScopeSymbolSearchArgs,
+    query: String,
+    scope: ScopeProgramDescriptorDto,
+    allowUiInteractiveScopes: Boolean,
+    maxResultCount: Int,
+    timeoutMillis: Int,
+    includeNonProjectItems: Boolean,
+    requirePhysicalLocation: Boolean,
 ): ScopeSymbolSearchResultDto {
     ensureIndicesReady(project)
 
     val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
         project = project,
-        descriptor = args.scope,
-        allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+        descriptor = scope,
+        allowUiInteractiveScopes = allowUiInteractiveScopes,
     )
 
     val effectiveScope = buildEffectiveScope(project, resolved.scope)
-    val constrainedGlobalScope = if (args.includeNonProjectItems) {
+    val constrainedGlobalScope = if (includeNonProjectItems) {
         effectiveScope.globalScope
     } else {
         effectiveScope.globalScope.intersectWith(ProjectScope.getProjectScope(project))
     }
-    val findParameters = FindSymbolParameters.wrap(args.query, constrainedGlobalScope)
+    val findParameters = FindSymbolParameters.wrap(query, constrainedGlobalScope)
 
     val modelDisposable = Disposer.newDisposable("ScopeSymbolSearchSdkTools.scope_search_symbols_impl")
     try {
@@ -503,7 +346,7 @@ private suspend fun scopeSymbolSearchImpl(
         val baseViewModel = StaticChooseByNameViewModel(
             project = project,
             model = model,
-            maximumListSizeLimit = args.maxResultCount,
+            maximumListSizeLimit = maxResultCount,
         )
         val provider = ChooseByNameModelEx.getItemProvider(model, null)
 
@@ -534,10 +377,10 @@ private suspend fun scopeSymbolSearchImpl(
                 }
             }
             try {
-                timedOut = withTimeoutOrNull(args.timeoutMillis.milliseconds) {
+                timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
                     withBackgroundProgress(
                         project,
-                        Bundle.message("progress.title.scope.symbol.search", args.query),
+                        Bundle.message("progress.title.scope.symbol.search", query),
                         cancellable = true,
                     ) {
                         val collection =
@@ -550,14 +393,14 @@ private suspend fun scopeSymbolSearchImpl(
                                                 baseViewModel = baseViewModel,
                                                 parameters = findParameters,
                                                 indicator = indicator,
-                                                maxResultCount = args.maxResultCount,
+                                                maxResultCount = maxResultCount,
                                             )
                                         } else {
                                             collectRawCandidatesByModelFallback(
                                                 model = model,
                                                 parameters = findParameters,
                                                 indicator = indicator,
-                                                maxResultCount = args.maxResultCount,
+                                                maxResultCount = maxResultCount,
                                             )
                                         }
                                     }
@@ -572,7 +415,7 @@ private suspend fun scopeSymbolSearchImpl(
                             model = model,
                             candidates = collection.candidates,
                             postFilterPolicy = effectiveScope.postFilterPolicy,
-                            requirePhysicalLocation = args.requirePhysicalLocation,
+                            requirePhysicalLocation = requirePhysicalLocation,
                             processedCandidateCount = processedCandidateCount,
                         )
                     }
@@ -598,23 +441,23 @@ private suspend fun scopeSymbolSearchImpl(
                     .thenBy { it.column ?: Int.MAX_VALUE },
             )
 
-        if (items.size > args.maxResultCount) {
-            items = items.take(args.maxResultCount)
+        if (items.size > maxResultCount) {
+            items = items.take(maxResultCount)
             probablyHasMore.set(true)
         }
 
         return ScopeSymbolSearchResultDto(
             scopeDisplayName = resolved.displayName,
             scopeShape = resolved.scopeShape,
-            query = args.query,
-            includeNonProjectItems = args.includeNonProjectItems,
-            requirePhysicalLocation = args.requirePhysicalLocation,
+            query = query,
+            includeNonProjectItems = includeNonProjectItems,
+            requirePhysicalLocation = requirePhysicalLocation,
             items = items,
             probablyHasMoreMatchingEntries = probablyHasMore.get(),
             timedOut = timedOut,
             canceled = false,
             diagnostics = (
-                    args.scope.diagnostics +
+                    scope.diagnostics +
                             resolved.diagnostics +
                             effectiveScope.diagnostics +
                             converted.diagnostics +
@@ -628,9 +471,11 @@ private suspend fun scopeSymbolSearchImpl(
     }
 }
 
+
 private suspend fun scopeSymbolSearchHealthcheckImpl(
     project: Project,
-    args: ScopeSymbolSearchHealthcheckArgs,
+    scope: ScopeProgramDescriptorDto,
+    allowUiInteractiveScopes: Boolean,
 ): ScopeSymbolSearchHealthcheckResultDto {
     if (DumbService.isDumb(project)) {
         return ScopeSymbolSearchHealthcheckResultDto(
@@ -641,8 +486,8 @@ private suspend fun scopeSymbolSearchHealthcheckImpl(
     }
     val resolved = ScopeResolverService.getInstance(project).resolveDescriptor(
         project = project,
-        descriptor = args.scope,
-        allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+        descriptor = scope,
+        allowUiInteractiveScopes = allowUiInteractiveScopes,
     )
     val modelDisposable = Disposer.newDisposable("ScopeSymbolSearchSdkTools.scope_search_symbols_healthcheck")
     return try {
@@ -650,7 +495,7 @@ private suspend fun scopeSymbolSearchHealthcheckImpl(
         val provider = ChooseByNameModelEx.getItemProvider(model, null)
         val providerMode = if (provider is ChooseByNameInScopeItemProvider) "inScope" else "fallback"
         val diagnostics = buildList {
-            addAll(args.scope.diagnostics)
+            addAll(scope.diagnostics)
             addAll(resolved.diagnostics)
             if (providerMode == "fallback") {
                 add("Provider '${provider.javaClass.name}' is not ChooseByNameInScopeItemProvider; contributor fallback path will be used.")
@@ -693,7 +538,7 @@ private fun collectRawCandidatesByInScopeProvider(
         baseViewModel,
         parameters,
         indicator,
-        Processor { descriptor: FoundItemDescriptor<*> ->
+        Processor { descriptor ->
             indicator.checkCanceled()
             observedCount.incrementAndGet()
             synchronized(candidates) {

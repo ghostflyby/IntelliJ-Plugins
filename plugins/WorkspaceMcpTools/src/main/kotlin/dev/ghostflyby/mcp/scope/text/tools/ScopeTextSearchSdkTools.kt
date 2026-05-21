@@ -25,91 +25,78 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
-import kotlinx.serialization.Serializable
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.milliseconds
 
-// ── Tool registration entrypoint ─────────────────────────────────
-
-// ── scope_search_text ────────────────────────────────────────────
-
-@Description("Arguments for ScopeSearchTextArgs")
-@Schema
-@Serializable
-internal data class ScopeSearchTextArgs(
-    val query: String = "",
-    val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
-    @Description("Whether to search in a case-sensitive manner.")
-    val caseSensitive: Boolean = true,
-    @Description("Whether to match whole words only.")
-    val wholeWordsOnly: Boolean = false,
-    @Description("Search context filter.")
-    val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
-    @Description("Optional file mask filter.")
-    val fileMask: String? = null,
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    @Description("Maximum number of occurrences to return.")
-    val maxUsageCount: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether to allow empty string matches.")
-    val allowEmptyMatches: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeSearchTextHandler(args: ScopeSearchTextArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        if (args.query.isBlank()) {
-            return@callToolWithProject CallToolResult(
+internal class ScopeTextSearchTools {
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text(
+        query: String,
+        mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+        @Description("Whether to search in a case-sensitive manner.")
+        caseSensitive: Boolean = true,
+        @Description("Whether to match whole words only.")
+        wholeWordsOnly: Boolean = false,
+        @Description("Search context filter.")
+        searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+        @Description("Optional file mask filter.")
+        fileMask: String? = null,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+        @Description("Maximum number of occurrences to return.")
+        maxUsageCount: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether to allow empty string matches.")
+        allowEmptyMatches: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        if (query.isBlank()) {
+            return CallToolResult(
                 content = listOf(TextContent(text = "query must not be blank.")),
                 isError = true,
             )
         }
-        if (args.maxUsageCount < 1) {
-            return@callToolWithProject CallToolResult(
+        if (maxUsageCount < 1) {
+            return CallToolResult(
                 content = listOf(TextContent(text = "maxUsageCount must be >= 1.")),
                 isError = true,
             )
         }
-        if (args.timeoutMillis < 1) {
-            return@callToolWithProject CallToolResult(
+        if (timeoutMillis < 1) {
+            return CallToolResult(
                 content = listOf(TextContent(text = "timeoutMillis must be >= 1.")),
                 isError = true,
             )
         }
 
         val request = ScopeTextSearchRequestDto(
-            query = args.query,
-            mode = args.mode,
-            caseSensitive = args.caseSensitive,
-            wholeWordsOnly = args.wholeWordsOnly,
-            searchContext = args.searchContext,
-            fileMask = args.fileMask,
-            scope = args.scope,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-            maxUsageCount = args.maxUsageCount,
-            timeoutMillis = args.timeoutMillis,
-            allowEmptyMatches = args.allowEmptyMatches,
+            query = query,
+            mode = mode,
+            caseSensitive = caseSensitive,
+            wholeWordsOnly = wholeWordsOnly,
+            searchContext = searchContext,
+            fileMask = fileMask,
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxUsageCount = maxUsageCount,
+            timeoutMillis = timeoutMillis,
+            allowEmptyMatches = allowEmptyMatches,
         )
 
         reportActivity(
@@ -122,60 +109,33 @@ internal suspend fun ClientConnection.scopeSearchTextHandler(args: ScopeSearchTe
             ),
         )
 
-        val execution = executeSearch(project, request)
-        val result = ScopeTextSearchResultDto(
-            scopeDisplayName = execution.scopeDisplayName,
-            scopeShape = execution.scopeShape,
-            mode = request.mode,
-            query = request.query,
-            caseSensitive = request.caseSensitive,
-            wholeWordsOnly = request.wholeWordsOnly,
-            searchContext = request.searchContext,
-            fileMask = request.fileMask,
-            occurrences = execution.occurrences.map { it.dto },
-            probablyHasMoreMatchingEntries = execution.probablyHasMoreMatchingEntries,
-            timedOut = execution.timedOut,
-            canceled = execution.canceled,
-            diagnostics = execution.diagnostics,
-        )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return scopeSearchAndFormat(request, project)
     }
-}
 
-// ── scope_search_text_quick ──────────────────────────────────────
-
-@Description("Arguments for ScopeSearchTextQuickArgs")
-@Schema
-@Serializable
-internal data class ScopeSearchTextQuickArgs(
-    val query: String = "",
-    val mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
-    @Description("Preset scope identifier.")
-    val scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Whether to search in a case-sensitive manner.")
-    val caseSensitive: Boolean = true,
-    @Description("Whether to match whole words only.")
-    val wholeWordsOnly: Boolean = false,
-    @Description("Search context filter.")
-    val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
-    @Description("Optional file mask filter.")
-    val fileMask: String? = null,
-    @Description("Maximum number of occurrences to return.")
-    val maxUsageCount: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether to allow empty string matches.")
-    val allowEmptyMatches: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeSearchTextQuickHandler(args: ScopeSearchTextQuickArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        if (args.query.isBlank()) {
-            return@callToolWithProject CallToolResult(
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_quick(
+        query: String,
+        mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
+        @Description("Preset scope identifier.")
+        scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Whether to search in a case-sensitive manner.")
+        caseSensitive: Boolean = true,
+        @Description("Whether to match whole words only.")
+        wholeWordsOnly: Boolean = false,
+        @Description("Search context filter.")
+        searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+        @Description("Optional file mask filter.")
+        fileMask: String? = null,
+        @Description("Maximum number of occurrences to return.")
+        maxUsageCount: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether to allow empty string matches.")
+        allowEmptyMatches: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
+        if (query.isBlank()) {
+            return CallToolResult(
                 content = listOf(TextContent(text = "query must not be blank.")),
                 isError = true,
             )
@@ -184,171 +144,147 @@ internal suspend fun ClientConnection.scopeSearchTextQuickHandler(args: ScopeSea
         reportActivity(
             Bundle.message(
                 "tool.activity.scope.text.search.quick",
-                args.scopePreset.name,
-                args.mode.name,
-                args.query.length,
-                args.maxUsageCount,
-                args.timeoutMillis,
+                scopePreset.name,
+                mode.name,
+                query.length,
+                maxUsageCount,
+                timeoutMillis,
             ),
         )
 
         val descriptor = buildPresetScopeDescriptor(
             project = project,
-            preset = args.scopePreset,
+            preset = scopePreset,
             allowUiInteractiveScopes = false,
         )
 
-        val innerArgs = ScopeSearchTextArgs(
-            query = args.query,
-            mode = args.mode,
-            caseSensitive = args.caseSensitive,
-            wholeWordsOnly = args.wholeWordsOnly,
-            searchContext = args.searchContext,
-            fileMask = args.fileMask,
+        val request = ScopeTextSearchRequestDto(
+            query = query,
+            mode = mode,
+            caseSensitive = caseSensitive,
+            wholeWordsOnly = wholeWordsOnly,
+            searchContext = searchContext,
+            fileMask = fileMask,
             scope = descriptor,
             allowUiInteractiveScopes = false,
-            maxUsageCount = args.maxUsageCount,
-            timeoutMillis = args.timeoutMillis,
-            allowEmptyMatches = args.allowEmptyMatches,
+            maxUsageCount = maxUsageCount,
+            timeoutMillis = timeoutMillis,
+            allowEmptyMatches = allowEmptyMatches,
         )
-        return@callToolWithProject scopeSearchTextHandler(innerArgs, request)
+        return scopeSearchAndFormat(request, project)
     }
-}
 
-// ── scope_search_text_by_plain ───────────────────────────────────
-
-@Description("Arguments for ScopeSearchTextByPlainArgs")
-@Schema
-@Serializable
-internal data class ScopeSearchTextByPlainArgs(
-    val query: String = "",
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether to search in a case-sensitive manner.")
-    val caseSensitive: Boolean = true,
-    @Description("Whether to match whole words only.")
-    val wholeWordsOnly: Boolean = false,
-    @Description("Search context filter.")
-    val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
-    @Description("Optional file mask filter.")
-    val fileMask: String? = null,
-    @Description("Maximum number of occurrences to return.")
-    val maxUsageCount: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeSearchTextByPlainHandler(args: ScopeSearchTextByPlainArgs, request: CallToolRequest): CallToolResult {
-    if (args.query.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "query must not be blank.")),
-            isError = true,
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_by_plain(
+        query: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether to search in a case-sensitive manner.")
+        caseSensitive: Boolean = true,
+        @Description("Whether to match whole words only.")
+        wholeWordsOnly: Boolean = false,
+        @Description("Search context filter.")
+        searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+        @Description("Optional file mask filter.")
+        fileMask: String? = null,
+        @Description("Maximum number of occurrences to return.")
+        maxUsageCount: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (query.isBlank()) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "query must not be blank.")),
+                isError = true,
+            )
+        }
+        reportActivity(Bundle.message("tool.activity.scope.text.search.by.plain", query.length))
+        val project = call.project()
+        val request = ScopeTextSearchRequestDto(
+            query = query,
+            mode = ScopeTextQueryMode.PLAIN,
+            caseSensitive = caseSensitive,
+            wholeWordsOnly = wholeWordsOnly,
+            searchContext = searchContext,
+            fileMask = fileMask,
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxUsageCount = maxUsageCount,
+            timeoutMillis = timeoutMillis,
         )
+        return scopeSearchAndFormat(request, project)
     }
-    reportActivity(Bundle.message("tool.activity.scope.text.search.by.plain", args.query.length))
-    val innerArgs = ScopeSearchTextArgs(
-        query = args.query,
-        mode = ScopeTextQueryMode.PLAIN,
-        caseSensitive = args.caseSensitive,
-        wholeWordsOnly = args.wholeWordsOnly,
-        searchContext = args.searchContext,
-        fileMask = args.fileMask,
-        scope = args.scope,
-        allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        maxUsageCount = args.maxUsageCount,
-        timeoutMillis = args.timeoutMillis,
-    )
-    return scopeSearchTextHandler(innerArgs, request)
-}
 
-// ── scope_search_text_by_regex ───────────────────────────────────
-
-@Description("Arguments for ScopeSearchTextByRegexArgs")
-@Schema
-@Serializable
-internal data class ScopeSearchTextByRegexArgs(
-    val query: String = "",
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether to search in a case-sensitive manner.")
-    val caseSensitive: Boolean = true,
-    @Description("Whether to match whole words only.")
-    val wholeWordsOnly: Boolean = false,
-    @Description("Search context filter.")
-    val searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
-    @Description("Optional file mask filter.")
-    val fileMask: String? = null,
-    @Description("Maximum number of occurrences to return.")
-    val maxUsageCount: Int = 1000,
-    @Description("Timeout in milliseconds.")
-    val timeoutMillis: Int = 30000,
-    @Description("Whether to allow empty string matches.")
-    val allowEmptyMatches: Boolean = false,
-    @Description("Whether UI-interactive scopes are allowed.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeSearchTextByRegexHandler(args: ScopeSearchTextByRegexArgs, request: CallToolRequest): CallToolResult {
-    if (args.query.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "query must not be blank.")),
-            isError = true,
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_by_regex(
+        query: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether to search in a case-sensitive manner.")
+        caseSensitive: Boolean = true,
+        @Description("Whether to match whole words only.")
+        wholeWordsOnly: Boolean = false,
+        @Description("Search context filter.")
+        searchContext: ScopeTextSearchContextDto = ScopeTextSearchContextDto.ANY,
+        @Description("Optional file mask filter.")
+        fileMask: String? = null,
+        @Description("Maximum number of occurrences to return.")
+        maxUsageCount: Int = 1000,
+        @Description("Timeout in milliseconds.")
+        timeoutMillis: Int = 30000,
+        @Description("Whether to allow empty string matches.")
+        allowEmptyMatches: Boolean = false,
+        @Description("Whether UI-interactive scopes are allowed.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (query.isBlank()) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "query must not be blank.")),
+                isError = true,
+            )
+        }
+        reportActivity(Bundle.message("tool.activity.scope.text.search.by.regex", query.length))
+        val project = call.project()
+        val request = ScopeTextSearchRequestDto(
+            query = query,
+            mode = ScopeTextQueryMode.REGEX,
+            caseSensitive = caseSensitive,
+            wholeWordsOnly = wholeWordsOnly,
+            searchContext = searchContext,
+            fileMask = fileMask,
+            scope = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
+            maxUsageCount = maxUsageCount,
+            timeoutMillis = timeoutMillis,
+            allowEmptyMatches = allowEmptyMatches,
         )
+        return scopeSearchAndFormat(request, project)
     }
-    reportActivity(Bundle.message("tool.activity.scope.text.search.by.regex", args.query.length))
-    val innerArgs = ScopeSearchTextArgs(
-        query = args.query,
-        mode = ScopeTextQueryMode.REGEX,
-        caseSensitive = args.caseSensitive,
-        wholeWordsOnly = args.wholeWordsOnly,
-        searchContext = args.searchContext,
-        fileMask = args.fileMask,
-        scope = args.scope,
-        allowUiInteractiveScopes = args.allowUiInteractiveScopes,
-        maxUsageCount = args.maxUsageCount,
-        timeoutMillis = args.timeoutMillis,
-        allowEmptyMatches = args.allowEmptyMatches,
-    )
-    return scopeSearchTextHandler(innerArgs, request)
-}
 
-// ── scope_replace_text_preview ───────────────────────────────────
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_replace_text_preview(
+        @Description("Search and scope configuration.")
+        search: ScopeTextSearchRequestDto,
+        @Description("Replacement text.")
+        replaceWith: String = "",
+        @Description("Whether to preserve original case during replacement.")
+        preserveCase: Boolean = false,
+        @Description("Optional specific occurrence IDs to replace.")
+        occurrenceIds: List<String> = emptyList(),
+        @Description("Whether to fail if specified occurrence IDs are not found.")
+        failOnMissingOccurrenceIds: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
+        val request = ScopeTextReplaceRequestDto(
+            search = search,
+            replaceWith = replaceWith,
+            preserveCase = preserveCase,
+            occurrenceIds = occurrenceIds,
+            failOnMissingOccurrenceIds = failOnMissingOccurrenceIds,
+        )
 
-@Description("Arguments for ScopeReplaceTextPreviewArgs")
-@Schema
-@Serializable
-internal data class ScopeReplaceTextPreviewArgs(
-    val search: ScopeTextSearchRequestDto,
-    @Description("Replacement text.")
-    val replaceWith: String = "",
-    @Description("Whether to preserve original case during replacement.")
-    val preserveCase: Boolean = false,
-    @Description("Optional specific occurrence IDs to replace.")
-    val occurrenceIds: List<String> = emptyList(),
-    @Description("Whether to fail if specified occurrence IDs are not found.")
-    val failOnMissingOccurrenceIds: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeReplaceTextPreviewHandler(args: ScopeReplaceTextPreviewArgs, request: CallToolRequest): CallToolResult {
-    val request = ScopeTextReplaceRequestDto(
-        search = args.search,
-        replaceWith = args.replaceWith,
-        preserveCase = args.preserveCase,
-        occurrenceIds = args.occurrenceIds,
-        failOnMissingOccurrenceIds = args.failOnMissingOccurrenceIds,
-    )
-
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
         reportActivity(
             Bundle.message(
                 "tool.activity.scope.text.replace.preview.start",
@@ -378,49 +314,39 @@ internal suspend fun ClientConnection.scopeReplaceTextPreviewHandler(args: Scope
             canceled = plan.execution.canceled,
             diagnostics = plan.execution.diagnostics,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-// ── scope_replace_text_apply ─────────────────────────────────────
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_replace_text_apply(
+        @Description("Search and scope configuration.")
+        search: ScopeTextSearchRequestDto,
+        @Description("Replacement text.")
+        replaceWith: String = "",
+        @Description("Whether to preserve original case during replacement.")
+        preserveCase: Boolean = false,
+        @Description("Optional specific occurrence IDs to replace.")
+        occurrenceIds: List<String> = emptyList(),
+        @Description("Whether to fail if specified occurrence IDs are not found.")
+        failOnMissingOccurrenceIds: Boolean = true,
+        @Description("Whether to save documents after write.")
+        saveAfterWrite: Boolean = true,
+        @Description("Maximum number of occurrences to replace.")
+        maxReplaceCount: Int = 10000,
+    ): CallToolResult {
+        val project = call.project()
+        val request = ScopeTextReplaceRequestDto(
+            search = search,
+            replaceWith = replaceWith,
+            preserveCase = preserveCase,
+            occurrenceIds = occurrenceIds,
+            failOnMissingOccurrenceIds = failOnMissingOccurrenceIds,
+            saveAfterWrite = saveAfterWrite,
+            maxReplaceCount = maxReplaceCount,
+        )
 
-@Description("Arguments for ScopeReplaceTextApplyArgs")
-@Schema
-@Serializable
-internal data class ScopeReplaceTextApplyArgs(
-    val search: ScopeTextSearchRequestDto,
-    @Description("Replacement text.")
-    val replaceWith: String = "",
-    @Description("Whether to preserve original case during replacement.")
-    val preserveCase: Boolean = false,
-    @Description("Optional specific occurrence IDs to replace.")
-    val occurrenceIds: List<String> = emptyList(),
-    @Description("Whether to fail if specified occurrence IDs are not found.")
-    val failOnMissingOccurrenceIds: Boolean = true,
-    @Description("Whether to save documents after write.")
-    val saveAfterWrite: Boolean = true,
-    @Description("Maximum number of occurrences to replace.")
-    val maxReplaceCount: Int = 10000,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeReplaceTextApplyArgs, request: CallToolRequest): CallToolResult {
-    val request = ScopeTextReplaceRequestDto(
-        search = args.search,
-        replaceWith = args.replaceWith,
-        preserveCase = args.preserveCase,
-        occurrenceIds = args.occurrenceIds,
-        failOnMissingOccurrenceIds = args.failOnMissingOccurrenceIds,
-        saveAfterWrite = args.saveAfterWrite,
-        maxReplaceCount = args.maxReplaceCount,
-    )
-
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
         if (request.maxReplaceCount < 1) {
-            return@callToolWithProject CallToolResult(
+            return CallToolResult(
                 content = listOf(TextContent(text = "maxReplaceCount must be >= 1.")),
                 isError = true,
             )
@@ -440,7 +366,7 @@ internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeRe
         val plan = buildReplacementPlan(project, request)
 
         if (plan.execution.timedOut && request.occurrenceIds.isEmpty()) {
-            return@callToolWithProject CallToolResult(
+            return CallToolResult(
                 content = listOf(
                     TextContent(
                         text = "Search timed out while preparing replace-all. " +
@@ -453,7 +379,7 @@ internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeRe
 
         val selectedOccurrences = plan.selectedOccurrences
         if (selectedOccurrences.size > request.maxReplaceCount) {
-            return@callToolWithProject CallToolResult(
+            return CallToolResult(
                 content = listOf(
                     TextContent(
                         text = "Selected occurrence count ${selectedOccurrences.size} exceeds maxReplaceCount ${request.maxReplaceCount}.",
@@ -479,7 +405,7 @@ internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeRe
                 canceled = plan.execution.canceled,
                 diagnostics = plan.execution.diagnostics,
             )
-            return@callToolWithProject CallToolResult(
+            return CallToolResult(
                 content = listOf(TextContent(text = toolArgsJson.encodeToString(emptyResult))),
             )
         }
@@ -532,8 +458,33 @@ internal suspend fun ClientConnection.scopeReplaceTextApplyHandler(args: ScopeRe
             canceled = plan.execution.canceled,
             diagnostics = plan.execution.diagnostics,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
+}
+
+// ── Shared helper for search tools ──────────────────────────────
+
+private suspend fun scopeSearchAndFormat(
+    request: ScopeTextSearchRequestDto,
+    project: com.intellij.openapi.project.Project,
+): CallToolResult {
+    val execution = executeSearch(project, request)
+    val result = ScopeTextSearchResultDto(
+        scopeDisplayName = execution.scopeDisplayName,
+        scopeShape = execution.scopeShape,
+        mode = request.mode,
+        query = request.query,
+        caseSensitive = request.caseSensitive,
+        wholeWordsOnly = request.wholeWordsOnly,
+        searchContext = request.searchContext,
+        fileMask = request.fileMask,
+        occurrences = execution.occurrences.map { it.dto },
+        probablyHasMoreMatchingEntries = execution.probablyHasMoreMatchingEntries,
+        timedOut = execution.timedOut,
+        canceled = execution.canceled,
+        diagnostics = execution.diagnostics,
+    )
+    return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -603,7 +554,7 @@ private suspend fun executeSearch(
     coroutineScope {
         val progressReporter = launch {
             while (isActive && !finished.get()) {
-                delay(800)
+                delay(800.milliseconds)
                 reportActivity(
                     Bundle.message(
                         "tool.activity.scope.text.search.progress",

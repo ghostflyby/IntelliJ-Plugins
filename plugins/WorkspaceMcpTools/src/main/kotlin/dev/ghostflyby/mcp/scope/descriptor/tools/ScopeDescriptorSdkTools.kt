@@ -8,11 +8,10 @@ package dev.ghostflyby.mcp.scope.descriptor.tools
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
+import dev.ghostflyby.mcp.route.McpCallContext
+import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.callToolWithProject
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -42,105 +41,79 @@ internal data class ScopeSdkCatalogIntentResultDto(
 
 @Schema
 @Serializable
-internal data class ScopeListCatalogArgs(
-    @Description("Whether to include scopes that depend on current UI context.")
-    val includeInteractiveScopes: Boolean = true,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
 
-internal suspend fun ClientConnection.scopeListCatalogHandler(args: ScopeListCatalogArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        val result = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+
+internal class ScopeDescriptorTools {
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_list_catalog(
+        @Description("Whether to include scopes that depend on current UI context.")
+        includeInteractiveScopes: Boolean = true,
+    ): CallToolResult {
+        val project = call.project()
+        val result = ScopeCatalogService.getInstance(project).listCatalog(project, includeInteractiveScopes)
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeGetDefaultDescriptorArgs(
-    @Description("Preset scope to use.")
-    val preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeGetDefaultDescriptorHandler(args: ScopeGetDefaultDescriptorArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_get_default_descriptor(
+        @Description("Preset scope to use.")
+        preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
         val descriptor = buildPresetScopeDescriptor(
             project = project,
-            preset = args.preset,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            preset = preset,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
         val result = ScopeResolveResultDto(descriptor = descriptor)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeResolveStandardDescriptorArgs(
-    @Description("Standard scope id, for example 'Project Files' or 'All Places'.")
-    val standardScopeId: String,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeResolveStandardDescriptorHandler(args: ScopeResolveStandardDescriptorArgs, request: CallToolRequest): CallToolResult {
-    if (args.standardScopeId.isBlank()) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "standardScopeId must not be blank.")),
-            isError = true,
-        )
-    }
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_resolve_standard_descriptor(
+        @Description("Standard scope id, for example 'Project Files' or 'All Places'.")
+        standardScopeId: String,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (standardScopeId.isBlank()) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "standardScopeId must not be blank.")),
+                isError = true,
+            )
+        }
+        val project = call.project()
         val descriptor = buildStandardScopeDescriptor(
             project = project,
-            standardScopeId = args.standardScopeId,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            standardScopeId = standardScopeId,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
         val result = ScopeResolveResultDto(descriptor = descriptor)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeCatalogFindByIntentArgs(
-    @Description("Selection intent for reducing catalog candidates.")
-    val intent: ScopeSdkCatalogIntent,
-    @Description("Maximum number of catalog items to return.")
-    val maxResults: Int = 20,
-    @Description("Whether to include scopes that depend on current UI context.")
-    val includeInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeCatalogFindByIntentHandler(args: ScopeCatalogFindByIntentArgs, request: CallToolRequest): CallToolResult {
-    if (args.maxResults < 1) {
-        return CallToolResult(
-            content = listOf(TextContent(text = "maxResults must be >= 1.")),
-            isError = true,
-        )
-    }
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        val catalog = ScopeCatalogService.getInstance(project).listCatalog(project, args.includeInteractiveScopes)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_catalog_find_by_intent(
+        @Description("Selection intent for reducing catalog candidates.")
+        intent: ScopeSdkCatalogIntent,
+        @Description("Maximum number of catalog items to return.")
+        maxResults: Int = 20,
+        @Description("Whether to include scopes that depend on current UI context.")
+        includeInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        if (maxResults < 1) {
+            return CallToolResult(
+                content = listOf(TextContent(text = "maxResults must be >= 1.")),
+                isError = true,
+            )
+        }
+        val project = call.project()
+        val catalog = ScopeCatalogService.getInstance(project).listCatalog(project, includeInteractiveScopes)
         val candidates = catalog.items.filter { item ->
             val serializationId = item.serializationId
-            when (args.intent) {
+            when (intent) {
                 ScopeSdkCatalogIntent.PROJECT_ONLY -> serializationId == "Project Files" ||
                         serializationId == "Project Production Files" ||
                         serializationId == "Project Test Files" ||
@@ -163,200 +136,155 @@ internal suspend fun ClientConnection.scopeCatalogFindByIntentHandler(args: Scop
                 { it.displayName.lowercase() },
             ),
         )
-        val truncated = sorted.size > args.maxResults
-        val selected = sorted.take(args.maxResults)
+        val truncated = sorted.size > maxResults
+        val selected = sorted.take(maxResults)
         val recommended = selected.firstOrNull()?.scopeRefId
         val diagnostics = buildList {
             addAll(catalog.diagnostics)
             if (selected.isEmpty()) {
-                add("No catalog items matched intent=${args.intent.name}.")
+                add("No catalog items matched intent=${intent.name}.")
             }
             if (truncated) {
-                add("Matched catalog items exceed maxResults=${args.maxResults}; result was truncated.")
+                add("Matched catalog items exceed maxResults=${maxResults}; result was truncated.")
             }
         }.distinct()
         val result = ScopeSdkCatalogIntentResultDto(
-            intent = args.intent,
+            intent = intent,
             recommendedScopeRefId = recommended,
             items = selected,
             diagnostics = diagnostics,
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeValidatePatternArgs(
-    @Description("Scope pattern text in IntelliJ PackageSet syntax.")
-    val patternText: String,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeValidatePatternHandler(args: ScopeValidatePatternArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        val result = ScopeResolverService.getInstance(project).validatePattern(args.patternText)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_validate_pattern(
+        @Description("Scope pattern text in IntelliJ PackageSet syntax.")
+        patternText: String,
+    ): CallToolResult {
+        val project = call.project()
+        val result = ScopeResolverService.getInstance(project).validatePattern(patternText)
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeResolveProgramArgs(
-    @Description("Compile request with atoms and RPN tokens.")
-    val request: ScopeResolveRequestDto,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeResolveProgramHandler(args: ScopeResolveProgramArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
-        val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, args.request)
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_resolve_program(
+        @Description("Compile request with atoms and RPN tokens.")
+        request: ScopeResolveRequestDto,
+    ): CallToolResult {
+        val project = call.project()
+        val descriptor = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
         val result = ScopeResolveResultDto(descriptor = descriptor)
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeNormalizeDescriptorArgs(
-    @Description("Existing scope descriptor to normalize.")
-    val descriptor: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeNormalizeDescriptorHandler(args: ScopeNormalizeDescriptorArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_normalize_program_descriptor(
+        @Description("Existing scope descriptor to normalize.")
+        descriptor: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
         val request = ScopeResolveRequestDto(
-            atoms = args.descriptor.atoms,
-            tokens = args.descriptor.tokens,
+            atoms = descriptor.atoms,
+            tokens = descriptor.tokens,
             strict = true,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
             nonStrictDefaultFailureMode = ScopeAtomFailureMode.EMPTY_SCOPE,
         )
         val normalized = ScopeResolverService.getInstance(project).compileProgramDescriptor(project, request)
         val result = ScopeDescribeProgramResultDto(
             descriptor = normalized.copy(
-                diagnostics = (args.descriptor.diagnostics + normalized.diagnostics).distinct(),
+                diagnostics = (descriptor.diagnostics + normalized.diagnostics).distinct(),
             ),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeContainsFileArgs(
-    @Description("VFS URL of the file to check.")
-    val fileUrl: String,
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeContainsFileHandler(args: ScopeContainsFileArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_contains_file(
+        @Description("VFS URL of the file to check.")
+        fileUrl: String,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
         val resolver = ScopeResolverService.getInstance(project)
         val resolved = resolver.resolveDescriptor(
             project = project,
-            descriptor = args.scope,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-        val file = findFileByUrlWithRefresh(args.fileUrl)
+        val file = findFileByUrlWithRefresh(fileUrl)
         if (file == null) {
-            return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(text = "File URL '${args.fileUrl}' not found.")),
+            return CallToolResult(
+                content = listOf(TextContent(text = "File URL '$fileUrl' not found.")),
                 isError = true,
             )
         }
         if (file.isDirectory) {
-            return@callToolWithProject CallToolResult(
-                content = listOf(TextContent(text = "URL '${args.fileUrl}' points to a directory, not a file.")),
+            return CallToolResult(
+                content = listOf(TextContent(text = "URL '$fileUrl' points to a directory, not a file.")),
                 isError = true,
             )
         }
         val matches = readAction { resolved.scope.contains(file) }
         val result = ScopeContainsFileResultDto(
-            fileUrl = args.fileUrl,
+            fileUrl = fileUrl,
             matches = matches,
             scopeDisplayName = resolved.displayName,
             scopeShape = resolved.scopeShape,
-            diagnostics = (args.scope.diagnostics + resolved.diagnostics).distinct(),
+            diagnostics = (scope.diagnostics + resolved.diagnostics).distinct(),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
-}
 
-@Schema
-@Serializable
-internal data class ScopeFilterFilesArgs(
-    @Description("Input file URLs to test against the scope.")
-    val fileUrls: List<String>,
-    @Description("Scope program descriptor.")
-    val `scope`: ScopeProgramDescriptorDto,
-    @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
-    val allowUiInteractiveScopes: Boolean = false,
-    override val projectKey: String? = null,
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.scopeFilterFilesHandler(args: ScopeFilterFilesArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        projectArgs = args,
-    ) { project ->
+    @Schema
+    internal suspend fun McpCallContext<CallToolRequest>.scope_filter_files(
+        @Description("Input file URLs to test against the scope.")
+        fileUrls: List<String>,
+        @Description("Scope program descriptor.")
+        scope: ScopeProgramDescriptorDto,
+        @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
+        allowUiInteractiveScopes: Boolean = false,
+    ): CallToolResult {
+        val project = call.project()
         val resolver = ScopeResolverService.getInstance(project)
         val resolved = resolver.resolveDescriptor(
             project = project,
-            descriptor = args.scope,
-            allowUiInteractiveScopes = args.allowUiInteractiveScopes,
+            descriptor = scope,
+            allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-
         val diagnostics = mutableListOf<String>()
         val matched = mutableListOf<String>()
         val excluded = mutableListOf<String>()
         val missing = mutableListOf<String>()
-
-        args.fileUrls.forEach { url ->
+        fileUrls.forEach { url ->
             val file = findFileByUrlWithRefresh(url)
             when {
                 file == null -> {
                     missing += url
                     diagnostics += "File URL '$url' not found."
                 }
-
                 file.isDirectory -> {
                     missing += url
                     diagnostics += "URL '$url' points to a directory and was skipped."
                 }
-
                 readAction { resolved.scope.contains(file) } -> matched += url
                 else -> excluded += url
             }
         }
-
         val result = ScopeFilterFilesResultDto(
             scopeDisplayName = resolved.displayName,
             scopeShape = resolved.scopeShape,
             matchedFileUrls = matched,
             excludedFileUrls = excluded,
             missingFileUrls = missing,
-            diagnostics = (args.scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
+            diagnostics = (scope.diagnostics + resolved.diagnostics + diagnostics).distinct(),
         )
-        CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
+        return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
 }

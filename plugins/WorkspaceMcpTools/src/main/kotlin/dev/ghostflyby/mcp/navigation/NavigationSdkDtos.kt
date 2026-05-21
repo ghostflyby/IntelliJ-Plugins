@@ -121,17 +121,6 @@ internal data class NavigationSymbolInfoPosition(
 
 @Schema
 @Serializable
-internal data class NavigationSymbolInfoAutoPositionInput(
-    @Description("1-based line number (omit when using offset).")
-    val row: Int? = null,
-    @Description("1-based column number (omit when using offset).")
-    val column: Int? = null,
-    @Description("0-based source offset (omit when using row+column).")
-    val offset: Int? = null,
-)
-
-@Schema
-@Serializable
 internal data class NavigationSymbolInfoResolvedResult(
     @Description("Documentation text, may be empty.")
     val documentation: String,

@@ -13,21 +13,9 @@ import dev.ghostflyby.mcp.route.ResourceSegment
 import dev.ghostflyby.mcp.route.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.route.ResourceSegmentCollector
 import dev.ghostflyby.mcp.sdk.tools.reflectTools
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
-import io.modelcontextprotocol.kotlin.sdk.types.ToolSchema
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.serializer
 
 internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
     create("dev.ghostflyby.mcp.workspace.workspaceFeature")
@@ -46,39 +34,6 @@ internal class WorkspaceMcpFeatureRegistrationContext(
 ) {
     private val trackedTools = mutableSetOf<String>()
     internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
-
-    inline fun <reified T : Any> registerTool(
-        name: String,
-        description: String,
-        schema: JsonObject = JsonObject(emptyMap()),
-        noinline handler: suspend ClientConnection.(T, CallToolRequest) -> CallToolResult,
-    ) {
-        server.addTool(
-            name = name,
-            description = description,
-            inputSchema = ToolSchema(
-                properties = schema["properties"] as? JsonObject,
-                required = (schema["required"] as? JsonArray)?.map { it.jsonPrimitive.content },
-            ),
-        ) { request ->
-            val jsonArgs: JsonObject = request.params.arguments ?: buildJsonObject { }
-            val decoded: T = try {
-                toolArgsJson.decodeFromJsonElement(serializer<T>(), jsonArgs)
-            } catch (e: SerializationException) {
-                return@addTool CallToolResult(
-                    content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
-                    isError = true,
-                )
-            } catch (e: IllegalArgumentException) {
-                return@addTool CallToolResult(
-                    content = listOf(TextContent(text = "Invalid arguments for $name: ${e.message}")),
-                    isError = true,
-                )
-            }
-            this.handler(decoded, request)
-        }
-        trackedTools.add(name)
-    }
 
     /**
      * Register a tool class via reflection.
