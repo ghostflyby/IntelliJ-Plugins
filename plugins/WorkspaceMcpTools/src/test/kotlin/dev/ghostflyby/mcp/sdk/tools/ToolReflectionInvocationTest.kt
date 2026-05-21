@@ -53,6 +53,14 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
+    fun `methodhandle handler factory accepts only invocation plan`() {
+        assertEquals(
+            ToolInvocationPlan::class,
+            ::buildMethodHandleHandler.valueParameters.single().type.classifier,
+        )
+    }
+
+    @Test
     fun `non-suspend invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NonSuspendTool::class,
@@ -251,14 +259,7 @@ internal class ToolReflectionInvocationTest {
             functionName = functionName,
             arguments = arguments,
             handlerFactory = { instance, func, _ ->
-                buildMethodHandleHandler(
-                    instance = instance,
-                    func = func,
-                    info = ToolMethodInfo(
-                        name = func.name,
-                        paramClasses = func.valueParameters.map { it.type },
-                    ),
-                )
+                buildMethodHandleHandler(compileToolInvocationPlan(instance, func))
             },
         )
     }
