@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.document.tools
+package dev.ghostflyby.mcp.filecontent.tools
 
-import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
@@ -17,14 +16,7 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
-import dev.ghostflyby.mcp.document.resources.validateDocumentRange
-import dev.ghostflyby.mcp.sdk.callToolWithProject
 import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
@@ -138,110 +130,6 @@ internal data class DocumentSdkSetTextArgs(
     @Description("Absolute project base path for project-scoped resolution (optional).")
     override val projectPath: String? = null,
 ) : WorkspaceMcpProjectToolArguments
-
-internal suspend fun ClientConnection.documentIsWritableHandler(args: DocumentSdkUrlArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (_, document) = resolveTextDocumentForTool(args.url)
-        val writable = readAction { document.isWritable }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(DocumentSdkWritableResult(writable = writable)))),
-        )
-    }
-}
-
-internal suspend fun ClientConnection.documentGetModificationStampHandler(args: DocumentSdkUrlArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (_, document) = resolveTextDocumentForTool(args.url)
-        val stamp = readAction { document.modificationStamp }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(DocumentSdkModificationStampResult(modificationStamp = stamp)))),
-        )
-    }
-}
-
-internal suspend fun ClientConnection.documentInsertStringHandler(args: DocumentSdkInsertArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (file, document) = resolveTextDocumentForTool(args.url)
-        val textLength = readAction { document.textLength }
-        validateToolRange(document, args.offset, args.offset) // validate single offset
-        ensureToolWritable(file, document, args.url)
-        backgroundWriteAction {
-            document.insertString(args.offset, args.text)
-            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
-        }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
-        )
-    }
-}
-
-internal suspend fun ClientConnection.documentDeleteStringHandler(args: DocumentSdkDeleteArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (file, document) = resolveTextDocumentForTool(args.url)
-        validateToolRange(document, args.startOffset, args.endOffset)
-        ensureToolWritable(file, document, args.url)
-        backgroundWriteAction {
-            document.deleteString(args.startOffset, args.endOffset)
-            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
-        }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
-        )
-    }
-}
-
-internal suspend fun ClientConnection.documentReplaceStringHandler(args: DocumentSdkReplaceArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (file, document) = resolveTextDocumentForTool(args.url)
-        validateToolRange(document, args.startOffset, args.endOffset)
-        ensureToolWritable(file, document, args.url)
-        backgroundWriteAction {
-            document.replaceString(args.startOffset, args.endOffset, args.text)
-            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
-        }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
-        )
-    }
-}
-
-internal suspend fun ClientConnection.documentSetTextHandler(args: DocumentSdkSetTextArgs, request: CallToolRequest): CallToolResult {
-    return callToolWithProject(
-        sessionId = this.sessionId,
-        projectArgs = args,
-        vfsUrl = args.url,
-    ) { project ->
-        val (file, document) = resolveTextDocumentForTool(args.url)
-        ensureToolWritable(file, document, args.url)
-        backgroundWriteAction {
-            document.setText(args.text)
-            commitToolAndMaybeSave(project, document, args.saveAfterWrite)
-        }
-        CallToolResult(
-            content = listOf(TextContent(text = toolArgsJson.encodeToString(snapshotToolWriteResult(document)))),
-        )
-    }
-}
 
 internal suspend fun resolveTextDocumentForTool(url: String): Pair<VirtualFile, Document> = readAction {
     val vfsManager = service<VirtualFileManager>()
