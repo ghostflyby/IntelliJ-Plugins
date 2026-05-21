@@ -36,6 +36,11 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         val projectAnchor = CoreResourceFeature.PROJECT_ROUTE
+        FileContentInvalidationListener(
+            projectResolver = projectResolver,
+            invalidationSink = invalidationSink,
+            scope = featureScope,
+        ).install()
 
         segments {
             // -- project-independent raw VFS (read only) --

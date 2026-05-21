@@ -20,6 +20,7 @@ internal class WorkspaceMcpFeatureCoordinator(
     private val projectResolver: WorkspaceProjectResolver,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
+    private val invalidationSink: WorkspaceMcpInvalidationSink,
 ) {
     private val logger: Logger = logger<WorkspaceMcpFeatureCoordinator>()
     private val lock = Any()
@@ -45,6 +46,7 @@ internal class WorkspaceMcpFeatureCoordinator(
             server = activeServer,
             featureScope = featureScope,
             featureName = feature.featureName,
+            invalidationSink = invalidationSink,
         )
         val registration = try {
             with(feature) { context.register() }

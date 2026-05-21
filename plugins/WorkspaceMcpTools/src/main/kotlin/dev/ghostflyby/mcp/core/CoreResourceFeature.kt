@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.core
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_ROUTE
-import dev.ghostflyby.mcp.resource.APPLICATION_JSON_MIME_TYPE
 import dev.ghostflyby.mcp.route.ResourceListDecision
 import dev.ghostflyby.mcp.route.visibleProjects
 import dev.ghostflyby.mcp.route.RouteAnchor
@@ -32,6 +31,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
     companion object {
         /** Route anchor for project-scoped resource sub-trees. */
         val PROJECT_ROUTE = RouteAnchor("projectKey")
+        private const val JSON_MIME_TYPE = "application/json"
     }
 
     private val json = Json { prettyPrint = true; encodeDefaults = true }
@@ -49,7 +49,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                         contents = listOf(
                             TextResourceContents(
                                 uri = "",
-                                mimeType = APPLICATION_JSON_MIME_TYPE,
+                                mimeType = JSON_MIME_TYPE,
                                 text = json.encodeToString(info),
                             ),
                         ),
@@ -67,7 +67,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                                 uri = "ij-workspace://${call.instanceKey}/projects/${project.projectKey}",
                                 name = project.projectKey,
                                 description = project.basePath ?: project.name,
-                                mimeType = APPLICATION_JSON_MIME_TYPE,
+                                mimeType = JSON_MIME_TYPE,
                                 title = project.name,
                             )
                         },
@@ -93,7 +93,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                         contents = listOf(
                             TextResourceContents(
                                 uri = "",
-                                mimeType = APPLICATION_JSON_MIME_TYPE,
+                                mimeType = JSON_MIME_TYPE,
                                 text = json.encodeToString(info),
                             ),
                         ),

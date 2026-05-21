@@ -6,25 +6,12 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.editor.Document
-import com.intellij.openapi.editor.EditorFactory
-import com.intellij.openapi.editor.event.DocumentEvent
-import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
-import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.openapi.vfs.newvfs.BulkFileListener
-import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import com.intellij.util.asDisposable
 import dev.ghostflyby.mcp.PluginInfo
-import dev.ghostflyby.mcp.resource.tryDecodeWorkspaceResourceUri
-import dev.ghostflyby.mcp.resource.workspaceDocumentUri
-import dev.ghostflyby.mcp.resource.workspaceVfsUri
 import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import io.ktor.server.cio.*
@@ -35,39 +22,40 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
-import kotlinx.coroutines.*
-import java.util.concurrent.atomic.AtomicReference
-import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
     private val scope: CoroutineScope,
 ) {
     private val logger = logger<WorkspaceMcpSdkServerService>()
+
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val sessionState = WorkspaceMcpSessionState { server }
     private val catalog = WorkspaceMcpResourceCatalog(projectResolver)
+    private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
+        sessionState = sessionState,
+        serverSupplier = { server },
+        scope = scope,
+    )
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
+        invalidationSink = subscriptionService,
     )
 
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
-    private val listChangedRef = AtomicReference<Set<String>>(emptySet())
-    private var listChangedFlushJob: Job? = null
-    private val pendingUpdateRef = AtomicReference<Set<String>>(emptySet())
-    private var resourceUpdateFlushJob: Job? = null
-
     @Volatile
     private var server: Server? = null
 
     init {
-        subscribeToResourceUpdateEvents()
         subscribeToFeatureEvents()
         scope.launch {
             val createdServer = createServer()
@@ -123,7 +111,7 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.register(activeServer, extension)
-                        scheduleResourceListChanged()
+                        subscriptionService.invalidateResourceList()
                     }
                 }
 
@@ -131,39 +119,8 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.unregister(activeServer, extension.featureName)
-                        scheduleResourceListChanged()
+                        subscriptionService.invalidateResourceList()
                     }
-                }
-            },
-        )
-    }
-
-    private fun subscribeToResourceUpdateEvents() {
-        EditorFactory.getInstance().eventMulticaster.addDocumentListener(
-            object : DocumentListener {
-                override fun documentChanged(event: DocumentEvent) {
-                    scheduleDocumentResourceUpdate(event.document)
-                }
-            },
-            scope.asDisposable(),
-        )
-
-        val connection = ApplicationManager.getApplication().messageBus.connect(scope)
-        connection.subscribe(
-            VirtualFileManager.VFS_CHANGES,
-            object : BulkFileListener {
-                override fun after(events: List<VFileEvent>) {
-                    events.mapNotNull { it.file?.url }
-                        .flatMap { url ->
-                            projectResolver.openProjects().mapNotNull { project ->
-                                val bp = project.basePath
-                                if (bp != null && url.startsWith("file://$bp")) {
-                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
-                                } else if (url.startsWith("file://") && projectResolver.openProjects().size == 1) {
-                                    workspaceVfsUri(workspaceInstanceKey(), workspaceProjectKey(project), url)
-                                } else null
-                            }
-                        }.distinct().forEach(::scheduleResourceUpdated)
                 }
             },
         )
@@ -179,10 +136,10 @@ internal class WorkspaceMcpSdkServerService(
             sessionState.rememberSubscriptionHandler(session.sessionId)
         if (!shouldInstall) return
         session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
-            recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
+            subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
         session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
-            removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
+            subscriptionService.removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
         }
         session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
             catalog.listResources(activeServer.clientConnection(session.sessionId), request)
@@ -194,120 +151,13 @@ internal class WorkspaceMcpSdkServerService(
             Method.Defined.NotificationsRootsListChanged,
         ) {
             clearSessionRoots(session.sessionId)
-            scheduleSessionListChanged(session.sessionId)
+            subscriptionService.invalidateResourceList(ResourceListSelector.Session(session.sessionId))
             CompletableDeferred(Unit)
         }
-    }
-
-    private fun recordResourceSubscription(sessionId: String, resourceUri: String) {
-        if (tryDecodeWorkspaceResourceUri(resourceUri) == null) return
-        sessionState.recordResourceSubscription(sessionId, resourceUri)
-    }
-
-    private fun removeResourceSubscription(sessionId: String, resourceUri: String) {
-        sessionState.removeResourceSubscription(sessionId, resourceUri)
-    }
-
-    private fun scheduleDocumentResourceUpdate(document: Document) {
-        val file = FileDocumentManager.getInstance().getFile(document) ?: return
-        projectResolver.openProjects().forEach { project ->
-            val bp = project.basePath
-            if (bp != null && file.path.startsWith(bp)) {
-                val instanceKey = workspaceInstanceKey()
-                val projectKey = workspaceProjectKey(project)
-                val relativePath = file.path.removePrefix(bp).trimStart('/')
-                scheduleResourceUpdated(workspaceDocumentUri(instanceKey, projectKey, relativePath))
-            }
-        }
-    }
-
-    private fun scheduleResourceUpdated(resourceUri: String) {
-        while (true) {
-            val current = pendingUpdateRef.get()
-            if (pendingUpdateRef.compareAndSet(current, current + resourceUri)) break
-        }
-        if (resourceUpdateFlushJob != null) return
-        resourceUpdateFlushJob = scope.launch {
-            delay(RESOURCE_UPDATE_COALESCE_MILLIS.milliseconds)
-            flushPendingResourceUpdates()
-        }
-    }
-
-    internal fun scheduleResourceListChanged() {
-        scheduleAllSessionsListChanged()
-    }
-
-    private fun scheduleSessionListChanged(sessionId: String) {
-        while (true) {
-            val current = listChangedRef.get()
-            if (listChangedRef.compareAndSet(current, current + sessionId)) break
-        }
-        scheduleListChangedFlush()
-    }
-
-    private fun scheduleAllSessionsListChanged() {
-        val activeServer = server
-        if (activeServer != null) {
-            val keys = activeServer.sessions.keys
-            while (true) {
-                val current = listChangedRef.get()
-                if (listChangedRef.compareAndSet(current, current + keys)) break
-            }
-        }
-        scheduleListChangedFlush()
-    }
-
-    private fun scheduleListChangedFlush() {
-        if (listChangedFlushJob != null) return
-        listChangedFlushJob = scope.launch {
-            delay(RESOURCE_LIST_CHANGED_COALESCE_MILLIS.milliseconds)
-            flushListChanged()
-        }
-    }
-
-    private suspend fun flushListChanged() {
-        val targetSessionIds = listChangedRef.getAndSet(emptySet())
-        listChangedFlushJob = null
-        val activeServer = server ?: return
-        val aliveIds = activeServer.sessions.keys
-        targetSessionIds.intersect(aliveIds).forEach { sessionId ->
-            runCatching { activeServer.sendResourceListChanged(sessionId) }
-                .onFailure { error ->
-                    logger.warn("Failed to send resource list changed to session $sessionId", error)
-                }
-        }
-    }
-
-    private suspend fun flushPendingResourceUpdates() {
-        val resourceUris = pendingUpdateRef.getAndSet(emptySet()).toList()
-        resourceUpdateFlushJob = null
-        val activeServer = server ?: return
-        resourceUris.forEach { uri -> sendResourceUpdated(activeServer, uri) }
-    }
-
-    private suspend fun sendResourceUpdated(activeServer: Server, resourceUri: String) {
-        val sessionIds = subscribedSessionIds(activeServer, resourceUri)
-        if (sessionIds.isEmpty()) return
-        val notification = ResourceUpdatedNotification(ResourceUpdatedNotificationParams(uri = resourceUri))
-        sessionIds.forEach { sessionId ->
-            runCatching { activeServer.sendResourceUpdated(sessionId, notification) }
-                .onFailure { error ->
-                    logger.warn(
-                        "Failed to send Workspace MCP resource update for $resourceUri to session $sessionId",
-                        error,
-                    )
-                }
-        }
-    }
-
-    private fun subscribedSessionIds(activeServer: Server, resourceUri: String): List<String> {
-        return sessionState.subscribedSessionIds(activeServer.sessions.keys, resourceUri)
     }
 
     private companion object {
         private const val LOOPBACK_HOST = "127.0.0.1"
         private const val MCP_ENDPOINT_PATH = "/mcp"
-        private const val RESOURCE_UPDATE_COALESCE_MILLIS = 100L
-        private const val RESOURCE_LIST_CHANGED_COALESCE_MILLIS = 100L
     }
 }

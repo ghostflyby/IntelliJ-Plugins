@@ -15,10 +15,17 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.resource.validateProjectRelativePath
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
+
+internal fun validateProjectRelativePath(relativePath: String) {
+    require(relativePath.isNotBlank()) { "relativePath must not be blank." }
+    require(!relativePath.startsWith('/')) { "relativePath must not be absolute: $relativePath" }
+    require(relativePath.split('/').none { it == ".." }) {
+        "relativePath must not contain '..' segments: $relativePath"
+    }
+}
 
 internal class ContentReadException(message: String) : RuntimeException(message)
 

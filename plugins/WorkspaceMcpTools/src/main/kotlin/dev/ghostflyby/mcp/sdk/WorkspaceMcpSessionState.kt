@@ -67,5 +67,30 @@ internal class WorkspaceMcpSessionState(
             resourceSubscriptionsBySession.filterValues { resourceUri in it }.keys.toList()
         }
     }
-}
 
+    fun sessionIdsForResourceListSelector(
+        activeSessionIds: Set<String>,
+        selector: ResourceListSelector,
+    ): Set<String> {
+        return synchronized(subscriptionLock) {
+            resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
+            subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
+            when (selector) {
+                ResourceListSelector.AllSessions -> activeSessionIds
+                is ResourceListSelector.Session -> setOf(selector.sessionId)
+                is ResourceListSelector.Uri -> sessionsSubscribedTo(activeSessionIds, selector.uri)
+                is ResourceListSelector.UriPrefix -> resourceSubscriptionsBySession
+                    .filterValues { subscriptions -> subscriptions.any { it.startsWith(selector.uriPrefix) } }
+                    .keys
+                    .filterTo(linkedSetOf()) { it in activeSessionIds }
+            }
+        }
+    }
+
+    private fun sessionsSubscribedTo(activeSessionIds: Set<String>, resourceUri: String): Set<String> {
+        return resourceSubscriptionsBySession
+            .filterValues { resourceUri in it }
+            .keys
+            .filterTo(linkedSetOf()) { it in activeSessionIds }
+    }
+}

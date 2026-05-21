@@ -42,6 +42,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,
+    val invalidationSink: WorkspaceMcpInvalidationSink,
 ) {
     private val trackedTools = mutableSetOf<String>()
     internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
