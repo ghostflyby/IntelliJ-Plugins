@@ -163,6 +163,242 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
+    fun `default params invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = DefaultParamTool::class,
+            functionName = "doDefault",
+            arguments = buildJsonObject {
+                put("prefix", "scan")
+                put("suffix", "done")
+            },
+        )
+
+        assertText(result, "scan:7:done:true")
+    }
+
+    @Test
+    fun `methodhandle default params invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = DefaultParamTool::class,
+            functionName = "doDefault",
+            arguments = buildJsonObject {
+                put("prefix", "scan")
+                put("suffix", "done")
+            },
+        )
+
+        assertText(result, "scan:7:done:true")
+    }
+
+    @Test
+    fun `value class invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = ValueClassTool::class,
+            functionName = "doValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `methodhandle value class invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = ValueClassTool::class,
+            functionName = "doValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `nullable value class invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullableValueClassTool::class,
+            functionName = "doNullableValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `methodhandle nullable value class invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullableValueClassTool::class,
+            functionName = "doNullableValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `nullable value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullableValueClassTool::class,
+            functionName = "doNullableValue",
+            arguments = buildJsonObject {
+                put("path", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
+    fun `methodhandle nullable value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullableValueClassTool::class,
+            functionName = "doNullableValue",
+            arguments = buildJsonObject {
+                put("path", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
+    fun `primitive value class invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = PrimitiveValueClassTool::class,
+            functionName = "doPrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", 42)
+            },
+        )
+
+        assertText(result, "42")
+    }
+
+    @Test
+    fun `methodhandle primitive value class invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = PrimitiveValueClassTool::class,
+            functionName = "doPrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", 42)
+            },
+        )
+
+        assertText(result, "42")
+    }
+
+    @Test
+    fun `nullable primitive value class invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullablePrimitiveValueClassTool::class,
+            functionName = "doNullablePrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", 42)
+            },
+        )
+
+        assertText(result, "42")
+    }
+
+    @Test
+    fun `methodhandle nullable primitive value class invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullablePrimitiveValueClassTool::class,
+            functionName = "doNullablePrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", 42)
+            },
+        )
+
+        assertText(result, "42")
+    }
+
+    @Test
+    fun `nullable primitive value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullablePrimitiveValueClassTool::class,
+            functionName = "doNullablePrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
+    fun `methodhandle nullable primitive value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullablePrimitiveValueClassTool::class,
+            functionName = "doNullablePrimitiveValue",
+            arguments = buildJsonObject {
+                put("id", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
+    fun `nullable underlying value class invocation`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullableUnderlyingValueClassTool::class,
+            functionName = "doNullableUnderlyingValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `methodhandle nullable underlying value class invocation`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullableUnderlyingValueClassTool::class,
+            functionName = "doNullableUnderlyingValue",
+            arguments = buildJsonObject {
+                put("path", "src/Main.kt")
+            },
+        )
+
+        assertText(result, "src/Main.kt")
+    }
+
+    @Test
+    fun `nullable underlying value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedTool(
+            toolClass = NullableUnderlyingValueClassTool::class,
+            functionName = "doNullableUnderlyingValue",
+            arguments = buildJsonObject {
+                put("path", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
+    fun `methodhandle nullable underlying value class accepts explicit null`() = runBlocking {
+        val result = callAcceptedToolWithMethodHandle(
+            toolClass = NullableUnderlyingValueClassTool::class,
+            functionName = "doNullableUnderlyingValue",
+            arguments = buildJsonObject {
+                put("path", null)
+            },
+        )
+
+        assertText(result, "null")
+    }
+
+    @Test
     fun `valid tool reports missing argument`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ValidTool::class,

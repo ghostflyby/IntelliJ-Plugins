@@ -12,6 +12,10 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.schema.Schema
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,6 +65,84 @@ internal class ToolReflectionTest {
 
     @Test fun `zero param accepted`() {
         assertTrue(reflectFirst(ZeroParamTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `default params accepted`() {
+        assertTrue(reflectFirst(DefaultParamTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `default params are not required in tool schema`() {
+        val r = reflectFirst(DefaultParamTool::class) as ToolReflectionResult.Accepted
+        assertEquals(listOf("prefix", "suffix"), r.tool.inputSchema.required)
+    }
+
+    @Test
+    fun `value class accepted`() {
+        assertTrue(reflectFirst(ValueClassTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `value class uses underlying property schema`() {
+        val r = reflectFirst(ValueClassTool::class) as ToolReflectionResult.Accepted
+        val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
+        assertEquals("string", pathSchema?.get("type")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `nullable value class accepted`() {
+        assertTrue(reflectFirst(NullableValueClassTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `nullable value class schema allows underlying value or null`() {
+        val r = reflectFirst(NullableValueClassTool::class) as ToolReflectionResult.Accepted
+        val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
+        assertEquals(listOf("string", "null"), pathSchema?.typeNames())
+    }
+
+    @Test
+    fun `primitive value class accepted`() {
+        assertTrue(reflectFirst(PrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `primitive value class uses underlying property schema`() {
+        val r = reflectFirst(PrimitiveValueClassTool::class) as ToolReflectionResult.Accepted
+        val idSchema = r.tool.inputSchema.properties?.get("id")?.jsonObject
+        assertEquals("integer", idSchema?.get("type")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun `nullable primitive value class accepted`() {
+        assertTrue(reflectFirst(NullablePrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `nullable primitive value class schema allows underlying value or null`() {
+        val r = reflectFirst(NullablePrimitiveValueClassTool::class) as ToolReflectionResult.Accepted
+        val idSchema = r.tool.inputSchema.properties?.get("id")?.jsonObject
+        assertEquals(listOf("integer", "null"), idSchema?.typeNames())
+    }
+
+    @Test
+    fun `nullable underlying value class accepted`() {
+        assertTrue(reflectFirst(NullableUnderlyingValueClassTool::class) is ToolReflectionResult.Accepted)
+    }
+
+    @Test
+    fun `nullable underlying value class schema allows underlying value or null`() {
+        val r = reflectFirst(NullableUnderlyingValueClassTool::class) as ToolReflectionResult.Accepted
+        val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
+        assertEquals(listOf("string", "null"), pathSchema?.typeNames())
+    }
+}
+
+private fun JsonObject.typeNames(): List<String> {
+    return when (val type = get("type")) {
+        is JsonArray -> type.map { it.jsonPrimitive.content }
+        else -> listOfNotNull(type?.jsonPrimitive?.content)
     }
 }
 
@@ -123,4 +205,57 @@ internal class ZeroParamTool {
     @Schema
     suspend fun McpCallContext<CallToolRequest>.doNothing(): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
+}
+
+internal class DefaultParamTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doDefault(
+        prefix: String,
+        limit: Int = 7,
+        suffix: String,
+        recursive: Boolean = true,
+    ): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = "$prefix:$limit:$suffix:$recursive")))
+}
+
+@JvmInline
+@Serializable
+internal value class ToolPath(val value: String)
+
+internal class ValueClassTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doValue(path: ToolPath): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = path.value)))
+}
+
+internal class NullableValueClassTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doNullableValue(path: ToolPath?): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = path?.value ?: "null")))
+}
+
+@JvmInline
+@Serializable
+internal value class ToolId(val value: Int)
+
+internal class PrimitiveValueClassTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doPrimitiveValue(id: ToolId): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = id.value.toString())))
+}
+
+internal class NullablePrimitiveValueClassTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doNullablePrimitiveValue(id: ToolId?): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = id?.value?.toString() ?: "null")))
+}
+
+@JvmInline
+@Serializable
+internal value class NullableInnerPath(val value: String?)
+
+internal class NullableUnderlyingValueClassTool {
+    @Schema
+    suspend fun McpCallContext<CallToolRequest>.doNullableUnderlyingValue(path: NullableInnerPath?): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = path?.value ?: "null")))
 }
