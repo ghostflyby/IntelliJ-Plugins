@@ -18,9 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
  * list requests by walking the immutable route snapshot and executing optional
  * per-segment list providers.
  */
-internal class WorkspaceMcpResourceCatalog(
-    private val projectResolver: WorkspaceProjectResolver,
-) {
+internal class WorkspaceMcpResourceCatalog {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
 
     fun updateSnapshot(snapshot: ResourceRouteSnapshot) {

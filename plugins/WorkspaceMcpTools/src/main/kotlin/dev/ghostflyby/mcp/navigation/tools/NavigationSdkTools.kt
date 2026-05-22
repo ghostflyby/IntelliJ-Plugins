@@ -47,7 +47,7 @@ internal class NavigationTools {
         column: Int,
     ): CallToolResult {
         reportActivity("navigation_get_symbol_info: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val result = resolveSymbolInfo(project, uri, row, column)
         return CallToolResult(content = listOf(TextContent(text = toolArgsJson.encodeToString(result))))
     }
@@ -58,7 +58,7 @@ internal class NavigationTools {
         offset: Int,
     ): CallToolResult {
         reportActivity("navigation_get_symbol_info_by_offset: $uri offset=$offset")
-        val project = project()
+        val project = call.project()
         val position = runNavigationRead(project) {
             resolvePositionFromOffset(project, uri, offset)
         }
@@ -83,7 +83,7 @@ internal class NavigationTools {
         offset: Int? = null,
     ): CallToolResult {
         reportActivity("navigation_get_symbol_info_auto_position: $uri")
-        val project = project()
+        val project = call.project()
         val input = NavigationInternalAutoPositionInput(row = row, column = column, offset = offset)
         val position = runNavigationRead(project) {
             resolveAutoPosition(project, uri, input)
@@ -109,7 +109,7 @@ internal class NavigationTools {
         column: Int,
     ): CallToolResult {
         reportActivity("navigation_get_symbol_info_quick: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val position = runNavigationRead(project) {
             ResolvedSourcePosition(row = row, column = column, offset = -1)
         }
@@ -138,7 +138,7 @@ internal class NavigationTools {
         continueOnError: Boolean = true,
     ): CallToolResult {
         reportActivity("navigation_get_symbol_info_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
-        val project = project()
+        val project = call.project()
         val items = mutableListOf<NavigationBatchSymbolInfoItem>()
         var successCount = 0
         var failureCount = 0
@@ -172,7 +172,7 @@ internal class NavigationTools {
         column: Int,
     ): CallToolResult {
         reportActivity("navigation_to_reference: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
             toNavigationResult(context.resolvedTarget, context.psiDocumentManager)
@@ -188,7 +188,7 @@ internal class NavigationTools {
         column: Int,
     ): CallToolResult {
         reportActivity("navigation_to_type_definition: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
             val typeTarget = findTypeDefinitionTarget(context.resolvedTarget)
@@ -208,7 +208,7 @@ internal class NavigationTools {
         fallbackToReferencesWhenEmpty: Boolean = false,
     ): CallToolResult {
         reportActivity("navigation_to_implementation: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -241,7 +241,7 @@ internal class NavigationTools {
         fallbackToReferencesWhenEmpty: Boolean = false,
     ): CallToolResult {
         reportActivity("navigation_find_overrides: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -274,7 +274,7 @@ internal class NavigationTools {
         fallbackToReferencesWhenEmpty: Boolean = false,
     ): CallToolResult {
         reportActivity("navigation_find_inheritors: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 20 else limit
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -307,7 +307,7 @@ internal class NavigationTools {
         limit: Int = 50,
     ): CallToolResult {
         reportActivity("navigation_find_references: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 50 else limit
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -327,7 +327,7 @@ internal class NavigationTools {
         limit: Int = 50,
     ): CallToolResult {
         reportActivity("navigation_get_callers: $uri:$row:$column")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 50 else limit
         val result = runNavigationRead(project) {
             val context = resolveReferenceContext(project, uri, row, column)
@@ -346,7 +346,7 @@ internal class NavigationTools {
         continueOnError: Boolean = true,
     ): CallToolResult {
         reportActivity("navigation_to_reference_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
-        val project = project()
+        val project = call.project()
         val items = mutableListOf<NavigationBatchSingleItem>()
         var successCount = 0
         var failureCount = 0
@@ -384,7 +384,7 @@ internal class NavigationTools {
         continueOnError: Boolean = true,
     ): CallToolResult {
         reportActivity("navigation_find_references_batch: ${inputs.size} inputs, continueOnError=$continueOnError")
-        val project = project()
+        val project = call.project()
         val effectiveLimit = if (limit < 1) 50 else limit
         val items = mutableListOf<NavigationBatchMultiItem>()
         var successCount = 0
@@ -432,8 +432,6 @@ private data class NavigationInternalAutoPositionInput(
 // Shared helpers — replicated from SymbolNavigationMcpTools internals
 // ---------------------------------------------------------------------------
 
-private const val DEFAULT_IMPLEMENTATION_LIMIT = 20
-private const val DEFAULT_REFERENCE_LIMIT = 50
 private const val TYPE_SCAN_MAX_DEPTH = 5
 private const val TYPE_SCAN_MAX_NODES = 512
 

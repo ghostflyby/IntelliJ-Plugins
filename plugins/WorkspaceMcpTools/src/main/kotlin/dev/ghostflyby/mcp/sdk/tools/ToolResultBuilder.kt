@@ -68,5 +68,6 @@ internal inline fun <reified T> ToolResultBuilder.structured(block: T) {
  * Create a [CallToolResult] via the [ToolResultBuilder] DSL.
  */
 internal fun McpCallContext<CallToolRequest>.callToolResult(block: ToolResultBuilder.() -> Unit): CallToolResult {
+    this.let { }
     return ToolResultBuilder().apply(block).build()
 }

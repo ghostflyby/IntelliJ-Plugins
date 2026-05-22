@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.route
 
-import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.collections.immutable.PersistentList
 import kotlinx.collections.immutable.PersistentMap
@@ -22,12 +20,6 @@ internal typealias TemplateResourceListProvider = ResourceListProvider<ListResou
 
 @JvmInline
 internal value class McpCallContext<R : Request>(val call: WorkspaceMcpCall<R>)
-
-// Forwarding extensions so DSL users see project/visibleProjects on McpCallContext directly
-internal suspend fun McpCallContext<*>.project(): Project = call.project()
-internal suspend fun McpCallContext<*>.project(resolver: WorkspaceProjectResolver): Project = call.project(resolver)
-internal suspend fun McpCallContext<*>.visibleProjects(): List<WorkspaceMcpListProject> = call.visibleProjects()
-internal suspend fun McpCallContext<*>.visibleProjects(resolver: WorkspaceProjectResolver): List<WorkspaceMcpListProject> = call.visibleProjects(resolver)
 
 internal data class ResourceListDecision<T>(
     val entries: List<T> = emptyList(),
@@ -66,8 +58,7 @@ internal data class ReadEntry(
     val description: String = "",
     val mimeType: String = "application/json",
     val resourceClassInfo: ResourceClassInfo? = null,
-) {
-}
+)
 
 // -- List specs --
 

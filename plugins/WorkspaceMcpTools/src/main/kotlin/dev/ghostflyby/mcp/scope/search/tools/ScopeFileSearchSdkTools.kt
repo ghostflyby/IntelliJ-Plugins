@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.scope.search.tools
 
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ContentIterator
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFile
@@ -318,8 +319,8 @@ internal class ScopeFileSearchTools {
 
     // ── Shared search logic ───────────────────────────────────────
 
-    private suspend fun McpCallContext<CallToolRequest>.runFileSearch(
-        project: com.intellij.openapi.project.Project,
+    private suspend fun runFileSearch(
+        project: Project,
         query: String,
         keywords: List<String>,
         scopeDescriptor: ScopeProgramDescriptorDto,
@@ -381,7 +382,7 @@ internal class ScopeFileSearchTools {
         coroutineScope {
             val progressJob = launch {
                 while (isActive && !finished.get()) {
-                    delay(800)
+                    delay(800.milliseconds)
                     reportActivity(
                         Bundle.message(
                             "tool.activity.scope.search.files.progress",
@@ -482,7 +483,7 @@ private fun buildGlobMatchers(
 }
 
 private suspend fun scanByTraversal(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     resolvedScope: com.intellij.psi.search.SearchScope,
     rootDirectory: VirtualFile?,
     mode: ScopeFileSearchMode,

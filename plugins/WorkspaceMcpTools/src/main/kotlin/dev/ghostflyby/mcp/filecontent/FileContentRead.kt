@@ -7,7 +7,6 @@
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.LanguageFileType
@@ -160,17 +159,6 @@ private fun filterAndSerialize(meta: FileMeta, fields: String): String {
         if (k in set) map[k] = v
     }
     return JSON.encodeToString(JsonObject.serializer(), buildJsonObject { map.forEach { (k, v) -> put(k, v) } })
-}
-
-// -- write --
-
-internal suspend fun writeContent(file: VirtualFile, text: String) {
-    val document = readAction {
-        FileDocumentManager.getInstance().getDocument(file) ?: contentFail("No editable document for: ${file.url}")
-    }
-    runWriteAction {
-        document.setText(text)
-    }
 }
 
 // -- private helpers --

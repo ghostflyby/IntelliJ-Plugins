@@ -145,7 +145,7 @@ internal fun interface ToolCallArgsBuilder {
 }
 
 internal data class ToolCallArgs(
-    val values: Array<Any?>,
+    @Suppress("ArrayInDataClass") val values: Array<Any?>,
     val argumentStart: Int,
     val maskStart: Int?,
 )
@@ -366,7 +366,7 @@ private fun toolFunctionMethodHandle(
 private fun defaultMethodFor(func: KFunction<*>): Method {
     val method = func.javaMethod
         ?: throw IllegalArgumentException("No Java method for ${func.name}")
-    val defaultMethodName = "${method.name}\$default"
+    val defaultMethodName = $$"$${method.name}$default"
     val expectedValueParameterCount = method.parameterCount + ((func.valueParameters.size + 31) / 32) + 2
     return method.declaringClass.declaredMethods.singleOrNull {
         it.name == defaultMethodName && it.parameterCount == expectedValueParameterCount

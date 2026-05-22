@@ -35,7 +35,7 @@ internal class WorkspaceMcpSdkServerService(
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val sessionState = WorkspaceMcpSessionState { server }
-    private val catalog = WorkspaceMcpResourceCatalog(projectResolver)
+    private val catalog = WorkspaceMcpResourceCatalog()
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
         sessionState = sessionState,
     )
@@ -71,6 +71,7 @@ internal class WorkspaceMcpSdkServerService(
                 embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
                     mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
                 }.startSuspend(wait = true)
+                @Suppress("HttpUrlsUsage")
                 logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
             } finally {
                 server = null
@@ -98,14 +99,6 @@ internal class WorkspaceMcpSdkServerService(
             onConnect { installWorkspaceSubscriptionHandlers() }
         }
         return server
-    }
-
-    internal suspend fun getSessionRoots(sessionId: String): List<String> {
-        return sessionState.getRoots(sessionId)
-    }
-
-    internal fun clearSessionRoots(sessionId: String) {
-        sessionState.clearRoots(sessionId)
     }
 
     private fun subscribeToFeatureEvents() {
@@ -156,7 +149,7 @@ internal class WorkspaceMcpSdkServerService(
         session.setNotificationHandler<RootsListChangedNotification>(
             Method.Defined.NotificationsRootsListChanged,
         ) {
-            clearSessionRoots(session.sessionId)
+            sessionState.clearRoots(session.sessionId)
             invalidationBus.invalidateResourceList(ResourceListSelector.Session(session.sessionId))
             CompletableDeferred(Unit)
         }
