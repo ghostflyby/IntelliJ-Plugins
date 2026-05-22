@@ -16,10 +16,18 @@ version = "1.0.4"
 
 
 dependencies {
-    api(libs.mcp.kotlin.sdk.server)
-    implementation(libs.ktor.server.cio)
+    api(libs.mcp.kotlin.sdk.server) {
+        exclude(group = "io.ktor")
+        exclude(group = "org.jetbrains.kotlinx")
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    api(libs.ktor.resources) {
+        isTransitive = false
+    }
     ksp(libs.kotlinx.schema.ksp)
-    implementation(libs.kotlinx.schema.annotations)
+    api(libs.kotlinx.schema.annotations) {
+        isTransitive = false
+    }
     implementation(project(":modules:intellij-shared"))
 }
 
