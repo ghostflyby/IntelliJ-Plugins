@@ -158,7 +158,6 @@ internal class WorkspaceMcpFeatureCoordinator(
                 WorkspaceResourceRouteContribution(
                     featureName = registration.featureName,
                     roots = registration.roots,
-                    pendingAnchors = registration.pendingAnchors,
                 )
             }
         }

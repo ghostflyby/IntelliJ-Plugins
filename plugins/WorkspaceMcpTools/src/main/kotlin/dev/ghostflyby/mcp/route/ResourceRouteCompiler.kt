@@ -7,43 +7,20 @@
 package dev.ghostflyby.mcp.route
 
 import kotlinx.collections.immutable.persistentHashMapOf
-import kotlinx.collections.immutable.persistentListOf
 
 internal object ResourceRouteCompiler {
     fun compile(registrations: Collection<WorkspaceResourceRouteContribution>): ResourceRouteSnapshot {
         val roots = linkedMapOf<String, ResourceSegment>()
-        val pendingAnchors = mutableListOf<PendingAnchor>()
 
         registrations.forEach { contribution ->
             contribution.roots.forEach { root ->
                 val clonedRoot = root.cloneWithoutAnchors()
                 if (clonedRoot.name in roots) {
                     val existing = roots[clonedRoot.name]!!
-                    existing.readEntries = existing.readEntries.addAll(clonedRoot.readEntries)
-                    if (clonedRoot.templateList != null && existing.templateList == null) {
-                        existing.templateList = clonedRoot.templateList
-                    }
+                    mergeSegment(existing, clonedRoot)
                 } else {
                     roots[clonedRoot.name] = clonedRoot
                 }
-            }
-            contribution.pendingAnchors.forEach { pendingAnchor ->
-                pendingAnchors += PendingAnchor(
-                    routeAnchor = pendingAnchor.routeAnchor,
-                    segments = pendingAnchor.segments.map { it.cloneWithoutAnchors() },
-                )
-            }
-        }
-
-        // Build route anchor index from segment.routeAnchor markings
-        val routeAnchorIndex = mutableMapOf<String, ResourceSegment>()
-        roots.values.forEach { root -> indexRouteAnchors(root, routeAnchorIndex) }
-
-        // Resolve RouteAnchor-based anchors by match key
-        pendingAnchors.forEach { anchor ->
-            val target = routeAnchorIndex[anchor.routeAnchor.key] ?: return@forEach
-            anchor.segments.forEach { segment ->
-                target.attachedSegments = target.attachedSegments.builder().apply { add(segment) }.build()
             }
         }
 
@@ -67,17 +44,6 @@ internal object ResourceRouteCompiler {
         )
     }
 
-    private fun indexRouteAnchors(
-        segment: ResourceSegment,
-        index: MutableMap<String, ResourceSegment>,
-    ) {
-        if (segment.routeAnchor != null) {
-            index[segment.routeAnchor!!.key] = segment
-        }
-        segment.children.values.forEach { indexRouteAnchors(it, index) }
-        segment.attachedSegments.forEach { indexRouteAnchors(it, index) }
-    }
-
     private fun enumerate(
         segment: ResourceSegment,
         inheritedOwnerFeatureName: String,
@@ -91,35 +57,44 @@ internal object ResourceRouteCompiler {
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
         segment.readEntries.forEach { entry ->
-            val querySuffix = entry.queryTemplate ?: segment.routePattern?.queryTemplate ?: ""
-            val baseUri = "ij-workspace://{instanceKey}/$currentPath"
-            val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
+            val uri = routeUri(currentPath, entry.resourceClassInfo)
             resources += ResourceRouteResource(
                 uri = uri,
                 name = segment.name, description = entry.description, mimeType = entry.mimeType,
                 ownerFeatureName = ownerFeatureName, handler = entry.handler,
+                readEntry = entry,
                 resourceListProvider = segment.resourceList?.listProvider,
                 isParameterized = currentHasParameter,
             )
         }
         segment.templateList?.let { spec ->
-            val querySuffix = segment.routePattern?.queryTemplate ?: ""
-            val baseUri = "ij-workspace://{instanceKey}/$currentPath"
-            val uri = if (querySuffix.isNotEmpty()) baseUri + querySuffix else baseUri
+            val uri = routeUri(currentPath, spec.resourceClassInfo)
             templates += ResourceRouteTemplate(
                 uri = uri,
                 name = segment.name, description = spec.description, mimeType = spec.mimeType,
                 ownerFeatureName = ownerFeatureName,
                 templateListProvider = spec.listProvider,
+                templateListSpec = spec,
             )
         }
 
         segment.children.values.forEach {
             enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
         }
-        segment.attachedSegments.forEach {
-            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
+    }
+
+    private fun routeUri(
+        path: String,
+        info: ResourceClassInfo?,
+    ): String {
+        val querySuffix = info?.queryTemplate() ?: ""
+        val pathTemplate = path.split("/").joinToString("/") { part ->
+            when {
+                part.startsWith("{") && part.endsWith("...}") -> "{${part.substring(1, part.length - 4)}}"
+                else -> part
+            }
         }
+        return "ij-workspace://{instanceKey}/$pathTemplate$querySuffix"
     }
 
     private fun ownerByRootName(
@@ -139,25 +114,37 @@ internal object ResourceRouteCompiler {
         clone.ownerFeatureName = ownerFeatureName
         clone.readEntries = readEntries
         clone.templateList = templateList
-        clone.routePattern = routePattern
-        clone.routeAnchor = routeAnchor
+        clone.resourceList = resourceList
         clone.children =
             children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
                 val childClone = child.cloneWithoutAnchors()
                 builder[childClone.name] = childClone
                 builder
             }.build()
-        clone.attachedSegments =
-            attachedSegments.fold(persistentListOf<ResourceSegment>().builder()) { builder, child ->
-                builder.add(child.cloneWithoutAnchors())
-                builder
-            }.build()
         return clone
     }
+}
+
+internal fun ResourceClassInfo.templateUri(): String {
+    return "ij-workspace://{instanceKey}/${pathTemplate()}${queryTemplate()}"
+}
+
+internal fun ResourceClassInfo.pathTemplate(): String {
+    return pathSegments.joinToString("/") { segment ->
+        when {
+            segment.isParameter -> "{${segment.paramName}}"
+            else -> segment.text
+        }
+    }
+}
+
+internal fun ResourceClassInfo.queryTemplate(): String {
+    return if (queryParams.isNotEmpty()) {
+        "{?${queryParams.joinToString(",") { it.name }}}"
+    } else ""
 }
 
 internal data class WorkspaceResourceRouteContribution(
     val featureName: String,
     val roots: List<ResourceSegment>,
-    val pendingAnchors: List<PendingAnchor>,
 )

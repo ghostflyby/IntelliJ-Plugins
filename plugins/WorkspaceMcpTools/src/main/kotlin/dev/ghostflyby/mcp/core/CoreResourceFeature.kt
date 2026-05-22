@@ -8,10 +8,11 @@ package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.PluginInfo
-import dev.ghostflyby.mcp.core.CoreResourceFeature.Companion.PROJECT_ROUTE
 import dev.ghostflyby.mcp.route.ResourceListDecision
+import dev.ghostflyby.mcp.route.resources.ProjectResource
+import dev.ghostflyby.mcp.route.resources.ServerInfoResource
+import dev.ghostflyby.mcp.route.route
 import dev.ghostflyby.mcp.route.visibleProjects
-import dev.ghostflyby.mcp.route.RouteAnchor
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
@@ -20,17 +21,11 @@ import kotlinx.serialization.json.Json
 
 /**
  * Core metadata feature: server/info, projects, and projects/{projectKey} resources.
- *
- * Registered via the Ktor-like route DSL. The [PROJECT_ROUTE] anchor
- * is string-keyed — other features hang their project-scoped resources
- * under it using `under(RouteAnchor("projectKey"))`.
  */
 internal class CoreResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "core"
 
     companion object {
-        /** Route anchor for project-scoped resource sub-trees. */
-        val PROJECT_ROUTE = RouteAnchor("projectKey")
         private const val JSON_MIME_TYPE = "application/json"
     }
 
@@ -39,7 +34,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
         segments {
             // server/info — static listable resource via route pattern
-            route("server/info") {
+            route<ServerInfoResource> {
                 read {
                     val instanceKey = workspaceInstanceKey()
                     val info = readAction {
@@ -57,8 +52,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                 }
             }
 
-            // projects/{projectKey} — parameterized route with anchor
-            route("projects/{projectKey}", anchor = PROJECT_ROUTE) {
+            route<ProjectResource> {
                 listResources {
                     val projects = call.visibleProjects()
                     ResourceListDecision(

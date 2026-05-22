@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
-import dev.ghostflyby.mcp.route.PendingAnchor
 import dev.ghostflyby.mcp.route.ResourceSegment
 import dev.ghostflyby.mcp.route.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.route.ResourceSegmentCollector
@@ -59,15 +58,11 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     }
 
     fun buildRegistration(): WorkspaceMcpFeatureRegistration {
-        // Resolve deferred under() anchors within this feature's own collector.
-        val pendingAnchors = segmentCollector.pendingAnchors.toList()
         segmentCollector.roots.forEach { it.markOwner(featureName) }
-        pendingAnchors.flatMap { it.segments }.forEach { it.markOwner(featureName) }
         return WorkspaceMcpFeatureRegistration(
             featureName = featureName,
             job = featureScope.coroutineContext[Job] ?: Job(),
             registeredTools = trackedTools.toSet(),
-            pendingAnchors = pendingAnchors,
             roots = segmentCollector.roots.toList(),
         )
     }
@@ -76,7 +71,6 @@ internal class WorkspaceMcpFeatureRegistrationContext(
 private fun ResourceSegment.markOwner(featureName: String) {
     ownerFeatureName = featureName
     children.values.forEach { it.markOwner(featureName) }
-    attachedSegments.forEach { it.markOwner(featureName) }
 }
 
 /**
@@ -87,7 +81,6 @@ internal data class WorkspaceMcpFeatureRegistration(
     val featureName: String,
     val job: Job,
     val registeredTools: Set<String>,
-    val pendingAnchors: List<PendingAnchor> = emptyList(),
     val roots: List<ResourceSegment> = emptyList(),
 )
 

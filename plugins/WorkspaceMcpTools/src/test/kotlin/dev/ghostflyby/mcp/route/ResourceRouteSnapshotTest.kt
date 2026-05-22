@@ -6,109 +6,30 @@
 
 package dev.ghostflyby.mcp.route
 
+import dev.ghostflyby.mcp.route.resources.ProjectFileResource
+import dev.ghostflyby.mcp.route.resources.ProjectResource
+import dev.ghostflyby.mcp.route.resources.ServerInfoResource
+import dev.ghostflyby.mcp.route.resources.VfsResource
+import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
+import kotlinx.serialization.Serializable
 import org.junit.Assert.*
 import org.junit.Test
 
 internal class ResourceRouteSnapshotTest {
-    // -- RoutePattern parser tests --
-
     @Test
-    fun `parse literal route`() {
-        val pattern = RoutePattern.parse("server/info")
-        assertEquals("server/info", pattern.original)
-        assertEquals(2, pattern.pathTokens.size)
-        assertTrue(pattern.pathTokens[0] is LiteralToken)
-        assertEquals("server", (pattern.pathTokens[0] as LiteralToken).text)
-        assertEquals("info", (pattern.pathTokens[1] as LiteralToken).text)
-        assertFalse(pattern.hasReservedParam)
+    fun `server info matches literal route`() {
+        val snapshot = testSnapshot()
+        val match = snapshot.segmentMatch("ij-workspace://iu-63341/server/info")
+        assertNotNull(match)
+        assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
     }
-
-    @Test
-    fun `parse parameterized route`() {
-        val pattern = RoutePattern.parse("projects/{projectKey}")
-        assertEquals(2, pattern.pathTokens.size)
-        assertTrue(pattern.pathTokens[0] is LiteralToken)
-        assertTrue(pattern.pathTokens[1] is ParamToken)
-        assertEquals("projectKey", (pattern.pathTokens[1] as ParamToken).name)
-        assertEquals(listOf("projectKey"), pattern.paramNames)
-    }
-
-    @Test
-    fun `parse reserved param route`() {
-        val pattern = RoutePattern.parse("files/{+relativePath}")
-        assertEquals(2, pattern.pathTokens.size)
-        assertTrue(pattern.pathTokens[0] is LiteralToken)
-        assertTrue(pattern.pathTokens[1] is ReservedParamToken)
-        assertEquals("relativePath", (pattern.pathTokens[1] as ReservedParamToken).name)
-        assertTrue(pattern.hasReservedParam)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `reserved param must be last`() {
-        RoutePattern.parse("files/{+tail}/extra")
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `legacy star prefixed tail param is not accepted`() {
-        RoutePattern.parse("files/{*tail}")
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `empty param name fails`() {
-        RoutePattern.parse("projects/{}")
-    }
-
-
-    @Test
-    fun `parse optional query params`() {
-        val pattern = RoutePattern.parse("search{?query}")
-        assertEquals(1, pattern.pathTokens.size)
-        assertEquals("search", (pattern.pathTokens[0] as LiteralToken).text)
-        assertEquals(1, pattern.queryTokens.size)
-        with(pattern.queryTokens[0]) {
-            assertEquals("query", key)
-            assertEquals("query", paramName)
-            assertTrue(optional)
-            assertNull(literalValue)
-        }
-    }
-
-    @Test
-    fun `parse query params`() {
-        val pattern = RoutePattern.parse("search?query={query}&limit=10")
-        assertEquals(1, pattern.pathTokens.size)
-        assertTrue(pattern.pathTokens[0] is LiteralToken)
-        assertEquals("search", (pattern.pathTokens[0] as LiteralToken).text)
-        assertEquals(2, pattern.queryTokens.size)
-        with(pattern.queryTokens[0]) {
-            assertEquals("query", key)
-            assertEquals("query", paramName)
-            assertNull(literalValue)
-        }
-        with(pattern.queryTokens[1]) {
-            assertEquals("limit", key)
-            assertNull(paramName)
-            assertEquals("10", literalValue)
-        }
-    }
-
-    // -- Matcher tests via compiled snapshot --
 
     @Test
     fun `no-query route does not match URI with query string`() {
         val snapshot = testSnapshot()
         assertNull(snapshot.segmentMatch("ij-workspace://iu-63341/server/info?x=1"))
-    }
-
-    @Test
-    fun `server info matches literal route`() {
-        val snapshot = testSnapshot()
-        val uri = "ij-workspace://iu-63341/server/info"
-        val match = snapshot.segmentMatch(uri)
-        assertNotNull(match)
-        assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
     }
 
     @Test
@@ -124,8 +45,7 @@ internal class ResourceRouteSnapshotTest {
     @Test
     fun `vfs template preserves raw tail`() {
         val rawVfsUrl = "jar:///tmp/with space/lib.jar!/pkg/with!bang.kt"
-        val uri = workspaceVfsUri(rawVfsUrl)
-        val result = vfsMatcher(testSnapshot()).match(uri)
+        val result = vfsMatcher(testSnapshot()).match(workspaceVfsUri(rawVfsUrl))
         assertNotNull(result)
         assertEquals(rawVfsUrl, result!!.variables["rawVfsUrl"])
     }
@@ -133,57 +53,56 @@ internal class ResourceRouteSnapshotTest {
     @Test
     fun `vfs template preserves raw tail containing question mark`() {
         val rawVfsUrl = "file:///tmp/workspace/file.kt?line=10&column=2"
-        val uri = workspaceVfsUri(rawVfsUrl)
-        val result = vfsMatcher(testSnapshot()).match(uri)
+        val result = vfsMatcher(testSnapshot()).match(workspaceVfsUri(rawVfsUrl))
         assertNotNull(result)
         assertEquals(rawVfsUrl, result!!.variables["rawVfsUrl"])
     }
 
     @Test
-    fun `project route does not match deeper vfs uri`() {
+    fun `vfs template captures key-only meta query after raw tail`() {
+        val rawVfsUrl = "file:///tmp/workspace/file?name.kt"
+        val result = vfsMatcher(testSnapshot()).match(workspaceVfsUri(rawVfsUrl) + "?meta")
+        assertNotNull(result)
+        assertEquals(rawVfsUrl, result!!.variables["rawVfsUrl"])
+        assertEquals("", result.variables["meta"])
+    }
+
+    @Test
+    fun `vfs template captures meta and content query after raw tail`() {
+        val rawVfsUrl = "file:///tmp/workspace/file?name.kt"
+        val result = vfsMatcher(testSnapshot()).match(workspaceVfsUri(rawVfsUrl) + "?meta=length,readonly&content")
+        assertNotNull(result)
+        assertEquals(rawVfsUrl, result!!.variables["rawVfsUrl"])
+        assertEquals("length,readonly", result.variables["meta"])
+        assertEquals("", result.variables["content"])
+    }
+
+    @Test
+    fun `project route does not match deeper file uri`() {
         val snapshot = testSnapshot()
         val projectTemplate = ResourceTemplate(
             uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}",
             name = "projectKey",
         )
         val matcher = SegmentTreeTemplateMatcher(projectTemplate, ResourceRouteSnapshotRef(snapshot))
-        val vfsUri = workspaceVfsUri("file:///tmp/workspace/file.txt")
-        assertNull(matcher.match(vfsUri))
+        assertNull(matcher.match(workspaceFileUri()))
     }
 
     @Test
-    fun `project route matches from anchor`() {
-        val snapshot = testSnapshot()
-        val uri = workspaceFileUri()
-        val routeMatch = snapshot.segmentMatch(uri)
+    fun `single segment parameter does not capture extra path segments`() {
+        val snapshot = projectOnlySnapshot()
+        assertNull(snapshot.segmentMatch(workspaceFileUri()))
+    }
+
+    @Test
+    fun `project route matches from parent resource`() {
+        val routeMatch = testSnapshot().segmentMatch(workspaceFileUri())
         assertEquals(PK, routeMatch?.ancestors?.get("projectKey"))
     }
 
     @Test
-    fun `search query matches with query params`() {
-        val snap = withSearchQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/search?query=abc&limit=10")
-        assertNotNull(match)
-        assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
-        assertEquals("abc", match?.ancestors?.get("query"))
-    }
-
-    @Test
-    fun `search query with wrong literal does not match`() {
-        val snap = withSearchQuerySnapshot()
-        assertNull(snap.segmentMatch("ij-workspace://iu-63341/search?query=abc&limit=11"))
-    }
-
-    @Test
-    fun `search query with missing required param does not match`() {
-        val snap = withSearchQuerySnapshot()
-        assertNull(snap.segmentMatch("ij-workspace://iu-63341/search?limit=10"))
-    }
-
-    @Test
     fun `optional query route matches without query string`() {
-        val snap = withOptionalQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/search")
+        val match = optionalQuerySnapshot().segmentMatch("ij-workspace://iu-63341/search")
         assertNotNull(match)
         assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
         assertNull(match?.ancestors?.get("query"))
@@ -191,209 +110,102 @@ internal class ResourceRouteSnapshotTest {
 
     @Test
     fun `optional query route matches with query string`() {
-        val snap = withOptionalQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/search?query=hello")
+        val match = optionalQuerySnapshot().segmentMatch("ij-workspace://iu-63341/search?query=hello")
         assertNotNull(match)
         assertEquals("hello", match?.ancestors?.get("query"))
     }
 
     @Test
-    fun `search query with no query string does not match`() {
-        val snap = withSearchQuerySnapshot()
-        assertNull(snap.segmentMatch("ij-workspace://iu-63341/search"))
-    }
+    fun `no-query and optional-query routes coexist on same path`() {
+        val snapshot = coexistingQuerySnapshot()
+        val noQuery = snapshot.segmentMatch("ij-workspace://iu-63341/target")
+        assertNotNull(noQuery)
+        assertNull(noQuery?.ancestors?.get("q"))
 
-    @Test
-    fun `reserved expansion route can also capture query params`() {
-        val snap = withReservedAndQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/raw/file:///tmp/a.kt?line=10?format=text")
-        assertNotNull(match)
-        assertEquals("file:///tmp/a.kt?line=10", match?.ancestors?.get("rawVfsUrl"))
-        assertEquals("text", match?.ancestors?.get("format"))
-    }
-
-    @Test
-    fun `reserved expansion route keeps question mark in vfs file name before query params`() {
-        val snap = withReservedAndQuerySnapshot()
-        val rawVfsUrl = "file:///tmp/workspace/file?name.kt"
-        val match = snap.segmentMatch("ij-workspace://iu-63341/raw/$rawVfsUrl?format=text")
-        assertNotNull(match)
-        assertEquals(rawVfsUrl, match?.ancestors?.get("rawVfsUrl"))
-        assertEquals("text", match?.ancestors?.get("format"))
+        val withQuery = snapshot.segmentMatch("ij-workspace://iu-63341/target?q=hello")
+        assertNotNull(withQuery)
+        assertEquals("hello", withQuery?.ancestors?.get("q"))
     }
 
     @Test
     fun `literal match has higher priority than param`() {
         val snapshot = testSnapshot()
-        val uri = "ij-workspace://iu-63341/projects/special"
-        val match = snapshot.segmentMatch(uri)
+        val match = snapshot.segmentMatch("ij-workspace://iu-63341/projects/special")
         assertNotNull(match)
         assertEquals("special", match?.ancestors?.get("projectKey"))
     }
 
-    // -- Helpers --
-
     private fun testSnapshot(): ResourceRouteSnapshot {
-        val c1 = ResourceSegmentCollector()
-        c1.route("server/info") {
+        val core = ResourceSegmentCollector()
+        core.route<ServerInfoResource> {
             read { ReadResourceResult(emptyList()) }
         }
-        c1.route("projects/{projectKey}", anchor = RouteAnchor("projectKey")) {
+        core.route<ProjectResource> {
             read { ReadResourceResult(emptyList()) }
             listTemplates()
         }
 
-        val c2 = ResourceSegmentCollector()
-        c2.under(RouteAnchor("projectKey")) {
-            route("files/{+relativePath}") {
-                read { ReadResourceResult(emptyList()) }
-                listTemplates()
-            }
-            route("vfs/{+rawVfsUrl}") {
-                read { ReadResourceResult(emptyList()) }
-                listTemplates()
-            }
+        val fileContent = ResourceSegmentCollector()
+        fileContent.route<VfsResource> {
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
+        }
+        fileContent.route<ProjectFileResource> {
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
         }
 
         return ResourceRouteCompiler.compile(
             listOf(
                 WorkspaceResourceRouteContribution(
                     featureName = "core",
-                    roots = c1.roots,
-                    pendingAnchors = c1.pendingAnchors,
+                    roots = core.roots,
                 ),
                 WorkspaceResourceRouteContribution(
-                    featureName = "vfs",
-                    roots = c2.roots,
-                    pendingAnchors = c2.pendingAnchors,
+                    featureName = "file-content",
+                    roots = fileContent.roots,
                 ),
             ),
         )
     }
 
-    
-    private fun withOptionalQuerySnapshot(): ResourceRouteSnapshot {
-        val c = ResourceSegmentCollector()
-        c.route("search{?query}") {
+    private fun projectOnlySnapshot(): ResourceRouteSnapshot {
+        val collector = ResourceSegmentCollector()
+        collector.route<ProjectResource> {
             read { ReadResourceResult(emptyList()) }
             listTemplates()
         }
+        return compile("project-only", collector)
+    }
+
+    private fun optionalQuerySnapshot(): ResourceRouteSnapshot {
+        val collector = ResourceSegmentCollector()
+        collector.route<SearchResource> {
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
+        }
+        return compile("search", collector)
+    }
+
+    private fun coexistingQuerySnapshot(): ResourceRouteSnapshot {
+        val collector = ResourceSegmentCollector()
+        collector.route<TargetResource> {
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
+        }
+        collector.route<TargetWithQueryResource> {
+            read { ReadResourceResult(emptyList()) }
+            listTemplates()
+        }
+        return compile("target", collector)
+    }
+
+    private fun compile(featureName: String, collector: ResourceSegmentCollector): ResourceRouteSnapshot {
         return ResourceRouteCompiler.compile(
             listOf(
                 WorkspaceResourceRouteContribution(
-                    featureName = "opt",
-                    roots = c.roots,
-                    pendingAnchors = c.pendingAnchors,
-                ),
-            ),
-        )
-    }
-
-    
-    @Test
-    fun `no-query and optional-query routes coexist on same path`() {
-        val snap = withCoexistingQuerySnapshot()
-        // No query URI → matches the no-query route
-        val match1 = snap.segmentMatch("ij-workspace://iu-63341/target")
-        assertNotNull(match1)
-        assertNull(match1?.ancestors?.get("q"))
-        // With query URI → matches the optional-query route
-        val match2 = snap.segmentMatch("ij-workspace://iu-63341/target?q=hello")
-        assertNotNull(match2)
-        assertEquals("hello", match2?.ancestors?.get("q"))
-    }
-
-    // -- Helpers --
-
-    
-    
-    @Test
-    fun `optional-only query route matches URI without query`() {
-        val snap = withSoloOptionalQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/search")
-        assertNotNull(match)
-        // q is optional and not present
-        assertNull(match?.ancestors?.get("q"))
-    }
-
-    @Test
-    fun `optional-only query route matches URI with query`() {
-        val snap = withSoloOptionalQuerySnapshot()
-        val match = snap.segmentMatch("ij-workspace://iu-63341/search?q=hello")
-        assertNotNull(match)
-        assertEquals("hello", match?.ancestors?.get("q"))
-    }
-
-    // -- Helpers --
-
-    
-    private fun withSoloOptionalQuerySnapshot(): ResourceRouteSnapshot {
-        val c = ResourceSegmentCollector()
-        c.route("search{?q}") {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        return ResourceRouteCompiler.compile(
-            listOf(
-                WorkspaceResourceRouteContribution(
-                    featureName = "test",
-                    roots = c.roots,
-                    pendingAnchors = c.pendingAnchors,
-                ),
-            ),
-        )
-    }
-
-    private fun withCoexistingQuerySnapshot(): ResourceRouteSnapshot {
-        val c = ResourceSegmentCollector()
-        c.route("target") {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        c.route("target{?q}") {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        return ResourceRouteCompiler.compile(
-            listOf(
-                WorkspaceResourceRouteContribution(
-                    featureName = "test",
-                    roots = c.roots,
-                    pendingAnchors = c.pendingAnchors,
-                ),
-            ),
-        )
-    }
-
-    private fun withSearchQuerySnapshot(): ResourceRouteSnapshot {
-        val c = ResourceSegmentCollector()
-        c.route("search?query={query}&limit=10") {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        return ResourceRouteCompiler.compile(
-            listOf(
-                WorkspaceResourceRouteContribution(
-                    featureName = "search",
-                    roots = c.roots,
-                    pendingAnchors = c.pendingAnchors,
-                ),
-            ),
-        )
-    }
-
-    private fun withReservedAndQuerySnapshot(): ResourceRouteSnapshot {
-        val c = ResourceSegmentCollector()
-        c.route("raw/{+rawVfsUrl}?format={format}") {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        return ResourceRouteCompiler.compile(
-            listOf(
-                WorkspaceResourceRouteContribution(
-                    featureName = "raw",
-                    roots = c.roots,
-                    pendingAnchors = c.pendingAnchors,
+                    featureName = featureName,
+                    roots = collector.roots,
                 ),
             ),
         )
@@ -402,7 +214,7 @@ internal class ResourceRouteSnapshotTest {
     private fun fileMatcher(snapshot: ResourceRouteSnapshot): SegmentTreeTemplateMatcher {
         return SegmentTreeTemplateMatcher(
             ResourceTemplate(
-                uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}/files/{+relativePath}",
+                uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content}",
                 name = "relativePath",
             ),
             ResourceRouteSnapshotRef(snapshot),
@@ -412,7 +224,7 @@ internal class ResourceRouteSnapshotTest {
     private fun vfsMatcher(snapshot: ResourceRouteSnapshot): SegmentTreeTemplateMatcher {
         return SegmentTreeTemplateMatcher(
             ResourceTemplate(
-                uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}/vfs/{+rawVfsUrl}",
+                uriTemplate = "ij-workspace://{instanceKey}/vfs/{rawVfsUrl}{?meta,content}",
                 name = "rawVfsUrl",
             ),
             ResourceRouteSnapshotRef(snapshot),
@@ -423,7 +235,23 @@ internal class ResourceRouteSnapshotTest {
         "ij-workspace://$IK/projects/$PK/files/src/main/Foo.kt"
 
     private fun workspaceVfsUri(raw: String = "file:///tmp/workspace/file.txt"): String =
-        "ij-workspace://$IK/projects/$PK/vfs/$raw"
+        "ij-workspace://$IK/vfs/$raw"
+
+    @Serializable
+    @Resource("/search")
+    private data class SearchResource(
+        val query: String? = null,
+    )
+
+    @Serializable
+    @Resource("/target")
+    private class TargetResource
+
+    @Serializable
+    @Resource("/target")
+    private data class TargetWithQueryResource(
+        val q: String? = null,
+    )
 
     private companion object {
         const val IK = "iu-63341"

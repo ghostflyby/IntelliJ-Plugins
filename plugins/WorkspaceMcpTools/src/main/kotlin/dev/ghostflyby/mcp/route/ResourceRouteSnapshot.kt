@@ -18,6 +18,7 @@ internal data class ResourceRouteResource(
     val mimeType: String,
     val ownerFeatureName: String,
     val handler: ResourceReadHandler,
+    val readEntry: ReadEntry,
     val resourceListProvider: ConcreteResourceListProvider?,
     val isParameterized: Boolean,
 )
@@ -29,6 +30,7 @@ internal data class ResourceRouteTemplate(
     val mimeType: String,
     val ownerFeatureName: String,
     val templateListProvider: TemplateResourceListProvider?,
+    val templateListSpec: TemplateListSpec,
 )
 
 internal data class ResourceRouteSnapshot(
@@ -49,17 +51,17 @@ internal data class ResourceRouteSnapshot(
                 segment = root,
                 parts = parts,
                 index = 1,
-            params = mapOf("instanceKey" to parsed.instanceKey),
-        ) ?: continue
-            if (candidate.embedsQuestionMark && match.segment.routePattern?.hasReservedParam != true) {
+                params = mapOf("instanceKey" to parsed.instanceKey),
+            ) ?: continue
+            if (candidate.embedsQuestionMark && match.segment.isTailSegment() != true) {
                 continue
             }
-            return matchQueryOnMatch(match, candidate.queryString) ?: continue
+            return match.acceptQuery(candidate.queryString) ?: continue
         }
         return null
     }
 
-    private fun parseWorkspaceUri(uri: String): ParsedWorkspaceUri? {
+    internal fun parseWorkspaceUri(uri: String): ParsedWorkspaceUri? {
         val schemeEnd = uri.indexOf("://")
         if (schemeEnd < 0) return null
         val afterScheme = uri.substring(schemeEnd + 3)
@@ -82,7 +84,7 @@ internal data class ResourceRouteSnapshot(
         when (segment) {
             is LiteralPathSegment -> {
                 if (index >= parts.size) {
-                    return if (segment.readEntries.isNotEmpty() || segment.templateList != null) {
+                    return if (segment.hasEndpoint()) {
                         ResourceRouteMatch(segment, AncestorContext(params))
                     } else {
                         null
@@ -95,27 +97,24 @@ internal data class ResourceRouteSnapshot(
                 segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
                     matchSegment(child, parts, index, params)?.let { return it }
                 }
-                segment.attachedSegments.forEach { anchor ->
-                    matchAnchor(anchor, parts, index, params)?.let { return it }
-                }
                 return null
             }
 
             is ParameterPathSegment -> {
                 if (index >= parts.size) return null
-                val value = if (segment.children.isEmpty() && segment.attachedSegments.isEmpty()) {
+                val value = if (segment.extensible) {
                     parts.drop(index).joinToString("/")
                 } else {
                     parts[index]
                 }
                 val nextParams = params + (segment.paramName to value)
-                val nextPartIndex = if (segment.children.isEmpty() && segment.attachedSegments.isEmpty()) {
+                val nextPartIndex = if (segment.extensible) {
                     parts.size
                 } else {
                     index + 1
                 }
                 if (nextPartIndex >= parts.size) {
-                    return if (segment.readEntries.isNotEmpty() || segment.templateList != null) {
+                    return if (segment.hasEndpoint()) {
                         ResourceRouteMatch(segment, AncestorContext(nextParams))
                     } else {
                         null
@@ -128,122 +127,81 @@ internal data class ResourceRouteSnapshot(
                 segment.children.values.filterIsInstance<ParameterPathSegment>().forEach { child ->
                     matchSegment(child, parts, nextPartIndex, nextParams)?.let { return it }
                 }
-                segment.attachedSegments.forEach { anchor ->
-                    matchAnchor(anchor, parts, nextPartIndex, nextParams)?.let { return it }
-                }
                 return null
             }
         }
     }
 
-    private fun matchAnchor(
-        anchor: ResourceSegment,
-        parts: List<String>,
-        index: Int,
-        params: Map<String, String>,
-    ): ResourceRouteMatch? {
-        return when (anchor) {
-            is LiteralPathSegment -> {
-                if (anchor.name == parts.getOrNull(index)) {
-                    matchSegment(anchor, parts, index + 1, params)
-                } else {
-                    null
-                }
-            }
-            is ParameterPathSegment -> matchSegment(anchor, parts, index, params)
+    private fun ResourceSegment.hasEndpoint(): Boolean {
+        return readEntries.isNotEmpty() || resourceList != null || templateList != null
+    }
+
+    private fun ResourceSegment.isTailSegment(): Boolean {
+        return this is ParameterPathSegment && extensible
+    }
+
+    private fun ResourceRouteMatch.acceptQuery(queryString: String): ResourceRouteMatch? {
+        return segment.endpointInfos().firstNotNullOfOrNull { info ->
+            matchQuery(info, queryString)
         }
     }
 
-    /**
-     * Validate query tokens from the matched segment's routePattern against
-     * the URI's query string. Captures param tokens into [AncestorContext].
-     * Returns null when a required literal or key-only token fails to match.
-     */
-    private fun matchQueryOnMatch(
-        match: ResourceRouteMatch,
+    internal fun ResourceRouteMatch.matchReadEntry(
+        readEntry: ReadEntry,
         queryString: String,
     ): ResourceRouteMatch? {
-        val segment = match.segment
-        // Try each resource endpoint on this segment — pick first that matches query
-        val endpoints = segment.readEntries
-        if (endpoints.isEmpty()) {
-            // No resource endpoints on this segment: just check template endpoint
-            val qt = segment.routePattern?.queryTokens
-            if (qt == null || qt.isEmpty()) return if (queryString.isEmpty()) match else null
-            return tryQueryTokens(qt, queryString, match)
-        }
-        // Try each endpoint's queryTokens in order; first match wins
-        for (entry in endpoints) {
-            val result = tryQueryTokens(entry.queryTokens, queryString, match)
-            if (result != null) return result
-        }
-        // Also try the segment-level routePattern (for template-only nodes)
-        val segQt = segment.routePattern?.queryTokens.orEmpty()
-        if (segQt.isNotEmpty() && segQt != endpoints.firstOrNull()?.queryTokens) {
-            return tryQueryTokens(segQt, queryString, match)
-        }
-        return null
+        val info = readEntry.resourceClassInfo ?: return this.takeIf { queryString.isEmpty() }
+        return this.matchQuery(info, queryString)
     }
 
-    private fun tryQueryTokens(
-        queryTokens: List<QueryToken>,
+    private fun ResourceSegment.endpointInfos(): List<ResourceClassInfo?> {
+        return readEntries.map { it.resourceClassInfo } +
+                listOfNotNull(resourceList?.resourceClassInfo, templateList?.resourceClassInfo)
+    }
+
+    private fun ResourceRouteMatch.matchQuery(
+        info: ResourceClassInfo?,
         queryString: String,
-        match: ResourceRouteMatch,
     ): ResourceRouteMatch? {
-        if (queryTokens.isEmpty()) return if (queryString.isEmpty()) match else null
-        val hasOptional = queryTokens.any { it.optional }
-        val hasRequired = queryTokens.any { !it.optional }
+        if (info == null) return this.takeIf { queryString.isEmpty() }
+        val queryParams = info.queryParams
+        if (queryParams.isEmpty()) return this.takeIf { queryString.isEmpty() }
+
+        val hasRequired = queryParams.any { !it.isOptional }
         if (queryString.isEmpty()) {
-            return if (hasRequired) null else match
+            return if (hasRequired) null else this
         }
+
         val actualParams = queryString.split("&").filter { it.isNotBlank() }.associate { pair ->
             val eqIdx = pair.indexOf('=')
             if (eqIdx < 0) pair to null else pair.substring(0, eqIdx) to pair.substring(eqIdx + 1)
         }
+        val knownParamNames = queryParams.map { it.name }.toSet()
+        if (actualParams.keys.none { it in knownParamNames }) return null
+
         val queryCaptures = mutableMapOf<String, String>()
-        for (token in queryTokens) {
-            val actualValue = actualParams[token.key]
-            when {
-                token.paramName != null && token.optional -> {
-                    // Capture as empty string when key is present without value (boolean flag)
-                    // or capture the actual value when provided
-                    if (actualParams.containsKey(token.key)) {
-                        queryCaptures[token.paramName] = actualValue ?: ""
-                    }
-                }
-                token.paramName != null -> {
-                    if (actualValue == null) return null
-                    queryCaptures[token.paramName] = actualValue
-                }
-                token.literalValue != null -> {
-                    if (actualValue != token.literalValue) return null
-                }
-                else -> {
-                    if (!actualParams.containsKey(token.key)) return null
-                }
+        for (qp in queryParams) {
+            if (actualParams.containsKey(qp.name)) {
+                queryCaptures[qp.name] = actualParams[qp.name] ?: ""
+            } else {
+                if (!qp.isOptional) return null
             }
         }
-        if (queryCaptures.isEmpty()) return match
-        return ResourceRouteMatch(
-            segment = match.segment,
-            ancestors = AncestorContext(match.ancestors.toMutableMap().apply { putAll(queryCaptures) }),
+
+        return if (queryCaptures.isEmpty()) this
+        else ResourceRouteMatch(
+            segment = segment,
+            ancestors = AncestorContext(ancestors.toMutableMap().apply { putAll(queryCaptures) }),
         )
     }
 }
 
-private data class ParsedWorkspaceUri(
+internal data class ParsedWorkspaceUri(
     val instanceKey: String,
     val pathAndQuery: String,
 ) {
     fun pathCandidates(): Sequence<ParsedWorkspacePathCandidate> = sequence {
         val questionMarks = pathAndQuery.indices.filter { pathAndQuery[it] == '?' }
-        yield(
-            ParsedWorkspacePathCandidate(
-                path = pathAndQuery,
-                queryString = "",
-                embedsQuestionMark = questionMarks.isNotEmpty(),
-            ),
-        )
         for (questionMark in questionMarks.asReversed()) {
             yield(
                 ParsedWorkspacePathCandidate(
@@ -253,10 +211,17 @@ private data class ParsedWorkspaceUri(
                 ),
             )
         }
+        yield(
+            ParsedWorkspacePathCandidate(
+                path = pathAndQuery,
+                queryString = "",
+                embedsQuestionMark = questionMarks.isNotEmpty(),
+            ),
+        )
     }
 }
 
-private data class ParsedWorkspacePathCandidate(
+internal data class ParsedWorkspacePathCandidate(
     val path: String,
     val queryString: String,
     val embedsQuestionMark: Boolean,
@@ -286,8 +251,14 @@ internal class SegmentTreeTemplateMatcher(
         val snapshot = snapshotRef.get()
         val entry = snapshot.parameterizedResource(resourceTemplate.uriTemplate) ?: return null
         val segmentMatch = snapshot.segmentMatch(resourceUri) ?: return null
-        val epEntry = segmentMatch.segment.readEntries
-            .firstOrNull { it.handler === entry.handler } ?: return null
-        return MatchResult(variables = segmentMatch.ancestors, score = 100)
+        if (segmentMatch.segment.readEntries.none { it.handler === entry.handler }) return null
+        val parsed = snapshot.parseWorkspaceUri(resourceUri) ?: return null
+        for (candidate in parsed.pathCandidates()) {
+            val endpointMatch = snapshot.run {
+                segmentMatch.matchReadEntry(entry.readEntry, candidate.queryString)
+            } ?: continue
+            return MatchResult(variables = endpointMatch.ancestors, score = 100)
+        }
+        return null
     }
 }

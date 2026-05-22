@@ -6,6 +6,10 @@
 
 package dev.ghostflyby.mcp.route
 
+import kotlinx.serialization.serializer
+import kotlin.reflect.KType
+import kotlin.reflect.typeOf
+
 internal interface ResourceSegmentBuilder {
     /** Register a read handler for the current path segment. */
     fun read(handler: ResourceReadHandler)
@@ -15,29 +19,19 @@ internal interface ResourceSegmentBuilder {
 
     /** Set the template list provider for the current path segment. */
     fun listTemplates(listProvider: TemplateResourceListProvider? = null)
-
-    /**
-     * Define a route using a Ktor-like pattern string.
-     * The route leaf exports [anchor] if provided — other features can
-     * attach sub-routes via [under] with the same [RouteAnchor].
-     */
-    fun route(
-        pattern: String,
-        anchor: RouteAnchor? = null,
-        block: RouteDslBuilder.() -> Unit,
-    )
-
-    /**
-     * Attach route children under a [RouteAnchor] exported by another feature's route.
-     * The anchor's segment must have [ResourceSegment.extensible] = true.
-     */
-    fun under(anchor: RouteAnchor, block: ResourceSegmentBuilder.() -> Unit)
 }
 
-// ---- RouteDslBuilder ----
+/**
+ * Define a route using a Ktor [io.ktor.resources.Resource] class.
+ */
+internal inline fun <reified T : Any> ResourceSegmentBuilder.route(
+    noinline block: RouteDslBuilder.() -> Unit,
+) {
+    (this as ResourceSegmentCollector).routeWithType(typeOf<T>(), block)
+}
 
 /**
- * Collects read/list endpoints for a single route pattern.
+ * Collects read/list endpoints for a single resource route.
  */
 internal class RouteDslBuilder {
     var readHandler: ReadEntry? = null
@@ -62,23 +56,15 @@ internal class RouteDslBuilder {
     }
 }
 
-// ---- Pending anchor ----
-
-internal data class PendingAnchor(
-    val segments: List<ResourceSegment>,
-    val routeAnchor: RouteAnchor,
-)
-
-// ---- ResourceSegmentCollector ----
-
+/**
+ * Collects route tree fragments for a feature registration.
+ */
 internal open class ResourceSegmentCollector(
     private val current: ResourceSegment? = null,
 ) : ResourceSegmentBuilder {
     internal val _roots: MutableList<ResourceSegment> = mutableListOf()
-    internal val _pendingAnchors: MutableList<PendingAnchor> = mutableListOf()
 
     val roots: List<ResourceSegment> get() = _roots.toList()
-    val pendingAnchors: List<PendingAnchor> get() = _pendingAnchors.toList()
 
     override fun read(handler: ResourceReadHandler) {
         val target = current ?: error("Inline read handler requires a current path segment.")
@@ -99,96 +85,75 @@ internal open class ResourceSegmentCollector(
         target.templateList = TemplateListSpec(listProvider = listProvider)
     }
 
-    override fun route(
-        pattern: String,
-        anchor: RouteAnchor?,
+    internal fun routeWithType(
+        resourceType: KType,
         block: RouteDslBuilder.() -> Unit,
     ) {
-        val patternObj = RoutePattern.parse(pattern)
+        val info = ResourceClassInfo.from(serializer(resourceType).descriptor)
         val dsb = RouteDslBuilder().apply(block)
-        val segments = buildTreeFromPattern(patternObj, dsb)
+        val segments = buildTreeFromResourceClass(info, dsb)
         segments.forEach { seg ->
-            if (anchor != null) {
-                val leaf = findLeaf(seg)
-                leaf.routeAnchor = anchor
-            }
             val existing = _roots.find { it.name == seg.name }
             if (existing != null) {
-                existing.readEntries = existing.readEntries.builder()
-                    .apply { seg.readEntries.forEach { add(it) } }
-                    .build()
-                if (seg.resourceList != null && existing.resourceList == null) {
-                    existing.resourceList = seg.resourceList
-                }
-                if (seg.templateList != null && existing.templateList == null) {
-                    existing.templateList = seg.templateList
-                }
+                mergeSegment(existing, seg)
             } else {
                 _roots.add(seg)
             }
         }
     }
+}
 
-    override fun under(anchor: RouteAnchor, block: ResourceSegmentBuilder.() -> Unit) {
-        val collector = ResourceSegmentCollector()
-        block(collector)
-        _pendingAnchors.add(
-            PendingAnchor(
-                segments = collector.roots.toList(),
-                routeAnchor = anchor,
-            ),
-        )
-        _pendingAnchors.addAll(collector.pendingAnchors)
+internal fun mergeSegment(
+    target: ResourceSegment,
+    source: ResourceSegment,
+) {
+    target.readEntries = target.readEntries.builder()
+        .apply { source.readEntries.forEach { add(it) } }
+        .build()
+    if (source.resourceList != null && target.resourceList == null) {
+        target.resourceList = source.resourceList
     }
-
-    private fun attachChild(segment: ResourceSegment) {
-        if (current == null) {
-            _roots.add(segment)
+    if (source.templateList != null && target.templateList == null) {
+        target.templateList = source.templateList
+    }
+    source.children.values.forEach { sourceChild ->
+        val targetChild = target.children[sourceChild.name]
+        if (targetChild != null) {
+            mergeSegment(targetChild, sourceChild)
         } else {
-            current.children = current.children.builder().apply { put(segment.name, segment) }.build()
+            target.children = target.children.builder().apply { put(sourceChild.name, sourceChild) }.build()
         }
     }
 }
 
-// ---- Tree-building helpers ----
-
-internal fun findLeaf(segment: ResourceSegment): ResourceSegment {
-    var current = segment
-    while (current.children.isNotEmpty()) {
-        current = current.children.values.first()
-    }
-    return current
-}
-
-internal fun buildTreeFromPattern(
-    pattern: RoutePattern,
+internal fun buildTreeFromResourceClass(
+    info: ResourceClassInfo,
     dsb: RouteDslBuilder,
 ): List<ResourceSegment> {
-    val tokens = pattern.pathTokens
-    if (tokens.isEmpty()) return emptyList()
+    val pathSegments = info.pathSegments
+    if (pathSegments.isEmpty()) return emptyList()
 
-    val root = tokenToSegment(tokens.first())
+    val root = pathInfoToSegment(pathSegments.first())
     var current = root
-    for (i in 1 until tokens.size) {
-        val child = tokenToSegment(tokens[i])
+    for (i in 1 until pathSegments.size) {
+        val child = pathInfoToSegment(pathSegments[i])
         current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
     if (dsb.readHandler != null) {
-        val entry = dsb.readHandler!!.copy(queryTokens = pattern.queryTokens)
+        val entry = dsb.readHandler!!.copy(resourceClassInfo = info)
         current.readEntries = current.readEntries.builder().apply { add(entry) }.build()
     }
-    if (dsb.resourceList != null) current.resourceList = dsb.resourceList
-    if (dsb.templateList != null) current.templateList = dsb.templateList
-    current.routePattern = pattern
+    if (dsb.resourceList != null) current.resourceList = dsb.resourceList!!.copy(resourceClassInfo = info)
+    if (dsb.templateList != null) current.templateList = dsb.templateList!!.copy(resourceClassInfo = info)
 
     return listOf(root)
 }
 
-private fun tokenToSegment(token: PathToken): ResourceSegment {
-    return when (token) {
-        is LiteralToken -> LiteralPathSegment(name = token.text)
-        is ParamToken -> ParameterPathSegment(name = "{${token.name}}", paramName = token.name)
-        is ReservedParamToken -> ParameterPathSegment(name = "{+${token.name}}", paramName = token.name, extensible = true)
+private fun pathInfoToSegment(seg: PathSegmentInfo): ResourceSegment {
+    return when {
+        seg.isTail -> ParameterPathSegment(name = seg.text, paramName = seg.paramName!!, extensible = true)
+        seg.isParameter -> ParameterPathSegment(name = seg.text, paramName = seg.paramName!!)
+        else -> LiteralPathSegment(name = seg.text)
     }
 }

@@ -7,8 +7,10 @@
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.vfs.VirtualFile
-import dev.ghostflyby.mcp.core.CoreResourceFeature
 import dev.ghostflyby.mcp.route.project
+import dev.ghostflyby.mcp.route.resources.ProjectFileResource
+import dev.ghostflyby.mcp.route.resources.VfsResource
+import dev.ghostflyby.mcp.route.route
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -21,8 +23,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
  * Unified content access feature.
  *
  * Routes:
- * - `vfs/{+rawVfsUrl}{?meta,content}` — project-independent, read-only raw VFS access
- * - `projects/{projectKey}/files/{+relativePath}{?meta,content}` — project-scoped file access via Document API (read+write)
+ * - `vfs/{rawVfsUrl...}` with optional `meta` and `content` query params — project-independent, read-only raw VFS access
+ * - `projects/{projectKey}/files/{relativePath...}` with optional `meta` and `content` query params — project-scoped file access via Document API (read+write)
  *
  * Query params:
  * - no query → content only
@@ -35,7 +37,6 @@ internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
-        val projectAnchor = CoreResourceFeature.PROJECT_ROUTE
         FileContentInvalidationListener(
             projectResolver = projectResolver,
             invalidationSink = invalidationSink,
@@ -43,8 +44,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         ).install()
 
         segments {
-            // -- project-independent raw VFS (read only) --
-            route("vfs/{+rawVfsUrl}{?meta,content}") {
+            route<VfsResource> {
                 read {
                     readContentOrMeta(
                         uri = call.request.params.uri,
@@ -56,21 +56,19 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             }
 
             // -- project-scoped files (via Document) --
-            under(projectAnchor) {
-                route("files/{+relativePath}{?meta,content}") {
-                    read {
-                        val file = resolveFileByRelativePath(
-                            project = call.project(),
-                            relativePath = call.parameters["relativePath"] ?: "",
-                        )
-                        readContentOrMeta(
-                            uri = call.request.params.uri,
-                            file = file,
-                            ancestors = call.parameters,
-                        )
-                    }
-                    listTemplates()
+            route<ProjectFileResource> {
+                read {
+                    val file = resolveFileByRelativePath(
+                        project = call.project(),
+                        relativePath = call.parameters["relativePath"] ?: "",
+                    )
+                    readContentOrMeta(
+                        uri = call.request.params.uri,
+                        file = file,
+                        ancestors = call.parameters,
+                    )
                 }
+                listTemplates()
             }
         }
 

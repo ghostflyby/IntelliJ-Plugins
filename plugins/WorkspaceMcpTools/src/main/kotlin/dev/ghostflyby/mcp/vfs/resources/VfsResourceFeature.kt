@@ -9,11 +9,10 @@ package dev.ghostflyby.mcp.vfs.resources
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.vfs.tools.*
+import dev.ghostflyby.mcp.vfs.tools.VfsSdkTools
 
 /**
- * VFS resource feature: provides project-scoped file and VFS resource templates
- * via the Ktor-like route DSL. Attached to the CoreResourceFeature.PROJECT_ROUTE anchor.
+ * VFS resource feature: registers VFS tools.
  */
 internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"

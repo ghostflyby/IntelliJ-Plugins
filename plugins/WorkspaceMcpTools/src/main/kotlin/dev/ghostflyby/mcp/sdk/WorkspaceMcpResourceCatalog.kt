@@ -139,9 +139,8 @@ internal class WorkspaceMcpResourceCatalog(
         )
     }
 
-    private fun ResourceSegment.childrenAndAnchors(): List<ResourceSegment> {
-        return children.values.toList() + attachedSegments
-    }
+    private fun ResourceSegment.childrenAndAnchors(): List<ResourceSegment> =
+        children.values.toList()
 
     private fun concreteInstanceUri(path: String): String =
         "ij-workspace://${workspaceInstanceKey()}/$path"

@@ -46,11 +46,8 @@ internal sealed class ResourceSegment {
     abstract val name: String
     abstract val extensible: Boolean
     var ownerFeatureName: String? = null
-    var routePattern: RoutePattern? = null
-    var routeAnchor: RouteAnchor? = null
 
     var children: PersistentMap<String, ResourceSegment> = persistentHashMapOf()
-    var attachedSegments: PersistentList<ResourceSegment> = persistentListOf()
 
     /** Read handlers, each optionally bound to query parameters. */
     var readEntries: PersistentList<ReadEntry> = persistentListOf()
@@ -68,19 +65,8 @@ internal data class ReadEntry(
     val handler: ResourceReadHandler,
     val description: String = "",
     val mimeType: String = "application/json",
-    val queryTokens: List<QueryToken> = emptyList(),
+    val resourceClassInfo: ResourceClassInfo? = null,
 ) {
-    val queryTemplate: String
-        get() {
-            if (queryTokens.isEmpty()) return ""
-            return queryTokens.joinToString("&", prefix = "?") { token ->
-                when {
-                    token.paramName != null -> "${token.key}={${token.paramName}}"
-                    token.literalValue != null -> "${token.key}=${token.literalValue}"
-                    else -> token.key
-                }
-            }
-        }
 }
 
 // -- List specs --
@@ -89,12 +75,14 @@ internal data class ResourceListSpec(
     val listProvider: ConcreteResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "application/json",
+    val resourceClassInfo: ResourceClassInfo? = null,
 )
 
 internal data class TemplateListSpec(
     val listProvider: TemplateResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "text/plain",
+    val resourceClassInfo: ResourceClassInfo? = null,
 )
 
 // -- Segment subtypes --
