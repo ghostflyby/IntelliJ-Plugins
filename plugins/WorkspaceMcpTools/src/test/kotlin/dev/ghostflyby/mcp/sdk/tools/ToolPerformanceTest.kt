@@ -30,21 +30,21 @@ internal class ToolPerformanceTest {
         private val reflectHandler: Handler by lazy {
             val tc = PerfTool::class
             val fn = (tc.declaredMemberFunctions + tc.declaredMemberExtensionFunctions)
-                .single { it.name == "doPerf" }
+                .single { it.name == "do_perf" }
             buildKotlinReflectHandler(PerfTool(), fn, ToolMethodInfo(fn.name, fn.valueParameters.map { it.type }))
         }
 
         private val mhHandler: Handler by lazy {
             val tc = PerfTool::class
             val fn = (tc.declaredMemberFunctions + tc.declaredMemberExtensionFunctions)
-                .single { it.name == "doPerf" }
+                .single { it.name == "do_perf" }
             buildMethodHandleHandler(compileToolInvocationPlan(PerfTool(), fn))
         }
 
         private val testRequest: CallToolRequest by lazy {
             CallToolRequest(
                 CallToolRequestParams(
-                    name = "doPerf",
+                    name = "do_perf",
                     arguments = buildJsonObject {
                         put("url", "file:///tmp/test/file.txt")
                         put("offset", 42)

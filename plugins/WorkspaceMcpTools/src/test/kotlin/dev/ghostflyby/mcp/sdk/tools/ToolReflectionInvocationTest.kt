@@ -30,7 +30,7 @@ internal class ToolReflectionInvocationTest {
     fun `valid tool invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -43,7 +43,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle valid tool invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -64,7 +64,7 @@ internal class ToolReflectionInvocationTest {
     fun `non-suspend invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NonSuspendTool::class,
-            functionName = "notSuspend",
+            functionName = "not_suspend",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -77,7 +77,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle non-suspend invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NonSuspendTool::class,
-            functionName = "notSuspend",
+            functionName = "not_suspend",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -90,7 +90,7 @@ internal class ToolReflectionInvocationTest {
     fun `regular member invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NoReceiverTool::class,
-            functionName = "noReceiver",
+            functionName = "no_receiver",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -103,7 +103,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle regular member invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NoReceiverTool::class,
-            functionName = "noReceiver",
+            functionName = "no_receiver",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -116,7 +116,7 @@ internal class ToolReflectionInvocationTest {
     fun `multi param invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = MultiParamTool::class,
-            functionName = "doMulti",
+            functionName = "do_multi",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
                 put("b", buildJsonObject { put("y", "z") })
@@ -130,7 +130,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle multi param invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = MultiParamTool::class,
-            functionName = "doMulti",
+            functionName = "do_multi",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
                 put("b", buildJsonObject { put("y", "z") })
@@ -144,7 +144,7 @@ internal class ToolReflectionInvocationTest {
     fun `zero param invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ZeroParamTool::class,
-            functionName = "doNothing",
+            functionName = "do_nothing",
             arguments = buildJsonObject { },
         )
 
@@ -155,7 +155,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle zero param invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ZeroParamTool::class,
-            functionName = "doNothing",
+            functionName = "do_nothing",
             arguments = buildJsonObject { },
         )
 
@@ -166,7 +166,7 @@ internal class ToolReflectionInvocationTest {
     fun `default params invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = DefaultParamTool::class,
-            functionName = "doDefault",
+            functionName = "do_default",
             arguments = buildJsonObject {
                 put("prefix", "scan")
                 put("suffix", "done")
@@ -180,7 +180,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle default params invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = DefaultParamTool::class,
-            functionName = "doDefault",
+            functionName = "do_default",
             arguments = buildJsonObject {
                 put("prefix", "scan")
                 put("suffix", "done")
@@ -194,7 +194,7 @@ internal class ToolReflectionInvocationTest {
     fun `value class invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ValueClassTool::class,
-            functionName = "doValue",
+            functionName = "do_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -207,7 +207,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValueClassTool::class,
-            functionName = "doValue",
+            functionName = "do_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -220,7 +220,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable value class invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullableValueClassTool::class,
-            functionName = "doNullableValue",
+            functionName = "do_nullable_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -233,7 +233,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableValueClassTool::class,
-            functionName = "doNullableValue",
+            functionName = "do_nullable_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -246,7 +246,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable value class accepts explicit null`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullableValueClassTool::class,
-            functionName = "doNullableValue",
+            functionName = "do_nullable_value",
             arguments = buildJsonObject {
                 put("path", null)
             },
@@ -259,7 +259,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableValueClassTool::class,
-            functionName = "doNullableValue",
+            functionName = "do_nullable_value",
             arguments = buildJsonObject {
                 put("path", null)
             },
@@ -272,7 +272,7 @@ internal class ToolReflectionInvocationTest {
     fun `primitive value class invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = PrimitiveValueClassTool::class,
-            functionName = "doPrimitiveValue",
+            functionName = "do_primitive_value",
             arguments = buildJsonObject {
                 put("id", 42)
             },
@@ -285,7 +285,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle primitive value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = PrimitiveValueClassTool::class,
-            functionName = "doPrimitiveValue",
+            functionName = "do_primitive_value",
             arguments = buildJsonObject {
                 put("id", 42)
             },
@@ -298,7 +298,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable primitive value class invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullablePrimitiveValueClassTool::class,
-            functionName = "doNullablePrimitiveValue",
+            functionName = "do_nullable_primitive_value",
             arguments = buildJsonObject {
                 put("id", 42)
             },
@@ -311,7 +311,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable primitive value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullablePrimitiveValueClassTool::class,
-            functionName = "doNullablePrimitiveValue",
+            functionName = "do_nullable_primitive_value",
             arguments = buildJsonObject {
                 put("id", 42)
             },
@@ -324,7 +324,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable primitive value class accepts explicit null`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullablePrimitiveValueClassTool::class,
-            functionName = "doNullablePrimitiveValue",
+            functionName = "do_nullable_primitive_value",
             arguments = buildJsonObject {
                 put("id", null)
             },
@@ -337,7 +337,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable primitive value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullablePrimitiveValueClassTool::class,
-            functionName = "doNullablePrimitiveValue",
+            functionName = "do_nullable_primitive_value",
             arguments = buildJsonObject {
                 put("id", null)
             },
@@ -350,7 +350,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable underlying value class invocation`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullableUnderlyingValueClassTool::class,
-            functionName = "doNullableUnderlyingValue",
+            functionName = "do_nullable_underlying_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -363,7 +363,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable underlying value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableUnderlyingValueClassTool::class,
-            functionName = "doNullableUnderlyingValue",
+            functionName = "do_nullable_underlying_value",
             arguments = buildJsonObject {
                 put("path", "src/Main.kt")
             },
@@ -376,7 +376,7 @@ internal class ToolReflectionInvocationTest {
     fun `nullable underlying value class accepts explicit null`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = NullableUnderlyingValueClassTool::class,
-            functionName = "doNullableUnderlyingValue",
+            functionName = "do_nullable_underlying_value",
             arguments = buildJsonObject {
                 put("path", null)
             },
@@ -389,7 +389,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle nullable underlying value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableUnderlyingValueClassTool::class,
-            functionName = "doNullableUnderlyingValue",
+            functionName = "do_nullable_underlying_value",
             arguments = buildJsonObject {
                 put("path", null)
             },
@@ -402,7 +402,7 @@ internal class ToolReflectionInvocationTest {
     fun `valid tool reports missing argument`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject { },
         )
 
@@ -413,7 +413,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle valid tool reports missing argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject { },
         )
 
@@ -424,7 +424,7 @@ internal class ToolReflectionInvocationTest {
     fun `multi param reports missing argument`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = MultiParamTool::class,
-            functionName = "doMulti",
+            functionName = "do_multi",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -437,7 +437,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle multi param reports missing argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = MultiParamTool::class,
-            functionName = "doMulti",
+            functionName = "do_multi",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", 1) })
             },
@@ -450,7 +450,7 @@ internal class ToolReflectionInvocationTest {
     fun `valid tool reports invalid argument`() = runBlocking {
         val result = callAcceptedTool(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", "bad") })
             },
@@ -463,7 +463,7 @@ internal class ToolReflectionInvocationTest {
     fun `methodhandle valid tool reports invalid argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
-            functionName = "doThing",
+            functionName = "do_thing",
             arguments = buildJsonObject {
                 put("a", buildJsonObject { put("x", "bad") })
             },

@@ -16,7 +16,7 @@ import kotlinx.schema.Schema
 
 internal class PerfTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doPerf(
+    suspend fun McpCallContext<CallToolRequest>.do_perf(
         url: String,
         offset: Int,
         limit: Int = 50,

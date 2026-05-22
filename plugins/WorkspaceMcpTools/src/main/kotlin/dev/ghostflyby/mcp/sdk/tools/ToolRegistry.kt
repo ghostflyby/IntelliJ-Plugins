@@ -59,6 +59,54 @@ internal fun <T : Any> reflectTools(
     }
 }
 
+/**
+ * Convert camelCase/PascalCase to snake_case.
+ *
+ * - `doThing` → `do_thing`
+ * - `DoThing` → `do_thing`
+ * - `PDFReader` → `pdf_reader`
+ * - `readXMLFile` → `read_xml_file`
+ * - `file_write` → `file_write` (unchanged)
+ */
+internal fun String.camelToSnakeCase(): String {
+    if (isEmpty()) return this
+
+    val result = StringBuilder(length + 8)
+
+    for (i in indices) {
+        val ch = this[i]
+
+        if (ch.isUpperCase()) {
+            val prev = getOrNull(i - 1)
+            val next = getOrNull(i + 1)
+
+            val needUnderscore =
+                result.isNotEmpty() &&
+                        (
+                                // helloWorld -> hello_world
+                                prev?.isLowerCase() == true ||
+                                        prev?.isDigit() == true ||
+
+                                        // HTTPRequest -> http_request
+                                        (
+                                                prev?.isUpperCase() == true &&
+                                                        next?.isLowerCase() == true
+                                                )
+                                )
+
+            if (needUnderscore && result.last() != '_') {
+                result.append('_')
+            }
+
+            result.append(ch.lowercaseChar())
+        } else {
+            result.append(ch)
+        }
+    }
+
+    return result.toString()
+}
+
 internal fun reflectOneTool(
     toolClass: KClass<*>,
     instance: Any,
@@ -76,7 +124,7 @@ internal fun reflectOneTool(
         .toSet()
     val properties = params?.get("properties") as? JsonObject
     val tool = Tool(
-        name = schema["name"]?.jsonPrimitive?.content ?: func.name,
+        name = (schema["name"]?.jsonPrimitive?.content ?: func.name).camelToSnakeCase(),
         description = schema["description"]?.jsonPrimitive?.content ?: "",
         inputSchema = ToolSchema(
             properties = properties?.unwrapValueClassProperties(func),

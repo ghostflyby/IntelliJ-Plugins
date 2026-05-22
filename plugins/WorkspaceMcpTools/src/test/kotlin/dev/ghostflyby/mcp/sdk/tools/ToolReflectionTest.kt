@@ -152,7 +152,7 @@ internal class ValidTool {
     data class VaIn(val x: Int)
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doThing(a: VaIn): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_thing(a: VaIn): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }
 
@@ -170,7 +170,7 @@ internal class NonSuspendTool {
     data class NtIn(val x: Int)
 
     @Schema
-    fun McpCallContext<CallToolRequest>.notSuspend(a: NtIn): CallToolResult =
+    fun McpCallContext<CallToolRequest>.not_suspend(a: NtIn): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }
 
@@ -189,7 +189,7 @@ internal class NoReceiverTool {
     data class NrIn(val x: Int)
 
     @Schema
-    suspend fun noReceiver(a: NrIn): CallToolResult =
+    suspend fun no_receiver(a: NrIn): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }
 internal class MultiParamTool {
@@ -197,19 +197,19 @@ internal class MultiParamTool {
     @Serializable
     data class B(val y: String)
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doMulti(a: A, b: B): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_multi(a: A, b: B): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "${a.x}, ${b.y}")))
 }
 
 internal class ZeroParamTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doNothing(): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_nothing(): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }
 
 internal class DefaultParamTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doDefault(
+    suspend fun McpCallContext<CallToolRequest>.do_default(
         prefix: String,
         limit: Int = 7,
         suffix: String,
@@ -224,13 +224,13 @@ internal value class ToolPath(val value: String)
 
 internal class ValueClassTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doValue(path: ToolPath): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_value(path: ToolPath): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = path.value)))
 }
 
 internal class NullableValueClassTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doNullableValue(path: ToolPath?): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_nullable_value(path: ToolPath?): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = path?.value ?: "null")))
 }
 
@@ -240,13 +240,13 @@ internal value class ToolId(val value: Int)
 
 internal class PrimitiveValueClassTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doPrimitiveValue(id: ToolId): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_primitive_value(id: ToolId): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = id.value.toString())))
 }
 
 internal class NullablePrimitiveValueClassTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doNullablePrimitiveValue(id: ToolId?): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_nullable_primitive_value(id: ToolId?): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = id?.value?.toString() ?: "null")))
 }
 
@@ -256,6 +256,6 @@ internal value class NullableInnerPath(val value: String?)
 
 internal class NullableUnderlyingValueClassTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.doNullableUnderlyingValue(path: NullableInnerPath?): CallToolResult =
+    suspend fun McpCallContext<CallToolRequest>.do_nullable_underlying_value(path: NullableInnerPath?): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = path?.value ?: "null")))
 }
