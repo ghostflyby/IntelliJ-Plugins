@@ -8,11 +8,21 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
+import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.ResourceSegment
-import dev.ghostflyby.mcp.route.ResourceSegmentBuilder
 import dev.ghostflyby.mcp.route.ResourceSegmentCollector
+import dev.ghostflyby.mcp.route.ResourceListDecision
+import dev.ghostflyby.mcp.route.listResources
+import dev.ghostflyby.mcp.route.listTemplates
+import dev.ghostflyby.mcp.route.read
 import dev.ghostflyby.mcp.sdk.tools.reflectTools
 import io.modelcontextprotocol.kotlin.sdk.server.Server
+import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.Resource
+import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
@@ -48,13 +58,20 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         }
     }
 
-    /**
-     * Register resource segments using the builder DSL.
-     * Segments are collected via [segmentCollector] and later assembled
-     * into the global resource tree by the server service.
-     */
-    fun segments(block: ResourceSegmentBuilder.() -> Unit) {
-        segmentCollector.block()
+    inline fun <reified T : Any> read(noinline handler: suspend McpCallContext<ReadResourceRequest>.(T) -> ReadResourceResult) {
+        segmentCollector.read(handler)
+    }
+
+    inline fun <reified T : Any> listResources(
+        noinline listProvider: (suspend McpCallContext<ListResourcesRequest>.() -> ResourceListDecision<Resource>)? = null,
+    ) {
+        segmentCollector.listResources<T>(listProvider)
+    }
+
+    inline fun <reified T : Any> listTemplates(
+        noinline listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> ResourceListDecision<ResourceTemplate>)? = null,
+    ) {
+        segmentCollector.listTemplates<T>(listProvider)
     }
 
     fun buildRegistration(): WorkspaceMcpFeatureRegistration {

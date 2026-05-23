@@ -12,12 +12,6 @@ import kotlinx.collections.immutable.PersistentMap
 import kotlinx.collections.immutable.persistentHashMapOf
 import kotlinx.collections.immutable.persistentListOf
 
-internal typealias ResourceReadHandler = suspend McpCallContext<ReadResourceRequest>.() -> ReadResourceResult
-internal typealias ResourceListProvider<R, T> = suspend McpCallContext<R>.() -> ResourceListDecision<T>
-
-internal typealias ConcreteResourceListProvider = ResourceListProvider<ListResourcesRequest, Resource>
-internal typealias TemplateResourceListProvider = ResourceListProvider<ListResourceTemplatesRequest, ResourceTemplate>
-
 @JvmInline
 internal value class McpCallContext<R : Request>(val call: WorkspaceMcpCall<R>)
 
@@ -41,19 +35,17 @@ internal sealed class ResourceSegment {
 
     var children: PersistentMap<String, ResourceSegment> = persistentHashMapOf()
 
-    /** Read handlers, each optionally bound to query parameters. */
-    var readEntries: PersistentList<ReadEntry> = persistentListOf()
+    /** Read routes, each optionally bound to query parameters. */
+    var readRoutes: PersistentList<ResourceReadRoute> = persistentListOf()
 
     /** Behaviour for resources/list at this segment. Null means no resource listing. */
-    var resourceList: ResourceListSpec? = null
+    var resourceListRoute: ResourceListRoute? = null
 
     /** Behaviour for resources/templates/list at this segment. Null means no template listing. */
-    var templateList: TemplateListSpec? = null
+    var templateListRoute: ResourceTemplateListRoute? = null
 }
 
-// -- Read --
-
-internal data class ReadEntry(
+internal data class ResourceReadRoute(
     val description: String = "",
     val mimeType: String = "application/json",
     val resourceClassInfo: ResourceClassInfo? = null,
@@ -61,20 +53,18 @@ internal data class ReadEntry(
     val paramDeserializer: ((Map<String, String>) -> Any?)? = null,
 )
 
-// -- List specs --
-
-internal data class ResourceListSpec(
+internal data class ResourceListRoute(
     val description: String = "",
     val mimeType: String = "application/json",
     val resourceClassInfo: ResourceClassInfo? = null,
-    val invoker: (suspend (McpCallContext<ListResourcesRequest>, Any?) -> ResourceListDecision<Resource>)? = null,
+    val provider: (suspend McpCallContext<ListResourcesRequest>.() -> ResourceListDecision<Resource>)? = null,
 )
 
-internal data class TemplateListSpec(
+internal data class ResourceTemplateListRoute(
     val description: String = "",
     val mimeType: String = "text/plain",
     val resourceClassInfo: ResourceClassInfo? = null,
-    val invoker: (suspend (McpCallContext<ListResourceTemplatesRequest>, Any?) -> ResourceListDecision<ResourceTemplate>)? = null,
+    val provider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> ResourceListDecision<ResourceTemplate>)? = null,
 )
 
 // -- Segment subtypes --

@@ -137,23 +137,15 @@ internal class ResourceRouteSnapshotTest {
 
     private fun testSnapshot(): ResourceRouteSnapshot {
         val core = ResourceSegmentCollector()
-        core.route<ServerInfoResource> {
-            read { ReadResourceResult(emptyList()) }
-        }
-        core.route<ProjectResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
+        core.read<ServerInfoResource> { ReadResourceResult(emptyList()) }
+        core.read<ProjectResource> { ReadResourceResult(emptyList()) }
+        core.listTemplates<ProjectResource>()
 
         val fileContent = ResourceSegmentCollector()
-        fileContent.route<VfsResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        fileContent.route<ProjectFileResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
+        fileContent.read<VfsResource> { ReadResourceResult(emptyList()) }
+        fileContent.listTemplates<VfsResource>()
+        fileContent.read<ProjectFileResource> { ReadResourceResult(emptyList()) }
+        fileContent.listTemplates<ProjectFileResource>()
 
         return ResourceRouteCompiler.compile(
             listOf(
@@ -171,32 +163,24 @@ internal class ResourceRouteSnapshotTest {
 
     private fun projectOnlySnapshot(): ResourceRouteSnapshot {
         val collector = ResourceSegmentCollector()
-        collector.route<ProjectResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
+        collector.read<ProjectResource> { ReadResourceResult(emptyList()) }
+        collector.listTemplates<ProjectResource>()
         return compile("project-only", collector)
     }
 
     private fun optionalQuerySnapshot(): ResourceRouteSnapshot {
         val collector = ResourceSegmentCollector()
-        collector.route<SearchResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
+        collector.read<SearchResource> { ReadResourceResult(emptyList()) }
+        collector.listTemplates<SearchResource>()
         return compile("search", collector)
     }
 
     private fun coexistingQuerySnapshot(): ResourceRouteSnapshot {
         val collector = ResourceSegmentCollector()
-        collector.route<TargetResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
-        collector.route<TargetWithQueryResource> {
-            read { ReadResourceResult(emptyList()) }
-            listTemplates()
-        }
+        collector.read<TargetResource> { ReadResourceResult(emptyList()) }
+        collector.listTemplates<TargetResource>()
+        collector.read<TargetWithQueryResource> { ReadResourceResult(emptyList()) }
+        collector.listTemplates<TargetWithQueryResource>()
         return compile("target", collector)
     }
 

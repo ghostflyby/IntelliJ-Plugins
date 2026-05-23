@@ -103,7 +103,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request, vars ->
-                        val deserialized = entry.readEntry.paramDeserializer?.invoke(vars)
+                        val deserialized = entry.readRoute.paramDeserializer?.invoke(vars)
                         entry.invoker(
                             McpCallContext(
                                 WorkspaceMcpCall(
@@ -126,7 +126,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request ->
-                        val deserialized = entry.readEntry.paramDeserializer?.invoke(emptyMap())
+                        val deserialized = entry.readRoute.paramDeserializer?.invoke(emptyMap())
                         entry.invoker(
                             McpCallContext(
                                 WorkspaceMcpCall(

@@ -23,8 +23,7 @@ internal data class ResourceRouteResource(
     val mimeType: String,
     val ownerFeatureName: String,
     val invoker: suspend (McpCallContext<ReadResourceRequest>, Any?) -> ReadResourceResult,
-    val readEntry: ReadEntry,
-    val resourceListInvoker: (suspend (McpCallContext<ListResourcesRequest>, Any?) -> ResourceListDecision<Resource>)?,
+    val readRoute: ResourceReadRoute,
     val isParameterized: Boolean,
 )
 
@@ -34,8 +33,7 @@ internal data class ResourceRouteTemplate(
     val description: String,
     val mimeType: String,
     val ownerFeatureName: String,
-    val templateListInvoker: (suspend (McpCallContext<ListResourceTemplatesRequest>, Any?) -> ResourceListDecision<ResourceTemplate>)?,
-    val templateListSpec: TemplateListSpec,
+    val templateListRoute: ResourceTemplateListRoute,
 )
 
 internal data class ResourceRouteSnapshot(
@@ -51,7 +49,7 @@ internal data class ResourceRouteSnapshot(
 
     fun matchUri(uri: String): ResourceRouteMatch? {
         for (resource in resources) {
-            val info = resource.readEntry.resourceClassInfo ?: continue
+            val info = resource.readRoute.resourceClassInfo ?: continue
             val params = format.tryMatch(uri, info) ?: continue
             return ResourceRouteMatch(resource = resource, params = AncestorContext(params))
         }

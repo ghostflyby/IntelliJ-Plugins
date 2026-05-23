@@ -18,7 +18,9 @@ import java.util.concurrent.atomic.AtomicReference
  * list requests by walking the immutable route snapshot and executing optional
  * per-segment list providers.
  */
-internal class WorkspaceMcpResourceCatalog {
+internal class WorkspaceMcpResourceCatalog(
+    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+) {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
 
     fun updateSnapshot(snapshot: ResourceRouteSnapshot) {
@@ -86,12 +88,12 @@ internal class WorkspaceMcpResourceCatalog {
         call: WorkspaceMcpCall<ListResourcesRequest>,
         path: String,
     ): ResourceListDecision<Resource> {
-        val lp = resourceList?.invoker
+        val lp = resourceListRoute?.provider
         if (lp != null) {
-            val decision = lp(McpCallContext(call), null)
+            val decision = lp(McpCallContext(call))
             if (decision.entries.isNotEmpty() || !decision.includeChildren) return decision
         }
-        val ep = readEntries.firstOrNull()
+        val ep = readRoutes.firstOrNull()
         return if (ep == null || this is ParameterPathSegment) ResourceListDecision()
         else defaultResourceDecision(path, ep.mimeType)
     }
@@ -100,8 +102,8 @@ internal class WorkspaceMcpResourceCatalog {
         call: WorkspaceMcpCall<ListResourceTemplatesRequest>,
         path: String,
     ): ResourceListDecision<ResourceTemplate> {
-        val spec = templateList ?: return ResourceListDecision()
-        return spec.invoker?.invoke(McpCallContext(call), null)
+        val spec = templateListRoute ?: return ResourceListDecision()
+        return spec.provider?.invoke(McpCallContext(call))
             ?: defaultTemplateDecision(path, spec.mimeType)
     }
 
@@ -141,5 +143,5 @@ internal class WorkspaceMcpResourceCatalog {
         children.values.toList()
 
     private fun concreteInstanceUri(path: String): String =
-        "ij-workspace://${workspaceInstanceKey()}/$path"
+        "ij-workspace://${instanceKeyProvider()}/$path"
 }

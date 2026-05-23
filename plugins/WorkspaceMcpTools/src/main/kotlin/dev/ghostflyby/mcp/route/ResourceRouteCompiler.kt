@@ -56,25 +56,23 @@ internal object ResourceRouteCompiler {
         val currentPath = if (prefix.isEmpty()) segment.name else "$prefix/${segment.name}"
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
-        segment.readEntries.forEach { entry ->
+        segment.readRoutes.forEach { entry ->
             val uri = routeUri(currentPath, entry.resourceClassInfo)
             resources += ResourceRouteResource(
                 uri = uri,
                 name = segment.name, description = entry.description, mimeType = entry.mimeType,
                 ownerFeatureName = ownerFeatureName, invoker = entry.invoker,
-                readEntry = entry,
-                resourceListInvoker = segment.resourceList?.invoker,
+                readRoute = entry,
                 isParameterized = currentHasParameter,
             )
         }
-        segment.templateList?.let { spec ->
+        segment.templateListRoute?.let { spec ->
             val uri = routeUri(currentPath, spec.resourceClassInfo)
             templates += ResourceRouteTemplate(
                 uri = uri,
                 name = segment.name, description = spec.description, mimeType = spec.mimeType,
                 ownerFeatureName = ownerFeatureName,
-                templateListInvoker = spec.invoker,
-                templateListSpec = spec,
+                templateListRoute = spec,
             )
         }
 
@@ -112,9 +110,9 @@ internal object ResourceRouteCompiler {
             is ParameterPathSegment -> ParameterPathSegment(name = name, paramName = paramName, extensible = extensible)
         }
         clone.ownerFeatureName = ownerFeatureName
-        clone.readEntries = readEntries
-        clone.templateList = templateList
-        clone.resourceList = resourceList
+        clone.readRoutes = readRoutes
+        clone.resourceListRoute = resourceListRoute
+        clone.templateListRoute = templateListRoute
         clone.children =
             children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
                 val childClone = child.cloneWithoutAnchors()

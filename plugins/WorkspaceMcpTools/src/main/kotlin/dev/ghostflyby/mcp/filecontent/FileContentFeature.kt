@@ -10,7 +10,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.route.resources.VfsResource
-import dev.ghostflyby.mcp.route.route
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
@@ -43,34 +42,27 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             scope = featureScope,
         ).install()
 
-        segments {
-            route<VfsResource> {
-                read {
-                    readContentOrMeta(
-                        uri = call.request.params.uri,
-                        file = resolveFileByRawUrl(call.parameters["rawVfsUrl"] ?: ""),
-                        ancestors = call.parameters,
-                    )
-                }
-                listTemplates()
-            }
-
-            // -- project-scoped files (via Document) --
-            route<ProjectFileResource> {
-                read {
-                    val file = resolveFileByRelativePath(
-                        project = call.project(),
-                        relativePath = call.parameters["relativePath"] ?: "",
-                    )
-                    readContentOrMeta(
-                        uri = call.request.params.uri,
-                        file = file,
-                        ancestors = call.parameters,
-                    )
-                }
-                listTemplates()
-            }
+        read<VfsResource> { resource ->
+            readContentOrMeta(
+                uri = call.request.params.uri,
+                file = resolveFileByRawUrl(resource.rawVfsUrl),
+                ancestors = call.parameters,
+            )
         }
+        listTemplates<VfsResource>()
+
+        read<ProjectFileResource> { resource ->
+            val file = resolveFileByRelativePath(
+                project = call.project(),
+                relativePath = resource.relativePath,
+            )
+            readContentOrMeta(
+                uri = call.request.params.uri,
+                file = file,
+                ancestors = call.parameters,
+            )
+        }
+        listTemplates<ProjectFileResource>()
 
         // -- document write tools --
         registerToolClass<FileContentWriteTools>()
