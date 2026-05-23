@@ -6,6 +6,19 @@
 
 package dev.ghostflyby.mcp
 
-import dev.ghostflyby.intellij.PluginInfoProvider
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
+import com.intellij.openapi.extensions.PluginAware
+import com.intellij.openapi.extensions.PluginDescriptor
 
-internal object PluginInfo : PluginInfoProvider(PluginInfo::class.java)
+@Service
+internal class MyPluginInfo : PluginAware {
+    override fun setPluginDescriptor(pluginDescriptor: PluginDescriptor) {
+        descriptor = pluginDescriptor
+    }
+
+    internal lateinit var descriptor: PluginDescriptor
+
+}
+
+internal val pluginDescriptor get() = service<MyPluginInfo>().descriptor

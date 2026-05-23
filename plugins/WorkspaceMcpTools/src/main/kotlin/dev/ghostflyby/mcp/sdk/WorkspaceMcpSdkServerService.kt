@@ -11,7 +11,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
-import dev.ghostflyby.mcp.PluginInfo
+import dev.ghostflyby.mcp.pluginDescriptor
 import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import io.ktor.server.cio.*
@@ -83,7 +83,7 @@ internal class WorkspaceMcpSdkServerService(
 
     private fun createServer(): Server {
         val server = Server(
-            serverInfo = Implementation(name = "workspace-mcp", version = PluginInfo.version),
+            serverInfo = Implementation(name = "workspace-mcp", version = pluginDescriptor.version),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
                     resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),
