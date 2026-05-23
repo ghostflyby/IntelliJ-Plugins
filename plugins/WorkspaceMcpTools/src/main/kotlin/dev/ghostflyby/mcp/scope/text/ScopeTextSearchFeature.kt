@@ -8,14 +8,13 @@ package dev.ghostflyby.mcp.scope.text
 
 import dev.ghostflyby.mcp.scope.text.tools.ScopeTextSearchTools
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
 internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-text-search"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         registerToolClass<ScopeTextSearchTools>()
-        return buildRegistration()
+
     }
 }

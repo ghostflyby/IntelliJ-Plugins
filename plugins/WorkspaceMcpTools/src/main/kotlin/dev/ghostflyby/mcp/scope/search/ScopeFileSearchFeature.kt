@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.scope.search
 
 import dev.ghostflyby.mcp.scope.search.tools.ScopeFileSearchTools
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
 /**
@@ -25,8 +24,8 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 internal class ScopeFileSearchFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-file-search"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         registerToolClass<ScopeFileSearchTools>()
-        return buildRegistration()
+
     }
 }

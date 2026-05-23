@@ -11,7 +11,6 @@ import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.route.resources.VfsResource
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 import io.modelcontextprotocol.kotlin.sdk.types.BlobResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
@@ -35,7 +34,7 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         FileContentInvalidationListener(
             projectResolver = projectResolver,
             invalidationSink = invalidationSink,
@@ -65,7 +64,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         // -- document write tools --
         registerToolClass<FileContentWriteTools>()
 
-        return buildRegistration()
+
     }
 
     private suspend fun readContentOrMeta(uri: String, file: VirtualFile, ancestors: Map<String, String>): ReadResourceResult {

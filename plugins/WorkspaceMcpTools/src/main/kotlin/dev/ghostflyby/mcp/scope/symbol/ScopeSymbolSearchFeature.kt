@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.scope.symbol
 
 import dev.ghostflyby.mcp.scope.symbol.tools.ScopeSymbolSearchTools
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
 /**
@@ -23,8 +22,8 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 internal class ScopeSymbolSearchFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-symbol-search"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         registerToolClass<ScopeSymbolSearchTools>()
-        return buildRegistration()
+
     }
 }

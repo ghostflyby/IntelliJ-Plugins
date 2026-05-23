@@ -11,7 +11,10 @@ import dev.ghostflyby.mcp.pluginDescriptor
 import dev.ghostflyby.mcp.route.resources.ProjectResource
 import dev.ghostflyby.mcp.route.resources.ServerInfoResource
 import dev.ghostflyby.mcp.route.visibleProjects
-import dev.ghostflyby.mcp.sdk.*
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
+import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
@@ -29,7 +32,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
 
     private val json = Json { prettyPrint = true; encodeDefaults = true }
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         read<ServerInfoResource> {
             val instanceKey = workspaceInstanceKey()
             val info = readAction {
@@ -82,6 +85,6 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                 ),
             )
         }
-        return buildRegistration()
+
     }
 }

@@ -49,7 +49,7 @@ internal class WorkspaceMcpFeatureCoordinator(
             invalidationSink = invalidationSink,
         )
         val registration = try {
-            with(feature) { context.register() }
+            with(feature) { context.apply { register() } }.buildRegistration()
         } catch (error: Exception) {
             featureJob.cancel()
             logger.warn("Failed to register Workspace MCP feature ${feature.featureName}", error)

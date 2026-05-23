@@ -63,7 +63,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
         segmentCollector.listTemplates<T>(listProvider)
     }
 
-    fun buildRegistration(): WorkspaceMcpFeatureRegistration {
+    internal fun buildRegistration(): WorkspaceMcpFeatureRegistration {
         segmentCollector.roots.forEach { it.markOwner(featureName) }
         return WorkspaceMcpFeatureRegistration(
             featureName = featureName,
@@ -108,5 +108,5 @@ internal data class WorkspaceMcpFeatureRegistration(
 internal interface WorkspaceMcpFeature {
     val featureName: String
 
-    fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration
+    fun WorkspaceMcpFeatureRegistrationContext.register()
 }

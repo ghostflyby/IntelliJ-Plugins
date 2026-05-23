@@ -7,7 +7,6 @@
 package dev.ghostflyby.mcp.vfs.resources
 
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 import dev.ghostflyby.mcp.vfs.tools.VfsSdkTools
 
@@ -17,8 +16,8 @@ import dev.ghostflyby.mcp.vfs.tools.VfsSdkTools
 internal class VfsResourceFeature : WorkspaceMcpFeature {
     override val featureName: String = "vfs-resources"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         registerToolClass<VfsSdkTools>()
-        return buildRegistration()
+
     }
 }

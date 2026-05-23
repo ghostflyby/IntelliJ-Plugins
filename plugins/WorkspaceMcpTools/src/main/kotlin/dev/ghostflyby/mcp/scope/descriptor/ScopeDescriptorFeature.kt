@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.scope.descriptor
 
 import dev.ghostflyby.mcp.scope.descriptor.tools.ScopeDescriptorTools
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistration
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 
 /**
@@ -28,8 +27,8 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
 internal class ScopeDescriptorFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-descriptor"
 
-    override fun WorkspaceMcpFeatureRegistrationContext.register(): WorkspaceMcpFeatureRegistration {
+    override fun WorkspaceMcpFeatureRegistrationContext.register() {
         registerToolClass<ScopeDescriptorTools>()
-        return buildRegistration()
+
     }
 }
