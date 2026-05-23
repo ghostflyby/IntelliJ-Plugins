@@ -54,26 +54,27 @@ internal sealed class ResourceSegment {
 // -- Read --
 
 internal data class ReadEntry(
-    val handler: ResourceReadHandler,
     val description: String = "",
     val mimeType: String = "application/json",
     val resourceClassInfo: ResourceClassInfo? = null,
+    val invoker: suspend (McpCallContext<ReadResourceRequest>, Any?) -> ReadResourceResult,
+    val paramDeserializer: ((Map<String, String>) -> Any?)? = null,
 )
 
 // -- List specs --
 
 internal data class ResourceListSpec(
-    val listProvider: ConcreteResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "application/json",
     val resourceClassInfo: ResourceClassInfo? = null,
+    val invoker: (suspend (McpCallContext<ListResourcesRequest>, Any?) -> ResourceListDecision<Resource>)? = null,
 )
 
 internal data class TemplateListSpec(
-    val listProvider: TemplateResourceListProvider? = null,
     val description: String = "",
     val mimeType: String = "text/plain",
     val resourceClassInfo: ResourceClassInfo? = null,
+    val invoker: (suspend (McpCallContext<ListResourceTemplatesRequest>, Any?) -> ResourceListDecision<ResourceTemplate>)? = null,
 )
 
 // -- Segment subtypes --

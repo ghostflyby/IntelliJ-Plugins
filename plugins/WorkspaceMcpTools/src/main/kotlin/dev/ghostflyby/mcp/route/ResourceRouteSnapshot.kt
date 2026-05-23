@@ -6,6 +6,11 @@
 
 package dev.ghostflyby.mcp.route
 
+import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
+import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
+import io.modelcontextprotocol.kotlin.sdk.types.Resource
 import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import io.modelcontextprotocol.kotlin.sdk.utils.MatchResult
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcher
@@ -17,9 +22,9 @@ internal data class ResourceRouteResource(
     val description: String,
     val mimeType: String,
     val ownerFeatureName: String,
-    val handler: ResourceReadHandler,
+    val invoker: suspend (McpCallContext<ReadResourceRequest>, Any?) -> ReadResourceResult,
     val readEntry: ReadEntry,
-    val resourceListProvider: ConcreteResourceListProvider?,
+    val resourceListInvoker: (suspend (McpCallContext<ListResourcesRequest>, Any?) -> ResourceListDecision<Resource>)?,
     val isParameterized: Boolean,
 )
 
@@ -29,7 +34,7 @@ internal data class ResourceRouteTemplate(
     val description: String,
     val mimeType: String,
     val ownerFeatureName: String,
-    val templateListProvider: TemplateResourceListProvider?,
+    val templateListInvoker: (suspend (McpCallContext<ListResourceTemplatesRequest>, Any?) -> ResourceListDecision<ResourceTemplate>)?,
     val templateListSpec: TemplateListSpec,
 )
 
@@ -78,7 +83,7 @@ internal class SegmentTreeTemplateMatcher(
         val snapshot = snapshotRef.get()
         val entry = snapshot.parameterizedResource(resourceTemplate.uriTemplate) ?: return null
         val routeMatch = snapshot.matchUri(resourceUri) ?: return null
-        if (routeMatch.resource.handler !== entry.handler) return null
+        if (routeMatch.resource.invoker !== entry.invoker) return null
         return MatchResult(variables = routeMatch.params, score = 100)
     }
 }

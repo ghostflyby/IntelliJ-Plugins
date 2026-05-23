@@ -86,9 +86,9 @@ internal class WorkspaceMcpResourceCatalog {
         call: WorkspaceMcpCall<ListResourcesRequest>,
         path: String,
     ): ResourceListDecision<Resource> {
-        val lp = resourceList?.listProvider
+        val lp = resourceList?.invoker
         if (lp != null) {
-            val decision = McpCallContext(call).lp()
+            val decision = lp(McpCallContext(call), null)
             if (decision.entries.isNotEmpty() || !decision.includeChildren) return decision
         }
         val ep = readEntries.firstOrNull()
@@ -101,7 +101,7 @@ internal class WorkspaceMcpResourceCatalog {
         path: String,
     ): ResourceListDecision<ResourceTemplate> {
         val spec = templateList ?: return ResourceListDecision()
-        return spec.listProvider?.invoke(McpCallContext(call))
+        return spec.invoker?.invoke(McpCallContext(call), null)
             ?: defaultTemplateDecision(path, spec.mimeType)
     }
 

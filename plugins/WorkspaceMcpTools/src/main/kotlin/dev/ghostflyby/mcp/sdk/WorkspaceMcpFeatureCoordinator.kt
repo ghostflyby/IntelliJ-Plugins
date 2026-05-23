@@ -103,7 +103,8 @@ internal class WorkspaceMcpFeatureCoordinator(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request, vars ->
-                        entry.handler(
+                        val deserialized = entry.readEntry.paramDeserializer?.invoke(vars)
+                        entry.invoker(
                             McpCallContext(
                                 WorkspaceMcpCall(
                                     connection = this,
@@ -111,6 +112,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     parameters = AncestorContext(vars),
                                 ),
                             ),
+                            deserialized,
                         )
                     }
                 }
@@ -124,7 +126,8 @@ internal class WorkspaceMcpFeatureCoordinator(
                         description = entry.description,
                         mimeType = entry.mimeType,
                     ) { request ->
-                        entry.handler(
+                        val deserialized = entry.readEntry.paramDeserializer?.invoke(emptyMap())
+                        entry.invoker(
                             McpCallContext(
                                 WorkspaceMcpCall(
                                     connection = this,
@@ -132,6 +135,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     parameters = AncestorContext(emptyMap()),
                                 ),
                             ),
+                            deserialized,
                         )
                     }
                 }

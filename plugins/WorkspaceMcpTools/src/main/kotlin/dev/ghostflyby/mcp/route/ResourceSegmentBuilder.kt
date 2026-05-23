@@ -6,19 +6,21 @@
 
 package dev.ghostflyby.mcp.route
 
+import io.modelcontextprotocol.kotlin.sdk.types.*
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
 import kotlin.reflect.KType
 import kotlin.reflect.typeOf
 
 internal interface ResourceSegmentBuilder {
     /** Register a read handler for the current path segment. */
-    fun read(handler: ResourceReadHandler)
+    fun read(handler: suspend McpCallContext<ReadResourceRequest>.(Any?) -> ReadResourceResult)
 
     /** Set the resource list provider for the current path segment. */
-    fun listResources(listProvider: ConcreteResourceListProvider? = null)
+    fun listResources(listProvider: (suspend McpCallContext<ListResourcesRequest>.(Any?) -> ResourceListDecision<Resource>)? = null)
 
     /** Set the template list provider for the current path segment. */
-    fun listTemplates(listProvider: TemplateResourceListProvider? = null)
+    fun listTemplates(listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.(Any?) -> ResourceListDecision<ResourceTemplate>)? = null)
 }
 
 /**
@@ -27,32 +29,32 @@ internal interface ResourceSegmentBuilder {
 internal inline fun <reified T : Any> ResourceSegmentBuilder.route(
     noinline block: RouteDslBuilder.() -> Unit,
 ) {
-    (this as ResourceSegmentCollector).routeWithType(typeOf<T>(), block)
+    (this as ResourceSegmentCollector).routeWithType(typeOf<T>(), block, serializer<T>())
 }
 
 /**
  * Collects read/list endpoints for a single resource route.
  */
 internal class RouteDslBuilder {
-    var readHandler: ReadEntry? = null
+    var invoker: ReadEntry? = null
         private set
     var resourceList: ResourceListSpec? = null
         private set
     var templateList: TemplateListSpec? = null
         private set
 
-    fun read(handler: ResourceReadHandler) {
-        check(readHandler == null) { "Read handler is already set for this route" }
-        readHandler = ReadEntry(handler = handler)
+    fun read(handler: suspend McpCallContext<ReadResourceRequest>.(Any?) -> ReadResourceResult) {
+        check(invoker == null) { "Read handler is already set for this route" }
+        invoker = ReadEntry(invoker = handler)
     }
 
-    fun listResources(listProvider: ConcreteResourceListProvider? = null) {
-        resourceList = ResourceListSpec(listProvider = listProvider)
+    fun listResources(listProvider: (suspend McpCallContext<ListResourcesRequest>.(Any?) -> ResourceListDecision<Resource>)? = null) {
+        resourceList = ResourceListSpec(invoker = listProvider)
     }
 
-    fun listTemplates(listProvider: TemplateResourceListProvider? = null) {
+    fun listTemplates(listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.(Any?) -> ResourceListDecision<ResourceTemplate>)? = null) {
         check(templateList == null) { "Template list is already set for this route" }
-        templateList = TemplateListSpec(listProvider = listProvider)
+        templateList = TemplateListSpec(invoker = listProvider)
     }
 }
 
@@ -66,32 +68,37 @@ internal open class ResourceSegmentCollector(
 
     val roots: List<ResourceSegment> get() = _roots.toList()
 
-    override fun read(handler: ResourceReadHandler) {
+    override fun read(handler: suspend McpCallContext<ReadResourceRequest>.(Any?) -> ReadResourceResult) {
         val target = current ?: error("Inline read handler requires a current path segment.")
-        val entry = ReadEntry(handler = handler)
+        val entry = ReadEntry(invoker = handler)
         target.readEntries = target.readEntries.builder().apply { add(entry) }.build()
     }
 
-    override fun listResources(listProvider: ConcreteResourceListProvider?) {
+    override fun listResources(listProvider: (suspend McpCallContext<ListResourcesRequest>.(Any?) -> ResourceListDecision<Resource>)?) {
         val target = current ?: error("Resource list requires a current path segment.")
-        target.resourceList = ResourceListSpec(listProvider = listProvider)
+        target.resourceList = ResourceListSpec(invoker = listProvider)
     }
 
-    override fun listTemplates(listProvider: TemplateResourceListProvider?) {
+    override fun listTemplates(listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.(Any?) -> ResourceListDecision<ResourceTemplate>)?) {
         val target = current ?: error("Template list requires a current path segment.")
         check(target.templateList == null) {
             "Template list is already set for segment '${target.name}'."
         }
-        target.templateList = TemplateListSpec(listProvider = listProvider)
+        target.templateList = TemplateListSpec(invoker = listProvider)
     }
 
     internal fun routeWithType(
         resourceType: KType,
         block: RouteDslBuilder.() -> Unit,
+        serializer: KSerializer<*> = serializer(resourceType),
     ) {
         val info = ResourceClassInfo.from(serializer(resourceType).descriptor)
+        val format = WorkspaceResourceUriFormat()
+        val paramDeserializer: ((Map<String, String>) -> Any?)? = { params ->
+            format.decodeFromParams(params, info, serializer)
+        }
         val dsb = RouteDslBuilder().apply(block)
-        val segments = buildTreeFromResourceClass(info, dsb)
+        val segments = buildTreeFromResourceClass(info, dsb, paramDeserializer)
         segments.forEach { seg ->
             val existing = _roots.find { it.name == seg.name }
             if (existing != null) {
@@ -129,6 +136,7 @@ internal fun mergeSegment(
 internal fun buildTreeFromResourceClass(
     info: ResourceClassInfo,
     dsb: RouteDslBuilder,
+    paramDeserializer: ((Map<String, String>) -> Any?)? = null,
 ): List<ResourceSegment> {
     val pathSegments = info.pathSegments
     if (pathSegments.isEmpty()) return emptyList()
@@ -140,8 +148,8 @@ internal fun buildTreeFromResourceClass(
         current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
-    if (dsb.readHandler != null) {
-        val entry = dsb.readHandler!!.copy(resourceClassInfo = info)
+    if (dsb.invoker != null) {
+        val entry = dsb.invoker!!.copy(resourceClassInfo = info, paramDeserializer = paramDeserializer)
         current.readEntries = current.readEntries.builder().apply { add(entry) }.build()
     }
     if (dsb.resourceList != null) current.resourceList = dsb.resourceList!!.copy(resourceClassInfo = info)

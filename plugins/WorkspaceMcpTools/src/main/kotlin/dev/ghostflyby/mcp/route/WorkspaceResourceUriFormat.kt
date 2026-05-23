@@ -195,6 +195,15 @@ internal class WorkspaceResourceUriFormat : StringFormat {
         return params
     }
 
+    internal fun <T> decodeFromParams(
+        params: Map<String, String>,
+        info: ResourceClassInfo,
+        deserializer: DeserializationStrategy<T>,
+    ): T {
+        val decoder = UrlParsingDecoder(params, info)
+        return deserializer.deserialize(decoder)
+    }
+
     fun templateUri(descriptor: SerialDescriptor): String {
         val info = ResourceClassInfo.from(descriptor)
         return info.templateUri()

@@ -61,9 +61,9 @@ internal object ResourceRouteCompiler {
             resources += ResourceRouteResource(
                 uri = uri,
                 name = segment.name, description = entry.description, mimeType = entry.mimeType,
-                ownerFeatureName = ownerFeatureName, handler = entry.handler,
+                ownerFeatureName = ownerFeatureName, invoker = entry.invoker,
                 readEntry = entry,
-                resourceListProvider = segment.resourceList?.listProvider,
+                resourceListInvoker = segment.resourceList?.invoker,
                 isParameterized = currentHasParameter,
             )
         }
@@ -73,7 +73,7 @@ internal object ResourceRouteCompiler {
                 uri = uri,
                 name = segment.name, description = spec.description, mimeType = spec.mimeType,
                 ownerFeatureName = ownerFeatureName,
-                templateListProvider = spec.listProvider,
+                templateListInvoker = spec.invoker,
                 templateListSpec = spec,
             )
         }
