@@ -6,13 +6,13 @@
 
 package dev.ghostflyby.mcp.route
 
-import io.ktor.resources.Resource
+import io.ktor.resources.*
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerializationStrategy
 import kotlinx.serialization.StringFormat
-import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.CompositeDecoder
 import kotlinx.serialization.encoding.CompositeEncoder
 import kotlinx.serialization.encoding.Decoder
@@ -148,9 +148,8 @@ internal class WorkspaceResourceUriFormat : StringFormat {
 
     override fun <T> decodeFromString(deserializer: DeserializationStrategy<T>, string: String): T {
         val info = ResourceClassInfo.from(deserializer.descriptor)
-        val params = parseUrlToParams(string, info)
-        val decoder = UrlParsingDecoder(params, info)
-        return deserializer.deserialize(decoder)
+        val params = tryMatch(string, info) ?: throw IllegalArgumentException("URI does not match route: $string")
+        return decodeFromParams(params, info, deserializer)
     }
 
     /**
@@ -379,53 +378,6 @@ internal class WorkspaceResourceUriFormat : StringFormat {
             }
         }
         private fun unsupported(): Nothing = error("UrlParsingDecoder only supports structured decoding")
-    }
-
-    // -- URL parsing --
-
-    private fun parseUrlToParams(url: String, info: ResourceClassInfo): Map<String, String> {
-        val schemeEnd = url.indexOf("://")
-        require(schemeEnd >= 0) { "Invalid workspace URI: $url" }
-        val afterScheme = url.substring(schemeEnd + 3)
-        val firstSlash = afterScheme.indexOf('/')
-        require(firstSlash >= 0) { "Invalid workspace URI: $url" }
-        val instanceKey = afterScheme.substring(0, firstSlash)
-        val pathAndQuery = afterScheme.substring(firstSlash + 1)
-        val queryCandidate = splitPathAndQuery(pathAndQuery, info)
-        val pathOnly = queryCandidate.path
-        val queryString = queryCandidate.queryString
-        val params = mutableMapOf("instanceKey" to instanceKey)
-        val pathParts = pathOnly.split("/").toMutableList()
-        var segIdx = 0
-        var pathIdx = 0
-        while (segIdx < info.pathSegments.size && pathIdx <= pathParts.size) {
-            val seg = info.pathSegments[segIdx]
-            when {
-                seg.isTail -> {
-                    params[seg.paramName!!] = pathParts.subList(pathIdx, pathParts.size).joinToString("/")
-                    pathIdx = pathParts.size; segIdx++
-                }
-                seg.isParameter -> {
-                    require(pathIdx < pathParts.size)
-                    params[seg.paramName!!] = pathParts[pathIdx]; pathIdx++; segIdx++
-                }
-                else -> {
-                    require(pathIdx < pathParts.size && pathParts[pathIdx] == seg.text) {
-                        "Invalid workspace URI path for ${info.pathSegments.joinToString("/") { it.text }}: $url"
-                    }
-                    pathIdx++; segIdx++
-                }
-            }
-        }
-        require(segIdx == info.pathSegments.size && pathIdx == pathParts.size) { "Invalid workspace URI path: $url" }
-        if (queryString.isNotEmpty()) {
-            queryString.split("&").filter { it.isNotBlank() }.forEach { pair ->
-                val eq = pair.indexOf('=')
-                if (eq >= 0) params[pair.substring(0, eq)] = pair.substring(eq + 1)
-                else params[pair] = ""
-            }
-        }
-        return params
     }
 
     private fun splitPathAndQuery(
