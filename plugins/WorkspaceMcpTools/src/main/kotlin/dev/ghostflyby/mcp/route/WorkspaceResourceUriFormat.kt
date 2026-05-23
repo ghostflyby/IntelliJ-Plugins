@@ -20,6 +20,25 @@ import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.modules.EmptySerializersModule
 import kotlinx.serialization.modules.SerializersModule
 
+internal data class ParsedWorkspaceUrl(
+    val instanceKey: String,
+    val pathAndQuery: String,
+)
+
+internal fun parseWorkspaceUrl(uri: String): ParsedWorkspaceUrl? {
+    val schemeEnd = uri.indexOf("://")
+    if (schemeEnd < 0) return null
+    val afterScheme = uri.substring(schemeEnd + 3)
+    val firstSlash = afterScheme.indexOf('/')
+    if (firstSlash < 0) return null
+    val instanceKey = afterScheme.substring(0, firstSlash)
+    if (instanceKey.isBlank()) return null
+    return ParsedWorkspaceUrl(
+        instanceKey = instanceKey,
+        pathAndQuery = afterScheme.substring(firstSlash),
+    )
+}
+
 internal data class ResourceClassInfo(
     val pathSegments: List<PathSegmentInfo>,
     val queryParams: List<QueryParamInfo>,
@@ -132,6 +151,48 @@ internal class WorkspaceResourceUriFormat : StringFormat {
         val params = parseUrlToParams(string, info)
         val decoder = UrlParsingDecoder(params, info)
         return deserializer.deserialize(decoder)
+    }
+
+    /**
+     * Try to match a workspace URI against a [ResourceClassInfo].
+     * Returns captured path + query parameters as a map, or null if the URI does not match.
+     */
+    internal fun tryMatch(url: String, info: ResourceClassInfo): Map<String, String>? {
+        val parsed = parseWorkspaceUrl(url) ?: return null
+        val pathAndQuery = parsed.pathAndQuery.removePrefix("/")
+        val queryCandidate = splitPathAndQuery(pathAndQuery, info)
+        val pathOnly = queryCandidate.path
+        val pathParts = pathOnly.split("/")
+        var segIdx = 0
+        val params = mutableMapOf<String, String>()
+        params["instanceKey"] = parsed.instanceKey
+
+        for (seg in info.pathSegments) {
+            when {
+                seg.isTail -> {
+                    params[seg.paramName!!] = pathParts.drop(segIdx).joinToString("/")
+                    segIdx = pathParts.size
+                }
+                seg.isParameter -> {
+                    if (segIdx >= pathParts.size) return null
+                    params[seg.paramName!!] = pathParts[segIdx]
+                    segIdx++
+                }
+                else -> {
+                    if (segIdx >= pathParts.size || pathParts[segIdx] != seg.text) return null
+                    segIdx++
+                }
+            }
+        }
+        if (segIdx != pathParts.size) return null
+        if (queryCandidate.queryString.isNotEmpty()) {
+            queryCandidate.queryString.split("&").filter { it.isNotBlank() }.forEach { pair ->
+                val eq = pair.indexOf('=')
+                if (eq >= 0) params[pair.substring(0, eq)] = pair.substring(eq + 1)
+                else params[pair] = ""
+            }
+        }
+        return params
     }
 
     fun templateUri(descriptor: SerialDescriptor): String {

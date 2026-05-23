@@ -21,15 +21,15 @@ internal class ResourceRouteSnapshotTest {
     @Test
     fun `server info matches literal route`() {
         val snapshot = testSnapshot()
-        val match = snapshot.segmentMatch("ij-workspace://iu-63341/server/info")
+        val match = snapshot.matchUri("ij-workspace://iu-63341/server/info")
         assertNotNull(match)
-        assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
+        assertEquals("iu-63341", match?.params?.get("instanceKey"))
     }
 
     @Test
     fun `no-query route does not match URI with query string`() {
         val snapshot = testSnapshot()
-        assertNull(snapshot.segmentMatch("ij-workspace://iu-63341/server/info?x=1"))
+        assertNull(snapshot.matchUri("ij-workspace://iu-63341/server/info?x=1"))
     }
 
     @Test
@@ -91,48 +91,48 @@ internal class ResourceRouteSnapshotTest {
     @Test
     fun `single segment parameter does not capture extra path segments`() {
         val snapshot = projectOnlySnapshot()
-        assertNull(snapshot.segmentMatch(workspaceFileUri()))
+        assertNull(snapshot.matchUri(workspaceFileUri()))
     }
 
     @Test
     fun `project route matches from parent resource`() {
-        val routeMatch = testSnapshot().segmentMatch(workspaceFileUri())
-        assertEquals(PK, routeMatch?.ancestors?.get("projectKey"))
+        val routeMatch = testSnapshot().matchUri(workspaceFileUri())
+        assertEquals(PK, routeMatch?.params?.get("projectKey"))
     }
 
     @Test
     fun `optional query route matches without query string`() {
-        val match = optionalQuerySnapshot().segmentMatch("ij-workspace://iu-63341/search")
+        val match = optionalQuerySnapshot().matchUri("ij-workspace://iu-63341/search")
         assertNotNull(match)
-        assertEquals("iu-63341", match?.ancestors?.get("instanceKey"))
-        assertNull(match?.ancestors?.get("query"))
+        assertEquals("iu-63341", match?.params?.get("instanceKey"))
+        assertNull(match?.params?.get("query"))
     }
 
     @Test
     fun `optional query route matches with query string`() {
-        val match = optionalQuerySnapshot().segmentMatch("ij-workspace://iu-63341/search?query=hello")
+        val match = optionalQuerySnapshot().matchUri("ij-workspace://iu-63341/search?query=hello")
         assertNotNull(match)
-        assertEquals("hello", match?.ancestors?.get("query"))
+        assertEquals("hello", match?.params?.get("query"))
     }
 
     @Test
     fun `no-query and optional-query routes coexist on same path`() {
         val snapshot = coexistingQuerySnapshot()
-        val noQuery = snapshot.segmentMatch("ij-workspace://iu-63341/target")
+        val noQuery = snapshot.matchUri("ij-workspace://iu-63341/target")
         assertNotNull(noQuery)
-        assertNull(noQuery?.ancestors?.get("q"))
+        assertNull(noQuery?.params?.get("q"))
 
-        val withQuery = snapshot.segmentMatch("ij-workspace://iu-63341/target?q=hello")
+        val withQuery = snapshot.matchUri("ij-workspace://iu-63341/target?q=hello")
         assertNotNull(withQuery)
-        assertEquals("hello", withQuery?.ancestors?.get("q"))
+        assertEquals("hello", withQuery?.params?.get("q"))
     }
 
     @Test
     fun `literal match has higher priority than param`() {
         val snapshot = testSnapshot()
-        val match = snapshot.segmentMatch("ij-workspace://iu-63341/projects/special")
+        val match = snapshot.matchUri("ij-workspace://iu-63341/projects/special")
         assertNotNull(match)
-        assertEquals("special", match?.ancestors?.get("projectKey"))
+        assertEquals("special", match?.params?.get("projectKey"))
     }
 
     private fun testSnapshot(): ResourceRouteSnapshot {
