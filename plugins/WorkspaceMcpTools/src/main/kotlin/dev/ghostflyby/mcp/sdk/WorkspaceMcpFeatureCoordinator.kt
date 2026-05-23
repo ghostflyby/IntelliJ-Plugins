@@ -162,6 +162,8 @@ internal class WorkspaceMcpFeatureCoordinator(
                 WorkspaceResourceRouteContribution(
                     featureName = registration.featureName,
                     roots = registration.roots,
+                    resourceListRoutes = registration.resourceListRoutes,
+                    templateListRoutes = registration.templateListRoutes,
                 )
             }
         }

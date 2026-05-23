@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.PluginInfo
-import dev.ghostflyby.mcp.route.ResourceListDecision
 import dev.ghostflyby.mcp.route.resources.ProjectResource
 import dev.ghostflyby.mcp.route.resources.ServerInfoResource
 import dev.ghostflyby.mcp.route.visibleProjects
@@ -49,8 +48,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
 
         listResources<ProjectResource> {
             val projects = call.visibleProjects()
-            ResourceListDecision(
-                entries = projects.map { project ->
+            projects.map { project ->
                     Resource(
                         uri = "ij-workspace://${call.instanceKey}/projects/${project.projectKey}",
                         name = project.projectKey,
@@ -58,9 +56,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                         mimeType = JSON_MIME_TYPE,
                         title = project.name,
                     )
-                },
-                includeChildren = projects.isNotEmpty(),
-            )
+            }
         }
         read<ProjectResource> { projectResource ->
             val projectKey = projectResource.projectKey
@@ -84,13 +80,6 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
                         text = json.encodeToString(info),
                     ),
                 ),
-            )
-        }
-        listTemplates<ProjectResource> {
-            val projects = call.visibleProjects()
-            ResourceListDecision(
-                entries = emptyList(),
-                includeChildren = projects.isNotEmpty(),
             )
         }
         return buildRegistration()

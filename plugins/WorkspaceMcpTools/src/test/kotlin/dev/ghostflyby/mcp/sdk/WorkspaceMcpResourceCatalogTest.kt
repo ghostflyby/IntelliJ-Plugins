@@ -6,30 +6,22 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import dev.ghostflyby.mcp.route.ResourceListDecision
-import dev.ghostflyby.mcp.route.ResourceRouteCompiler
-import dev.ghostflyby.mcp.route.ResourceSegmentCollector
-import dev.ghostflyby.mcp.route.WorkspaceResourceRouteContribution
-import dev.ghostflyby.mcp.route.listResources
-import dev.ghostflyby.mcp.route.listTemplates
-import dev.ghostflyby.mcp.route.read
-import io.ktor.resources.Resource
+import dev.ghostflyby.mcp.route.*
+import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Proxy
 
 internal class WorkspaceMcpResourceCatalogTest {
     @Test
-    fun `exact read route is listed as concrete resource by default`() = runBlocking {
+    fun `exact read route falls back to concrete resource listing`() = runBlocking {
         val catalog = catalog {
             read<ExactResource> { ReadResourceResult(emptyList()) }
         }
@@ -40,60 +32,90 @@ internal class WorkspaceMcpResourceCatalogTest {
     }
 
     @Test
-    fun `parameterized read route is not listed as concrete resource by default`() = runBlocking {
+    fun `parameterized read route falls back to template listing`() = runBlocking {
         val catalog = catalog {
             read<ParameterizedResource> { ReadResourceResult(emptyList()) }
         }
 
-        val result = catalog.listResources(fakeClientConnection(), ListResourcesRequest())
+        val resources = catalog.listResources(fakeClientConnection(), ListResourcesRequest())
+        val templates = catalog.listTemplates(fakeClientConnection(), ListResourceTemplatesRequest())
 
-        assertTrue(result.resources.isEmpty())
+        assertTrue(resources.resources.isEmpty())
+        assertEquals(
+            listOf("ij-workspace://{instanceKey}/parameterized/{id}"),
+            templates.resourceTemplates.map { it.uriTemplate },
+        )
     }
 
     @Test
-    fun `resource list provider can stop child traversal`() = runBlocking {
+    fun `manual resource list provider suppresses same path read fallback`() = runBlocking {
         val catalog = catalog {
-            listResources<ParentResource> {
-                ResourceListDecision(
-                    entries = listOf(
-                        io.modelcontextprotocol.kotlin.sdk.types.Resource(
-                            uri = "ij-workspace://test-instance/custom-parent",
-                            name = "parent",
-                        ),
+            read<ExactResource> { ReadResourceResult(emptyList()) }
+            listResources<ExactResource> {
+                listOf(
+                    io.modelcontextprotocol.kotlin.sdk.types.Resource(
+                        uri = "ij-workspace://test-instance/custom-exact",
+                        name = "exact",
                     ),
-                    includeChildren = false,
                 )
             }
-            read<ChildResource> { ReadResourceResult(emptyList()) }
         }
 
         val result = catalog.listResources(fakeClientConnection(), ListResourcesRequest())
 
-        assertEquals(listOf("ij-workspace://test-instance/custom-parent"), result.resources.map { it.uri })
-        assertFalse(result.resources.any { it.uri.endsWith("/child") })
+        assertEquals(listOf("ij-workspace://test-instance/custom-exact"), result.resources.map { it.uri })
     }
 
     @Test
-    fun `template list provider is independent from resource list`() = runBlocking {
+    fun `manual empty template list provider suppresses same path read fallback`() = runBlocking {
         val catalog = catalog {
-            read<ExactResource> { ReadResourceResult(emptyList()) }
             listTemplates<ParameterizedResource> {
-                ResourceListDecision(
-                    entries = listOf(
-                        ResourceTemplate(
-                            uriTemplate = "ij-workspace://{instanceKey}/custom/{id}",
-                            name = "custom",
-                        ),
-                    ),
-                )
+                emptyList()
+            }
+            read<ParameterizedResource> { ReadResourceResult(emptyList()) }
+        }
+
+        val templates = catalog.listTemplates(fakeClientConnection(), ListResourceTemplatesRequest())
+
+        assertTrue(templates.resourceTemplates.isEmpty())
+    }
+
+    @Test
+    fun `manual list provider does not suppress other list primitive fallback`() = runBlocking {
+        val catalog = catalog {
+            read<ParameterizedResource> { ReadResourceResult(emptyList()) }
+            listResources<ParameterizedResource> {
+                emptyList()
             }
         }
 
         val resources = catalog.listResources(fakeClientConnection(), ListResourcesRequest())
         val templates = catalog.listTemplates(fakeClientConnection(), ListResourceTemplatesRequest())
 
-        assertEquals(listOf("ij-workspace://test-instance/exact"), resources.resources.map { it.uri })
-        assertEquals(listOf("ij-workspace://{instanceKey}/custom/{id}"), templates.resourceTemplates.map { it.uriTemplate })
+        assertTrue(resources.resources.isEmpty())
+        assertEquals(
+            listOf("ij-workspace://{instanceKey}/parameterized/{id}"),
+            templates.resourceTemplates.map { it.uriTemplate },
+        )
+    }
+
+    @Test
+    fun `duplicate provider output is deduplicated after read fallback`() = runBlocking {
+        val catalog = catalog {
+            read<ExactResource> { ReadResourceResult(emptyList()) }
+            listResources<ParentResource> {
+                listOf(
+                    io.modelcontextprotocol.kotlin.sdk.types.Resource(
+                        uri = "ij-workspace://test-instance/exact",
+                        name = "duplicate",
+                    ),
+                )
+            }
+        }
+
+        val result = catalog.listResources(fakeClientConnection(), ListResourcesRequest())
+
+        assertEquals(listOf("ij-workspace://test-instance/exact"), result.resources.map { it.uri })
     }
 
     private fun catalog(block: ResourceSegmentCollector.() -> Unit): WorkspaceMcpResourceCatalog {
@@ -105,6 +127,8 @@ internal class WorkspaceMcpResourceCatalogTest {
                         WorkspaceResourceRouteContribution(
                             featureName = "test",
                             roots = collector.roots,
+                            resourceListRoutes = collector.resourceListRoutes,
+                            templateListRoutes = collector.templateListRoutes,
                         ),
                     ),
                 ),

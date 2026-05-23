@@ -6,6 +6,8 @@
 
 package dev.ghostflyby.mcp.route
 
+import io.modelcontextprotocol.kotlin.sdk.types.Resource
+import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import kotlinx.collections.immutable.persistentHashMapOf
 
 internal object ResourceRouteCompiler {
@@ -25,18 +27,28 @@ internal object ResourceRouteCompiler {
         }
 
         val resources = mutableListOf<ResourceRouteResource>()
-        val templates = mutableListOf<ResourceRouteTemplate>()
         roots.values.forEach { root ->
             enumerate(
                 segment = root,
                 inheritedOwnerFeatureName = ownerByRootName(registrations, root.name),
-                prefix = "", resources = resources, templates = templates,
+                prefix = "", resources = resources,
             )
         }
+        val resourceListRoutes = registrations.flatMap { it.resourceListRoutes }
+        val templateListRoutes = registrations.flatMap { it.templateListRoutes }
+        val resourceListKeys = resourceListRoutes.mapTo(linkedSetOf()) { it.listKey }
+        val templateListKeys = templateListRoutes.mapTo(linkedSetOf()) { it.listKey }
 
         return ResourceRouteSnapshot(
             resources = resources.toList(),
-            templates = templates.toList(),
+            defaultFallbacks = resources
+                .filter { !it.isParameterized && it.uri !in resourceListKeys }
+                .map { ReadRouteDefault.ResourceEntry(it.defaultResource()) } +
+                    resources
+                        .filter { it.isParameterized && it.uri !in templateListKeys }
+                        .map { ReadRouteDefault.TemplateEntry(it.defaultTemplate()) },
+            resourceListRoutes = resourceListRoutes,
+            templateListRoutes = templateListRoutes,
             routeRoots = roots.toMap(),
             parameterizedResourceByUri = resources
                 .filter { it.isParameterized }
@@ -49,7 +61,6 @@ internal object ResourceRouteCompiler {
         inheritedOwnerFeatureName: String,
         prefix: String,
         resources: MutableList<ResourceRouteResource>,
-        templates: MutableList<ResourceRouteTemplate>,
         hasParameter: Boolean = false,
     ) {
         val ownerFeatureName = segment.ownerFeatureName ?: inheritedOwnerFeatureName
@@ -57,7 +68,8 @@ internal object ResourceRouteCompiler {
         val currentHasParameter = hasParameter || segment is ParameterPathSegment
 
         segment.readRoutes.forEach { entry ->
-            val uri = routeUri(currentPath, entry.resourceClassInfo)
+            val uri = entry.resourceClassInfo?.templateUri()
+                ?: routeUri(currentPath)
             resources += ResourceRouteResource(
                 uri = uri,
                 name = segment.name, description = entry.description, mimeType = entry.mimeType,
@@ -66,33 +78,16 @@ internal object ResourceRouteCompiler {
                 isParameterized = currentHasParameter,
             )
         }
-        segment.templateListRoute?.let { spec ->
-            val uri = routeUri(currentPath, spec.resourceClassInfo)
-            templates += ResourceRouteTemplate(
-                uri = uri,
-                name = segment.name, description = spec.description, mimeType = spec.mimeType,
-                ownerFeatureName = ownerFeatureName,
-                templateListRoute = spec,
-            )
-        }
 
         segment.children.values.forEach {
-            enumerate(it, ownerFeatureName, currentPath, resources, templates, currentHasParameter)
+            enumerate(it, ownerFeatureName, currentPath, resources, currentHasParameter)
         }
     }
 
     private fun routeUri(
         path: String,
-        info: ResourceClassInfo?,
     ): String {
-        val querySuffix = info?.queryTemplate() ?: ""
-        val pathTemplate = path.split("/").joinToString("/") { part ->
-            when {
-                part.startsWith("{") && part.endsWith("...}") -> "{${part.substring(1, part.length - 4)}}"
-                else -> part
-            }
-        }
-        return "ij-workspace://{instanceKey}/$pathTemplate$querySuffix"
+        return "ij-workspace://{instanceKey}/$path"
     }
 
     private fun ownerByRootName(
@@ -111,8 +106,6 @@ internal object ResourceRouteCompiler {
         }
         clone.ownerFeatureName = ownerFeatureName
         clone.readRoutes = readRoutes
-        clone.resourceListRoute = resourceListRoute
-        clone.templateListRoute = templateListRoute
         clone.children =
             children.values.fold(persistentHashMapOf<String, ResourceSegment>().builder()) { builder, child ->
                 val childClone = child.cloneWithoutAnchors()
@@ -121,6 +114,24 @@ internal object ResourceRouteCompiler {
             }.build()
         return clone
     }
+}
+
+private fun ResourceRouteResource.defaultResource(): Resource {
+    return Resource(
+        uri = uri,
+        name = name,
+        description = description.ifBlank { null },
+        mimeType = mimeType,
+    )
+}
+
+private fun ResourceRouteResource.defaultTemplate(): ResourceTemplate {
+    return ResourceTemplate(
+        uriTemplate = uri,
+        name = name,
+        description = description.ifBlank { null },
+        mimeType = mimeType,
+    )
 }
 
 internal fun ResourceClassInfo.templateUri(): String {
@@ -145,4 +156,6 @@ internal fun ResourceClassInfo.queryTemplate(): String {
 internal data class WorkspaceResourceRouteContribution(
     val featureName: String,
     val roots: List<ResourceSegment>,
+    val resourceListRoutes: List<ResourceListRoute> = emptyList(),
+    val templateListRoutes: List<ResourceTemplateListRoute> = emptyList(),
 )

@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicReference
  * Session-specific projection of resource routes into MCP list responses.
  *
  * The global primitive registry owns read dispatch. The catalog only answers
- * list requests by walking the immutable route snapshot and executing optional
- * per-segment list providers.
+ * list requests by combining read-route fallback projections and explicit
+ * flat list providers.
  */
 internal class WorkspaceMcpResourceCatalog(
     private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
@@ -31,11 +31,16 @@ internal class WorkspaceMcpResourceCatalog(
         val snapshot = snapshotRef.get()
         val call = listCall(connection, request)
         return ListResourcesResult(
-            resources = buildList {
-                snapshot.routeRoots.values.forEach { root ->
-                    addAll(root.traverse({ resourceDecision(call, it) }, root.name))
-                }
-            },
+            resources = distinctResources(
+                snapshot.defaultFallbacks.flatMap { fb ->
+                    if (fb is ReadRouteDefault.ResourceEntry)
+                        listOf(fb.resource.copy(uri = fb.resource.uri.replace("{instanceKey}", instanceKeyProvider())))
+                    else emptyList()
+                } +
+                        snapshot.resourceListRoutes.flatMap { route ->
+                            route.provider(McpCallContext(call))
+                        },
+            ),
             nextCursor = null,
             meta = null,
         )
@@ -45,11 +50,14 @@ internal class WorkspaceMcpResourceCatalog(
         val snapshot = snapshotRef.get()
         val call = listCall(connection, request)
         return ListResourceTemplatesResult(
-            resourceTemplates = buildList {
-                snapshot.routeRoots.values.forEach { root ->
-                    addAll(root.traverse({ templateDecision(call, it) }, root.name))
-                }
-            },
+            resourceTemplates = distinctTemplates(
+                snapshot.defaultFallbacks.flatMap { fb ->
+                    if (fb is ReadRouteDefault.TemplateEntry) listOf(fb.template) else emptyList()
+                } +
+                        snapshot.templateListRoutes.flatMap { route ->
+                            route.provider(McpCallContext(call))
+                        },
+            ),
             nextCursor = null,
             meta = null,
         )
@@ -66,82 +74,13 @@ internal class WorkspaceMcpResourceCatalog(
         )
     }
 
-    // -- traversal --
-
-    private suspend fun <T> ResourceSegment.traverse(
-        decide: suspend ResourceSegment.(String) -> ResourceListDecision<T>,
-        path: String,
-    ): List<T> {
-        val decision = decide(path)
-        return if (decision.includeChildren) {
-            decision.entries + childrenAndAnchors().flatMap { child ->
-                child.traverse(decide, "$path/${child.name}")
-            }
-        } else {
-            decision.entries
-        }
+    private fun distinctResources(resources: List<Resource>): List<Resource> {
+        val seen = linkedSetOf<String>()
+        return resources.filter { seen.add(it.uri) }
     }
 
-    // -- per-segment decisions (no child recursion) --
-
-    private suspend fun ResourceSegment.resourceDecision(
-        call: WorkspaceMcpCall<ListResourcesRequest>,
-        path: String,
-    ): ResourceListDecision<Resource> {
-        val lp = resourceListRoute?.provider
-        if (lp != null) {
-            val decision = lp(McpCallContext(call))
-            if (decision.entries.isNotEmpty() || !decision.includeChildren) return decision
-        }
-        val ep = readRoutes.firstOrNull()
-        return if (ep == null || this is ParameterPathSegment) ResourceListDecision()
-        else defaultResourceDecision(path, ep.mimeType)
+    private fun distinctTemplates(templates: List<ResourceTemplate>): List<ResourceTemplate> {
+        val seen = linkedSetOf<String>()
+        return templates.filter { seen.add(it.uriTemplate) }
     }
-
-    private suspend fun ResourceSegment.templateDecision(
-        call: WorkspaceMcpCall<ListResourceTemplatesRequest>,
-        path: String,
-    ): ResourceListDecision<ResourceTemplate> {
-        val spec = templateListRoute ?: return ResourceListDecision()
-        return spec.provider?.invoke(McpCallContext(call))
-            ?: defaultTemplateDecision(path, spec.mimeType)
-    }
-
-    private fun ResourceSegment.defaultResourceDecision(
-        path: String,
-        mimeType: String,
-    ): ResourceListDecision<Resource> {
-        return ResourceListDecision(
-            entries = listOf(
-                Resource(
-                    uri = concreteInstanceUri(path),
-                    name = name,
-                    description = null,
-                    mimeType = mimeType,
-                ),
-            ),
-        )
-    }
-
-    private fun ResourceSegment.defaultTemplateDecision(
-        path: String,
-        mimeType: String,
-    ): ResourceListDecision<ResourceTemplate> {
-        return ResourceListDecision(
-            entries = listOf(
-                ResourceTemplate(
-                    uriTemplate = concreteInstanceUri(path),
-                    name = name,
-                    description = null,
-                    mimeType = mimeType,
-                ),
-            ),
-        )
-    }
-
-    private fun ResourceSegment.childrenAndAnchors(): List<ResourceSegment> =
-        children.values.toList()
-
-    private fun concreteInstanceUri(path: String): String =
-        "ij-workspace://${instanceKeyProvider()}/$path"
 }

@@ -9,52 +9,70 @@ package dev.ghostflyby.mcp.route
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.serializer
-import kotlin.reflect.KType
-import kotlin.reflect.typeOf
 
 /**
  * Collects route tree fragments for a feature registration.
  */
 internal open class ResourceSegmentCollector {
-    internal val _roots: MutableList<ResourceSegment> = mutableListOf()
+    internal val resourceSegments: MutableList<ResourceSegment> = mutableListOf()
+    internal val listRoutes: MutableList<ResourceListRoute> = mutableListOf()
+    internal val resourceTemplateListRoutes: MutableList<ResourceTemplateListRoute> = mutableListOf()
 
-    val roots: List<ResourceSegment> get() = _roots.toList()
+    val roots: List<ResourceSegment> get() = resourceSegments.toList()
+    val resourceListRoutes: List<ResourceListRoute> get() = listRoutes.toList()
+    val templateListRoutes: List<ResourceTemplateListRoute> get() = resourceTemplateListRoutes.toList()
 
-    internal fun addResourceRoute(
-        resourceType: KType,
-        serializer: KSerializer<*> = serializer(resourceType),
-        readRoute: ResourceReadRoute? = null,
-        resourceListRoute: ResourceListRoute? = null,
-        templateListRoute: ResourceTemplateListRoute? = null,
+    internal fun addReadRoute(
+        serializer: KSerializer<*>,
+        readRoute: ResourceReadRoute,
     ) {
         val info = ResourceClassInfo.from(serializer.descriptor)
         val format = WorkspaceResourceUriFormat()
-        val paramDeserializer: ((Map<String, String>) -> Any?)? = { params ->
+        val paramDeserializer: (Map<String, String>) -> Any? = { params ->
             format.decodeFromParams(params, info, serializer)
         }
-        val segments = buildTreeFromResourceClass(
+        val segments = buildReadTreeFromResourceClass(
             info = info,
             paramDeserializer = paramDeserializer,
             readRoute = readRoute,
-            resourceListRoute = resourceListRoute,
-            templateListRoute = templateListRoute,
         )
         segments.forEach { seg ->
-            val existing = _roots.find { it.name == seg.name }
+            val existing = resourceSegments.find { it.name == seg.name }
             if (existing != null) {
                 mergeSegment(existing, seg)
             } else {
-                _roots.add(seg)
+                resourceSegments.add(seg)
             }
         }
+    }
+
+    internal fun addResourceListRoute(
+        serializer: KSerializer<*>,
+        route: ResourceListRoute,
+    ) {
+        val info = ResourceClassInfo.from(serializer.descriptor)
+        listRoutes += route.copy(
+            listKey = info.templateUri(),
+            resourceClassInfo = info,
+        )
+    }
+
+    internal fun addTemplateListRoute(
+        serializer: KSerializer<*>,
+        route: ResourceTemplateListRoute,
+    ) {
+        val info = ResourceClassInfo.from(serializer.descriptor)
+        resourceTemplateListRoutes += route.copy(
+            listKey = info.templateUri(),
+            resourceClassInfo = info,
+        )
     }
 }
 
 internal inline fun <reified T : Any> ResourceSegmentCollector.read(
     noinline handler: suspend McpCallContext<ReadResourceRequest>.(T) -> ReadResourceResult,
 ) {
-    addResourceRoute(
-        resourceType = typeOf<T>(),
+    addReadRoute(
         serializer = serializer<T>(),
         readRoute = ResourceReadRoute(
             invoker = { context, resource ->
@@ -65,22 +83,26 @@ internal inline fun <reified T : Any> ResourceSegmentCollector.read(
 }
 
 internal inline fun <reified T : Any> ResourceSegmentCollector.listResources(
-    noinline listProvider: (suspend McpCallContext<ListResourcesRequest>.() -> ResourceListDecision<Resource>)? = null,
+    noinline listProvider: (suspend McpCallContext<ListResourcesRequest>.() -> List<Resource>),
 ) {
-    addResourceRoute(
-        resourceType = typeOf<T>(),
+    addResourceListRoute(
         serializer = serializer<T>(),
-        resourceListRoute = ResourceListRoute(provider = listProvider),
+        route = ResourceListRoute(
+            listKey = "",
+            provider = listProvider,
+        ),
     )
 }
 
 internal inline fun <reified T : Any> ResourceSegmentCollector.listTemplates(
-    noinline listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> ResourceListDecision<ResourceTemplate>)? = null,
+    noinline listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> List<ResourceTemplate>),
 ) {
-    addResourceRoute(
-        resourceType = typeOf<T>(),
+    addTemplateListRoute(
         serializer = serializer<T>(),
-        templateListRoute = ResourceTemplateListRoute(provider = listProvider),
+        route = ResourceTemplateListRoute(
+            listKey = "",
+            provider = listProvider,
+        ),
     )
 }
 
@@ -91,12 +113,6 @@ internal fun mergeSegment(
     target.readRoutes = target.readRoutes.builder()
         .apply { source.readRoutes.forEach { add(it) } }
         .build()
-    if (source.resourceListRoute != null && target.resourceListRoute == null) {
-        target.resourceListRoute = source.resourceListRoute
-    }
-    if (source.templateListRoute != null && target.templateListRoute == null) {
-        target.templateListRoute = source.templateListRoute
-    }
     source.children.values.forEach { sourceChild ->
         val targetChild = target.children[sourceChild.name]
         if (targetChild != null) {
@@ -107,12 +123,10 @@ internal fun mergeSegment(
     }
 }
 
-internal fun buildTreeFromResourceClass(
+internal fun buildReadTreeFromResourceClass(
     info: ResourceClassInfo,
     paramDeserializer: ((Map<String, String>) -> Any?)? = null,
-    readRoute: ResourceReadRoute? = null,
-    resourceListRoute: ResourceListRoute? = null,
-    templateListRoute: ResourceTemplateListRoute? = null,
+    readRoute: ResourceReadRoute,
 ): List<ResourceSegment> {
     val pathSegments = info.pathSegments
     if (pathSegments.isEmpty()) return emptyList()
@@ -124,15 +138,11 @@ internal fun buildTreeFromResourceClass(
         current.children = current.children.builder().apply { put(child.name, child) }.build()
         current = child
     }
-    readRoute?.let { route ->
-        val copiedRoute = route.copy(
-            resourceClassInfo = info,
-            paramDeserializer = paramDeserializer,
-        )
-        current.readRoutes = current.readRoutes.builder().apply { add(copiedRoute) }.build()
-    }
-    if (resourceListRoute != null) current.resourceListRoute = resourceListRoute.copy(resourceClassInfo = info)
-    if (templateListRoute != null) current.templateListRoute = templateListRoute.copy(resourceClassInfo = info)
+    val copiedRoute = readRoute.copy(
+        resourceClassInfo = info,
+        paramDeserializer = paramDeserializer,
+    )
+    current.readRoutes = current.readRoutes.builder().apply { add(copiedRoute) }.build()
 
     return listOf(root)
 }

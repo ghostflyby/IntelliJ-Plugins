@@ -8,21 +8,10 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
-import dev.ghostflyby.mcp.route.McpCallContext
-import dev.ghostflyby.mcp.route.ResourceSegment
-import dev.ghostflyby.mcp.route.ResourceSegmentCollector
-import dev.ghostflyby.mcp.route.ResourceListDecision
-import dev.ghostflyby.mcp.route.listResources
-import dev.ghostflyby.mcp.route.listTemplates
-import dev.ghostflyby.mcp.route.read
+import dev.ghostflyby.mcp.route.*
 import dev.ghostflyby.mcp.sdk.tools.reflectTools
 import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.Resource
-import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
+import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
@@ -63,13 +52,13 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     }
 
     inline fun <reified T : Any> listResources(
-        noinline listProvider: (suspend McpCallContext<ListResourcesRequest>.() -> ResourceListDecision<Resource>)? = null,
+        noinline listProvider: (suspend McpCallContext<ListResourcesRequest>.() -> List<Resource>),
     ) {
         segmentCollector.listResources<T>(listProvider)
     }
 
     inline fun <reified T : Any> listTemplates(
-        noinline listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> ResourceListDecision<ResourceTemplate>)? = null,
+        noinline listProvider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> List<ResourceTemplate>),
     ) {
         segmentCollector.listTemplates<T>(listProvider)
     }
@@ -81,6 +70,8 @@ internal class WorkspaceMcpFeatureRegistrationContext(
             job = featureScope.coroutineContext[Job] ?: Job(),
             registeredTools = trackedTools.toSet(),
             roots = segmentCollector.roots.toList(),
+            resourceListRoutes = segmentCollector.resourceListRoutes.toList(),
+            templateListRoutes = segmentCollector.templateListRoutes.toList(),
         )
     }
 }
@@ -99,6 +90,8 @@ internal data class WorkspaceMcpFeatureRegistration(
     val job: Job,
     val registeredTools: Set<String>,
     val roots: List<ResourceSegment> = emptyList(),
+    val resourceListRoutes: List<ResourceListRoute> = emptyList(),
+    val templateListRoutes: List<ResourceTemplateListRoute> = emptyList(),
 )
 
 /**

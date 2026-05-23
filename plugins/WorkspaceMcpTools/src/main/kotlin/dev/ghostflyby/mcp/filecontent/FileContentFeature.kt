@@ -49,7 +49,6 @@ internal class FileContentFeature : WorkspaceMcpFeature {
                 ancestors = call.parameters,
             )
         }
-        listTemplates<VfsResource>()
 
         read<ProjectFileResource> { resource ->
             val file = resolveFileByRelativePath(
@@ -62,7 +61,6 @@ internal class FileContentFeature : WorkspaceMcpFeature {
                 ancestors = call.parameters,
             )
         }
-        listTemplates<ProjectFileResource>()
 
         // -- document write tools --
         registerToolClass<FileContentWriteTools>()

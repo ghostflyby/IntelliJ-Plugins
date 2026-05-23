@@ -15,18 +15,11 @@ import kotlinx.collections.immutable.persistentListOf
 @JvmInline
 internal value class McpCallContext<R : Request>(val call: WorkspaceMcpCall<R>)
 
-internal data class ResourceListDecision<T>(
-    val entries: List<T> = emptyList(),
-    val includeChildren: Boolean = true,
-)
-
 internal data class WorkspaceMcpListProject(
     val projectKey: String,
     val name: String,
     val basePath: String?,
 )
-
-// -- Segment tree node --
 
 internal sealed class ResourceSegment {
     abstract val name: String
@@ -37,12 +30,6 @@ internal sealed class ResourceSegment {
 
     /** Read routes, each optionally bound to query parameters. */
     var readRoutes: PersistentList<ResourceReadRoute> = persistentListOf()
-
-    /** Behaviour for resources/list at this segment. Null means no resource listing. */
-    var resourceListRoute: ResourceListRoute? = null
-
-    /** Behaviour for resources/templates/list at this segment. Null means no template listing. */
-    var templateListRoute: ResourceTemplateListRoute? = null
 }
 
 internal data class ResourceReadRoute(
@@ -54,20 +41,16 @@ internal data class ResourceReadRoute(
 )
 
 internal data class ResourceListRoute(
-    val description: String = "",
-    val mimeType: String = "application/json",
+    val listKey: String,
     val resourceClassInfo: ResourceClassInfo? = null,
-    val provider: (suspend McpCallContext<ListResourcesRequest>.() -> ResourceListDecision<Resource>)? = null,
+    val provider: suspend McpCallContext<ListResourcesRequest>.() -> List<Resource>,
 )
 
 internal data class ResourceTemplateListRoute(
-    val description: String = "",
-    val mimeType: String = "text/plain",
+    val listKey: String,
     val resourceClassInfo: ResourceClassInfo? = null,
-    val provider: (suspend McpCallContext<ListResourceTemplatesRequest>.() -> ResourceListDecision<ResourceTemplate>)? = null,
+    val provider: suspend McpCallContext<ListResourceTemplatesRequest>.() -> List<ResourceTemplate>,
 )
-
-// -- Segment subtypes --
 
 internal class LiteralPathSegment(
     override val name: String,

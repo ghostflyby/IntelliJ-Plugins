@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.route
 
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
-import io.modelcontextprotocol.kotlin.sdk.types.ListResourceTemplatesRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
@@ -27,18 +25,18 @@ internal data class ResourceRouteResource(
     val isParameterized: Boolean,
 )
 
-internal data class ResourceRouteTemplate(
-    val uri: String,
-    val name: String,
-    val description: String,
-    val mimeType: String,
-    val ownerFeatureName: String,
-    val templateListRoute: ResourceTemplateListRoute,
-)
+/** A read route's default list projection. Concrete routes produce [Resource],
+ * parameterized routes produce [ResourceTemplate]. Never both. */
+internal sealed interface ReadRouteDefault {
+    data class ResourceEntry(val resource: Resource) : ReadRouteDefault
+    data class TemplateEntry(val template: ResourceTemplate) : ReadRouteDefault
+}
 
 internal data class ResourceRouteSnapshot(
     val resources: List<ResourceRouteResource> = emptyList(),
-    val templates: List<ResourceRouteTemplate> = emptyList(),
+    val defaultFallbacks: List<ReadRouteDefault> = emptyList(),
+    val resourceListRoutes: List<ResourceListRoute> = emptyList(),
+    val templateListRoutes: List<ResourceTemplateListRoute> = emptyList(),
     val routeRoots: Map<String, ResourceSegment> = emptyMap(),
     private val parameterizedResourceByUri: Map<String, ResourceRouteResource> = emptyMap(),
 ) {
