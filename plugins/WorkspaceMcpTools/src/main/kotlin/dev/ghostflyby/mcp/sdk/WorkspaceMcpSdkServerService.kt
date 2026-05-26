@@ -18,12 +18,14 @@ import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
-import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @Service(Service.Level.APP)
@@ -47,6 +49,16 @@ internal class WorkspaceMcpSdkServerService(
         scope = scope,
         dispatcher = notificationDispatcher,
     )
+    private val globalGen = MutableStateFlow(0L)
+    private val sessionResourcesChanged = MutableStateFlow(persistentSetOf<String>())
+
+    init {
+        invalidationBus.registerListChanged(ListKind.Resources, globalGen)
+        invalidationBus.registerListChanged(ListKind.Templates, globalGen)
+        invalidationBus.registerListChanged(ListKind.Tools, globalGen)
+        invalidationBus.registerSessionListChanged(ListKind.Resources, sessionResourcesChanged)
+    }
+
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = scope,
         projectResolver = projectResolver,
@@ -82,7 +94,7 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun createServer(): Server {
-        val server = Server(
+        val newServer = Server(
             serverInfo = Implementation(name = "workspace-mcp", version = pluginDescriptor.version),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
@@ -92,13 +104,34 @@ internal class WorkspaceMcpSdkServerService(
                 resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
                     SegmentTreeTemplateMatcher(template, routeSnapshotRef)
                 },
-            ),
+            ).apply { concurrentMessageHandling = true },
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
         ) {
             featureCoordinator.registerInitial(this, features)
-            onConnect { installWorkspaceSubscriptionHandlers() }
         }
-        return server
+        newServer.onConnect { session ->
+            sessionState.rememberSubscriptionHandler(session.sessionId)
+            session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
+                subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
+            }
+            session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
+                subscriptionService.removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
+            }
+            session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
+                catalog.listResources(newServer.clientConnection(session.sessionId), request)
+            }
+            session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
+                catalog.listTemplates(newServer.clientConnection(session.sessionId), request)
+            }
+            session.setNotificationHandler<RootsListChangedNotification>(
+                Method.Defined.NotificationsRootsListChanged,
+            ) {
+                sessionState.clearRoots(session.sessionId)
+                sessionResourcesChanged.update { it.add(session.sessionId) }
+                CompletableDeferred(Unit)
+            }
+        }
+        return newServer
     }
 
     private fun subscribeToFeatureEvents() {
@@ -110,7 +143,7 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.register(activeServer, extension)
-                        invalidationBus.invalidateResourceList()
+                        globalGen.update { it + 1 }
                     }
                 }
 
@@ -118,41 +151,11 @@ internal class WorkspaceMcpSdkServerService(
                     scope.launch {
                         val activeServer = server ?: return@launch
                         featureCoordinator.unregister(activeServer, extension.featureName)
-                        invalidationBus.invalidateResourceList()
+                        globalGen.update { it + 1 }
                     }
                 }
             },
         )
-    }
-
-    private fun installWorkspaceSubscriptionHandlers() {
-        server?.sessions?.values?.forEach { s -> installWorkspaceSubscriptionHandlers(s) }
-    }
-
-    private fun installWorkspaceSubscriptionHandlers(session: ServerSession) {
-        val activeServer = server ?: return
-        val shouldInstall =
-            sessionState.rememberSubscriptionHandler(session.sessionId)
-        if (!shouldInstall) return
-        session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
-            subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
-        }
-        session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
-            subscriptionService.removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
-        }
-        session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
-            catalog.listResources(activeServer.clientConnection(session.sessionId), request)
-        }
-        session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
-            catalog.listTemplates(activeServer.clientConnection(session.sessionId), request)
-        }
-        session.setNotificationHandler<RootsListChangedNotification>(
-            Method.Defined.NotificationsRootsListChanged,
-        ) {
-            sessionState.clearRoots(session.sessionId)
-            invalidationBus.invalidateResourceList(ResourceListSelector.Session(session.sessionId))
-            CompletableDeferred(Unit)
-        }
     }
 
     private companion object {
