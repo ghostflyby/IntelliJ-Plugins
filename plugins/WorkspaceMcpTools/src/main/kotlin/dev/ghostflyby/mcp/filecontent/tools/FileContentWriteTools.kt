@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.filecontent
+package dev.ghostflyby.mcp.filecontent.tools
 
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
-import dev.ghostflyby.mcp.filecontent.tools.*
 import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.project
 import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
@@ -20,7 +19,7 @@ import kotlinx.serialization.serializer
 
 internal class FileContentWriteTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_is_writable(a: DocumentSdkUrlArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentIsWritable(a: DocumentSdkUrlArgs): CallToolResult {
         val (_, document) = resolveTextDocumentForTool(a.url)
         val writable = readAction { document.isWritable }
         return CallToolResult(
@@ -35,7 +34,7 @@ internal class FileContentWriteTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_get_modification_stamp(a: DocumentSdkUrlArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentGetModificationStamp(a: DocumentSdkUrlArgs): CallToolResult {
         val (_, document) = resolveTextDocumentForTool(a.url)
         val stamp = readAction { document.modificationStamp }
         return CallToolResult(
@@ -51,7 +50,7 @@ internal class FileContentWriteTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_insert_string(a: DocumentSdkInsertArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentInsertString(a: DocumentSdkInsertArgs): CallToolResult {
         val project = call.project()
         val (file, document) = resolveTextDocumentForTool(a.url)
         readAction { document.textLength }
@@ -73,7 +72,7 @@ internal class FileContentWriteTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_delete_string(a: DocumentSdkDeleteArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentDeleteString(a: DocumentSdkDeleteArgs): CallToolResult {
         val project = call.project()
         val (file, document) = resolveTextDocumentForTool(a.url)
         validateToolRange(document, a.startOffset, a.endOffset)
@@ -94,7 +93,7 @@ internal class FileContentWriteTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_replace_string(a: DocumentSdkReplaceArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentReplaceString(a: DocumentSdkReplaceArgs): CallToolResult {
         val project = call.project()
         val (file, document) = resolveTextDocumentForTool(a.url)
         validateToolRange(document, a.startOffset, a.endOffset)
@@ -115,7 +114,7 @@ internal class FileContentWriteTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.document_set_text(a: DocumentSdkSetTextArgs): CallToolResult {
+    internal suspend fun McpCallContext<CallToolRequest>.documentSetText(a: DocumentSdkSetTextArgs): CallToolResult {
         val project = call.project()
         val (file, document) = resolveTextDocumentForTool(a.url)
         ensureToolWritable(file, document, a.url)

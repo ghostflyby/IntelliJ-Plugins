@@ -4,12 +4,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.vfs.resources
+package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.roots.ModuleRootEvent
 import com.intellij.openapi.roots.ModuleRootListener
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 
 internal class WorkspaceMcpModuleRootListener : ModuleRootListener {
     override fun rootsChanged(event: ModuleRootEvent) {

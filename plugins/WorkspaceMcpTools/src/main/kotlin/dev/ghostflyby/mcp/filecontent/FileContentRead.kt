@@ -8,12 +8,14 @@ package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
@@ -36,21 +38,19 @@ internal data class ContentResult(
 
 // -- resolve VirtualFile --
 
-internal suspend fun resolveFileByRelativePath(
+internal suspend fun resolveFileByRelativePathOrNull(
     project: Project,
     relativePath: String,
-): VirtualFile {
+): VirtualFile? {
     validateProjectRelativePath(relativePath)
-    val basePath = project.basePath ?: contentFail("Project ${project.name} has no base path.")
+    val basePath = project.basePath ?: return null
     val fullPath = "$basePath/$relativePath"
     return readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
-        ?: contentFail("File not found at '$relativePath' in project '${project.name}': $fullPath")
 }
 
-internal suspend fun resolveFileByRawUrl(rawVfsUrl: String): VirtualFile {
+internal suspend fun resolveFileByRawUrlOrNull(rawVfsUrl: String): VirtualFile? {
     val vfsManager = service<VirtualFileManager>()
     return readAction { vfsManager.findFileByUrl(rawVfsUrl) }
-        ?: contentFail("File not found for URL: $rawVfsUrl")
 }
 
 // -- unified read --
@@ -72,6 +72,21 @@ private data class BinaryReadData(val bytes: ByteArray) : ReadData {
 
 private data class TextReadData(val text: String) : ReadData
 
+// -- Document LRU cache --
+
+private val documentCache = object : LinkedHashMap<String, Document>(64, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Document>): Boolean = size > 64
+}
+
+@RequiresReadLock
+private fun getOrCreateDocument(file: VirtualFile): Document? {
+    val url = file.url
+    synchronized(documentCache) { documentCache[url] }?.let { return it }
+    val doc = FileDocumentManager.getInstance().getDocument(file) ?: return null
+    synchronized(documentCache) { documentCache[url] = doc }
+    return doc
+}
+
 internal suspend fun readContentResult(file: VirtualFile): ContentResult {
     val data = readAction {
         if (file.isDirectory) {
@@ -79,7 +94,7 @@ internal suspend fun readContentResult(file: VirtualFile): ContentResult {
         } else if (file.fileType.isBinary) {
             BinaryReadData(file.contentsToByteArray())
         } else {
-            val document = FileDocumentManager.getInstance().getDocument(file)
+            val document = getOrCreateDocument(file)
             TextReadData(document?.text ?: String(file.contentsToByteArray(), file.charset))
         }
     }
@@ -128,7 +143,7 @@ internal data class FileMeta(
 
 internal suspend fun readMetaResult(file: VirtualFile, fields: String /* ""=all; "a,b"=subset */): ContentResult {
     val meta = readAction {
-        val doc = FileDocumentManager.getInstance().getDocument(file)
+        val doc = getOrCreateDocument(file)
         FileMeta(
             name = file.name,
             url = file.url,
@@ -203,10 +218,6 @@ private fun VirtualFile.readDirectoryListing(): VfsDirectoryListing {
             )
         },
     )
-}
-
-private fun contentFail(message: String): Nothing {
-    throw ContentReadException(message)
 }
 
 // -- DTOs --

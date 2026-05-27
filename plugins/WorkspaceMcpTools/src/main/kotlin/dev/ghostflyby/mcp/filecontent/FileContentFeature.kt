@@ -7,7 +7,9 @@
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.mcp.filecontent.tools.FileContentWriteTools
 import dev.ghostflyby.mcp.route.project
+import dev.ghostflyby.mcp.route.resources.FileContentQuery
 import dev.ghostflyby.mcp.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.route.resources.VfsResource
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
@@ -30,28 +32,22 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
  * - `?meta=length,name` → metadata with field filter
  * - `?content` → content only
  * - `?meta&content` → both content + metadata
+ * - `?exists` → existence check appended alongside other requested data
+ * - `?meta&exists` → metadata + existence
  */
 internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
         read<VfsResource> { resource ->
-            readContentOrMeta(
-                uri = call.request.params.uri,
-                file = resolveFileByRawUrl(resource.rawVfsUrl),
-                ancestors = call.parameters,
-            )
+            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), resource)
         }
 
         read<ProjectFileResource> { resource ->
-            val file = resolveFileByRelativePath(
-                project = call.project(),
-                relativePath = resource.relativePath,
-            )
-            readContentOrMeta(
-                uri = call.request.params.uri,
-                file = file,
-                ancestors = call.parameters,
+            readFileContent(
+                call.request.params.uri,
+                resolveFileByRelativePathOrNull(call.project(), resource.relativePath),
+                resource,
             )
         }
 
@@ -61,15 +57,21 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
     }
 
-    private suspend fun readContentOrMeta(uri: String, file: VirtualFile, ancestors: Map<String, String>): ReadResourceResult {
-        val metaFields = ancestors["meta"]           // null: no meta; "": all; "a,b": subset
-        val wantsContent = "content" in ancestors    // no key: fallback to content-only
+    private suspend fun readFileContent(
+        uri: String,
+        file: VirtualFile?,
+        query: FileContentQuery,
+    ): ReadResourceResult {
+        val wantsContent = query.content != null || (query.meta == null && !query.exists)
+        val needsFile = wantsContent || query.meta != null
+
+        if (needsFile && file == null) throw ContentReadException("File not found")
 
         val items = mutableListOf<ResourceContents>()
 
         // Content
-        if (wantsContent || metaFields == null) {
-            val result = readContentResult(file)
+        if (wantsContent) {
+            val result = readContentResult(file!!)
             items += if (result.isBinary) {
                 BlobResourceContents(uri = uri, mimeType = result.mimeType, blob = result.payload)
             } else {
@@ -78,14 +80,21 @@ internal class FileContentFeature : WorkspaceMcpFeature {
         }
 
         // Metadata
-        if (metaFields != null) {
-            val metaResult = readMetaResult(file, metaFields)
+        val meta = query.meta
+        if (meta != null) {
+            val metaResult = readMetaResult(file!!, meta)
             items += TextResourceContents(uri = uri, mimeType = metaResult.mimeType, text = metaResult.payload)
         }
 
+        // Existence
+        if (query.exists) {
+            items += TextResourceContents(uri = uri, mimeType = "application/json", text = (file != null).toString())
+        }
+
         if (items.isEmpty()) {
-            items += TextResourceContents(uri = uri, mimeType = "text/plain", text = "Empty result")
+            items += TextResourceContents(uri = uri, mimeType = "text/plain", text = "")
         }
         return ReadResourceResult(contents = items)
     }
+
 }

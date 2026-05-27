@@ -13,6 +13,20 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 
+internal fun workspaceRawVfsUri(instanceKey: String, rawVfsUrl: String): String {
+    require(rawVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }
+    return "ij-workspace://$instanceKey/vfs/$rawVfsUrl"
+}
+
+internal fun workspaceProjectFileUri(
+    instanceKey: String,
+    projectKey: String,
+    relativePath: String,
+): String {
+    validateProjectRelativePath(relativePath)
+    return "ij-workspace://$instanceKey/projects/$projectKey/files/$relativePath"
+}
+
 internal fun fileContentResourceUrisForFile(file: VirtualFile): Set<String> {
     val projectResolver = service<WorkspaceProjectResolver>()
     val instanceKey = workspaceInstanceKey()

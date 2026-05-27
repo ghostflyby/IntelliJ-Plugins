@@ -289,23 +289,25 @@ internal class WorkspaceResourceUriFormat : StringFormat {
     ) : Decoder, CompositeDecoder {
         override val serializersModule: SerializersModule = EmptySerializersModule()
         private var elementIndex = 0
-        private val elementOrder: List<String> by lazy {
-            info.pathSegments.mapNotNull { it.paramName } + info.queryParams.map { it.name }
-        }
 
         override fun beginStructure(descriptor: SerialDescriptor): CompositeDecoder = this
         override fun endStructure(descriptor: SerialDescriptor) {}
         override fun decodeElementIndex(descriptor: SerialDescriptor): Int {
             while (elementIndex < descriptor.elementsCount) {
                 val name = descriptor.getElementName(elementIndex)
-                if (name == info.parentName || name in elementOrder || params.containsKey(name)) return elementIndex++
+                val isPathParam = name in info.pathParamNames
+                if (name == info.parentName || isPathParam || params.containsKey(name)) return elementIndex++
                 elementIndex++
             }
             return CompositeDecoder.DECODE_DONE
         }
         override fun decodeStringElement(descriptor: SerialDescriptor, index: Int): String = params[descriptor.getElementName(index)] ?: ""
         override fun decodeIntElement(descriptor: SerialDescriptor, index: Int): Int = decodeStringElement(descriptor, index).toIntOrNull() ?: 0
-        override fun decodeBooleanElement(descriptor: SerialDescriptor, index: Int): Boolean = decodeStringElement(descriptor, index).toBooleanStrictOrNull() ?: false
+        override fun decodeBooleanElement(descriptor: SerialDescriptor, index: Int): Boolean {
+            val raw = decodeStringElement(descriptor, index)
+            if (raw.isEmpty()) return true  // query param present with no value
+            return raw.toBooleanStrictOrNull() ?: false
+        }
         override fun decodeByteElement(descriptor: SerialDescriptor, index: Int): Byte = decodeStringElement(descriptor, index).toByteOrNull() ?: 0
         override fun decodeShortElement(descriptor: SerialDescriptor, index: Int): Short = decodeStringElement(descriptor, index).toShortOrNull() ?: 0
         override fun decodeLongElement(descriptor: SerialDescriptor, index: Int): Long = decodeStringElement(descriptor, index).toLongOrNull() ?: 0L
