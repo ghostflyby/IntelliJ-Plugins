@@ -57,7 +57,7 @@ internal suspend fun resolveFileByRawUrlOrNull(rawVfsUrl: String): VirtualFile? 
 
 private sealed interface ReadData
 
-private data class DirReadData(val listing: VfsDirectoryListing) : ReadData
+private data class DirReadData(val listing: DirectoryListing) : ReadData
 private data class BinaryReadData(val bytes: ByteArray) : ReadData {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -202,20 +202,10 @@ private fun VirtualFile.inferMimeType(): String {
     }
 }
 
-private fun VirtualFile.readDirectoryListing(): VfsDirectoryListing {
-    return VfsDirectoryListing(
-        url = this.url,
-        path = this.path,
+private fun VirtualFile.readDirectoryListing(): DirectoryListing {
+    return DirectoryListing(
         children = this.children.map { child ->
-            VfsFileStat(
-                name = child.name,
-                url = child.url,
-                path = child.path,
-                isDirectory = child.isDirectory,
-                length = child.length,
-                lastModified = child.timeStamp,
-                fileType = child.fileType.name,
-            )
+            if (child.isDirectory) "${child.name}/" else child.name
         },
     )
 }
@@ -223,21 +213,8 @@ private fun VirtualFile.readDirectoryListing(): VfsDirectoryListing {
 // -- DTOs --
 
 @Serializable
-internal data class VfsDirectoryListing(
-    val url: String,
-    val path: String,
-    val children: List<VfsFileStat>,
-)
-
-@Serializable
-internal data class VfsFileStat(
-    val name: String,
-    val url: String,
-    val path: String,
-    val isDirectory: Boolean,
-    val length: Long,
-    val lastModified: Long,
-    val fileType: String,
+internal data class DirectoryListing(
+    val children: List<String>,
 )
 
 private val JSON = Json {
