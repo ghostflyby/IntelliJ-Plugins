@@ -103,7 +103,7 @@ internal suspend fun readContentResult(file: VirtualFile): ContentResult {
 
 private fun buildContentResult(file: VirtualFile, data: ReadData): ContentResult = when (data) {
     is DirReadData -> ContentResult(
-        payload = JSON.encodeToString(VfsDirectoryListing.serializer(), data.listing),
+        payload = JSON.encodeToString(data.listing),
         mimeType = "application/json",
         isBinary = false,
     )

@@ -14,11 +14,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
-import dev.ghostflyby.mcp.common.VFS_URL_PARAM_DESCRIPTION
-import dev.ghostflyby.mcp.common.WorkspaceResourceException
-import dev.ghostflyby.mcp.sdk.tools.WorkspaceMcpProjectToolArguments
-import kotlinx.schema.Description
 import kotlinx.schema.Schema
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import kotlinx.serialization.Serializable
 
 /**
@@ -31,105 +28,6 @@ internal data class DocumentSdkWriteResult(
     val lineCount: Int,
     val modificationStamp: Long,
 )
-
-/**
- * Typed result for document_is_writable.
- */
-@Schema
-@Serializable
-internal data class DocumentSdkWritableResult(
-    val writable: Boolean,
-)
-
-/**
- * Typed result for document_get_modification_stamp.
- */
-@Schema
-@Serializable
-internal data class DocumentSdkModificationStampResult(
-    val modificationStamp: Long,
-)
-
-// -- single-URL argument DTOs --
-
-@Schema
-@Serializable
-internal data class DocumentSdkUrlArgs(
-    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
-    val url: String,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class DocumentSdkInsertArgs(
-    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
-    val url: String,
-    @Description("Insert offset in [0, textLength].")
-    val offset: Int,
-    @Description("Text to insert.")
-    val text: String,
-    @Description("Save document after write (default false).")
-    val saveAfterWrite: Boolean = false,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class DocumentSdkDeleteArgs(
-    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
-    val url: String,
-    @Description("Delete range start (inclusive).")
-    val startOffset: Int,
-    @Description("Delete range end (exclusive).")
-    val endOffset: Int,
-    @Description("Save document after write (default false).")
-    val saveAfterWrite: Boolean = false,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class DocumentSdkReplaceArgs(
-    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
-    val url: String,
-    @Description("Replace range start (inclusive).")
-    val startOffset: Int,
-    @Description("Replace range end (exclusive).")
-    val endOffset: Int,
-    @Description("Text to replace with.")
-    val text: String,
-    @Description("Save document after write (default false).")
-    val saveAfterWrite: Boolean = false,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
-
-@Schema
-@Serializable
-internal data class DocumentSdkSetTextArgs(
-    @Description("Target VFS URL. $VFS_URL_PARAM_DESCRIPTION")
-    val url: String,
-    @Description("New whole text.")
-    val text: String,
-    @Description("Save document after write (default false).")
-    val saveAfterWrite: Boolean = false,
-    @Description("Stable project key for project-scoped resolution (optional).")
-    override val projectKey: String? = null,
-    @Description("Absolute project base path for project-scoped resolution (optional).")
-    override val projectPath: String? = null,
-) : WorkspaceMcpProjectToolArguments
 
 internal suspend fun resolveTextDocumentForTool(url: String): Pair<VirtualFile, Document> = readAction {
     val vfsManager = service<VirtualFileManager>()
@@ -175,17 +73,13 @@ internal suspend fun snapshotToolWriteResult(document: Document): DocumentSdkWri
     )
 }
 
-internal fun commitToolAndMaybeSave(
+internal fun commitDocument(
     project: Project,
     document: Document,
-    saveAfterWrite: Boolean,
 ) {
     val psiDocumentManager = PsiDocumentManager.getInstance(project)
     psiDocumentManager.doPostponedOperationsAndUnblockDocument(document)
     psiDocumentManager.commitDocument(document)
-    if (saveAfterWrite) {
-        FileDocumentManager.getInstance().saveDocument(document)
-    }
 }
 
 internal fun throwToolError(message: String): Nothing {

@@ -10,126 +10,87 @@ import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.project
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.schema.Description
 import kotlinx.schema.Schema
-import kotlinx.serialization.serializer
 
 internal class FileContentWriteTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentIsWritable(a: DocumentSdkUrlArgs): CallToolResult {
-        val (_, document) = resolveTextDocumentForTool(a.url)
-        val writable = readAction { document.isWritable }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkWritableResult>(), DocumentSdkWritableResult(writable = writable),
-                    ),
-                ),
-            ),
-        )
-    }
-
-    @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentGetModificationStamp(a: DocumentSdkUrlArgs): CallToolResult {
-        val (_, document) = resolveTextDocumentForTool(a.url)
-        val stamp = readAction { document.modificationStamp }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkModificationStampResult>(),
-                        DocumentSdkModificationStampResult(modificationStamp = stamp),
-                    ),
-                ),
-            ),
-        )
-    }
-
-    @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentInsertString(a: DocumentSdkInsertArgs): CallToolResult {
+    internal suspend fun McpCallContext<*>.documentInsertString(
+        @Description("VFS URL to target file")
+        url: String,
+        @Description("Insert offset in [0, textLength]")
+        offset: Int,
+        @Description("Text to insert")
+        text: String,
+    ): DocumentSdkWriteResult {
         val project = call.project()
-        val (file, document) = resolveTextDocumentForTool(a.url)
+        val (file, document) = resolveTextDocumentForTool(url)
         readAction { document.textLength }
-        validateToolRange(document, a.offset, a.offset)
-        ensureToolWritable(file, document, a.url)
+        validateToolRange(document, offset, offset)
+        ensureToolWritable(file, document, url)
         backgroundWriteAction {
-            document.insertString(a.offset, a.text)
-            commitToolAndMaybeSave(project, document, a.saveAfterWrite)
+            document.insertString(offset, text)
+            commitDocument(project, document)
         }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkWriteResult>(), snapshotToolWriteResult(document),
-                    ),
-                ),
-            ),
-        )
+        return snapshotToolWriteResult(document)
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentDeleteString(a: DocumentSdkDeleteArgs): CallToolResult {
+    internal suspend fun McpCallContext<*>.documentDeleteString(
+        @Description("VFS URL to target file")
+        url: String,
+        @Description("Delete range start (inclusive)")
+        startOffset: Int,
+        @Description("Delete range end (exclusive)")
+        endOffset: Int,
+    ): DocumentSdkWriteResult {
         val project = call.project()
-        val (file, document) = resolveTextDocumentForTool(a.url)
-        validateToolRange(document, a.startOffset, a.endOffset)
-        ensureToolWritable(file, document, a.url)
+        val (file, document) = resolveTextDocumentForTool(url)
+        validateToolRange(document, startOffset, endOffset)
+        ensureToolWritable(file, document, url)
         backgroundWriteAction {
-            document.deleteString(a.startOffset, a.endOffset)
-            commitToolAndMaybeSave(project, document, a.saveAfterWrite)
+            document.deleteString(startOffset, endOffset)
+            commitDocument(project, document)
         }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkWriteResult>(), snapshotToolWriteResult(document),
-                    ),
-                ),
-            ),
-        )
+        return snapshotToolWriteResult(document)
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentReplaceString(a: DocumentSdkReplaceArgs): CallToolResult {
+    internal suspend fun McpCallContext<*>.documentReplaceString(
+        @Description("VFS URL to target file")
+        url: String,
+        @Description("Replace range start (inclusive)")
+        startOffset: Int,
+        @Description("Replace range end (exclusive)")
+        endOffset: Int,
+        @Description("Text to replace with")
+        text: String,
+    ): DocumentSdkWriteResult {
         val project = call.project()
-        val (file, document) = resolveTextDocumentForTool(a.url)
-        validateToolRange(document, a.startOffset, a.endOffset)
-        ensureToolWritable(file, document, a.url)
+        val (file, document) = resolveTextDocumentForTool(url)
+        validateToolRange(document, startOffset, endOffset)
+        ensureToolWritable(file, document, url)
         backgroundWriteAction {
-            document.replaceString(a.startOffset, a.endOffset, a.text)
-            commitToolAndMaybeSave(project, document, a.saveAfterWrite)
+            document.replaceString(startOffset, endOffset, text)
+            commitDocument(project, document)
         }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkWriteResult>(), snapshotToolWriteResult(document),
-                    ),
-                ),
-            ),
-        )
+        return snapshotToolWriteResult(document)
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.documentSetText(a: DocumentSdkSetTextArgs): CallToolResult {
+    internal suspend fun McpCallContext<*>.documentSetText(
+        @Description("VFS URL to target file")
+        url: String,
+        @Description("New whole text")
+        text: String,
+    ): DocumentSdkWriteResult {
         val project = call.project()
-        val (file, document) = resolveTextDocumentForTool(a.url)
-        ensureToolWritable(file, document, a.url)
+        val (file, document) = resolveTextDocumentForTool(url)
+        ensureToolWritable(file, document, url)
         backgroundWriteAction {
-            document.setText(a.text)
-            commitToolAndMaybeSave(project, document, a.saveAfterWrite)
+            document.setText(text)
+            commitDocument(project, document)
         }
-        return CallToolResult(
-            content = listOf(
-                TextContent(
-                    text = toolArgsJson.encodeToString(
-                        serializer<DocumentSdkWriteResult>(), snapshotToolWriteResult(document),
-                    ),
-                ),
-            ),
-        )
+        return snapshotToolWriteResult(document)
     }
 }
