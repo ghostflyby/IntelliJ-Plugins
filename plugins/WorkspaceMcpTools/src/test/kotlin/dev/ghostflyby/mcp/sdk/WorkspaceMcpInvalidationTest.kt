@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,7 +36,9 @@ internal class WorkspaceMcpInvalidationTest {
 
     @Test
     fun `session state checks direct subscriptions`() {
-        val state = WorkspaceMcpSessionState { null }
+        val state = WorkspaceMcpSessionState()
+        state.recordSessionConnected("a")
+        state.recordSessionConnected("b")
         state.recordResourceSubscription("a", "ij-workspace://iu-1/vfs/file:///tmp/a.kt")
         state.recordResourceSubscription("b", "ij-workspace://iu-1/vfs/file:///tmp/b.kt")
 
@@ -46,15 +47,20 @@ internal class WorkspaceMcpInvalidationTest {
     }
 
     @Test
-    fun `subscribed session lookup ignores inactive sessions`() {
-        val state = WorkspaceMcpSessionState { null }
+    fun `closing session clears subscriptions and active state`() {
+        val state = WorkspaceMcpSessionState()
         val uri = "ij-workspace://iu-1/vfs/file:///tmp/a.kt"
+        state.recordSessionConnected("active")
         state.recordResourceSubscription("active", uri)
-        state.recordResourceSubscription("inactive", uri)
 
-        assertEquals(
-            listOf("active"),
-            state.subscribedSessionIds(activeSessionIds = setOf("active"), resourceUri = uri),
-        )
+        assertTrue(state.hasActiveSessions())
+        assertTrue(state.hasResourceSubscriptions())
+        assertTrue(state.isSubscribed("active", uri))
+
+        state.recordSessionClosed("active")
+
+        assertFalse(state.hasActiveSessions())
+        assertFalse(state.hasResourceSubscriptions())
+        assertFalse(state.isSubscribed("active", uri))
     }
 }

@@ -6,39 +6,38 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
+import com.intellij.openapi.components.Service
 
-internal class WorkspaceMcpSessionState(
-    private val serverProvider: () -> Server?,
-) {
-    private val rootsCache = ConcurrentHashMap<String, List<String>>()
+@Service(Service.Level.APP)
+internal class WorkspaceMcpSessionState {
     private val subscriptionLock = Any()
+    private val activeSessionIds = linkedSetOf<String>()
     private val resourceSubscriptionsBySession = linkedMapOf<String, MutableSet<String>>()
-    private val rootsVersion = AtomicLong(0L)
 
-    suspend fun getRoots(sessionId: String): List<String> {
-        return rootsCache.getOrPut(sessionId) {
-            val activeServer = serverProvider() ?: return@getOrPut emptyList()
-            runCatching { activeServer.listRoots(sessionId) }
-                .getOrNull()
-                ?.roots
-                ?.map { it.uri.removePrefix("file://") }
-                ?: emptyList()
+    fun recordSessionConnected(sessionId: String) {
+        if (sessionId.isBlank()) return
+        synchronized(subscriptionLock) {
+            activeSessionIds.add(sessionId)
         }
     }
 
-    fun getRootsVersion(): Long = rootsVersion.get()
-
-    fun clearRoots(sessionId: String) {
-        rootsCache.remove(sessionId)
-        rootsVersion.incrementAndGet()
+    fun recordSessionClosed(sessionId: String) {
+        synchronized(subscriptionLock) {
+            activeSessionIds.remove(sessionId)
+            resourceSubscriptionsBySession.remove(sessionId)
+        }
     }
 
-    fun clearAllRoots() {
-        rootsCache.clear()
-        rootsVersion.incrementAndGet()
+    fun hasActiveSessions(): Boolean {
+        return synchronized(subscriptionLock) {
+            activeSessionIds.isNotEmpty()
+        }
+    }
+
+    fun hasResourceSubscriptions(): Boolean {
+        return synchronized(subscriptionLock) {
+            resourceSubscriptionsBySession.isNotEmpty()
+        }
     }
 
     fun recordResourceSubscription(sessionId: String, resourceUri: String) {
@@ -53,13 +52,6 @@ internal class WorkspaceMcpSessionState(
                 subs.remove(resourceUri)
                 if (subs.isEmpty()) resourceSubscriptionsBySession.remove(sessionId)
             }
-        }
-    }
-
-    fun subscribedSessionIds(activeSessionIds: Set<String>, resourceUri: String): List<String> {
-        return synchronized(subscriptionLock) {
-            resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
-            resourceSubscriptionsBySession.filterValues { resourceUri in it }.keys.toList()
         }
     }
 

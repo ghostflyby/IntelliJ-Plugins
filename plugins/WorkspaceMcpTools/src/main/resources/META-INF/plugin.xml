@@ -29,14 +29,16 @@
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
-        <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerStartupActivity"/>
+        <postStartupActivity implementation="dev.ghostflyby.mcp.WorkspaceMcpStartupActivity"/>
+        <vfs.asyncListener implementation="dev.ghostflyby.mcp.filecontent.FileContentVfsListener"/>
     </extensions>
 
-    <projectListeners>
+    <applicationListeners>
         <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpProjectLifecycleListener"
                   topic="com.intellij.openapi.project.ProjectManager$TOPIC"/>
-        <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpFileEditorListener"
-                  topic="com.intellij.openapi.fileEditor.FileEditorManagerListener$FILE_EDITOR_MANAGER"/>
+    </applicationListeners>
+
+    <projectListeners>
         <listener class="dev.ghostflyby.mcp.vfs.resources.WorkspaceMcpModuleRootListener"
                   topic="com.intellij.openapi.roots.ModuleRootListener$TOPIC"/>
     </projectListeners>

@@ -22,14 +22,9 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
@@ -39,19 +34,23 @@ internal class WorkspaceMcpSdkServerService(
 
     private val projectResolver = service<WorkspaceProjectResolver>()
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
-    private val sessionState = WorkspaceMcpSessionState { server }
+    private val sessionState = service<WorkspaceMcpSessionState>()
+    private val stateFlows = service<WorkspaceMcpStateFlows>()
     private val catalog = WorkspaceMcpResourceCatalog()
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
         sessionState = sessionState,
     )
     private val invalidationBus = WorkspaceMcpInvalidationBus(scope = scope)
     private val globalGen = MutableStateFlow(0L)
-    private val sessionResourcesChanged = MutableStateFlow(PerSessionListChange())
 
     init {
-        invalidationBus.registerGlobalListChanged(ListChangeKind.Resources, globalGen)
+        invalidationBus.registerResourceUpdates(stateFlows.resourceUpdates)
+        invalidationBus.registerGlobalListChanged(ListChangeKind.Resources, stateFlows.globalResourceListChanges)
         invalidationBus.registerGlobalListChanged(ListChangeKind.Tools, globalGen)
-        invalidationBus.registerSessionListChanged(ListChangeKind.Resources, sessionResourcesChanged) { it.sessionIds }
+        invalidationBus.registerSessionListChanged(
+            ListChangeKind.Resources,
+            stateFlows.perSessionResourceListChanges,
+        )
     }
 
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
@@ -105,6 +104,7 @@ internal class WorkspaceMcpSdkServerService(
             featureCoordinator.registerInitial(this, features)
         }
         newServer.onConnect { session ->
+            sessionState.recordSessionConnected(session.sessionId)
             session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
                 subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
             }
@@ -120,14 +120,16 @@ internal class WorkspaceMcpSdkServerService(
             session.setNotificationHandler<RootsListChangedNotification>(
                 Method.Defined.NotificationsRootsListChanged,
             ) {
-                sessionState.clearRoots(session.sessionId)
-                sessionResourcesChanged.update { it.next(session.sessionId) }
+                stateFlows.sessionResourcesChanged(session.sessionId)
                 CompletableDeferred(Unit)
             }
 
             // Per-session notification collectors
             val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            session.onClose { sessionScope.cancel() }
+            session.onClose {
+                sessionState.recordSessionClosed(session.sessionId)
+                sessionScope.cancel()
+            }
 
             sessionScope.launch {
                 invalidationBus.resourceUpdateBatches.collect { uris ->
@@ -198,14 +200,4 @@ internal class WorkspaceMcpSdkServerService(
         private const val LOOPBACK_HOST = "127.0.0.1"
         private const val MCP_ENDPOINT_PATH = "/mcp"
     }
-}
-
-private data class PerSessionListChange(
-    val generation: Long = 0L,
-    val sessionIds: Set<String> = emptySet(),
-) {
-    fun next(sessionId: String): PerSessionListChange = copy(
-        generation = generation + 1,
-        sessionIds = setOf(sessionId),
-    )
 }

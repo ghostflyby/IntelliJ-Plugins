@@ -35,12 +35,6 @@ internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
-        FileContentInvalidationListener(
-            projectResolver = projectResolver,
-            invalidationSink = invalidationSink,
-            scope = featureScope,
-        ).install()
-
         read<VfsResource> { resource ->
             readContentOrMeta(
                 uri = call.request.params.uri,

@@ -8,11 +8,7 @@ package dev.ghostflyby.mcp.sdk
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -24,8 +20,8 @@ internal class WorkspaceMcpInvalidationBus(
     private val _resourceUpdates = MutableStateFlow<Set<String>>(emptySet())
     private val _listChanged = MutableStateFlow<Set<ListChangedEvent>>(emptySet())
 
-    val resourceUpdateBatches: StateFlow<Set<String>> = _resourceUpdates
-    val listChangedBatches: StateFlow<Set<ListChangedEvent>> = _listChanged
+    val resourceUpdateBatches: StateFlow<Set<String>> = _resourceUpdates.asStateFlow()
+    val listChangedBatches: StateFlow<Set<ListChangedEvent>> = _listChanged.asStateFlow()
 
     init {
         @OptIn(FlowPreview::class)
@@ -79,6 +75,43 @@ internal class WorkspaceMcpInvalidationBus(
         scope.launch {
             flow.drop(1).collect { state ->
                 val sessionIds = sessions(state).filterTo(linkedSetOf()) { it.isNotBlank() }
+                if (sessionIds.isNotEmpty()) {
+                    _listChanged.update { it + ListChangedEvent(kind, SessionSelector.Sessions(sessionIds)) }
+                }
+            }
+        }
+    }
+
+    fun registerResourceUpdates(flow: StateFlow<ResourceUpdateState>) {
+        scope.launch {
+            var seenGenerations = flow.value.uriGenerations
+            flow.drop(1).collect { state ->
+                val changedUris = state.uriGenerations.asSequence()
+                    .filter { (uri, generation) ->
+                        generation != seenGenerations[uri] &&
+                                WorkspaceMcpResourceSubscriptionService.isWorkspaceResourceUri(uri)
+                    }
+                    .map { (uri, _) -> uri }
+                    .toSet()
+                seenGenerations = state.uriGenerations
+                if (changedUris.isNotEmpty()) {
+                    _resourceUpdates.update { it + changedUris }
+                }
+            }
+        }
+    }
+
+    fun registerSessionListChanged(kind: ListChangeKind, flow: StateFlow<PerSessionListChange>) {
+        scope.launch {
+            var seenGenerations = flow.value.sessionGenerations
+            flow.drop(1).collect { state ->
+                val sessionIds = state.sessionGenerations.asSequence()
+                    .filter { (sessionId, generation) ->
+                        sessionId.isNotBlank() && generation != seenGenerations[sessionId]
+                    }
+                    .map { (sessionId, _) -> sessionId }
+                    .toSet()
+                seenGenerations = state.sessionGenerations
                 if (sessionIds.isNotEmpty()) {
                     _listChanged.update { it + ListChangedEvent(kind, SessionSelector.Sessions(sessionIds)) }
                 }
