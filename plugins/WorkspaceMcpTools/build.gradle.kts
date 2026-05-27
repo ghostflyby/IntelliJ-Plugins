@@ -29,6 +29,9 @@ dependencies {
         isTransitive = false
     }
     implementation(project(":modules:intellij-shared"))
+    intellijPlatform {
+        bundledModule("intellij.platform.vcs.impl")
+    }
 }
 
 ksp {

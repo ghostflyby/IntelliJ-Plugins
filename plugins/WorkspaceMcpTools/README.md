@@ -77,12 +77,11 @@ Document tools:
 - `document_is_line_modified`
 - `document_is_writable`
 - `document_get_modification_stamp`
-- `document_insert_string`
-- `document_delete_string`
-- `document_replace_string`
-- `document_set_text`
+- `document_apply_git_patch`
+- `document_apply_codex_patch`
 
-These methods are designed to map directly to `com.intellij.openapi.editor.Document` APIs.
+Patch apply tools only operate on files under the current project directory. They return both
+successful file paths and per-file failures when a multi-file patch partially applies.
 
 Navigation tools:
 
