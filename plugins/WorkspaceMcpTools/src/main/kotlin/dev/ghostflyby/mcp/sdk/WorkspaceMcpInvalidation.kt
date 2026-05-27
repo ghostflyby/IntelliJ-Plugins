@@ -6,45 +6,25 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import kotlinx.coroutines.flow.StateFlow
+
+internal enum class ListChangeKind { Resources, Tools }
+
 internal interface WorkspaceMcpInvalidationSink {
-    fun invalidateResource(uri: String)
+    /** URI content changes -> [resources/updated]. */
+    fun <T> registerResourceUpdates(flow: StateFlow<T>, uris: (T) -> Set<String>)
 
-    fun invalidateResourceList(selector: ResourceListSelector = ResourceListSelector.AllSessions)
+    /** Any emission triggers global [kind] list_changed for all sessions. */
+    fun <T> registerGlobalListChanged(kind: ListChangeKind, flow: StateFlow<T>)
 
-    fun invalidateToolList()
+    /** Each emission carries the affected session IDs. */
+    fun <T> registerSessionListChanged(kind: ListChangeKind, flow: StateFlow<T>, sessions: (T) -> Set<String>)
 }
 
-internal sealed interface WorkspaceMcpInvalidation {
-    data class Resource(val uri: String) : WorkspaceMcpInvalidation
+internal data class ListChangedEvent(val kind: ListChangeKind, val selector: SessionSelector)
 
-    data class ResourceList(val selector: ResourceListSelector) : WorkspaceMcpInvalidation
+internal sealed interface SessionSelector {
+    data object AllSessions : SessionSelector
 
-    data object ToolList : WorkspaceMcpInvalidation
-}
-
-internal data class CoalescedInvalidations(
-    val resourceUris: Set<String> = emptySet(),
-    val resourceListSelectors: Set<ResourceListSelector> = emptySet(),
-    val toolListChanged: Boolean = false,
-) {
-    val isEmpty: Boolean
-        get() = resourceUris.isEmpty() && resourceListSelectors.isEmpty() && !toolListChanged
-
-    fun plus(event: WorkspaceMcpInvalidation): CoalescedInvalidations {
-        return when (event) {
-            is WorkspaceMcpInvalidation.Resource -> copy(resourceUris = resourceUris + event.uri)
-            is WorkspaceMcpInvalidation.ResourceList -> copy(resourceListSelectors = resourceListSelectors + event.selector)
-            WorkspaceMcpInvalidation.ToolList -> copy(toolListChanged = true)
-        }
-    }
-}
-
-internal sealed interface ResourceListSelector {
-    data object AllSessions : ResourceListSelector
-
-    data class Session(val sessionId: String) : ResourceListSelector
-
-    data class Uri(val uri: String) : ResourceListSelector
-
-    data class UriPrefix(val uriPrefix: String) : ResourceListSelector
+    data class Sessions(val sessionIds: Set<String>) : SessionSelector
 }

@@ -16,7 +16,6 @@ internal class WorkspaceMcpSessionState(
     private val rootsCache = ConcurrentHashMap<String, List<String>>()
     private val subscriptionLock = Any()
     private val resourceSubscriptionsBySession = linkedMapOf<String, MutableSet<String>>()
-    private val subscriptionHandlerSessionIds = linkedSetOf<String>()
     private val rootsVersion = AtomicLong(0L)
 
     suspend fun getRoots(sessionId: String): List<String> {
@@ -42,9 +41,6 @@ internal class WorkspaceMcpSessionState(
         rootsVersion.incrementAndGet()
     }
 
-    fun rememberSubscriptionHandler(sessionId: String): Boolean =
-        subscriptionHandlerSessionIds.add(sessionId)
-
     fun recordResourceSubscription(sessionId: String, resourceUri: String) {
         synchronized(subscriptionLock) {
             resourceSubscriptionsBySession.getOrPut(sessionId) { linkedSetOf() }.add(resourceUri)
@@ -63,38 +59,13 @@ internal class WorkspaceMcpSessionState(
     fun subscribedSessionIds(activeSessionIds: Set<String>, resourceUri: String): List<String> {
         return synchronized(subscriptionLock) {
             resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
-            subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
             resourceSubscriptionsBySession.filterValues { resourceUri in it }.keys.toList()
         }
     }
 
-    fun sessionIdsForResourceListSelector(
-        activeSessionIds: Set<String>,
-        selector: ResourceListSelector,
-    ): Set<String> {
+    fun isSubscribed(sessionId: String, resourceUri: String): Boolean {
         return synchronized(subscriptionLock) {
-            resourceSubscriptionsBySession.keys.removeAll { it !in activeSessionIds }
-            subscriptionHandlerSessionIds.removeAll { it !in activeSessionIds }
-            when (selector) {
-                ResourceListSelector.AllSessions -> activeSessionIds
-                is ResourceListSelector.Session -> if (selector.sessionId in activeSessionIds) {
-                    setOf(selector.sessionId)
-                } else {
-                    emptySet()
-                }
-                is ResourceListSelector.Uri -> sessionsSubscribedTo(activeSessionIds, selector.uri)
-                is ResourceListSelector.UriPrefix -> resourceSubscriptionsBySession
-                    .filterValues { subscriptions -> subscriptions.any { it.startsWith(selector.uriPrefix) } }
-                    .keys
-                    .filterTo(linkedSetOf()) { it in activeSessionIds }
-            }
+            resourceSubscriptionsBySession[sessionId]?.contains(resourceUri) == true
         }
-    }
-
-    private fun sessionsSubscribedTo(activeSessionIds: Set<String>, resourceUri: String): Set<String> {
-        return resourceSubscriptionsBySession
-            .filterValues { resourceUri in it }
-            .keys
-            .filterTo(linkedSetOf()) { it in activeSessionIds }
     }
 }

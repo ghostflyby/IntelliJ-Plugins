@@ -18,12 +18,15 @@ import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
+import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -41,22 +44,14 @@ internal class WorkspaceMcpSdkServerService(
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
         sessionState = sessionState,
     )
-    private val notificationDispatcher = WorkspaceMcpNotificationDispatcher(
-        subscriptionService = subscriptionService,
-        serverSupplier = { server },
-    )
-    private val invalidationBus = WorkspaceMcpInvalidationBus(
-        scope = scope,
-        dispatcher = notificationDispatcher,
-    )
+    private val invalidationBus = WorkspaceMcpInvalidationBus(scope = scope)
     private val globalGen = MutableStateFlow(0L)
-    private val sessionResourcesChanged = MutableStateFlow(persistentSetOf<String>())
+    private val sessionResourcesChanged = MutableStateFlow(PerSessionListChange())
 
     init {
-        invalidationBus.registerListChanged(ListKind.Resources, globalGen)
-        invalidationBus.registerListChanged(ListKind.Templates, globalGen)
-        invalidationBus.registerListChanged(ListKind.Tools, globalGen)
-        invalidationBus.registerSessionListChanged(ListKind.Resources, sessionResourcesChanged)
+        invalidationBus.registerGlobalListChanged(ListChangeKind.Resources, globalGen)
+        invalidationBus.registerGlobalListChanged(ListChangeKind.Tools, globalGen)
+        invalidationBus.registerSessionListChanged(ListChangeKind.Resources, sessionResourcesChanged) { it.sessionIds }
     }
 
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
@@ -110,7 +105,6 @@ internal class WorkspaceMcpSdkServerService(
             featureCoordinator.registerInitial(this, features)
         }
         newServer.onConnect { session ->
-            sessionState.rememberSubscriptionHandler(session.sessionId)
             session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
                 subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
             }
@@ -127,11 +121,53 @@ internal class WorkspaceMcpSdkServerService(
                 Method.Defined.NotificationsRootsListChanged,
             ) {
                 sessionState.clearRoots(session.sessionId)
-                sessionResourcesChanged.update { it.add(session.sessionId) }
+                sessionResourcesChanged.update { it.next(session.sessionId) }
                 CompletableDeferred(Unit)
+            }
+
+            // Per-session notification collectors
+            val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            session.onClose { sessionScope.cancel() }
+
+            sessionScope.launch {
+                invalidationBus.resourceUpdateBatches.collect { uris ->
+                    uris.filter { subscriptionService.isSubscribed(session.sessionId, it) }
+                        .forEach { uri ->
+                            runCatching {
+                                session.sendResourceUpdated(
+                                    ResourceUpdatedNotification(ResourceUpdatedNotificationParams(uri = uri))
+                                )
+                            }.onFailure { error ->
+                                logger.warn("Failed to send resource update to session ${session.sessionId}", error)
+                            }
+                        }
+                }
+            }
+            sessionScope.launch {
+                invalidationBus.listChangedBatches.collect { events ->
+                    events.forEach { (kind, selector) ->
+                        when (selector) {
+                            SessionSelector.AllSessions -> notifyListChanged(session, kind)
+                            is SessionSelector.Sessions if session.sessionId in selector.sessionIds ->
+                                notifyListChanged(session, kind)
+                            else -> {}
+                        }
+                    }
+                }
             }
         }
         return newServer
+    }
+
+    private suspend fun notifyListChanged(session: ServerSession, kind: ListChangeKind) {
+        runCatching {
+            when (kind) {
+                ListChangeKind.Resources -> session.sendResourceListChanged()
+                ListChangeKind.Tools -> session.sendToolListChanged()
+            }
+        }.onFailure { error ->
+            logger.warn("Failed to send list changed notification to session ${session.sessionId}", error)
+        }
     }
 
     private fun subscribeToFeatureEvents() {
@@ -162,4 +198,14 @@ internal class WorkspaceMcpSdkServerService(
         private const val LOOPBACK_HOST = "127.0.0.1"
         private const val MCP_ENDPOINT_PATH = "/mcp"
     }
+}
+
+private data class PerSessionListChange(
+    val generation: Long = 0L,
+    val sessionIds: Set<String> = emptySet(),
+) {
+    fun next(sessionId: String): PerSessionListChange = copy(
+        generation = generation + 1,
+        sessionIds = setOf(sessionId),
+    )
 }

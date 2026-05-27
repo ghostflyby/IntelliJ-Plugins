@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-
 internal class WorkspaceMcpResourceSubscriptionService(
     private val sessionState: WorkspaceMcpSessionState,
 ) {
@@ -21,28 +19,11 @@ internal class WorkspaceMcpResourceSubscriptionService(
         sessionState.removeResourceSubscription(sessionId, resourceUri)
     }
 
-    internal fun subscribedSessionIds(activeServer: Server, resourceUri: String): List<String> {
-        return sessionState.subscribedSessionIds(activeServer.sessions.keys, resourceUri)
+    internal fun isSubscribed(sessionId: String, resourceUri: String): Boolean {
+        if (!isWorkspaceResourceUri(resourceUri)) return false
+        return sessionState.isSubscribed(sessionId, resourceUri)
     }
 
-    internal fun sessionIdsForResourceListSelector(
-        activeServer: Server,
-        selector: ResourceListSelector,
-    ): Set<String> {
-        val activeSessionIds = activeServer.sessions.keys
-        return when (selector) {
-            ResourceListSelector.AllSessions -> activeSessionIds
-            is ResourceListSelector.Session -> if (selector.sessionId in activeSessionIds) {
-                setOf(selector.sessionId)
-            } else {
-                emptySet()
-            }
-            is ResourceListSelector.Uri -> sessionState.sessionIdsForResourceListSelector(activeSessionIds, selector)
-            is ResourceListSelector.UriPrefix -> sessionState.sessionIdsForResourceListSelector(activeSessionIds, selector)
-        }
-    }
-
-    // -- URI helpers (private to this service) --
 
     internal companion object {
         private const val WORKSPACE_URI_SCHEME = "ij-workspace://"

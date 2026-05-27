@@ -22,13 +22,19 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
 internal class FileContentInvalidationListener(
     private val projectResolver: WorkspaceProjectResolver,
     private val invalidationSink: WorkspaceMcpInvalidationSink,
     private val scope: CoroutineScope,
 ) {
+    private val resourceUpdates = MutableStateFlow(ResourceUpdateState())
+
     fun install() {
+        invalidationSink.registerResourceUpdates(resourceUpdates) { it.uris }
+
         EditorFactory.getInstance().eventMulticaster.addDocumentListener(
             object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
@@ -42,10 +48,12 @@ internal class FileContentInvalidationListener(
             VirtualFileManager.VFS_CHANGES,
             object : BulkFileListener {
                 override fun after(events: List<VFileEvent>) {
-                    events.mapNotNull { it.file }
+                    val uris = events.mapNotNull { it.file }
                         .flatMap(::resourceUrisForFile)
-                        .distinct()
-                        .forEach(invalidationSink::invalidateResource)
+                        .toSet()
+                    if (uris.isNotEmpty()) {
+                        resourceUpdates.update { it.next(uris) }
+                    }
                 }
             },
         )
@@ -53,7 +61,10 @@ internal class FileContentInvalidationListener(
 
     private fun invalidateDocument(document: Document) {
         val file = FileDocumentManager.getInstance().getFile(document) ?: return
-        resourceUrisForFile(file).forEach(invalidationSink::invalidateResource)
+        val uris = resourceUrisForFile(file).toSet()
+        if (uris.isNotEmpty()) {
+            resourceUpdates.update { it.next(uris) }
+        }
     }
 
     private fun resourceUrisForFile(file: VirtualFile): List<String> {
@@ -83,4 +94,14 @@ internal class FileContentInvalidationListener(
             else -> null
         }
     }
+}
+
+private data class ResourceUpdateState(
+    val generation: Long = 0L,
+    val uris: Set<String> = emptySet(),
+) {
+    fun next(uris: Set<String>): ResourceUpdateState = copy(
+        generation = generation + 1,
+        uris = uris,
+    )
 }

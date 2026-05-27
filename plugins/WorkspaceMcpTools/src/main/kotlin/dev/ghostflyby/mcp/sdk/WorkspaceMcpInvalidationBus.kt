@@ -7,57 +7,82 @@
 package dev.ghostflyby.mcp.sdk
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
 internal class WorkspaceMcpInvalidationBus(
-    scope: CoroutineScope,
-    private val dispatcher: WorkspaceMcpNotificationDispatcher,
+    private val scope: CoroutineScope,
     private val coalesceWindow: Duration = 100.milliseconds,
 ) : WorkspaceMcpInvalidationSink {
-    private val channel = Channel<WorkspaceMcpInvalidation>(
-        capacity = 256,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
+    private val _resourceUpdates = MutableStateFlow<Set<String>>(emptySet())
+    private val _listChanged = MutableStateFlow<Set<ListChangedEvent>>(emptySet())
+
+    val resourceUpdateBatches: StateFlow<Set<String>> = _resourceUpdates
+    val listChangedBatches: StateFlow<Set<ListChangedEvent>> = _listChanged
 
     init {
+        @OptIn(FlowPreview::class)
         scope.launch {
-            channel.batchedInvalidations(coalesceWindow).collect { invalidations ->
-                dispatcher.dispatch(invalidations)
+            _resourceUpdates
+                .debounce(coalesceWindow)
+                .collect { batch ->
+                    if (batch.isNotEmpty()) {
+                        _resourceUpdates.compareAndSet(batch, emptySet())
+                    }
+                }
+        }
+        @OptIn(FlowPreview::class)
+        scope.launch {
+            _listChanged
+                .debounce(coalesceWindow)
+                .collect { batch ->
+                    if (batch.isNotEmpty()) {
+                        _listChanged.compareAndSet(batch, emptySet())
+                    }
+                }
+        }
+    }
+
+    override fun <T> registerResourceUpdates(flow: StateFlow<T>, uris: (T) -> Set<String>) {
+        scope.launch {
+            flow.drop(1).collect { state ->
+                val validUris = uris(state).filterTo(linkedSetOf()) {
+                    WorkspaceMcpResourceSubscriptionService.isWorkspaceResourceUri(it)
+                }
+                if (validUris.isNotEmpty()) {
+                    _resourceUpdates.update { it + validUris }
+                }
             }
         }
     }
 
-    override fun invalidateResource(uri: String) {
-        if (!WorkspaceMcpResourceSubscriptionService.isWorkspaceResourceUri(uri)) return
-        channel.trySend(WorkspaceMcpInvalidation.Resource(uri))
-    }
-
-    override fun invalidateResourceList(selector: ResourceListSelector) {
-        channel.trySend(WorkspaceMcpInvalidation.ResourceList(selector))
-    }
-
-    override fun invalidateToolList() {
-        channel.trySend(WorkspaceMcpInvalidation.ToolList)
-    }
-}
-
-internal fun ReceiveChannel<WorkspaceMcpInvalidation>.batchedInvalidations(
-    coalesceWindow: Duration,
-): kotlinx.coroutines.flow.Flow<CoalescedInvalidations> = kotlinx.coroutines.flow.flow {
-    for (first in this@batchedInvalidations) {
-        var batch = CoalescedInvalidations().plus(first)
-        withTimeoutOrNull(coalesceWindow) {
-            while (true) {
-                val next = receiveCatching().getOrNull() ?: break
-                batch = batch.plus(next)
+    override fun <T> registerGlobalListChanged(kind: ListChangeKind, flow: StateFlow<T>) {
+        scope.launch {
+            flow.drop(1).collect {
+                _listChanged.update { it + ListChangedEvent(kind, SessionSelector.AllSessions) }
             }
         }
-        emit(batch)
+    }
+
+    override fun <T> registerSessionListChanged(
+        kind: ListChangeKind,
+        flow: StateFlow<T>,
+        sessions: (T) -> Set<String>,
+    ) {
+        scope.launch {
+            flow.drop(1).collect { state ->
+                val sessionIds = sessions(state).filterTo(linkedSetOf()) { it.isNotBlank() }
+                if (sessionIds.isNotEmpty()) {
+                    _listChanged.update { it + ListChangedEvent(kind, SessionSelector.Sessions(sessionIds)) }
+                }
+            }
+        }
     }
 }
