@@ -6,19 +6,15 @@
 
 package dev.ghostflyby.mcp
 
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
-import com.intellij.openapi.extensions.PluginAware
-import com.intellij.openapi.extensions.PluginDescriptor
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.extensions.PluginId
 
-@Service
-internal class MyPluginInfo : PluginAware {
-    override fun setPluginDescriptor(pluginDescriptor: PluginDescriptor) {
-        descriptor = pluginDescriptor
-    }
+private val LOG = Logger.getInstance("dev.ghostflyby.mcp.PluginInfo")
+private val WORKSPACE_MCP_PLUGIN_ID = PluginId.getId("dev.ghostflyby.mcp.workspace")
 
-    internal lateinit var descriptor: PluginDescriptor
-
-}
-
-internal val pluginDescriptor get() = service<MyPluginInfo>().descriptor
+internal val pluginVersion: String
+    get() = PluginManagerCore.getPlugin(WORKSPACE_MCP_PLUGIN_ID)?.version
+        ?: "unknown".also {
+            LOG.warn("Plugin descriptor was not found for $WORKSPACE_MCP_PLUGIN_ID; reporting version as unknown.")
+        }

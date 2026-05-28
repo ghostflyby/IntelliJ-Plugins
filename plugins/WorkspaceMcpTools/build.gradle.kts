@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -29,7 +30,21 @@ dependencies {
         isTransitive = false
     }
     implementation(project(":modules:intellij-shared"))
+    testImplementation(libs.mcp.kotlin.sdk.testing) {
+        exclude(group = "io.ktor")
+        exclude(group = "org.jetbrains.kotlinx")
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    testImplementation(libs.mcp.kotlin.sdk.client) {
+        exclude(group = "io.ktor")
+        exclude(group = "org.jetbrains.kotlinx")
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    testImplementation(libs.kotlin.stdlib)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     intellijPlatform {
+        testFramework(TestFrameworkType.JUnit5)
         bundledModule("intellij.platform.vcs.impl")
     }
 }
@@ -42,6 +57,10 @@ ksp {
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.compilerOptions {
     freeCompilerArgs.set(listOf("-Xannotation-default-target=param-property"))
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 configurations.all {

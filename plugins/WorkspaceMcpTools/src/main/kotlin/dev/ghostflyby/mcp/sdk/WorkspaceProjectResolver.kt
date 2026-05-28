@@ -55,6 +55,14 @@ internal fun workspaceProjectKey(project: Project): String {
 
 internal interface WorkspaceProjectProvider {
     fun openProjects(): List<Project>
+
+    suspend fun resolve(
+        projectKey: String? = null,
+        projectPath: String? = null,
+        rawVfsUrl: String? = null,
+        relativePath: String? = null,
+        rootsCandidates: List<String>? = null,
+    ): WorkspaceProjectResolution
 }
 
 @Service(Service.Level.APP)
@@ -69,12 +77,12 @@ internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
     /**
      * Enhanced resolver supporting projectKey, projectPath, rawVfsUrl, relativePath, and single-project fallback.
      */
-    internal suspend fun resolve(
-        projectKey: String? = null,
-        projectPath: String? = null,
-        rawVfsUrl: String? = null,
-        relativePath: String? = null,
-        rootsCandidates: List<String>? = null,
+    override suspend fun resolve(
+        projectKey: String?,
+        projectPath: String?,
+        rawVfsUrl: String?,
+        relativePath: String?,
+        rootsCandidates: List<String>?,
     ): WorkspaceProjectResolution {
         // 1. explicit projectKey
         projectKey?.takeIf { it.isNotBlank() }?.let { key ->

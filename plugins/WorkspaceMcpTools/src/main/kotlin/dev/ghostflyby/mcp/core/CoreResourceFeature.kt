@@ -7,7 +7,7 @@
 package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
-import dev.ghostflyby.mcp.pluginDescriptor
+import dev.ghostflyby.mcp.pluginVersion
 import dev.ghostflyby.mcp.route.resources.ProjectResource
 import dev.ghostflyby.mcp.route.resources.ServerInfoResource
 import dev.ghostflyby.mcp.route.visibleProjects
@@ -36,7 +36,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         read<ServerInfoResource> {
             val instanceKey = workspaceInstanceKey()
             val info = readAction {
-                mapOf("instanceKey" to instanceKey, "version" to pluginDescriptor.version)
+                mapOf("instanceKey" to instanceKey, "version" to pluginVersion)
             }
             ReadResourceResult(
                 contents = listOf(

@@ -42,8 +42,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
         read<VfsResource> { resource ->
-            val project = call.project()
-            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), project, resource)
+            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), { call.project() }, resource)
         }
 
         read<ProjectFileResource> { resource ->
@@ -51,7 +50,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             readFileContent(
                 call.request.params.uri,
                 resolveFileByRelativePathOrNull(project, resource.relativePath),
-                project,
+                { project },
                 resource,
             )
         }
@@ -65,7 +64,7 @@ internal class FileContentFeature : WorkspaceMcpFeature {
     private suspend fun readFileContent(
         uri: String,
         file: VirtualFile?,
-        project: Project,
+        project: suspend () -> Project,
         query: FileContentQuery,
     ): ReadResourceResult {
         val wantsContent = query.content != null || (query.meta == null && !query.exists && !query.structure)
@@ -99,7 +98,11 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
         // Structure
         if (query.structure) {
-            items += TextResourceContents(uri = uri, mimeType = "application/json", text = readStructureResult(project, file!!))
+            items += TextResourceContents(
+                uri = uri,
+                mimeType = "application/json",
+                text = readStructureResult(project(), file!!),
+            )
         }
 
         return ReadResourceResult(contents = items)

@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.openapi.components.service
 import dev.ghostflyby.mcp.route.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
@@ -71,6 +72,7 @@ internal class WorkspaceMcpResourceCatalog(
             connection = connection,
             request = request,
             parameters = AncestorContext(emptyMap()),
+            projectResolver = service<WorkspaceProjectResolver>(),
         )
     }
 

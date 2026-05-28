@@ -6,12 +6,13 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
-import dev.ghostflyby.mcp.pluginDescriptor
+import dev.ghostflyby.mcp.pluginVersion
 import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import io.ktor.server.cio.*
@@ -69,27 +70,29 @@ internal class WorkspaceMcpSdkServerService(
 
     init {
         subscribeToFeatureEvents()
-        scope.launch {
-            val createdServer = createServer()
-            try {
-                val port = service<WorkspaceMcpSdkServerSettings>().port
-                server = createdServer
-                embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
-                }.startSuspend(wait = true)
-                @Suppress("HttpUrlsUsage")
-                logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
-            } finally {
-                server = null
-                runCatching { createdServer.close() }
-                    .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
+        if (!ApplicationManager.getApplication().isUnitTestMode) {
+            scope.launch {
+                val createdServer = createServer()
+                try {
+                    val port = service<WorkspaceMcpSdkServerSettings>().port
+                    server = createdServer
+                    embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
+                        mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
+                    }.startSuspend(wait = true)
+                    @Suppress("HttpUrlsUsage")
+                    logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
+                } finally {
+                    server = null
+                    runCatching { createdServer.close() }
+                        .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
+                }
             }
         }
     }
 
     private fun createServer(): Server {
         val newServer = Server(
-            serverInfo = Implementation(name = "workspace-mcp", version = pluginDescriptor.version),
+            serverInfo = Implementation(name = "workspace-mcp", version = pluginVersion),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
                     resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),

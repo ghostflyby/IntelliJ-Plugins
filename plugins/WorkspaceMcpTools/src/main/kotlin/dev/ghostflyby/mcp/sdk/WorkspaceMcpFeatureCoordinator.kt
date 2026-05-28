@@ -17,7 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 
 internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
-    private val projectResolver: WorkspaceProjectResolver,
+    private val projectResolver: WorkspaceProjectProvider,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
     private val invalidationSink: WorkspaceMcpInvalidationSink,
@@ -110,6 +110,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     connection = this,
                                     request = request,
                                     parameters = AncestorContext(vars),
+                                    projectResolver = projectResolver,
                                 ),
                             ),
                             deserialized,
@@ -133,6 +134,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                                     connection = this,
                                     request = request,
                                     parameters = AncestorContext(emptyMap()),
+                                    projectResolver = projectResolver,
                                 ),
                             ),
                             deserialized,

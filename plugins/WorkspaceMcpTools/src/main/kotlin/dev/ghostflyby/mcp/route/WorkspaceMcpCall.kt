@@ -23,6 +23,7 @@ internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
     val parameters: AncestorContext,
+    val projectResolver: WorkspaceProjectProvider,
 ) {
     val sessionId: String get() = connection.sessionId
     val instanceKey: String get() = workspaceInstanceKey()
@@ -35,9 +36,9 @@ internal class WorkspaceMcpCall<out R : Request>(
 // -- project resolution (extension with service default + overload for testing) --
 
 internal suspend fun WorkspaceMcpCall<*>.project(): Project =
-    project(service<WorkspaceProjectResolver>())
+    project(projectResolver)
 
-internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectResolver): Project {
+internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectProvider): Project {
     val project = when (val r = resolver.resolve(projectKey = parameters["projectKey"])) {
         is WorkspaceProjectResolution.Resolved -> r.project
         is WorkspaceProjectResolution.Unresolved -> error(r.message)
@@ -56,7 +57,7 @@ internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectResol
 internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpListProject> =
     visibleProjects(service<WorkspaceProjectResolver>())
 
-internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProjectResolver): List<WorkspaceMcpListProject> {
+internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProjectProvider): List<WorkspaceMcpListProject> {
     return visibleProjectInstances(resolver).map { project ->
         WorkspaceMcpListProject(
             projectKey = workspaceProjectKey(project),
@@ -68,7 +69,7 @@ internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProj
 
 // -- impl --
 
-private suspend fun WorkspaceMcpCall<*>.visibleProjectInstances(resolver: WorkspaceProjectResolver): List<Project> {
+private suspend fun WorkspaceMcpCall<*>.visibleProjectInstances(resolver: WorkspaceProjectProvider): List<Project> {
     val projects = resolver.openProjects()
     val roots = roots()
     if (roots.isEmpty()) return projects

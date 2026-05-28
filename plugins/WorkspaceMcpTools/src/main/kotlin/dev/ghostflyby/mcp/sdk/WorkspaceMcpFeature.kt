@@ -24,7 +24,7 @@ internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
  * Tracks registered resources/tools for cleanup on dynamic removal.
  */
 internal class WorkspaceMcpFeatureRegistrationContext(
-    val projectResolver: WorkspaceProjectResolver,
+    val projectResolver: WorkspaceProjectProvider,
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,

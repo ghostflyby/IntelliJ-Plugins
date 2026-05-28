@@ -6,9 +6,11 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
+import com.intellij.openapi.components.service
 import dev.ghostflyby.mcp.route.AncestorContext
 import dev.ghostflyby.mcp.route.McpCallContext
 import dev.ghostflyby.mcp.route.WorkspaceMcpCall
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.Dispatchers
@@ -381,6 +383,7 @@ private fun newWorkspaceMcpCall(
         connection = conn,
         request = request,
         parameters = AncestorContext(emptyMap()),
+        projectResolver = service<WorkspaceProjectResolver>(),
     )
 }
 

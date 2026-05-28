@@ -53,6 +53,8 @@ internal class CocoaRecentProjectsCoordinator(
     private val coroutineScope: CoroutineScope,
     private val documentsBridge: CocoaRecentDocumentsBridge,
     private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
+    private val startupProjectLookupDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val nanoTime: () -> Long = System::nanoTime,
     private val onFailure: (Throwable) -> Unit = {},
 ) {
     private val stateLock = Any()
@@ -77,7 +79,7 @@ internal class CocoaRecentProjectsCoordinator(
                 pendingStartupProjects[projectKey] = projectPath
             }
             recentProjectKeys.forEach(pendingStartupProjects::remove)
-            scheduledSyncAtNanos = System.nanoTime() + debounceMillis * NANOS_PER_MILLISECOND
+            scheduledSyncAtNanos = nanoTime() + debounceMillis * NANOS_PER_MILLISECOND
             if (workerJob?.isActive != true) {
                 workerJob = coroutineScope.launch {
                     processPendingRequests()
@@ -142,7 +144,7 @@ internal class CocoaRecentProjectsCoordinator(
     }
 
     private suspend fun syncPendingRequest(request: PendingSyncRequest) {
-        val startupProjectsToRemove = withContext(Dispatchers.IO) {
+        val startupProjectsToRemove = withContext(startupProjectLookupDispatcher) {
             findStartupProjectsToRemove(
                 recentPaths = request.recentPaths,
                 startupProjects = request.startupProjects,
@@ -168,7 +170,7 @@ internal class CocoaRecentProjectsCoordinator(
                 workerJob = null
                 WorkerStep.Stop
             } else {
-                val remainingNanos = scheduledSyncAtNanos - System.nanoTime()
+                val remainingNanos = scheduledSyncAtNanos - nanoTime()
                 if (remainingNanos > 0L) {
                     WorkerStep.Delay((remainingNanos + NANOS_PER_MILLISECOND - 1L) / NANOS_PER_MILLISECOND)
                 } else {
