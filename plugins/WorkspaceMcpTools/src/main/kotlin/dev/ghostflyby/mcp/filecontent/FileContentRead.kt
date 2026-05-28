@@ -6,16 +6,20 @@
 
 package dev.ghostflyby.mcp.filecontent
 
+import com.intellij.ide.structureView.TreeBasedStructureViewBuilder
+import com.intellij.ide.util.treeView.smartTree.TreeElement
+import com.intellij.lang.LanguageStructureViewBuilder
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.util.concurrency.annotations.RequiresReadLock
+import com.intellij.psi.PsiManager
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
@@ -78,7 +82,6 @@ private val documentCache = object : LinkedHashMap<String, Document>(64, 0.75f, 
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Document>): Boolean = size > 64
 }
 
-@RequiresReadLock
 private fun getOrCreateDocument(file: VirtualFile): Document? {
     val url = file.url
     synchronized(documentCache) { documentCache[url] }?.let { return it }
@@ -164,6 +167,46 @@ internal suspend fun readMetaResult(file: VirtualFile, fields: String /* ""=all;
     val json = filterAndSerialize(meta, fields)
     return ContentResult(payload = json, mimeType = "application/json", isBinary = false)
 }
+
+// -- structure read --
+
+@Serializable
+internal data class FileStructure(val elements: List<StructureElement>)
+
+@Serializable
+internal data class StructureElement(
+    val name: String,
+    val type: String,
+    val children: List<StructureElement> = emptyList(),
+)
+
+internal suspend fun readStructureResult(
+    project: Project,
+    file: VirtualFile,
+): String {
+    val document = readAction { FileDocumentManager.getInstance().getDocument(file) }
+        ?: return """{"elements":[]}"""
+    val elements = readAction {
+        val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList<StructureElement>()
+        val builder = LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(psiFile)
+            as? TreeBasedStructureViewBuilder
+            ?: return@readAction emptyList<StructureElement>()
+        val editor = ImaginaryEditor(project, document)
+        val model = builder.createStructureViewModel(editor)
+        collectElements(model.root)
+    }
+    return JSON.encodeToString(FileStructure.serializer(), FileStructure(elements))
+}
+
+private fun collectElements(element: Any?): List<StructureElement> {
+    if (element !is TreeElement) return emptyList()
+    val name = element.presentation.presentableText ?: ""
+    val type = element.presentation.locationString ?: ""
+    val children = element.children.toList().flatMap { collectElements(it) }
+    return listOf(StructureElement(name, type, children))
+}
+
+// -- helpers --
 
 private fun filterAndSerialize(meta: FileMeta, fields: String): String {
     if (fields.isBlank()) return JSON.encodeToString(FileMeta.serializer(), meta)

@@ -20,7 +20,7 @@ internal class WorkspaceResourceUriFormatTest {
     @Test
     fun `template uri includes parent resource path`() {
         assertEquals(
-            "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists}",
+            "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists,structure}",
             format.templateUri(ProjectFileResource.serializer().descriptor),
         )
     }
@@ -36,7 +36,7 @@ internal class WorkspaceResourceUriFormatTest {
             ),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/projects/project-a/files/src/main/App.kt?meta&exists=false", uri)
+        assertEquals("ij-workspace://{instanceKey}/projects/project-a/files/src/main/App.kt?meta&exists=false&structure=false", uri)
     }
 
     @Test
@@ -58,7 +58,7 @@ internal class WorkspaceResourceUriFormatTest {
             VfsResource(rawVfsUrl = "file:///tmp/file.kt"),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?exists=false", uri)
+        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?exists=false&structure=false", uri)
     }
 
     @Test
@@ -68,7 +68,7 @@ internal class WorkspaceResourceUriFormatTest {
             VfsResource(rawVfsUrl = "file:///tmp/file.kt", meta = "length", content = ""),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?meta=length&content&exists=false", uri)
+        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?meta=length&content&exists=false&structure=false", uri)
     }
 
     @Test

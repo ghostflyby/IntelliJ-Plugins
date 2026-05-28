@@ -197,7 +197,7 @@ internal class ResourceRouteSnapshotTest {
     private fun fileMatcher(snapshot: ResourceRouteSnapshot): SegmentTreeTemplateMatcher {
         return SegmentTreeTemplateMatcher(
             ResourceTemplate(
-                uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists}",
+                uriTemplate = "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists,structure}",
                 name = "relativePath",
             ),
             ResourceRouteSnapshotRef(snapshot),
@@ -207,7 +207,7 @@ internal class ResourceRouteSnapshotTest {
     private fun vfsMatcher(snapshot: ResourceRouteSnapshot): SegmentTreeTemplateMatcher {
         return SegmentTreeTemplateMatcher(
             ResourceTemplate(
-                uriTemplate = "ij-workspace://{instanceKey}/vfs/{rawVfsUrl}{?meta,content,exists}",
+                uriTemplate = "ij-workspace://{instanceKey}/vfs/{rawVfsUrl}{?meta,content,exists,structure}",
                 name = "rawVfsUrl",
             ),
             ResourceRouteSnapshotRef(snapshot),

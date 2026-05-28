@@ -13,6 +13,7 @@ internal interface FileContentQuery {
     val meta: String?
     val content: String?
     val exists: Boolean
+    val structure: Boolean
 }
 
 @Serializable
@@ -30,6 +31,7 @@ internal data class VfsResource(
     override val meta: String? = null,
     override val content: String? = null,
     override val exists: Boolean = false,
+    override val structure: Boolean = false,
 ) : FileContentQuery {
 }
 
@@ -41,5 +43,6 @@ internal data class ProjectFileResource(
     override val meta: String? = null,
     override val content: String? = null,
     override val exists: Boolean = false,
+    override val structure: Boolean = false,
 ) : FileContentQuery {
 }

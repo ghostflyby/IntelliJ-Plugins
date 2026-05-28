@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.filecontent
 
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.tools.FileContentWriteTools
 import dev.ghostflyby.mcp.route.project
@@ -34,19 +35,23 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
  * - `?meta&content` → both content + metadata
  * - `?exists` → existence check appended alongside other requested data
  * - `?meta&exists` → metadata + existence
+ * - `?structure` → file structure overview (declarations)
  */
 internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
         read<VfsResource> { resource ->
-            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), resource)
+            val project = call.project()
+            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), project, resource)
         }
 
         read<ProjectFileResource> { resource ->
+            val project = call.project()
             readFileContent(
                 call.request.params.uri,
-                resolveFileByRelativePathOrNull(call.project(), resource.relativePath),
+                resolveFileByRelativePathOrNull(project, resource.relativePath),
+                project,
                 resource,
             )
         }
@@ -60,10 +65,11 @@ internal class FileContentFeature : WorkspaceMcpFeature {
     private suspend fun readFileContent(
         uri: String,
         file: VirtualFile?,
+        project: Project,
         query: FileContentQuery,
     ): ReadResourceResult {
-        val wantsContent = query.content != null || (query.meta == null && !query.exists)
-        val needsFile = wantsContent || query.meta != null
+        val wantsContent = query.content != null || (query.meta == null && !query.exists && !query.structure)
+        val needsFile = wantsContent || query.meta != null || query.structure
 
         if (needsFile && file == null) throw ContentReadException("File not found")
 
@@ -91,9 +97,11 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             items += TextResourceContents(uri = uri, mimeType = "application/json", text = (file != null).toString())
         }
 
-        if (items.isEmpty()) {
-            items += TextResourceContents(uri = uri, mimeType = "text/plain", text = "")
+        // Structure
+        if (query.structure) {
+            items += TextResourceContents(uri = uri, mimeType = "application/json", text = readStructureResult(project, file!!))
         }
+
         return ReadResourceResult(contents = items)
     }
 
