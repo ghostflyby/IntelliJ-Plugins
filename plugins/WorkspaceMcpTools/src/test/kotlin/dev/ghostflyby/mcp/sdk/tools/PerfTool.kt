@@ -6,17 +6,14 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
-import dev.ghostflyby.mcp.route.McpCallContext
-import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
-import kotlinx.serialization.Serializable
+import kotlinx.schema.Schema
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.schema.Schema
 
 internal class PerfTool {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.do_perf(
+    fun do_perf(
         url: String,
         offset: Int,
         limit: Int = 50,

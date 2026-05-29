@@ -44,7 +44,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle valid tool invocation`() = runBlocking {
+    fun `methodHandle valid tool invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
             functionName = "do_thing",
@@ -57,7 +57,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle handler factory accepts only invocation plan`() {
+    fun `methodHandle handler factory accepts only invocation plan`() {
         assertEquals(
             ToolInvocationPlan::class,
             ::buildMethodHandleHandler.valueParameters.single().type.classifier,
@@ -78,7 +78,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle non-suspend invocation`() = runBlocking {
+    fun `methodHandle non-suspend invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NonSuspendTool::class,
             functionName = "not_suspend",
@@ -104,7 +104,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle regular member invocation`() = runBlocking {
+    fun `methodHandle regular member invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NoReceiverTool::class,
             functionName = "no_receiver",
@@ -131,7 +131,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle multi param invocation`() = runBlocking {
+    fun `methodHandle multi param invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = MultiParamTool::class,
             functionName = "do_multi",
@@ -156,7 +156,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle zero param invocation`() = runBlocking {
+    fun `methodHandle zero param invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ZeroParamTool::class,
             functionName = "do_nothing",
@@ -181,7 +181,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle default params invocation`() = runBlocking {
+    fun `methodHandle default params invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = DefaultParamTool::class,
             functionName = "do_default",
@@ -208,7 +208,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle value class invocation`() = runBlocking {
+    fun `methodHandle value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValueClassTool::class,
             functionName = "do_value",
@@ -234,7 +234,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable value class invocation`() = runBlocking {
+    fun `methodHandle nullable value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableValueClassTool::class,
             functionName = "do_nullable_value",
@@ -260,7 +260,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable value class accepts explicit null`() = runBlocking {
+    fun `methodHandle nullable value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableValueClassTool::class,
             functionName = "do_nullable_value",
@@ -286,7 +286,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle primitive value class invocation`() = runBlocking {
+    fun `methodHandle primitive value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = PrimitiveValueClassTool::class,
             functionName = "do_primitive_value",
@@ -312,7 +312,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable primitive value class invocation`() = runBlocking {
+    fun `methodHandle nullable primitive value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullablePrimitiveValueClassTool::class,
             functionName = "do_nullable_primitive_value",
@@ -338,7 +338,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable primitive value class accepts explicit null`() = runBlocking {
+    fun `methodHandle nullable primitive value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullablePrimitiveValueClassTool::class,
             functionName = "do_nullable_primitive_value",
@@ -364,7 +364,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable underlying value class invocation`() = runBlocking {
+    fun `methodHandle nullable underlying value class invocation`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableUnderlyingValueClassTool::class,
             functionName = "do_nullable_underlying_value",
@@ -390,7 +390,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle nullable underlying value class accepts explicit null`() = runBlocking {
+    fun `methodHandle nullable underlying value class accepts explicit null`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = NullableUnderlyingValueClassTool::class,
             functionName = "do_nullable_underlying_value",
@@ -414,7 +414,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle valid tool reports missing argument`() = runBlocking {
+    fun `methodHandle valid tool reports missing argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
             functionName = "do_thing",
@@ -438,7 +438,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle multi param reports missing argument`() = runBlocking {
+    fun `methodHandle multi param reports missing argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = MultiParamTool::class,
             functionName = "do_multi",
@@ -464,7 +464,7 @@ internal class ToolReflectionInvocationTest {
     }
 
     @Test
-    fun `methodhandle valid tool reports invalid argument`() = runBlocking {
+    fun `methodHandle valid tool reports invalid argument`() = runBlocking {
         val result = callAcceptedToolWithMethodHandle(
             toolClass = ValidTool::class,
             functionName = "do_thing",

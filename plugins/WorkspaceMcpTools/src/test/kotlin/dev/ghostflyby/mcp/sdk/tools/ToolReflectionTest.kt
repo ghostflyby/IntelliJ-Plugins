@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+@file:Suppress("UnusedReceiverParameter", "RedundantSuspendModifier", "unused")
+
 package dev.ghostflyby.mcp.sdk.tools
 
 import dev.ghostflyby.mcp.route.McpCallContext
