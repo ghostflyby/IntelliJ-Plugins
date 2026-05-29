@@ -42,7 +42,13 @@ internal class FileContentFeature : WorkspaceMcpFeature {
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
         read<VfsResource> { resource ->
-            readFileContent(call.request.params.uri, resolveFileByRawUrlOrNull(resource.rawVfsUrl), { call.project() }, resource)
+            readFileContent(
+                call.request.params.uri,
+                resolveFileByRawUrlOrNull(resource.rawVfsUrl),
+                projectForStructure = { call.project() },
+                projectForGlob = null,
+                resource,
+            )
         }
 
         read<ProjectFileResource> { resource ->
@@ -50,7 +56,8 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             readFileContent(
                 call.request.params.uri,
                 resolveFileByRelativePathOrNull(project, resource.relativePath),
-                { project },
+                projectForStructure = { project },
+                projectForGlob = project,
                 resource,
             )
         }
@@ -64,11 +71,15 @@ internal class FileContentFeature : WorkspaceMcpFeature {
     private suspend fun readFileContent(
         uri: String,
         file: VirtualFile?,
-        project: suspend () -> Project,
+        projectForStructure: suspend () -> Project,
+        projectForGlob: Project?,
         query: FileContentQuery,
     ): ReadResourceResult {
-        val wantsContent = query.content != null || (query.meta == null && !query.exists && !query.structure)
-        val needsFile = wantsContent || query.meta != null || query.structure
+        // Glob is handled independently; it only needs a directory, not content/meta/structure resolution.
+        val hasGlob = query.glob != null
+        val wantsContent =
+            !hasGlob && (query.content != null || (query.meta == null && !query.exists && !query.structure))
+        val needsFile = wantsContent || query.meta != null || query.structure || hasGlob
 
         if (needsFile && file == null) throw ContentReadException("File not found")
 
@@ -101,8 +112,14 @@ internal class FileContentFeature : WorkspaceMcpFeature {
             items += TextResourceContents(
                 uri = uri,
                 mimeType = "application/json",
-                text = readStructureResult(project(), file!!),
+                text = readStructureResult(projectForStructure(), file!!),
             )
+        }
+
+        // Glob
+        if (hasGlob) {
+            val result = readGlobResult(file!!, query.glob!!, projectForGlob)
+            items += TextResourceContents(uri = uri, mimeType = result.mimeType, text = result.payload)
         }
 
         return ReadResourceResult(contents = items)

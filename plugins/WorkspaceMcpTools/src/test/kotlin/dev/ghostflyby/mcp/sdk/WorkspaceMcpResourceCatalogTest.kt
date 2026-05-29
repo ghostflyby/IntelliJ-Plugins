@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.testFramework.junit5.TestApplication
 import dev.ghostflyby.mcp.route.*
 import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
@@ -14,11 +15,12 @@ import io.modelcontextprotocol.kotlin.sdk.types.ListResourcesRequest
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 import java.lang.reflect.Proxy
 
+@TestApplication
 internal class WorkspaceMcpResourceCatalogTest {
     @Test
     fun `exact read route falls back to concrete resource listing`() = runBlocking {

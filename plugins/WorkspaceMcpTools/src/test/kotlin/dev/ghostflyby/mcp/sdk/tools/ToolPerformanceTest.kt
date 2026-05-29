@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
+import com.intellij.testFramework.junit5.TestApplication
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
@@ -13,14 +14,15 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlinx.serialization.json.*
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 import java.lang.reflect.Proxy
 import kotlin.reflect.full.declaredMemberExtensionFunctions
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.valueParameters
 import kotlin.time.Duration.Companion.nanoseconds
 
+@TestApplication
 internal class ToolPerformanceTest {
 
     companion object {
@@ -92,7 +94,7 @@ internal class ToolPerformanceTest {
         val elapsed = Clock.System.now() - start
         val avg = elapsed / MEASURED
         println("Reflect: $MEASURED calls in ${elapsed}, avg ${avg}/call")
-        assertTrue("too slow: $avg > 500_000ns", avg < 500_000.nanoseconds)
+        assertTrue(avg < 500_000.nanoseconds, "too slow: $avg > 500_000ns")
     }
 
     @Test
@@ -103,7 +105,7 @@ internal class ToolPerformanceTest {
         val elapsed = Clock.System.now() - start
         val avg = elapsed / MEASURED
         println("MethodHandle: $MEASURED calls in ${elapsed}, avg ${avg}/call")
-        assertTrue("too slow: $avg > 500_000ns", avg < 500_000.nanoseconds)
+        assertTrue(avg < 500_000.nanoseconds, "too slow: $avg > 500_000ns")
     }
 
     private fun verify(r: CallToolResult) {

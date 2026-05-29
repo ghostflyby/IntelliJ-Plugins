@@ -6,7 +6,7 @@
 
 package dev.ghostflyby.mcp.route.resources
 
-import io.ktor.resources.Resource
+import io.ktor.resources.*
 import kotlinx.serialization.Serializable
 
 internal interface FileContentQuery {
@@ -14,6 +14,7 @@ internal interface FileContentQuery {
     val content: String?
     val exists: Boolean
     val structure: Boolean
+    val glob: String?
 }
 
 @Serializable
@@ -32,6 +33,7 @@ internal data class VfsResource(
     override val content: String? = null,
     override val exists: Boolean = false,
     override val structure: Boolean = false,
+    override val glob: String? = null,
 ) : FileContentQuery {
 }
 
@@ -44,5 +46,6 @@ internal data class ProjectFileResource(
     override val content: String? = null,
     override val exists: Boolean = false,
     override val structure: Boolean = false,
+    override val glob: String? = null,
 ) : FileContentQuery {
 }

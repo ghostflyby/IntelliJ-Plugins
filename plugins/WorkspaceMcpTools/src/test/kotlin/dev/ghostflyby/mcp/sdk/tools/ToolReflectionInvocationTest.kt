@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
+import com.intellij.testFramework.junit5.TestApplication
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
@@ -16,8 +17,8 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
 import java.lang.reflect.Proxy
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
@@ -26,6 +27,7 @@ import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.valueParameters
 
 @OptIn(ExperimentalSerializationApi::class)
+@TestApplication
 internal class ToolReflectionInvocationTest {
 
     @Test
@@ -541,7 +543,7 @@ internal class ToolReflectionInvocationTest {
         return when (val result = reflectOneTool(toolClass, instance, func)) {
             is ToolReflectionResult.Accepted -> result
             is ToolReflectionResult.Rejected -> fail("Expected ${func.name} to be accepted, rejected: ${result.reasons}")
-        } as ToolReflectionResult.Accepted
+        }
     }
 
     private fun fakeClientConnection(): ClientConnection {

@@ -6,13 +6,14 @@
 
 package dev.ghostflyby.mcp.filecontent
 
-import com.intellij.openapi.application.backgroundWriteAction
+import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.refreshAndFindVirtualFileOrDirectory
-import com.intellij.project.stateStore
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
-import com.intellij.testFramework.junit5.fixture.projectFixture
+import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import dev.ghostflyby.mcp.route.WorkspaceResourceUriFormat
@@ -30,19 +31,39 @@ import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import kotlin.io.path.createDirectories
+import kotlin.io.path.Path
+import java.nio.file.Path as NioPath
 
 @OptIn(ExperimentalMcpApi::class)
 @TestApplication
 internal class FileContentIntegrationTest {
-    private val project by projectFixture(openAfterCreation = true)
+    private val projectPathFixture = tempPathFixture()
+    private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
+    private val project by projectFixture
+    private val moduleFixture = projectFixture.moduleFixture(name = "file-content")
+    private val contentRootBlueprint = NioPath.of(
+        requireNotNull(javaClass.getResource("/fileContentIntegration")) {
+            "Missing fileContentIntegration test resources"
+        }.toURI(),
+    )
+    private val contentRootFixture = moduleFixture.sourceRootFixture(
+        pathFixture = projectFixture.pathInProjectFixture(Path(CONTENT_ROOT)),
+        blueprintResourcePath = contentRootBlueprint,
+    )
 
     private val openConnections = mutableListOf<McpConnection>()
+
+    @BeforeEach
+    fun refreshFixtureContent() {
+        contentRootFixture.get().virtualFile.refresh(false, true)
+    }
 
     @AfterEach
     fun closeMcpConnections() {
@@ -55,7 +76,7 @@ internal class FileContentIntegrationTest {
     @Test
     fun `reads raw VFS resource through real MCP client`() {
         runBlocking {
-            val file = createProjectFile("test.txt", "hello raw")
+            val file = requireNotNull(contentRootFixture.get().virtualFile.findFileByRelativePath(SAMPLE_TEXT_FILE))
             val client = openMcpClient(ForbiddenProjectProvider)
             val uri = WorkspaceResourceUriFormat()
                 .encodeToString(VfsResource.serializer(), VfsResource(rawVfsUrl = file.url))
@@ -63,7 +84,7 @@ internal class FileContentIntegrationTest {
 
             val result = client.readTextResource(uri)
 
-            assertEquals("hello raw", result.text)
+            assertEquals(SAMPLE_TEXT, result.text)
             assertEquals("text/plain", result.mimeType)
         }
     }
@@ -71,21 +92,20 @@ internal class FileContentIntegrationTest {
     @Test
     fun `reads project relative resource through real MCP client`() {
         runBlocking {
-            createProjectFile("test.txt", "hello project")
             val client = openMcpClient()
             val uri = WorkspaceResourceUriFormat()
                 .encodeToString(
                     ProjectFileResource.serializer(),
                     ProjectFileResource(
                         parent = ProjectResource(workspaceProjectKey(project)),
-                        relativePath = "test.txt",
+                        relativePath = "$CONTENT_ROOT/$SAMPLE_TEXT_FILE",
                     ),
                 )
                 .withCurrentInstanceKey()
 
             val result = client.readTextResource(uri)
 
-            assertEquals("hello project", result.text)
+            assertEquals(SAMPLE_TEXT, result.text)
             assertEquals("text/plain", result.mimeType)
         }
     }
@@ -93,7 +113,7 @@ internal class FileContentIntegrationTest {
     @Test
     fun `reads selected metadata fields through real MCP client`() {
         runBlocking {
-            val file = createProjectFile("test.txt", "hello metadata")
+            val file = requireNotNull(contentRootFixture.get().virtualFile.findFileByRelativePath(SAMPLE_TEXT_FILE))
             val client = openMcpClient(ForbiddenProjectProvider)
             val uri = WorkspaceResourceUriFormat()
                 .encodeToString(
@@ -106,8 +126,8 @@ internal class FileContentIntegrationTest {
             val metadata = Json.parseToJsonElement(result.text).jsonObject
 
             assertEquals("application/json", result.mimeType)
-            assertEquals("test.txt", metadata["name"]?.jsonPrimitive?.content)
-            assertEquals("14", metadata["length"]?.jsonPrimitive?.content)
+            assertEquals("plain.txt", metadata["name"]?.jsonPrimitive?.content)
+            assertEquals(SAMPLE_TEXT.length.toString(), metadata["length"]?.jsonPrimitive?.content)
             assertNotNull(metadata["fileType"], "fileType should be present")
             assertTrue("path" !in metadata, "metadata field filter should not include unrequested fields")
         }
@@ -116,7 +136,8 @@ internal class FileContentIntegrationTest {
     @Test
     fun `reads raw VFS structure through real MCP client`() {
         runBlocking {
-            val file = createProjectFile("Test.kt", "class Test { fun answer() = 42 }")
+            val file =
+                requireNotNull(contentRootFixture.get().virtualFile.findFileByRelativePath(SAMPLE_STRUCTURE_FILE))
             val client = openMcpClient()
             val uri = WorkspaceResourceUriFormat()
                 .encodeToString(
@@ -137,7 +158,8 @@ internal class FileContentIntegrationTest {
     @Test
     fun `raw VFS structure requires project resolution`() {
         runBlocking {
-            val file = createProjectFile("Test.kt", "class Test")
+            val file =
+                requireNotNull(contentRootFixture.get().virtualFile.findFileByRelativePath(SAMPLE_STRUCTURE_FILE))
             val client = openMcpClient(ForbiddenProjectProvider)
             val uri = WorkspaceResourceUriFormat()
                 .encodeToString(
@@ -174,22 +196,6 @@ internal class FileContentIntegrationTest {
             }.exceptionOrNull()
 
             assertInstanceOf(McpException::class.java, error)
-        }
-    }
-
-    private suspend fun createProjectFile(relativePath: String, text: String): VirtualFile {
-        val pathSegments = relativePath.split('/')
-        val projectRoot = project.stateStore.projectBasePath
-        return backgroundWriteAction {
-            projectRoot.createDirectories()
-            var directory = projectRoot.refreshAndFindVirtualFileOrDirectory()
-                ?: error("Project root was not found in VFS: $projectRoot")
-            pathSegments.dropLast(1).forEach { segment ->
-                directory = directory.findChild(segment) ?: directory.createChildDirectory(this, segment)
-            }
-            directory.createChildData(this, pathSegments.last()).also { file ->
-                file.setBinaryContent(text.toByteArray())
-            }
         }
     }
 
@@ -310,5 +316,251 @@ internal class FileContentIntegrationTest {
             relativePath: String?,
             rootsCandidates: List<String>?,
         ): WorkspaceProjectResolution = error("Project provider should not be queried.")
+    }
+
+    @Test
+    fun `raw VFS glob expands files matching pattern`() {
+        runBlocking {
+            val dir = contentRootFixture.get().virtualFile
+            val client = openMcpClient(ForbiddenProjectProvider)
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    VfsResource.serializer(),
+                    VfsResource(rawVfsUrl = dir.url, glob = "**/*.xml"),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+            val paths = Json.parseToJsonElement(result.text).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(SAMPLE_XML_FILES, paths.map { it.jsonPrimitive.content }.sorted())
+        }
+    }
+
+    @Test
+    fun `raw VFS glob on non-directory throws`() {
+        runBlocking {
+            val file = requireNotNull(contentRootFixture.get().virtualFile.findFileByRelativePath(SAMPLE_TEXT_FILE))
+            val client = openMcpClient(ForbiddenProjectProvider)
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    VfsResource.serializer(),
+                    VfsResource(rawVfsUrl = file.url, glob = "*"),
+                )
+                .withCurrentInstanceKey()
+
+            val error = runCatching {
+                client.readResource(ReadResourceRequest(ReadResourceRequestParams(uri = uri)))
+            }.exceptionOrNull()
+
+            assertInstanceOf(McpException::class.java, error)
+        }
+    }
+
+    @Test
+    fun `raw VFS glob with no matches returns empty array`() {
+        runBlocking {
+            val dir = contentRootFixture.get().virtualFile
+            val client = openMcpClient(ForbiddenProjectProvider)
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    VfsResource.serializer(),
+                    VfsResource(rawVfsUrl = dir.url, glob = "*.rs"),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals("[]", result.text)
+        }
+    }
+
+    @Test
+    fun `project relative extension glob uses FileTypeIndex fast path`() {
+        runBlocking {
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            val client = openMcpClient()
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    ProjectFileResource.serializer(),
+                    ProjectFileResource(
+                        parent = ProjectResource(workspaceProjectKey(project)),
+                        relativePath = "$CONTENT_ROOT/src",
+                        glob = "*.xml",
+                    ),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+            val paths = Json.parseToJsonElement(result.text).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(listOf("bar.xml", "foo.xml"), paths.map { it.jsonPrimitive.content }.sorted())
+        }
+    }
+
+    @Test
+    fun `project relative glob recursive extension uses FileTypeIndex fast path`() {
+        runBlocking {
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            val client = openMcpClient()
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    ProjectFileResource.serializer(),
+                    ProjectFileResource(
+                        parent = ProjectResource(workspaceProjectKey(project)),
+                        relativePath = CONTENT_ROOT,
+                        glob = "**/*.xml",
+                    ),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+            val paths = Json.parseToJsonElement(result.text).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(SAMPLE_XML_FILES, paths.map { it.jsonPrimitive.content }.sorted())
+        }
+    }
+
+    @Test
+    fun `project relative glob with literal directory prefix uses FileTypeIndex fast path`() {
+        runBlocking {
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            val client = openMcpClient()
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    ProjectFileResource.serializer(),
+                    ProjectFileResource(
+                        parent = ProjectResource(workspaceProjectKey(project)),
+                        relativePath = CONTENT_ROOT,
+                        glob = "src/*.xml",
+                    ),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+            val paths = Json.parseToJsonElement(result.text).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(
+                listOf("src/bar.xml", "src/foo.xml"),
+                paths.map { it.jsonPrimitive.content }.sorted(),
+            )
+        }
+    }
+
+    @Test
+    fun `project relative glob with intermediate wildcard directory uses FileTypeIndex fast path`() {
+        runBlocking {
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            val client = openMcpClient()
+            val uri = WorkspaceResourceUriFormat()
+                .encodeToString(
+                    ProjectFileResource.serializer(),
+                    ProjectFileResource(
+                        parent = ProjectResource(workspaceProjectKey(project)),
+                        relativePath = CONTENT_ROOT,
+                        glob = "**/any/*/target/*.xml",
+                    ),
+                )
+                .withCurrentInstanceKey()
+
+            val result = client.readTextResource(uri)
+            val paths = Json.parseToJsonElement(result.text).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(
+                listOf("any/bar/target/b.xml", "any/foo/target/a.xml"),
+                paths.map { it.jsonPrimitive.content }.sorted(),
+            )
+        }
+    }
+
+    @Test
+    fun `extension glob patterns use FileTypeIndex lookup before glob filtering`() {
+        runBlocking {
+            val root = contentRootFixture.get().virtualFile
+            val lookup = RecordingFileTypeIndexLookup(root)
+
+            assertGlobViaIndex(root, "*.xml", lookup, listOf("root.xml"))
+            assertGlobViaIndex(root, "**/*.xml", lookup, SAMPLE_XML_FILES)
+            assertGlobViaIndex(root, "src/*.xml", lookup, listOf("src/bar.xml", "src/foo.xml"))
+            assertGlobViaIndex(root, "nested/deep/*.xml", lookup, listOf("nested/deep/c.xml"))
+            assertGlobViaIndex(root, "any/foo/target/*.xml", lookup, listOf("any/foo/target/a.xml"))
+            assertGlobViaIndex(
+                root,
+                "**/any/*/target/*.xml",
+                lookup,
+                listOf("any/bar/target/b.xml", "any/foo/target/a.xml"),
+            )
+
+            assertEquals(listOf("xml", "xml", "xml", "xml", "xml", "xml"), lookup.fileTypeNames.map { it.lowercase() })
+        }
+    }
+
+    @Test
+    fun `non extension glob patterns bypass FileTypeIndex lookup`() {
+        runBlocking {
+            val root = contentRootFixture.get().virtualFile
+            val lookup = RecordingFileTypeIndexLookup(root)
+            val result = readGlobResult(root, "src/foo.*", project, lookup)
+            val paths = Json.parseToJsonElement(result.payload).jsonArray
+
+            assertEquals("application/json", result.mimeType)
+            assertEquals(listOf("src/foo.xml"), paths.map { it.jsonPrimitive.content }.sorted())
+            assertEquals(emptyList<String>(), lookup.fileTypeNames)
+        }
+    }
+
+    private suspend fun assertGlobViaIndex(
+        root: VirtualFile,
+        pattern: String,
+        lookup: RecordingFileTypeIndexLookup,
+        expectedPaths: List<String>,
+    ) {
+        val callCountBefore = lookup.fileTypeNames.size
+        val result = readGlobResult(root, pattern, project, lookup)
+        val paths = Json.parseToJsonElement(result.payload).jsonArray
+
+        assertEquals("application/json", result.mimeType)
+        assertEquals(expectedPaths, paths.map { it.jsonPrimitive.content }.sorted())
+        assertEquals(callCountBefore + 1, lookup.fileTypeNames.size, "FileTypeIndex lookup should be used for $pattern")
+    }
+
+    private class RecordingFileTypeIndexLookup(
+        private val root: VirtualFile,
+    ) : FileTypeIndexLookup {
+        val fileTypeNames = mutableListOf<String>()
+
+        override fun getFiles(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile> {
+            fileTypeNames += fileType.name
+            val files = mutableListOf<VirtualFile>()
+            VfsUtilCore.iterateChildrenRecursively(root, null) { file ->
+                if (!file.isDirectory && file.fileType == fileType && scope.contains(file)) {
+                    files += file
+                }
+                true
+            }
+            return files
+        }
+    }
+
+    private companion object {
+        const val CONTENT_ROOT = "fileContent"
+        const val SAMPLE_TEXT = "hello sample\n"
+        const val SAMPLE_TEXT_FILE = "plain.txt"
+        const val SAMPLE_STRUCTURE_FILE = "src/foo.xml"
+        val SAMPLE_XML_FILES = listOf(
+            "any/bar/target/b.xml",
+            "any/foo/target/a.xml",
+            "nested/deep/c.xml",
+            "root.xml",
+            "src/bar.xml",
+            "src/foo.xml",
+            "unmatched/ignored.xml",
+        )
     }
 }

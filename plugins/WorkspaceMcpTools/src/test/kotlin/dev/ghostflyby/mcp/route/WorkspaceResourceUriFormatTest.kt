@@ -9,7 +9,7 @@ package dev.ghostflyby.mcp.route
 import dev.ghostflyby.mcp.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.route.resources.ProjectResource
 import dev.ghostflyby.mcp.route.resources.VfsResource
-import io.ktor.resources.Resource
+import io.ktor.resources.*
 import kotlinx.serialization.Serializable
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -20,7 +20,7 @@ internal class WorkspaceResourceUriFormatTest {
     @Test
     fun `template uri includes parent resource path`() {
         assertEquals(
-            "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists,structure}",
+            "ij-workspace://{instanceKey}/projects/{projectKey}/files/{relativePath}{?meta,content,exists,structure,glob}",
             format.templateUri(ProjectFileResource.serializer().descriptor),
         )
     }
