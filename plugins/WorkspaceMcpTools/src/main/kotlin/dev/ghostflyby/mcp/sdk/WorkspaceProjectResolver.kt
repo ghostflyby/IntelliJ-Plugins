@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.server
+package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.readAction

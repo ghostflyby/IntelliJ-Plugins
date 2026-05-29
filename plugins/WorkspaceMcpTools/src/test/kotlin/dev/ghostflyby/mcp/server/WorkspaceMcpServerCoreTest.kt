@@ -7,6 +7,8 @@
 package dev.ghostflyby.mcp.server
 
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectProvider
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import dev.ghostflyby.mcp.server.tools.PerfTool
 import io.ktor.resources.Resource
@@ -108,13 +110,14 @@ internal class WorkspaceMcpServerCoreTest {
     ): McpConnection {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val stateFlows = WorkspaceMcpStateFlows()
+        val callFactory = mcpCallFactory()
         val core = WorkspaceMcpServerCore(
             parentScope = scope,
-            projectResolver = ForbiddenProjectProvider,
             serverInfo = Implementation(name = "workspace-mcp-core-test", version = "0.0.0"),
             instructions = "",
             initialFeatures = initialFeatures,
             stateFlows = stateFlows,
+            callFactory = callFactory,
             instanceKeyProvider = { "test-instance" },
         )
         val (clientTransport, serverTransport) = ChannelTransport.createLinkedPair()

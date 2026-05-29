@@ -60,13 +60,18 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun createCore(initialFeatures: List<WorkspaceMcpFeature>): WorkspaceMcpServerCore {
+        val callFactory = mcpCallFactory().withAttributes {
+            attributes[SdkKeys.ProjectProvider] = projectResolver
+            attributes[SdkKeys.InstanceKey] = workspaceInstanceKey()
+        }
         return WorkspaceMcpServerCore(
             parentScope = scope,
-            projectResolver = projectResolver,
             serverInfo = Implementation(name = "workspace-mcp", version = pluginVersion),
             initialFeatures = initialFeatures,
             stateFlows = stateFlows,
             sessionState = sessionState.state,
+            callFactory = callFactory,
+            instanceKeyProvider = ::workspaceInstanceKey,
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
             logger = object : WorkspaceMcpCoreLogger {
                 override fun warn(message: String, error: Throwable?) {

@@ -15,6 +15,7 @@ import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
+import dev.ghostflyby.mcp.sdk.*
 import dev.ghostflyby.mcp.server.*
 import dev.ghostflyby.mcp.server.route.WorkspaceResourceUriFormat
 import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
@@ -198,13 +199,18 @@ internal class FileContentIntegrationTest {
         projectProvider: WorkspaceProjectProvider = FixedProjectProvider(project),
     ): Client {
         val featureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val callFactory = mcpCallFactory().withAttributes {
+            attributes[SdkKeys.ProjectProvider] = projectProvider
+            attributes[SdkKeys.InstanceKey] = "test-instance"
+        }
         val core = WorkspaceMcpServerCore(
             parentScope = featureScope,
-            projectResolver = projectProvider,
             serverInfo = Implementation(name = "workspace-mcp-test", version = "0.0.0"),
             instructions = "",
             initialFeatures = listOf(FileContentFeature()),
             stateFlows = WorkspaceMcpStateFlows(),
+            callFactory = callFactory,
+            instanceKeyProvider = { "test-instance" },
         )
 
         val (clientTransport, serverTransport) = ChannelTransport.createLinkedPair()

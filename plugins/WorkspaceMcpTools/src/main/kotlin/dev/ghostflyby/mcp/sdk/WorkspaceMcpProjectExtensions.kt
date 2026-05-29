@@ -7,9 +7,6 @@
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.mcp.server.WorkspaceProjectProvider
-import dev.ghostflyby.mcp.server.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.server.workspaceProjectKey
 import dev.ghostflyby.mcp.server.route.Keys
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpCall
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpListProject
@@ -22,8 +19,7 @@ import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
 
 internal suspend fun WorkspaceMcpCall<*>.project(): Project {
-    val resolver = attributes[Keys.ProjectProvider]
-        ?: error("WorkspaceProjectProvider not available")
+    val resolver = attributes[SdkKeys.ProjectProvider]
     val routeParams = attributes[Keys.RouteParameters]
     val project = when (val r = resolver.resolve(projectKey = routeParams?.get("projectKey"))) {
         is WorkspaceProjectResolution.Resolved -> r.project
@@ -38,9 +34,9 @@ internal suspend fun WorkspaceMcpCall<*>.project(): Project {
     return project
 }
 
-internal suspend fun WorkspaceMcpCall<*>.visibleProjects(
-    resolver: WorkspaceProjectProvider,
-): List<WorkspaceMcpListProject> {
+internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpListProject> {
+    val resolver = attributes[SdkKeys.ProjectProvider]
+        ?: error("WorkspaceProjectProvider not available")
     return visibleProjectInstances(resolver).map { project ->
         WorkspaceMcpListProject(
             projectKey = workspaceProjectKey(project),
@@ -49,6 +45,9 @@ internal suspend fun WorkspaceMcpCall<*>.visibleProjects(
         )
     }
 }
+
+internal val WorkspaceMcpCall<*>.instanceKey: String
+    get() = attributes[SdkKeys.InstanceKey] ?: error("InstanceKey not available")
 
 private suspend fun WorkspaceMcpCall<*>.visibleProjectInstances(resolver: WorkspaceProjectProvider): List<Project> {
     val projects = resolver.openProjects()
@@ -75,4 +74,3 @@ private fun normalizePath(path: String): String {
         path.trim().trimEnd('/')
     }
 }
-

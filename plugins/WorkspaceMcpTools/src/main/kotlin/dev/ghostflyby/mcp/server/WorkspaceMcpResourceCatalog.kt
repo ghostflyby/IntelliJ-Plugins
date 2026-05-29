@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 internal class WorkspaceMcpResourceCatalog(
     private val callFactory: McpCallFactory = mcpCallFactory(),
-    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+    private val instanceKeyProvider: () -> String ,
 ) {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
 

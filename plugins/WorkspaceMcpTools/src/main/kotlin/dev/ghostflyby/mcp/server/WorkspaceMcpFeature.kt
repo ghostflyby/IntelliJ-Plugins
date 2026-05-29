@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.server
 
-import com.intellij.openapi.extensions.ExtensionPointName
-import com.intellij.openapi.extensions.ExtensionPointName.Companion.create
 import dev.ghostflyby.mcp.server.route.*
 import dev.ghostflyby.mcp.server.tools.reflectTools
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -15,16 +13,12 @@ import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 
-internal val WORKSPACE_MCP_FEATURE_EP: ExtensionPointName<WorkspaceMcpFeature> =
-    create("dev.ghostflyby.mcp.workspace.workspaceFeature")
-
 /**
  * Registration context provided to [WorkspaceMcpFeature.register].
  * Features use this to register resource templates and SDK tools on the server.
  * Tracks registered resources/tools for cleanup on dynamic removal.
  */
 internal class WorkspaceMcpFeatureRegistrationContext(
-    val projectResolver: WorkspaceProjectProvider,
     val server: Server,
     val featureScope: CoroutineScope,
     val featureName: String,
@@ -84,7 +78,7 @@ private fun ResourceSegment.markOwner(featureName: String) {
 
 /**
  * Record of what a [WorkspaceMcpFeature] registered on the server.
- * Used for cleanup on dynamic removal.
+ * Used for clean-up on dynamic removal.
  */
 internal data class WorkspaceMcpFeatureRegistration(
     val featureName: String,

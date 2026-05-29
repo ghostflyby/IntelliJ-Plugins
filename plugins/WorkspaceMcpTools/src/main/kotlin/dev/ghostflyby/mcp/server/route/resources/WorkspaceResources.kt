@@ -34,8 +34,7 @@ internal data class VfsResource(
     override val exists: Boolean = false,
     override val structure: Boolean = false,
     override val glob: String? = null,
-) : FileContentQuery {
-}
+) : FileContentQuery
 
 @Serializable
 @Resource("/files/{relativePath...}")
@@ -47,5 +46,4 @@ internal data class ProjectFileResource(
     override val exists: Boolean = false,
     override val structure: Boolean = false,
     override val glob: String? = null,
-) : FileContentQuery {
-}
+) : FileContentQuery

@@ -15,8 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 
 internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
-    private val projectResolver: WorkspaceProjectProvider,
-    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+    private val instanceKeyProvider: () -> String ,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
     private val invalidationSink: WorkspaceMcpInvalidationSink,
@@ -42,7 +41,6 @@ internal class WorkspaceMcpFeatureCoordinator(
         val featureJob = SupervisorJob(parentScope.coroutineContext[Job])
         val featureScope = CoroutineScope(parentScope.coroutineContext + featureJob)
         val context = WorkspaceMcpFeatureRegistrationContext(
-            projectResolver = projectResolver,
             server = activeServer,
             featureScope = featureScope,
             featureName = feature.featureName,

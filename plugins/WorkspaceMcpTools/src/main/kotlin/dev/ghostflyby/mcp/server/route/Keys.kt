@@ -6,11 +6,8 @@
 
 package dev.ghostflyby.mcp.server.route
 
-import dev.ghostflyby.mcp.server.WorkspaceProjectProvider
 import io.ktor.util.AttributeKey
 
 internal object Keys {
-    val ProjectProvider = AttributeKey<WorkspaceProjectProvider>("projectProvider")
-    val InstanceKey = AttributeKey<String>("instanceKey")
     val RouteParameters = AttributeKey<AncestorContext>("routeParams")
 }

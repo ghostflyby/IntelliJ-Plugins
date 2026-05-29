@@ -6,8 +6,8 @@
 
 package dev.ghostflyby.mcp.server
 
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import dev.ghostflyby.mcp.server.route.Keys
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import dev.ghostflyby.mcp.server.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.server.route.SegmentTreeTemplateMatcher
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -22,14 +22,14 @@ import kotlinx.coroutines.flow.update
 
 internal class WorkspaceMcpServerCore(
     private val parentScope: CoroutineScope,
-    private val projectResolver: WorkspaceProjectProvider,
     private val serverInfo: Implementation,
     private val instructions: String,
     private val initialFeatures: List<WorkspaceMcpFeature>,
     private val stateFlows: WorkspaceMcpStateFlows,
     private val sessionState: WorkspaceMcpSessionState = WorkspaceMcpSessionState(),
     private val sessionRoots: WorkspaceMcpSessionRoots = WorkspaceMcpSessionRoots(),
-    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+    private val callFactory: McpCallFactory,
+    private val instanceKeyProvider: () -> String,
     private val logger: WorkspaceMcpCoreLogger = WorkspaceMcpCoreLogger.Noop,
 ) {
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
@@ -41,14 +41,9 @@ internal class WorkspaceMcpServerCore(
     )
     private val invalidationBus = WorkspaceMcpInvalidationBus(scope = parentScope)
     private val globalGen = MutableStateFlow(0L)
-    private val callFactory = mcpCallFactory().withAttributes {
-        attributes[Keys.ProjectProvider] = projectResolver
-        attributes[Keys.InstanceKey] = instanceKeyProvider()
-    }
 
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = parentScope,
-        projectResolver = projectResolver,
         instanceKeyProvider = instanceKeyProvider,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,

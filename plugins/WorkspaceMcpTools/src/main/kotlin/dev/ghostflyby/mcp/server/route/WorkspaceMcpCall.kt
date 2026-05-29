@@ -21,6 +21,3 @@ internal class WorkspaceMcpCall<out R : Request>(
         return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
     }
 }
-
-internal val WorkspaceMcpCall<*>.instanceKey: String
-    get() = attributes[Keys.InstanceKey] ?: error("InstanceKey not available")

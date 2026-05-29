@@ -8,14 +8,11 @@ package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.sdk.visibleProjects
+import dev.ghostflyby.mcp.sdk.*
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.server.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.server.route.instanceKey
 import dev.ghostflyby.mcp.server.route.resources.ProjectResource
 import dev.ghostflyby.mcp.server.route.resources.ServerInfoResource
-import dev.ghostflyby.mcp.server.workspaceInstanceKey
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
 import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
@@ -51,7 +48,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         }
 
         listResources<ProjectResource> {
-            val projects = call.visibleProjects(projectResolver)
+            val projects = call.visibleProjects()
             projects.map { project ->
                     Resource(
                         uri = "ij-workspace://${call.instanceKey}/projects/${project.projectKey}",
@@ -64,7 +61,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         }
         read<ProjectResource> { projectResource ->
             val projectKey = projectResource.projectKey
-            val info = when (val resolved = projectResolver.resolve(projectKey)) {
+            val info = when (val resolved = call.attributes[SdkKeys.ProjectProvider].resolve(projectKey)) {
                 is WorkspaceProjectResolution.Resolved -> mapOf(
                     "projectKey" to projectKey,
                     "name" to resolved.project.name,
