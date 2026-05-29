@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.server.route.Keys
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpCall
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpListProject
+import dev.ghostflyby.mcp.server.route.resources.ProjectResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -19,9 +20,20 @@ import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
 
 internal suspend fun WorkspaceMcpCall<*>.project(): Project {
+    // 1) Try typed resource from the holder first
+    val typedKey = resourceHolder.get<ProjectResource>()?.projectKey
+    if (typedKey != null) {
+        val resolver = attributes[SdkKeys.ProjectProvider]
+        return when (val r = resolver.resolve(typedKey)) {
+            is WorkspaceProjectResolution.Resolved -> r.project
+            is WorkspaceProjectResolution.Unresolved -> error(r.message)
+        }
+    }
+
+    // 2) Fallback: RouteParameters (list providers without typed resource)
     val resolver = attributes[SdkKeys.ProjectProvider]
     val routeParams = attributes[Keys.RouteParameters]
-    val project = when (val r = resolver.resolve(projectKey = routeParams?.get("projectKey"))) {
+    val project = when (val r = resolver.resolve(projectKey = routeParams["projectKey"])) {
         is WorkspaceProjectResolution.Resolved -> r.project
         is WorkspaceProjectResolution.Unresolved -> error(r.message)
     }
@@ -36,7 +48,6 @@ internal suspend fun WorkspaceMcpCall<*>.project(): Project {
 
 internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpListProject> {
     val resolver = attributes[SdkKeys.ProjectProvider]
-        ?: error("WorkspaceProjectProvider not available")
     return visibleProjectInstances(resolver).map { project ->
         WorkspaceMcpListProject(
             projectKey = workspaceProjectKey(project),
@@ -47,7 +58,7 @@ internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpLis
 }
 
 internal val WorkspaceMcpCall<*>.instanceKey: String
-    get() = attributes[SdkKeys.InstanceKey] ?: error("InstanceKey not available")
+    get() = attributes[SdkKeys.InstanceKey]
 
 private suspend fun WorkspaceMcpCall<*>.visibleProjectInstances(resolver: WorkspaceProjectProvider): List<Project> {
     val projects = resolver.openProjects()

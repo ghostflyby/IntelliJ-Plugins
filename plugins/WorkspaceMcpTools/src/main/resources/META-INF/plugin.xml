@@ -12,7 +12,7 @@
 
     <extensionPoints>
         <extensionPoint name="workspaceFeature"
-                        interface="dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature"
+                        interface="dev.ghostflyby.mcp.server.WorkspaceMcpFeature"
                         dynamic="true"/>
     </extensionPoints>
 

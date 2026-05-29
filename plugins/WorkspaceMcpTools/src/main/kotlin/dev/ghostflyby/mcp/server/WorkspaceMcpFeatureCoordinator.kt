@@ -103,7 +103,9 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request, vars ->
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(vars)
-                        entry.invoker(callFactory.create(this, request, vars), deserialized)
+                        val call = callFactory.create(this, request, vars)
+                        if (deserialized != null) call.call.resourceHolder.put(deserialized)
+                        entry.invoker(call, deserialized)
                     }
                 }
             } else {
@@ -117,7 +119,9 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request ->
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(emptyMap())
-                        entry.invoker(callFactory.create(this, request, emptyMap()), deserialized)
+                        val call = callFactory.create(this, request, emptyMap())
+                        if (deserialized != null) call.call.resourceHolder.put(deserialized)
+                        entry.invoker(call, deserialized)
                     }
                 }
             }

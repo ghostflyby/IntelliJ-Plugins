@@ -14,6 +14,7 @@ internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
     val attributes: Attributes = Attributes(),
+    val resourceHolder: ResourceHolder = ResourceHolder(),
 ) {
     val sessionId: String get() = connection.sessionId
 
