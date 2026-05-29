@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp.server
 
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test

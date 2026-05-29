@@ -7,6 +7,7 @@
 package dev.ghostflyby.mcp.server
 
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import dev.ghostflyby.mcp.server.tools.PerfTool
 import io.ktor.resources.Resource
 import io.modelcontextprotocol.kotlin.sdk.ExperimentalMcpApi

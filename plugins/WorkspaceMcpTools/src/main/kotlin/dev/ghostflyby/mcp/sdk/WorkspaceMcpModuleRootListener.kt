@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.sdk
 import com.intellij.openapi.components.service
 import com.intellij.openapi.roots.ModuleRootEvent
 import com.intellij.openapi.roots.ModuleRootListener
-import dev.ghostflyby.mcp.server.WorkspaceMcpStateFlows
 
 internal class WorkspaceMcpModuleRootListener : ModuleRootListener {
     override fun rootsChanged(event: ModuleRootEvent) {

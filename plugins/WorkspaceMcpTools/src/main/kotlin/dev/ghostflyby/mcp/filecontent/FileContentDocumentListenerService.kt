@@ -14,7 +14,7 @@ import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionStateService
-import dev.ghostflyby.mcp.server.WorkspaceMcpStateFlows
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 
 @Service(Service.Level.APP)
 internal class FileContentDocumentListenerService : Disposable.Default {

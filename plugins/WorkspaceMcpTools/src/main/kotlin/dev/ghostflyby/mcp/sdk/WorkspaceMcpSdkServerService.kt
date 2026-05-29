@@ -13,12 +13,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.server.WORKSPACE_MCP_FEATURE_EP
-import dev.ghostflyby.mcp.server.WorkspaceMcpServerCore
-import dev.ghostflyby.mcp.server.WorkspaceMcpCoreLogger
-import dev.ghostflyby.mcp.server.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.server.WorkspaceMcpStateFlows
+import dev.ghostflyby.mcp.server.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp

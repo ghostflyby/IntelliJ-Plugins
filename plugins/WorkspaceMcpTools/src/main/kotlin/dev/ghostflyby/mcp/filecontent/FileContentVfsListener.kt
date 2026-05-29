@@ -10,7 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.AsyncFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionStateService
-import dev.ghostflyby.mcp.server.WorkspaceMcpStateFlows
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 
 internal class FileContentVfsListener : AsyncFileListener {
     override fun prepareChange(events: List<VFileEvent>): AsyncFileListener.ChangeApplier? {

@@ -9,12 +9,12 @@ package dev.ghostflyby.mcp.filecontent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.tools.FileContentWriteTools
-import dev.ghostflyby.mcp.server.route.project
+import dev.ghostflyby.mcp.sdk.project
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 import dev.ghostflyby.mcp.server.route.resources.FileContentQuery
 import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.server.route.resources.VfsResource
-import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 import io.modelcontextprotocol.kotlin.sdk.types.BlobResourceContents
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ResourceContents

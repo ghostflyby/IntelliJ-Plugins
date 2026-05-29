@@ -26,8 +26,8 @@ import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.isLikelyTypeDeclarationClassName
 import dev.ghostflyby.mcp.common.reportActivity
 import dev.ghostflyby.mcp.navigation.*
+import dev.ghostflyby.mcp.sdk.project
 import dev.ghostflyby.mcp.server.route.McpCallContext
-import dev.ghostflyby.mcp.server.route.project
 import dev.ghostflyby.mcp.server.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult

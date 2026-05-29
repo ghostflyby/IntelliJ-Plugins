@@ -8,13 +8,13 @@ package dev.ghostflyby.mcp.core
 
 import com.intellij.openapi.application.readAction
 import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.server.route.resources.ProjectResource
-import dev.ghostflyby.mcp.server.route.resources.ServerInfoResource
-import dev.ghostflyby.mcp.server.route.visibleProjects
-import dev.ghostflyby.mcp.server.route.instanceKey
+import dev.ghostflyby.mcp.sdk.visibleProjects
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 import dev.ghostflyby.mcp.server.WorkspaceProjectResolution
+import dev.ghostflyby.mcp.server.route.instanceKey
+import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.server.route.resources.ServerInfoResource
 import dev.ghostflyby.mcp.server.workspaceInstanceKey
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.Resource
