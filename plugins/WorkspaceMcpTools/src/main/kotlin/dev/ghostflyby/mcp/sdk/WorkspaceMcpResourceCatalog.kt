@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.components.service
 import dev.ghostflyby.mcp.route.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
@@ -20,6 +19,7 @@ import java.util.concurrent.atomic.AtomicReference
  * flat list providers.
  */
 internal class WorkspaceMcpResourceCatalog(
+    private val projectResolver: WorkspaceProjectProvider,
     private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
 ) {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
@@ -72,7 +72,7 @@ internal class WorkspaceMcpResourceCatalog(
             connection = connection,
             request = request,
             parameters = AncestorContext(emptyMap()),
-            projectResolver = service<WorkspaceProjectResolver>(),
+            projectResolver = projectResolver,
         )
     }
 

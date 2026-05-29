@@ -6,11 +6,9 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
-import com.intellij.openapi.components.service
 import dev.ghostflyby.mcp.route.AncestorContext
 import dev.ghostflyby.mcp.route.McpCallContext
-import dev.ghostflyby.mcp.route.WorkspaceMcpCall
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpCallFactory
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.Dispatchers
@@ -47,13 +45,14 @@ internal sealed class ToolReflectionResult {
 
 internal fun <T : Any> reflectTools(
     toolClass: KClass<T>,
+    callFactory: WorkspaceMcpCallFactory,
 ): Set<Pair<Tool, Handler>> {
     val instance = toolClass.objectInstance
         ?: toolClass.java.getDeclaredConstructor().newInstance()
 
     return buildSet {
         for (func in toolClass.declaredMemberFunctions + toolClass.declaredMemberExtensionFunctions) {
-            when (val r = reflectOneTool(toolClass, instance, func)) {
+            when (val r = reflectOneTool(toolClass, instance, func, callFactory)) {
                 is ToolReflectionResult.Accepted -> add(Pair(r.tool, r.handler))
                 is ToolReflectionResult.Rejected -> continue
             }
@@ -113,6 +112,7 @@ internal fun reflectOneTool(
     toolClass: KClass<*>,
     instance: Any,
     func: KFunction<*>,
+    callFactory: WorkspaceMcpCallFactory,
 ): ToolReflectionResult {
     val reasons = ToolMethodInfo.classify(func)
     if (reasons.isNotEmpty()) return ToolReflectionResult.Rejected(reasons)
@@ -135,7 +135,7 @@ internal fun reflectOneTool(
                 ?.filterNot { it in optionalParameterNames },
         ),
     )
-    val plan = compileToolInvocationPlan(instance, func)
+    val plan = compileToolInvocationPlan(instance, func, callFactory)
     return ToolReflectionResult.Accepted(tool, buildMethodHandleHandler(plan))
 }
 
@@ -143,13 +143,14 @@ internal fun buildKotlinReflectHandler(
     instance: Any,
     func: KFunction<*>,
     info: ToolMethodInfo,
+    callFactory: WorkspaceMcpCallFactory,
 ): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
         val decoded = when (val result = decodeToolArguments(request, func, info)) {
             is ToolArgumentDecodeResult.Decoded -> result.valueByName
             is ToolArgumentDecodeResult.Failed -> return result.result
         }
-        val args = buildToolInvocationArgs(instance, func, conn, request, decoded)
+        val args = buildToolInvocationArgs(instance, func, conn, request, decoded, callFactory)
         val result = if (func.isSuspend) {
             func.callSuspendBy(args)
         } else {
@@ -203,6 +204,7 @@ internal data class ToolCallArgs(
 internal fun compileToolInvocationPlan(
     instance: Any,
     func: KFunction<*>,
+    callFactory: WorkspaceMcpCallFactory,
 ): ToolInvocationPlan {
     val hasExtensionReceiver = func.extensionReceiverParameter != null
     val valueParameterCount = func.valueParameters.size
@@ -230,7 +232,7 @@ internal fun compileToolInvocationPlan(
             )
         },
         callArgsBuilder = { conn, request ->
-            newToolCallArgs(hasExtensionReceiver, valueParameterCount, hasDefaultArguments, conn, request)
+            newToolCallArgs(hasExtensionReceiver, valueParameterCount, hasDefaultArguments, conn, request, callFactory)
         },
         methodHandle = adaptToolFunctionHandle(
             func = func,
@@ -338,12 +340,15 @@ private fun buildToolInvocationArgs(
     conn: ClientConnection,
     request: CallToolRequest,
     decoded: Map<String?, Any?>,
+    callFactory: WorkspaceMcpCallFactory,
 ): Map<KParameter, Any?> {
     val hasExtensionReceiver = func.extensionReceiverParameter != null
     val args = LinkedHashMap<KParameter, Any?>(func.parameters.size)
     func.instanceParameter?.let { args[it] = instance }
     if (hasExtensionReceiver) {
-        func.extensionReceiverParameter?.let { args[it] = McpCallContext(newWorkspaceMcpCall(conn, request)) }
+        func.extensionReceiverParameter?.let {
+            args[it] = McpCallContext(callFactory.create(conn, request, AncestorContext(emptyMap())))
+        }
     }
     for (param in func.valueParameters) {
         if (decoded.containsKey(param.name)) args[param] = decoded[param.name]
@@ -357,12 +362,13 @@ private fun newToolCallArgs(
     hasDefaultArguments: Boolean,
     conn: ClientConnection,
     request: CallToolRequest,
+    callFactory: WorkspaceMcpCallFactory,
 ): ToolCallArgs {
     val receiverCount = if (hasExtensionReceiver) 1 else 0
     val parameterSlotCount = valueParameterCount + receiverCount
     val maskCount = if (hasDefaultArguments) ((valueParameterCount + 31) / 32) else 0
     val args = arrayOfNulls<Any>(parameterSlotCount + maskCount + if (hasDefaultArguments) 1 else 0)
-    if (hasExtensionReceiver) args[0] = newWorkspaceMcpCall(conn, request)
+    if (hasExtensionReceiver) args[0] = callFactory.create(conn, request, AncestorContext(emptyMap()))
     val maskStart = if (hasDefaultArguments) parameterSlotCount else null
     if (maskStart != null) {
         repeat(maskCount) { args[maskStart + it] = 0 }
@@ -372,18 +378,6 @@ private fun newToolCallArgs(
         values = args,
         argumentStart = receiverCount,
         maskStart = maskStart,
-    )
-}
-
-private fun newWorkspaceMcpCall(
-    conn: ClientConnection,
-    request: CallToolRequest,
-): WorkspaceMcpCall<CallToolRequest> {
-    return WorkspaceMcpCall(
-        connection = conn,
-        request = request,
-        parameters = AncestorContext(emptyMap()),
-        projectResolver = service<WorkspaceProjectResolver>(),
     )
 }
 

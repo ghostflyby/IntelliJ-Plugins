@@ -30,7 +30,7 @@ internal class ToolReflectionTest {
         val allFuncs = toolClass.declaredMemberFunctions + toolClass.declaredMemberExtensionFunctions
         val func = allFuncs.first()
         val instance = toolClass.java.getDeclaredConstructor().newInstance()
-        return reflectOneTool(toolClass, instance, func)
+        return reflectOneTool(toolClass, instance, func, TestCallFactory)
     }
 
     @Test

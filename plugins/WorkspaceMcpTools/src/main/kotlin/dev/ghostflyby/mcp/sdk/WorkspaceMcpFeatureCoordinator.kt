@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.diagnostic.logger
 import dev.ghostflyby.mcp.route.*
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.coroutines.CoroutineScope
@@ -21,8 +19,10 @@ internal class WorkspaceMcpFeatureCoordinator(
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
     private val invalidationSink: WorkspaceMcpInvalidationSink,
+    private val callFactory: WorkspaceMcpCallFactory = workspaceMcpCallFactory(projectResolver),
+    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+    private val logger: WorkspaceMcpCoreLogger = WorkspaceMcpCoreLogger.Noop,
 ) {
-    private val logger: Logger = logger<WorkspaceMcpFeatureCoordinator>()
     private val lock = Any()
     private val registrations = linkedMapOf<String, WorkspaceMcpFeatureRegistration>()
 
@@ -47,6 +47,7 @@ internal class WorkspaceMcpFeatureCoordinator(
             featureScope = featureScope,
             featureName = feature.featureName,
             invalidationSink = invalidationSink,
+            callFactory = callFactory,
         )
         val registration = try {
             with(feature) { context.apply { register() } }.buildRegistration()
@@ -106,19 +107,14 @@ internal class WorkspaceMcpFeatureCoordinator(
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(vars)
                         entry.invoker(
                             McpCallContext(
-                                WorkspaceMcpCall(
-                                    connection = this,
-                                    request = request,
-                                    parameters = AncestorContext(vars),
-                                    projectResolver = projectResolver,
-                                ),
+                                callFactory.create(this, request, AncestorContext(vars)),
                             ),
                             deserialized,
                         )
                     }
                 }
             } else {
-                val concreteUri = entry.uri.replace("{instanceKey}", workspaceInstanceKey())
+                val concreteUri = entry.uri.replace("{instanceKey}", instanceKeyProvider())
                 nextResourceUris += concreteUri
                 if (concreteUri !in resourceUris) {
                     activeServer.addResource(
@@ -130,12 +126,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(emptyMap())
                         entry.invoker(
                             McpCallContext(
-                                WorkspaceMcpCall(
-                                    connection = this,
-                                    request = request,
-                                    parameters = AncestorContext(emptyMap()),
-                                    projectResolver = projectResolver,
-                                ),
+                                callFactory.create(this, request, AncestorContext(emptyMap())),
                             ),
                             deserialized,
                         )

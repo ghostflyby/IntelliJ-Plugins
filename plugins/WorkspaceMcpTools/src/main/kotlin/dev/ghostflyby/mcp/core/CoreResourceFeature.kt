@@ -50,7 +50,7 @@ internal class CoreResourceFeature : WorkspaceMcpFeature {
         }
 
         listResources<ProjectResource> {
-            val projects = call.visibleProjects()
+            val projects = call.visibleProjects(projectResolver)
             projects.map { project ->
                     Resource(
                         uri = "ij-workspace://${call.instanceKey}/projects/${project.projectKey}",

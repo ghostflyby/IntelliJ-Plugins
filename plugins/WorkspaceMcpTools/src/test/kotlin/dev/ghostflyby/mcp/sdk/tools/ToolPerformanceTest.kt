@@ -33,14 +33,19 @@ internal class ToolPerformanceTest {
             val tc = PerfTool::class
             val fn = (tc.declaredMemberFunctions + tc.declaredMemberExtensionFunctions)
                 .single { it.name == "do_perf" }
-            buildKotlinReflectHandler(PerfTool(), fn, ToolMethodInfo(fn.name, fn.valueParameters.map { it.type }))
+            buildKotlinReflectHandler(
+                PerfTool(),
+                fn,
+                ToolMethodInfo(fn.name, fn.valueParameters.map { it.type }),
+                TestCallFactory,
+            )
         }
 
         private val mhHandler: Handler by lazy {
             val tc = PerfTool::class
             val fn = (tc.declaredMemberFunctions + tc.declaredMemberExtensionFunctions)
                 .single { it.name == "do_perf" }
-            buildMethodHandleHandler(compileToolInvocationPlan(PerfTool(), fn))
+            buildMethodHandleHandler(compileToolInvocationPlan(PerfTool(), fn, TestCallFactory))
         }
 
         private val testRequest: CallToolRequest by lazy {

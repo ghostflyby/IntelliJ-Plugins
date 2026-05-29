@@ -9,12 +9,12 @@ package dev.ghostflyby.mcp.filecontent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.AsyncFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionState
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionStateService
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 
 internal class FileContentVfsListener : AsyncFileListener {
     override fun prepareChange(events: List<VFileEvent>): AsyncFileListener.ChangeApplier? {
-        if (!service<WorkspaceMcpSessionState>().hasResourceSubscriptions()) return null
+        if (!service<WorkspaceMcpSessionStateService>().hasResourceSubscriptions()) return null
         val uris = events.mapNotNull { it.file }
             .flatMap { fileContentResourceUrisForFile(it) }
             .toSet()

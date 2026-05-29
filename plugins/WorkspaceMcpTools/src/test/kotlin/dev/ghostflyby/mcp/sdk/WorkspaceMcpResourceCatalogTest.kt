@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.testFramework.junit5.TestApplication
 import dev.ghostflyby.mcp.route.*
 import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
@@ -20,7 +19,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Proxy
 
-@TestApplication
 internal class WorkspaceMcpResourceCatalogTest {
     @Test
     fun `exact read route falls back to concrete resource listing`() = runBlocking {
@@ -122,7 +120,10 @@ internal class WorkspaceMcpResourceCatalogTest {
 
     private fun catalog(block: ResourceSegmentCollector.() -> Unit): WorkspaceMcpResourceCatalog {
         val collector = ResourceSegmentCollector().apply(block)
-        return WorkspaceMcpResourceCatalog(instanceKeyProvider = { "test-instance" }).apply {
+        return WorkspaceMcpResourceCatalog(
+            projectResolver = ForbiddenProjectProvider,
+            instanceKeyProvider = { "test-instance" },
+        ).apply {
             updateSnapshot(
                 ResourceRouteCompiler.compile(
                     listOf(
@@ -151,6 +152,19 @@ internal class WorkspaceMcpResourceCatalogTest {
                 else -> error("Unexpected ClientConnection call in catalog test: ${method.name}")
             }
         } as ClientConnection
+    }
+
+    private object ForbiddenProjectProvider : WorkspaceProjectProvider {
+        override fun openProjects(): List<com.intellij.openapi.project.Project> =
+            error("Project provider should not be queried.")
+
+        override suspend fun resolve(
+            projectKey: String?,
+            projectPath: String?,
+            rawVfsUrl: String?,
+            relativePath: String?,
+            rootsCandidates: List<String>?,
+        ): WorkspaceProjectResolution = error("Project provider should not be queried.")
     }
 
     @Serializable

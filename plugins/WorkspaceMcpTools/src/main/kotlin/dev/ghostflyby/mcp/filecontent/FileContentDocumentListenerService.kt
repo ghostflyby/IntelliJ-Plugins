@@ -13,17 +13,16 @@ import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionState
+import dev.ghostflyby.mcp.sdk.WorkspaceMcpSessionStateService
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 
 @Service(Service.Level.APP)
-internal class FileContentDocumentListenerService(
-) : Disposable.Default {
+internal class FileContentDocumentListenerService : Disposable.Default {
     init {
         EditorFactory.getInstance().eventMulticaster.addDocumentListener(
             object : DocumentListener {
                 override fun documentChanged(event: DocumentEvent) {
-                    if (!service<WorkspaceMcpSessionState>().hasResourceSubscriptions()) return
+                    if (!service<WorkspaceMcpSessionStateService>().hasResourceSubscriptions()) return
                     val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
                     service<WorkspaceMcpStateFlows>().resourceContentChanged(fileContentResourceUrisForFile(file))
                 }

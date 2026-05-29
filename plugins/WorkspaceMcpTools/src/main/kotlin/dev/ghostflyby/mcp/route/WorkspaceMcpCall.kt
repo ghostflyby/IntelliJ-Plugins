@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.route
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
@@ -52,10 +51,7 @@ internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectProvi
     return project
 }
 
-// -- visible projects (extension with service default + overload) --
-
-internal suspend fun WorkspaceMcpCall<*>.visibleProjects(): List<WorkspaceMcpListProject> =
-    visibleProjects(service<WorkspaceProjectResolver>())
+// -- visible projects --
 
 internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProjectProvider): List<WorkspaceMcpListProject> {
     return visibleProjectInstances(resolver).map { project ->

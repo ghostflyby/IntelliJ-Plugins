@@ -493,6 +493,7 @@ internal class ToolReflectionInvocationTest {
                         name = func.name,
                         paramClasses = func.valueParameters.map { it.type },
                     ),
+                    callFactory = TestCallFactory,
                 )
             },
         )
@@ -508,7 +509,7 @@ internal class ToolReflectionInvocationTest {
             functionName = functionName,
             arguments = arguments,
             handlerFactory = { instance, func, _ ->
-                buildMethodHandleHandler(compileToolInvocationPlan(instance, func))
+                buildMethodHandleHandler(compileToolInvocationPlan(instance, func, TestCallFactory))
             },
         )
     }
@@ -540,7 +541,7 @@ internal class ToolReflectionInvocationTest {
         instance: Any,
         func: KFunction<*>,
     ): ToolReflectionResult.Accepted {
-        return when (val result = reflectOneTool(toolClass, instance, func)) {
+        return when (val result = reflectOneTool(toolClass, instance, func, TestCallFactory)) {
             is ToolReflectionResult.Accepted -> result
             is ToolReflectionResult.Rejected -> fail("Expected ${func.name} to be accepted, rejected: ${result.reasons}")
         }

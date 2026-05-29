@@ -14,8 +14,6 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
-import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import dev.ghostflyby.mcp.route.WorkspaceResourceUriFormat
 import dev.ghostflyby.mcp.route.resources.ProjectFileResource
 import dev.ghostflyby.mcp.route.resources.ProjectResource
@@ -23,13 +21,9 @@ import dev.ghostflyby.mcp.route.resources.VfsResource
 import dev.ghostflyby.mcp.sdk.*
 import io.modelcontextprotocol.kotlin.sdk.ExperimentalMcpApi
 import io.modelcontextprotocol.kotlin.sdk.client.Client
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.testing.ChannelTransport
 import io.modelcontextprotocol.kotlin.sdk.types.*
-import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -202,47 +196,25 @@ internal class FileContentIntegrationTest {
     private suspend fun openMcpClient(
         projectProvider: WorkspaceProjectProvider = FixedProjectProvider(project),
     ): Client {
-        val routeSnapshotRef = ResourceRouteSnapshotRef()
-        val catalog = WorkspaceMcpResourceCatalog()
         val featureScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val server = Server(
+        val core = WorkspaceMcpServerCore(
+            parentScope = featureScope,
+            projectResolver = projectProvider,
             serverInfo = Implementation(name = "workspace-mcp-test", version = "0.0.0"),
-            options = ServerOptions(
-                capabilities = ServerCapabilities(
-                    resources = ServerCapabilities.Resources(listChanged = true),
-                    tools = ServerCapabilities.Tools(),
-                ),
-                resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
-                    SegmentTreeTemplateMatcher(template, routeSnapshotRef)
-                },
-            ),
-        ) {
-            WorkspaceMcpFeatureCoordinator(
-                parentScope = featureScope,
-                projectResolver = projectProvider,
-                catalog = catalog,
-                onSnapshotChanged = routeSnapshotRef::set,
-                invalidationSink = NoopInvalidationSink,
-            ).registerInitial(this, listOf(FileContentFeature()))
-        }
-        server.onConnect { session ->
-            session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
-                catalog.listResources(server.clientConnection(session.sessionId), request)
-            }
-            session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
-                catalog.listTemplates(server.clientConnection(session.sessionId), request)
-            }
-        }
+            instructions = "",
+            initialFeatures = listOf(FileContentFeature()),
+            stateFlows = WorkspaceMcpStateFlows(),
+        )
 
         val (clientTransport, serverTransport) = ChannelTransport.createLinkedPair()
         val client = Client(clientInfo = Implementation(name = "workspace-mcp-test-client", version = "0.0.0"))
-        val connection = McpConnection(client = client, server = server, featureScope = featureScope)
+        val connection = McpConnection(client = client, core = core, featureScope = featureScope)
         openConnections += connection
 
         coroutineScope {
             listOf(
                 launch { client.connect(clientTransport) },
-                launch { server.createSession(serverTransport) },
+                launch { core.server.createSession(serverTransport) },
             ).joinAll()
         }
 
@@ -263,26 +235,14 @@ internal class FileContentIntegrationTest {
 
     private data class McpConnection(
         val client: Client,
-        val server: Server,
+        val core: WorkspaceMcpServerCore,
         val featureScope: CoroutineScope,
     ) {
         suspend fun close() {
             runCatching { client.close() }
-            runCatching { server.close() }
+            runCatching { core.close() }
             featureScope.cancel()
         }
-    }
-
-    private object NoopInvalidationSink : WorkspaceMcpInvalidationSink {
-        override fun <T> registerResourceUpdates(flow: StateFlow<T>, uris: (T) -> Set<String>) = Unit
-
-        override fun <T> registerGlobalListChanged(kind: ListChangeKind, flow: StateFlow<T>) = Unit
-
-        override fun <T> registerSessionListChanged(
-            kind: ListChangeKind,
-            flow: StateFlow<T>,
-            sessions: (T) -> Set<String>,
-        ) = Unit
     }
 
     private class FixedProjectProvider(

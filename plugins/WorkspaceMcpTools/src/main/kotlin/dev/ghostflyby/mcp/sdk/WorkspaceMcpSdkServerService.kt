@@ -13,19 +13,12 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.route.ResourceRouteSnapshotRef
-import dev.ghostflyby.mcp.route.SegmentTreeTemplateMatcher
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
-import io.modelcontextprotocol.kotlin.sdk.server.Server
-import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
-import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
-import io.modelcontextprotocol.kotlin.sdk.types.*
-import io.modelcontextprotocol.kotlin.sdk.utils.ResourceTemplateMatcherFactory
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
+import io.modelcontextprotocol.kotlin.sdk.types.Implementation
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
@@ -34,145 +27,52 @@ internal class WorkspaceMcpSdkServerService(
     private val logger = logger<WorkspaceMcpSdkServerService>()
 
     private val projectResolver = service<WorkspaceProjectResolver>()
-    private val routeSnapshotRef = ResourceRouteSnapshotRef()
-    private val sessionState = service<WorkspaceMcpSessionState>()
+    private val sessionState = service<WorkspaceMcpSessionStateService>()
     private val stateFlows = service<WorkspaceMcpStateFlows>()
-    private val catalog = WorkspaceMcpResourceCatalog()
-    private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
-        sessionState = sessionState,
-    )
-    private val invalidationBus = WorkspaceMcpInvalidationBus(scope = scope)
-    private val globalGen = MutableStateFlow(0L)
-
-    init {
-        invalidationBus.registerResourceUpdates(stateFlows.resourceUpdates)
-        invalidationBus.registerGlobalListChanged(ListChangeKind.Resources, stateFlows.globalResourceListChanges)
-        invalidationBus.registerGlobalListChanged(ListChangeKind.Tools, globalGen)
-        invalidationBus.registerSessionListChanged(
-            ListChangeKind.Resources,
-            stateFlows.perSessionResourceListChanges,
-        )
-    }
-
-    private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
-        parentScope = scope,
-        projectResolver = projectResolver,
-        catalog = catalog,
-        onSnapshotChanged = routeSnapshotRef::set,
-        invalidationSink = invalidationBus,
-    )
 
     private val features: List<WorkspaceMcpFeature>
         get() = WORKSPACE_MCP_FEATURE_EP.extensionList
 
     @Volatile
-    private var server: Server? = null
+    private var core: WorkspaceMcpServerCore? = null
 
     init {
         subscribeToFeatureEvents()
         if (!ApplicationManager.getApplication().isUnitTestMode) {
             scope.launch {
-                val createdServer = createServer()
+                val createdCore = createCore(features)
                 try {
                     val port = service<WorkspaceMcpSdkServerSettings>().port
-                    server = createdServer
+                    core = createdCore
                     embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-                        mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdServer }
+                        mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdCore.server }
                     }.startSuspend(wait = true)
                     @Suppress("HttpUrlsUsage")
                     logger.info("Workspace MCP SDK server started at http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH")
                 } finally {
-                    server = null
-                    runCatching { createdServer.close() }
+                    core = null
+                    runCatching { createdCore.close() }
                         .onFailure { error -> logger.warn("Failed to close Workspace MCP SDK server", error) }
                 }
             }
         }
     }
 
-    private fun createServer(): Server {
-        val newServer = Server(
+    private fun createCore(initialFeatures: List<WorkspaceMcpFeature>): WorkspaceMcpServerCore {
+        return WorkspaceMcpServerCore(
+            parentScope = scope,
+            projectResolver = projectResolver,
             serverInfo = Implementation(name = "workspace-mcp", version = pluginVersion),
-            options = ServerOptions(
-                capabilities = ServerCapabilities(
-                    resources = ServerCapabilities.Resources(subscribe = true, listChanged = true),
-                    tools = ServerCapabilities.Tools(listChanged = true),
-                ),
-                resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
-                    SegmentTreeTemplateMatcher(template, routeSnapshotRef)
-                },
-            ).apply { concurrentMessageHandling = true },
+            initialFeatures = initialFeatures,
+            stateFlows = stateFlows,
+            sessionState = sessionState.state,
             instructions = "Workspace MCP exposes IntelliJ VFS and editor document snapshots as MCP resources.",
-        ) {
-            featureCoordinator.registerInitial(this, features)
-        }
-        newServer.onConnect { session ->
-            sessionState.recordSessionConnected(session.sessionId)
-            session.setRequestHandler<SubscribeRequest>(Method.Defined.ResourcesSubscribe) { request, _ ->
-                subscriptionService.recordResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
-            }
-            session.setRequestHandler<UnsubscribeRequest>(Method.Defined.ResourcesUnsubscribe) { request, _ ->
-                subscriptionService.removeResourceSubscription(session.sessionId, request.params.uri); EmptyResult()
-            }
-            session.setRequestHandler<ListResourcesRequest>(Method.Defined.ResourcesList) { request, _ ->
-                catalog.listResources(newServer.clientConnection(session.sessionId), request)
-            }
-            session.setRequestHandler<ListResourceTemplatesRequest>(Method.Defined.ResourcesTemplatesList) { request, _ ->
-                catalog.listTemplates(newServer.clientConnection(session.sessionId), request)
-            }
-            session.setNotificationHandler<RootsListChangedNotification>(
-                Method.Defined.NotificationsRootsListChanged,
-            ) {
-                stateFlows.sessionResourcesChanged(session.sessionId)
-                CompletableDeferred(Unit)
-            }
-
-            // Per-session notification collectors
-            val sessionScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            session.onClose {
-                sessionState.recordSessionClosed(session.sessionId)
-                sessionScope.cancel()
-            }
-
-            sessionScope.launch {
-                invalidationBus.resourceUpdateBatches.collect { uris ->
-                    uris.filter { subscriptionService.isSubscribed(session.sessionId, it) }
-                        .forEach { uri ->
-                            runCatching {
-                                session.sendResourceUpdated(
-                                    ResourceUpdatedNotification(ResourceUpdatedNotificationParams(uri = uri))
-                                )
-                            }.onFailure { error ->
-                                logger.warn("Failed to send resource update to session ${session.sessionId}", error)
-                            }
-                        }
+            logger = object : WorkspaceMcpCoreLogger {
+                override fun warn(message: String, error: Throwable?) {
+                    if (error == null) logger.warn(message) else logger.warn(message, error)
                 }
-            }
-            sessionScope.launch {
-                invalidationBus.listChangedBatches.collect { events ->
-                    events.forEach { (kind, selector) ->
-                        when (selector) {
-                            SessionSelector.AllSessions -> notifyListChanged(session, kind)
-                            is SessionSelector.Sessions if session.sessionId in selector.sessionIds ->
-                                notifyListChanged(session, kind)
-                            else -> {}
-                        }
-                    }
-                }
-            }
-        }
-        return newServer
-    }
-
-    private suspend fun notifyListChanged(session: ServerSession, kind: ListChangeKind) {
-        runCatching {
-            when (kind) {
-                ListChangeKind.Resources -> session.sendResourceListChanged()
-                ListChangeKind.Tools -> session.sendToolListChanged()
-            }
-        }.onFailure { error ->
-            logger.warn("Failed to send list changed notification to session ${session.sessionId}", error)
-        }
+            },
+        )
     }
 
     private fun subscribeToFeatureEvents() {
@@ -182,17 +82,13 @@ internal class WorkspaceMcpSdkServerService(
             object : ExtensionPointListener<WorkspaceMcpFeature> {
                 override fun extensionAdded(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
                     scope.launch {
-                        val activeServer = server ?: return@launch
-                        featureCoordinator.register(activeServer, extension)
-                        globalGen.update { it + 1 }
+                        core?.register(extension)
                     }
                 }
 
                 override fun extensionRemoved(extension: WorkspaceMcpFeature, pluginDescriptor: PluginDescriptor) {
                     scope.launch {
-                        val activeServer = server ?: return@launch
-                        featureCoordinator.unregister(activeServer, extension.featureName)
-                        globalGen.update { it + 1 }
+                        core?.unregister(extension.featureName)
                     }
                 }
             },

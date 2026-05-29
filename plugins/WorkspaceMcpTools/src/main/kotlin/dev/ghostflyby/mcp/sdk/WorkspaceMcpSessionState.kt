@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.Service
 
-@Service(Service.Level.APP)
 internal class WorkspaceMcpSessionState {
     private val subscriptionLock = Any()
     private val activeSessionIds = linkedSetOf<String>()
@@ -60,4 +59,11 @@ internal class WorkspaceMcpSessionState {
             resourceSubscriptionsBySession[sessionId]?.contains(resourceUri) == true
         }
     }
+}
+
+@Service(Service.Level.APP)
+internal class WorkspaceMcpSessionStateService {
+    val state: WorkspaceMcpSessionState = WorkspaceMcpSessionState()
+
+    fun hasResourceSubscriptions(): Boolean = state.hasResourceSubscriptions()
 }

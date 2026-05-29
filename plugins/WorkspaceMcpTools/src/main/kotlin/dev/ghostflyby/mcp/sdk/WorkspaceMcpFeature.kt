@@ -29,6 +29,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     val featureScope: CoroutineScope,
     val featureName: String,
     val invalidationSink: WorkspaceMcpInvalidationSink,
+    private val callFactory: WorkspaceMcpCallFactory = workspaceMcpCallFactory(projectResolver),
 ) {
     private val trackedTools = mutableSetOf<String>()
     internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
@@ -41,7 +42,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
      * from the KSP-generated `KClass<P>.jsonSchema` convention.
      */
     inline fun <reified T : Any> registerToolClass() {
-        for ((tool, handler) in reflectTools(T::class)) {
+        for ((tool, handler) in reflectTools(T::class, callFactory)) {
             server.addTool(tool, handler)
             trackedTools.add(tool.name)
         }
