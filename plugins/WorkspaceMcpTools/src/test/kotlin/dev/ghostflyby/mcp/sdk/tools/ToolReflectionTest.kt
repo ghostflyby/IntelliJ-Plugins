@@ -18,9 +18,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 import kotlin.reflect.KClass
 import kotlin.reflect.full.declaredMemberExtensionFunctions
 import kotlin.reflect.full.declaredMemberFunctions
@@ -36,108 +35,110 @@ internal class ToolReflectionTest {
 
     @Test
     fun `valid tool accepted`() {
-        assertTrue(reflectFirst(ValidTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(ValidTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `non-suspend accepted`() {
-        assertTrue(reflectFirst(NonSuspendTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(NonSuspendTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `regular member accepted`() {
-        assertTrue(reflectFirst(NoReceiverTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(NoReceiverTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `wrong receiver rejected`() {
         val r = reflectFirst(WrongReceiverTool::class) as ToolReflectionResult.Rejected
-        assertEquals(setOf(ToolRejectReason.WRONG_RECEIVER), r.reasons)
+        Assertions.assertEquals(setOf(ToolRejectReason.WRONG_RECEIVER), r.reasons)
     }
 
     @Test
     fun `no schema rejected`() {
         val r = reflectFirst(NoSchemaTool::class) as ToolReflectionResult.Rejected
-        assertEquals(setOf(ToolRejectReason.NO_SCHEMA), r.reasons)
+        Assertions.assertEquals(setOf(ToolRejectReason.NO_SCHEMA), r.reasons)
     }
 
-    @Test fun `multi param accepted`() {
-        assertTrue(reflectFirst(MultiParamTool::class) is ToolReflectionResult.Accepted)
+    @Test
+    fun `multi param accepted`() {
+        Assertions.assertTrue(reflectFirst(MultiParamTool::class) is ToolReflectionResult.Accepted)
     }
 
-    @Test fun `zero param accepted`() {
-        assertTrue(reflectFirst(ZeroParamTool::class) is ToolReflectionResult.Accepted)
+    @Test
+    fun `zero param accepted`() {
+        Assertions.assertTrue(reflectFirst(ZeroParamTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `default params accepted`() {
-        assertTrue(reflectFirst(DefaultParamTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(DefaultParamTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `default params are not required in tool schema`() {
         val r = reflectFirst(DefaultParamTool::class) as ToolReflectionResult.Accepted
-        assertEquals(listOf("prefix", "suffix"), r.tool.inputSchema.required)
+        Assertions.assertEquals(listOf("prefix", "suffix"), r.tool.inputSchema.required)
     }
 
     @Test
     fun `value class accepted`() {
-        assertTrue(reflectFirst(ValueClassTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(ValueClassTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `value class uses underlying property schema`() {
         val r = reflectFirst(ValueClassTool::class) as ToolReflectionResult.Accepted
         val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
-        assertEquals("string", pathSchema?.get("type")?.jsonPrimitive?.content)
+        Assertions.assertEquals("string", pathSchema?.get("type")?.jsonPrimitive?.content)
     }
 
     @Test
     fun `nullable value class accepted`() {
-        assertTrue(reflectFirst(NullableValueClassTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(NullableValueClassTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `nullable value class schema allows underlying value or null`() {
         val r = reflectFirst(NullableValueClassTool::class) as ToolReflectionResult.Accepted
         val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
-        assertEquals(listOf("string", "null"), pathSchema?.typeNames())
+        Assertions.assertEquals(listOf("string", "null"), pathSchema?.typeNames())
     }
 
     @Test
     fun `primitive value class accepted`() {
-        assertTrue(reflectFirst(PrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(PrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `primitive value class uses underlying property schema`() {
         val r = reflectFirst(PrimitiveValueClassTool::class) as ToolReflectionResult.Accepted
         val idSchema = r.tool.inputSchema.properties?.get("id")?.jsonObject
-        assertEquals("integer", idSchema?.get("type")?.jsonPrimitive?.content)
+        Assertions.assertEquals("integer", idSchema?.get("type")?.jsonPrimitive?.content)
     }
 
     @Test
     fun `nullable primitive value class accepted`() {
-        assertTrue(reflectFirst(NullablePrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(NullablePrimitiveValueClassTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `nullable primitive value class schema allows underlying value or null`() {
         val r = reflectFirst(NullablePrimitiveValueClassTool::class) as ToolReflectionResult.Accepted
         val idSchema = r.tool.inputSchema.properties?.get("id")?.jsonObject
-        assertEquals(listOf("integer", "null"), idSchema?.typeNames())
+        Assertions.assertEquals(listOf("integer", "null"), idSchema?.typeNames())
     }
 
     @Test
     fun `nullable underlying value class accepted`() {
-        assertTrue(reflectFirst(NullableUnderlyingValueClassTool::class) is ToolReflectionResult.Accepted)
+        Assertions.assertTrue(reflectFirst(NullableUnderlyingValueClassTool::class) is ToolReflectionResult.Accepted)
     }
 
     @Test
     fun `nullable underlying value class schema allows underlying value or null`() {
         val r = reflectFirst(NullableUnderlyingValueClassTool::class) as ToolReflectionResult.Accepted
         val pathSchema = r.tool.inputSchema.properties?.get("path")?.jsonObject
-        assertEquals(listOf("string", "null"), pathSchema?.typeNames())
+        Assertions.assertEquals(listOf("string", "null"), pathSchema?.typeNames())
     }
 }
 

@@ -6,8 +6,8 @@
 
 package dev.ghostflyby.mcp.sdk.tools
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 internal class CamelToSnakeCaseTest {
     @Test

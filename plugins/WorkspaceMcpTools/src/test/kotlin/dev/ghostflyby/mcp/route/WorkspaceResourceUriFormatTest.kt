@@ -11,8 +11,9 @@ import dev.ghostflyby.mcp.route.resources.ProjectResource
 import dev.ghostflyby.mcp.route.resources.VfsResource
 import io.ktor.resources.*
 import kotlinx.serialization.Serializable
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 internal class WorkspaceResourceUriFormatTest {
     private val format = WorkspaceResourceUriFormat()
@@ -36,7 +37,10 @@ internal class WorkspaceResourceUriFormatTest {
             ),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/projects/project-a/files/src/main/App.kt?meta&exists=false&structure=false", uri)
+        assertEquals(
+            "ij-workspace://{instanceKey}/projects/project-a/files/src/main/App.kt?meta&exists=false&structure=false",
+            uri,
+        )
     }
 
     @Test
@@ -58,7 +62,10 @@ internal class WorkspaceResourceUriFormatTest {
             VfsResource(rawVfsUrl = "file:///tmp/file.kt"),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?exists=false&structure=false", uri)
+        assertEquals(
+            "ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?exists=false&structure=false",
+            uri,
+        )
     }
 
     @Test
@@ -68,7 +75,10 @@ internal class WorkspaceResourceUriFormatTest {
             VfsResource(rawVfsUrl = "file:///tmp/file.kt", meta = "length", content = ""),
         )
 
-        assertEquals("ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?meta=length&content&exists=false&structure=false", uri)
+        assertEquals(
+            "ij-workspace://{instanceKey}/vfs/file:///tmp/file.kt?meta=length&content&exists=false&structure=false",
+            uri,
+        )
     }
 
     @Test
@@ -94,17 +104,21 @@ internal class WorkspaceResourceUriFormatTest {
         assertEquals("", resource.meta)
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun `decode rejects mismatched literal path`() {
-        format.decodeFromString(
-            VfsResource.serializer(),
-            "ij-workspace://iu-1/not-vfs/file:///tmp/file.kt",
-        )
+        assertThrows<IllegalArgumentException> {
+            format.decodeFromString(
+                VfsResource.serializer(),
+                "ij-workspace://iu-1/not-vfs/file:///tmp/file.kt",
+            )
+        }
     }
 
-    @Test(expected = IllegalArgumentException::class)
+    @Test
     fun `tail path parameter must be last`() {
-        format.templateUri(InvalidTailResource.serializer().descriptor)
+        assertThrows<IllegalArgumentException> {
+            format.templateUri(InvalidTailResource.serializer().descriptor)
+        }
     }
 
     @Serializable

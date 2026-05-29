@@ -14,8 +14,10 @@ import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate
 import kotlinx.serialization.Serializable
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Test
 
 internal class ResourceRouteSnapshotTest {
     @Test
@@ -29,7 +31,7 @@ internal class ResourceRouteSnapshotTest {
     @Test
     fun `no-query route does not match URI with query string`() {
         val snapshot = testSnapshot()
-        assertNull(snapshot.matchUri("ij-workspace://iu-63341/server/info?x=1"))
+        Assertions.assertNull(snapshot.matchUri("ij-workspace://iu-63341/server/info?x=1"))
     }
 
     @Test
@@ -85,13 +87,13 @@ internal class ResourceRouteSnapshotTest {
             name = "projectKey",
         )
         val matcher = SegmentTreeTemplateMatcher(projectTemplate, ResourceRouteSnapshotRef(snapshot))
-        assertNull(matcher.match(workspaceFileUri()))
+        Assertions.assertNull(matcher.match(workspaceFileUri()))
     }
 
     @Test
     fun `single segment parameter does not capture extra path segments`() {
         val snapshot = projectOnlySnapshot()
-        assertNull(snapshot.matchUri(workspaceFileUri()))
+        Assertions.assertNull(snapshot.matchUri(workspaceFileUri()))
     }
 
     @Test
@@ -105,7 +107,7 @@ internal class ResourceRouteSnapshotTest {
         val match = optionalQuerySnapshot().matchUri("ij-workspace://iu-63341/search")
         assertNotNull(match)
         assertEquals("iu-63341", match?.params?.get("instanceKey"))
-        assertNull(match?.params?.get("query"))
+        Assertions.assertNull(match?.params?.get("query"))
     }
 
     @Test
@@ -120,7 +122,7 @@ internal class ResourceRouteSnapshotTest {
         val snapshot = coexistingQuerySnapshot()
         val noQuery = snapshot.matchUri("ij-workspace://iu-63341/target")
         assertNotNull(noQuery)
-        assertNull(noQuery?.params?.get("q"))
+        Assertions.assertNull(noQuery?.params?.get("q"))
 
         val withQuery = snapshot.matchUri("ij-workspace://iu-63341/target?q=hello")
         assertNotNull(withQuery)

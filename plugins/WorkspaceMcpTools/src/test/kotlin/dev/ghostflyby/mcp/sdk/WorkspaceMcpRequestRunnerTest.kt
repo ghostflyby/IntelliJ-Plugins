@@ -13,8 +13,11 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import org.junit.Assert.*
-import org.junit.Test
+import kotlinx.serialization.serializer
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
 
 internal class WorkspaceMcpRequestRunnerTest {
     @Test
@@ -27,7 +30,7 @@ internal class WorkspaceMcpRequestRunnerTest {
         )
         val json = buildJsonObject { put("url", "file:///test.txt") }
         val decoded = toolArgsJson.decodeFromJsonElement(
-            kotlinx.serialization.serializer<TestArgs>(), json
+            serializer<TestArgs>(), json
         )
         assertEquals("file:///test.txt", decoded.url)
         assertEquals(42, decoded.count)
@@ -43,10 +46,10 @@ internal class WorkspaceMcpRequestRunnerTest {
             val async: Boolean = false,
         )
         val decoded = toolArgsJson.decodeFromJsonElement(
-            kotlinx.serialization.serializer<TestArgs>(), buildJsonObject { }
+            serializer<TestArgs>(), buildJsonObject { }
         )
         assertEquals("", decoded.url)
-        assertNull(decoded.projectKey)
+        Assertions.assertNull(decoded.projectKey)
         assertEquals(false, decoded.async)
     }
 
@@ -56,11 +59,11 @@ internal class WorkspaceMcpRequestRunnerTest {
         data class TestArgs(val count: Int)
         val json = buildJsonObject { put("count", JsonPrimitive("not-an-int")) }
         assertTrue(
-            kotlin.runCatching {
+            runCatching {
                 toolArgsJson.decodeFromJsonElement(
-                    kotlinx.serialization.serializer<TestArgs>(), json
+                    serializer<TestArgs>(), json,
                 )
-            }.exceptionOrNull() is SerializationException
+            }.exceptionOrNull() is SerializationException,
         )
     }
 
@@ -69,11 +72,11 @@ internal class WorkspaceMcpRequestRunnerTest {
         @Serializable
         data class TestArgs(val url: String)
         assertTrue(
-            kotlin.runCatching {
+            runCatching {
                 toolArgsJson.decodeFromJsonElement(
-                    kotlinx.serialization.serializer<TestArgs>(), buildJsonObject { }
+                    serializer<TestArgs>(), buildJsonObject { },
                 )
-            }.exceptionOrNull() is SerializationException
+            }.exceptionOrNull() is SerializationException,
         )
     }
 
