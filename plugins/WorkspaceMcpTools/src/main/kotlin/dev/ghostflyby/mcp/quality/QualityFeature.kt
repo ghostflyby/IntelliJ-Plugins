@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.quality
 
 import dev.ghostflyby.mcp.quality.tools.QualityTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 internal class QualityFeature : WorkspaceMcpFeature {
     override val featureName: String = "quality"

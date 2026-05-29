@@ -14,11 +14,11 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.mcp.route.WorkspaceResourceUriFormat
-import dev.ghostflyby.mcp.route.resources.ProjectFileResource
-import dev.ghostflyby.mcp.route.resources.ProjectResource
-import dev.ghostflyby.mcp.route.resources.VfsResource
-import dev.ghostflyby.mcp.sdk.*
+import dev.ghostflyby.mcp.server.*
+import dev.ghostflyby.mcp.server.route.WorkspaceResourceUriFormat
+import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
+import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.modelcontextprotocol.kotlin.sdk.ExperimentalMcpApi
 import io.modelcontextprotocol.kotlin.sdk.client.Client
 import io.modelcontextprotocol.kotlin.sdk.testing.ChannelTransport

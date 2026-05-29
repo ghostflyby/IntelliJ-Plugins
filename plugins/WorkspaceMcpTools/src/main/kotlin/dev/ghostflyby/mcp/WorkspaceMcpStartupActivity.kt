@@ -11,7 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import dev.ghostflyby.mcp.filecontent.FileContentDocumentListenerService
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerService
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
+import dev.ghostflyby.mcp.server.WorkspaceMcpStateFlows
 
 internal class WorkspaceMcpStartupActivity : ProjectActivity {
     override suspend fun execute(project: Project) {

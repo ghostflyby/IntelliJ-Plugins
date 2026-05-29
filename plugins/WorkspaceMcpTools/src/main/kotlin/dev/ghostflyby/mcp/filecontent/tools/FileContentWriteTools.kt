@@ -21,8 +21,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
-import dev.ghostflyby.mcp.route.McpCallContext
-import dev.ghostflyby.mcp.route.project
+import dev.ghostflyby.mcp.server.route.McpCallContext
+import dev.ghostflyby.mcp.server.route.project
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
 import java.nio.file.InvalidPathException

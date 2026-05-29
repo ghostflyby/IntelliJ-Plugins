@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.scope.search
 
 import dev.ghostflyby.mcp.scope.search.tools.ScopeFileSearchTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 /**
  * Workspace MCP feature that provides scope file search SDK tools:

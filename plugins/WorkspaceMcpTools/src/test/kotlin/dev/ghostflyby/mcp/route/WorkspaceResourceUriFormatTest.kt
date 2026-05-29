@@ -6,9 +6,10 @@
 
 package dev.ghostflyby.mcp.route
 
-import dev.ghostflyby.mcp.route.resources.ProjectFileResource
-import dev.ghostflyby.mcp.route.resources.ProjectResource
-import dev.ghostflyby.mcp.route.resources.VfsResource
+import dev.ghostflyby.mcp.server.route.WorkspaceResourceUriFormat
+import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
+import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.resources.*
 import kotlinx.serialization.Serializable
 import org.junit.jupiter.api.Assertions.assertEquals

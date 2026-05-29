@@ -37,10 +37,10 @@ import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.relativizePathOrNull
 import dev.ghostflyby.mcp.common.reportActivity
-import dev.ghostflyby.mcp.route.McpCallContext
-import dev.ghostflyby.mcp.route.project
+import dev.ghostflyby.mcp.server.route.McpCallContext
+import dev.ghostflyby.mcp.server.route.project
 import dev.ghostflyby.mcp.scope.*
-import dev.ghostflyby.mcp.sdk.tools.toolArgsJson
+import dev.ghostflyby.mcp.server.tools.toolArgsJson
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent

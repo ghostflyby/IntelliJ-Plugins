@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.scope.descriptor
 
 import dev.ghostflyby.mcp.scope.descriptor.tools.ScopeDescriptorTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 /**
  * Workspace MCP feature that provides scope descriptor and catalog SDK tools:

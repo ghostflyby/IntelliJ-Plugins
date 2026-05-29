@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.navigation
 
 import dev.ghostflyby.mcp.navigation.tools.NavigationTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 internal class NavigationFeature : WorkspaceMcpFeature {
     override val featureName: String = "navigation"

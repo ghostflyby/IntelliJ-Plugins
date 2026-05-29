@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.scope.symbol
 
 import dev.ghostflyby.mcp.scope.symbol.tools.ScopeSymbolSearchTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 /**
  * Workspace MCP feature that provides scope symbol search SDK tools:

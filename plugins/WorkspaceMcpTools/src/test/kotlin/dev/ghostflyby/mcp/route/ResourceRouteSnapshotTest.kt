@@ -6,10 +6,11 @@
 
 package dev.ghostflyby.mcp.route
 
-import dev.ghostflyby.mcp.route.resources.ProjectFileResource
-import dev.ghostflyby.mcp.route.resources.ProjectResource
-import dev.ghostflyby.mcp.route.resources.ServerInfoResource
-import dev.ghostflyby.mcp.route.resources.VfsResource
+import dev.ghostflyby.mcp.server.route.*
+import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
+import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.server.route.resources.ServerInfoResource
+import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.resources.*
 import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
 import io.modelcontextprotocol.kotlin.sdk.types.ResourceTemplate

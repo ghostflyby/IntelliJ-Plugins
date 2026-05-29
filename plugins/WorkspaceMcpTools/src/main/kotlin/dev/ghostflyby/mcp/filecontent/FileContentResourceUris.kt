@@ -9,9 +9,9 @@ package dev.ghostflyby.mcp.filecontent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
+import dev.ghostflyby.mcp.server.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.server.workspaceInstanceKey
+import dev.ghostflyby.mcp.server.workspaceProjectKey
 
 internal fun workspaceRawVfsUri(instanceKey: String, rawVfsUrl: String): String {
     require(rawVfsUrl.isNotBlank()) { "rawVfsUrl must not be blank." }

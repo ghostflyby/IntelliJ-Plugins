@@ -7,8 +7,8 @@
 package dev.ghostflyby.mcp.scope.text
 
 import dev.ghostflyby.mcp.scope.text.tools.ScopeTextSearchTools
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeature
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpFeatureRegistrationContext
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
+import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
 
 internal class ScopeTextSearchFeature : WorkspaceMcpFeature {
     override val featureName: String = "scope-text-search"
