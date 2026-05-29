@@ -18,12 +18,19 @@ version = "1.0.4"
 
 dependencies {
     api(libs.mcp.kotlin.sdk.server) {
-        exclude(group = "io.ktor")
         exclude(group = "org.jetbrains.kotlinx")
         exclude(group = "org.jetbrains.kotlin")
     }
     api(libs.ktor.resources) {
         isTransitive = false
+    }
+    implementation(libs.ktor.server.content.negotiation) {
+        exclude(group = "org.jetbrains.kotlinx")
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    implementation(libs.ktor.server.cio) {
+        exclude(group = "org.jetbrains.kotlinx")
+        exclude(group = "org.jetbrains.kotlin")
     }
     ksp(libs.kotlinx.schema.ksp)
     api(libs.kotlinx.schema.annotations) {
