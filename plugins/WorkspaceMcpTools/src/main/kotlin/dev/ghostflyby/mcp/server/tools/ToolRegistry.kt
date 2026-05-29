@@ -6,9 +6,8 @@
 
 package dev.ghostflyby.mcp.server.tools
 
-import dev.ghostflyby.mcp.server.route.AncestorContext
 import dev.ghostflyby.mcp.server.route.McpCallContext
-import dev.ghostflyby.mcp.server.WorkspaceMcpCallFactory
+import dev.ghostflyby.mcp.server.McpCallFactory
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.*
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +44,7 @@ internal sealed class ToolReflectionResult {
 
 internal fun <T : Any> reflectTools(
     toolClass: KClass<T>,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): Set<Pair<Tool, Handler>> {
     val instance = toolClass.objectInstance
         ?: toolClass.java.getDeclaredConstructor().newInstance()
@@ -112,7 +111,7 @@ internal fun reflectOneTool(
     toolClass: KClass<*>,
     instance: Any,
     func: KFunction<*>,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): ToolReflectionResult {
     val reasons = ToolMethodInfo.classify(func)
     if (reasons.isNotEmpty()) return ToolReflectionResult.Rejected(reasons)
@@ -143,7 +142,7 @@ internal fun buildKotlinReflectHandler(
     instance: Any,
     func: KFunction<*>,
     info: ToolMethodInfo,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): Handler {
     suspend fun handleRequest(conn: ClientConnection, request: CallToolRequest): CallToolResult {
         val decoded = when (val result = decodeToolArguments(request, func, info)) {
@@ -204,7 +203,7 @@ internal data class ToolCallArgs(
 internal fun compileToolInvocationPlan(
     instance: Any,
     func: KFunction<*>,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): ToolInvocationPlan {
     val hasExtensionReceiver = func.extensionReceiverParameter != null
     val valueParameterCount = func.valueParameters.size
@@ -340,14 +339,14 @@ private fun buildToolInvocationArgs(
     conn: ClientConnection,
     request: CallToolRequest,
     decoded: Map<String?, Any?>,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): Map<KParameter, Any?> {
     val hasExtensionReceiver = func.extensionReceiverParameter != null
     val args = LinkedHashMap<KParameter, Any?>(func.parameters.size)
     func.instanceParameter?.let { args[it] = instance }
     if (hasExtensionReceiver) {
         func.extensionReceiverParameter?.let {
-            args[it] = McpCallContext(callFactory.create(conn, request, AncestorContext(emptyMap())))
+            args[it] = callFactory.create(conn, request, emptyMap())
         }
     }
     for (param in func.valueParameters) {
@@ -362,13 +361,13 @@ private fun newToolCallArgs(
     hasDefaultArguments: Boolean,
     conn: ClientConnection,
     request: CallToolRequest,
-    callFactory: WorkspaceMcpCallFactory,
+    callFactory: McpCallFactory,
 ): ToolCallArgs {
     val receiverCount = if (hasExtensionReceiver) 1 else 0
     val parameterSlotCount = valueParameterCount + receiverCount
     val maskCount = if (hasDefaultArguments) ((valueParameterCount + 31) / 32) else 0
     val args = arrayOfNulls<Any>(parameterSlotCount + maskCount + if (hasDefaultArguments) 1 else 0)
-    if (hasExtensionReceiver) args[0] = callFactory.create(conn, request, AncestorContext(emptyMap()))
+    if (hasExtensionReceiver) args[0] = callFactory.create(conn, request, emptyMap()).call
     val maskStart = if (hasDefaultArguments) parameterSlotCount else null
     if (maskStart != null) {
         repeat(maskCount) { args[maskStart + it] = 0 }

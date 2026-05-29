@@ -16,11 +16,11 @@ import kotlinx.coroutines.SupervisorJob
 internal class WorkspaceMcpFeatureCoordinator(
     private val parentScope: CoroutineScope,
     private val projectResolver: WorkspaceProjectProvider,
+    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
     private val catalog: WorkspaceMcpResourceCatalog,
     private val onSnapshotChanged: (ResourceRouteSnapshot) -> Unit,
     private val invalidationSink: WorkspaceMcpInvalidationSink,
-    private val callFactory: WorkspaceMcpCallFactory = workspaceMcpCallFactory(projectResolver),
-    private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
+    private val callFactory: McpCallFactory = mcpCallFactory(),
     private val logger: WorkspaceMcpCoreLogger = WorkspaceMcpCoreLogger.Noop,
 ) {
     private val lock = Any()
@@ -105,12 +105,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request, vars ->
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(vars)
-                        entry.invoker(
-                            McpCallContext(
-                                callFactory.create(this, request, AncestorContext(vars)),
-                            ),
-                            deserialized,
-                        )
+                        entry.invoker(callFactory.create(this, request, vars), deserialized)
                     }
                 }
             } else {
@@ -124,12 +119,7 @@ internal class WorkspaceMcpFeatureCoordinator(
                         mimeType = entry.mimeType,
                     ) { request ->
                         val deserialized = entry.readRoute.paramDeserializer?.invoke(emptyMap())
-                        entry.invoker(
-                            McpCallContext(
-                                callFactory.create(this, request, AncestorContext(emptyMap())),
-                            ),
-                            deserialized,
-                        )
+                        entry.invoker(callFactory.create(this, request, emptyMap()), deserialized)
                     }
                 }
             }

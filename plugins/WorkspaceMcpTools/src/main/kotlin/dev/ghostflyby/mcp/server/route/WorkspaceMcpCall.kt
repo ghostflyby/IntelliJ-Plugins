@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.server.route
 
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.server.*
+import io.ktor.util.Attributes
 import io.modelcontextprotocol.kotlin.sdk.server.ClientConnection
 import io.modelcontextprotocol.kotlin.sdk.types.Request
 import kotlinx.coroutines.CancellationException
@@ -21,24 +22,22 @@ import kotlin.io.path.exists
 internal class WorkspaceMcpCall<out R : Request>(
     val connection: ClientConnection,
     val request: R,
-    val parameters: AncestorContext,
-    val projectResolver: WorkspaceProjectProvider,
+    val attributes: Attributes = Attributes(),
 ) {
     val sessionId: String get() = connection.sessionId
-    val instanceKey: String get() = workspaceInstanceKey()
 
     suspend fun roots(): List<String> {
         return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
     }
 }
 
-// -- project resolution (extension with service default + overload for testing) --
+// -- project resolution --
 
-internal suspend fun WorkspaceMcpCall<*>.project(): Project =
-    project(projectResolver)
-
-internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectProvider): Project {
-    val project = when (val r = resolver.resolve(projectKey = parameters["projectKey"])) {
+internal suspend fun WorkspaceMcpCall<*>.project(): Project {
+    val resolver = attributes[Keys.ProjectProvider]
+        ?: error("WorkspaceProjectProvider not available")
+    val routeParams = attributes[Keys.RouteParameters]
+    val project = when (val r = resolver.resolve(projectKey = routeParams?.get("projectKey"))) {
         is WorkspaceProjectResolution.Resolved -> r.project
         is WorkspaceProjectResolution.Unresolved -> error(r.message)
     }
@@ -53,7 +52,12 @@ internal suspend fun WorkspaceMcpCall<*>.project(resolver: WorkspaceProjectProvi
 
 // -- visible projects --
 
-internal suspend fun WorkspaceMcpCall<*>.visibleProjects(resolver: WorkspaceProjectProvider): List<WorkspaceMcpListProject> {
+internal val WorkspaceMcpCall<*>.instanceKey: String
+    get() = attributes[Keys.InstanceKey] ?: error("InstanceKey not available")
+
+internal suspend fun WorkspaceMcpCall<*>.visibleProjects(
+    resolver: WorkspaceProjectProvider,
+): List<WorkspaceMcpListProject> {
     return visibleProjectInstances(resolver).map { project ->
         WorkspaceMcpListProject(
             projectKey = workspaceProjectKey(project),

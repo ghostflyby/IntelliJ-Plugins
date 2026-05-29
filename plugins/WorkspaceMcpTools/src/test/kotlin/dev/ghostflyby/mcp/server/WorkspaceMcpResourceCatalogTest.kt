@@ -121,7 +121,6 @@ internal class WorkspaceMcpResourceCatalogTest {
     private fun catalog(block: ResourceSegmentCollector.() -> Unit): WorkspaceMcpResourceCatalog {
         val collector = ResourceSegmentCollector().apply(block)
         return WorkspaceMcpResourceCatalog(
-            projectResolver = ForbiddenProjectProvider,
             instanceKeyProvider = { "test-instance" },
         ).apply {
             updateSnapshot(
@@ -152,19 +151,6 @@ internal class WorkspaceMcpResourceCatalogTest {
                 else -> error("Unexpected ClientConnection call in catalog test: ${method.name}")
             }
         } as ClientConnection
-    }
-
-    private object ForbiddenProjectProvider : WorkspaceProjectProvider {
-        override fun openProjects(): List<com.intellij.openapi.project.Project> =
-            error("Project provider should not be queried.")
-
-        override suspend fun resolve(
-            projectKey: String?,
-            projectPath: String?,
-            rawVfsUrl: String?,
-            relativePath: String?,
-            rootsCandidates: List<String>?,
-        ): WorkspaceProjectResolution = error("Project provider should not be queried.")
     }
 
     @Serializable

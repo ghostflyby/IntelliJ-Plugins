@@ -8,6 +8,7 @@ package dev.ghostflyby.mcp.server
 
 import dev.ghostflyby.mcp.server.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.server.route.SegmentTreeTemplateMatcher
+import dev.ghostflyby.mcp.server.route.Keys
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.ServerSession
@@ -32,7 +33,6 @@ internal class WorkspaceMcpServerCore(
 ) {
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val catalog = WorkspaceMcpResourceCatalog(
-        projectResolver = projectResolver,
         instanceKeyProvider = instanceKeyProvider,
     )
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
@@ -40,16 +40,19 @@ internal class WorkspaceMcpServerCore(
     )
     private val invalidationBus = WorkspaceMcpInvalidationBus(scope = parentScope)
     private val globalGen = MutableStateFlow(0L)
-    private val callFactory = workspaceMcpCallFactory(projectResolver)
+    private val callFactory = mcpCallFactory().withAttributes {
+        attributes[Keys.ProjectProvider] = projectResolver
+        attributes[Keys.InstanceKey] = instanceKeyProvider()
+    }
 
     private val featureCoordinator = WorkspaceMcpFeatureCoordinator(
         parentScope = parentScope,
         projectResolver = projectResolver,
+        instanceKeyProvider = instanceKeyProvider,
         catalog = catalog,
         onSnapshotChanged = routeSnapshotRef::set,
         invalidationSink = invalidationBus,
         callFactory = callFactory,
-        instanceKeyProvider = instanceKeyProvider,
         logger = logger,
     )
 

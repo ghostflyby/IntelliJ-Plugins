@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference
  * flat list providers.
  */
 internal class WorkspaceMcpResourceCatalog(
-    private val projectResolver: WorkspaceProjectProvider,
+    private val callFactory: McpCallFactory = mcpCallFactory(),
     private val instanceKeyProvider: () -> String = ::workspaceInstanceKey,
 ) {
     private val snapshotRef = AtomicReference(ResourceRouteSnapshot())
@@ -68,12 +68,7 @@ internal class WorkspaceMcpResourceCatalog(
         connection: ClientConnection,
         request: R,
     ): WorkspaceMcpCall<R> {
-        return WorkspaceMcpCall(
-            connection = connection,
-            request = request,
-            parameters = AncestorContext(emptyMap()),
-            projectResolver = projectResolver,
-        )
+        return callFactory.create(connection, request, emptyMap()).call
     }
 
     private fun distinctResources(resources: List<Resource>): List<Resource> {

@@ -29,7 +29,7 @@ internal class WorkspaceMcpFeatureRegistrationContext(
     val featureScope: CoroutineScope,
     val featureName: String,
     val invalidationSink: WorkspaceMcpInvalidationSink,
-    private val callFactory: WorkspaceMcpCallFactory = workspaceMcpCallFactory(projectResolver),
+    private val callFactory: McpCallFactory = mcpCallFactory(),
 ) {
     private val trackedTools = mutableSetOf<String>()
     internal val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
