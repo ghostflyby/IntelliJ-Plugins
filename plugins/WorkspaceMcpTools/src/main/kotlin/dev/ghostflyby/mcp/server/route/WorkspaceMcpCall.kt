@@ -18,7 +18,12 @@ internal class WorkspaceMcpCall<out R : Request>(
 ) {
     val sessionId: String get() = connection.sessionId
 
+    /**
+     * Lists client roots. Returns empty list if the client does not support this capability.
+     */
     suspend fun roots(): List<String> {
-        return connection.listRoots().roots.map { it.uri.removePrefix("file://") }
+        return runCatching {
+            connection.listRoots().roots.map { it.uri.removePrefix("file://") }
+        }.getOrDefault(emptyList())
     }
 }

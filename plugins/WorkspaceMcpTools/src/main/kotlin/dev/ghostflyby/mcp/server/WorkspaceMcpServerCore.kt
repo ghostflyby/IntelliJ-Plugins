@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.server
 
-import dev.ghostflyby.mcp.server.route.Keys
 import dev.ghostflyby.mcp.sdk.WorkspaceMcpStateFlows
 import dev.ghostflyby.mcp.server.route.ResourceRouteSnapshotRef
 import dev.ghostflyby.mcp.server.route.SegmentTreeTemplateMatcher
@@ -34,6 +33,7 @@ internal class WorkspaceMcpServerCore(
 ) {
     private val routeSnapshotRef = ResourceRouteSnapshotRef()
     private val catalog = WorkspaceMcpResourceCatalog(
+        callFactory = callFactory,
         instanceKeyProvider = instanceKeyProvider,
     )
     private val subscriptionService = WorkspaceMcpResourceSubscriptionService(
@@ -101,7 +101,7 @@ internal class WorkspaceMcpServerCore(
                 resourceTemplateMatcherFactory = ResourceTemplateMatcherFactory { template ->
                     SegmentTreeTemplateMatcher(template, routeSnapshotRef)
                 },
-            ).apply { concurrentMessageHandling = true },
+            ),
             instructions = instructions,
         ) {
             featureCoordinator.registerInitial(this, initialFeatures)
