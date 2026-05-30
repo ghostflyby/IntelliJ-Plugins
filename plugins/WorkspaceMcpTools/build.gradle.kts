@@ -17,36 +17,19 @@ version = "1.0.4"
 
 
 dependencies {
-    api(libs.mcp.kotlin.sdk.server) {
-        exclude(group = "org.jetbrains.kotlinx")
-        exclude(group = "org.jetbrains.kotlin")
-    }
-    api(libs.ktor.resources) {
-        isTransitive = false
-    }
-    implementation(libs.ktor.server.content.negotiation) {
-        exclude(group = "org.jetbrains.kotlinx")
-        exclude(group = "org.jetbrains.kotlin")
-    }
-    implementation(libs.ktor.server.cio) {
-        exclude(group = "org.jetbrains.kotlinx")
-        exclude(group = "org.jetbrains.kotlin")
-    }
+    api(libs.mcp.kotlin.sdk.server)
+    api(libs.ktor.resources)
+    api(libs.kotlinx.schema.annotations)
+
     ksp(libs.kotlinx.schema.ksp)
-    api(libs.kotlinx.schema.annotations) {
-        isTransitive = false
-    }
+
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))
-    testImplementation(libs.mcp.kotlin.sdk.testing) {
-        exclude(group = "io.ktor")
-        exclude(group = "org.jetbrains.kotlinx")
-        exclude(group = "org.jetbrains.kotlin")
-    }
-    testImplementation(libs.mcp.kotlin.sdk.client) {
-        exclude(group = "io.ktor")
-        exclude(group = "org.jetbrains.kotlinx")
-        exclude(group = "org.jetbrains.kotlin")
-    }
+    implementation(project(":modules:workspace-mcp-server"))
+
+    testImplementation(libs.mcp.kotlin.sdk.testing)
+    testImplementation(libs.mcp.kotlin.sdk.client)
     testImplementation(libs.kotlin.stdlib)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
