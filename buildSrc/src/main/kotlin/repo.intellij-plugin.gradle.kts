@@ -7,7 +7,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
-import org.jetbrains.intellij.platform.gradle.models.coroutines
 import org.jetbrains.intellij.platform.gradle.models.kotlinStdlib
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
@@ -86,14 +85,29 @@ sourceSets.forEach {
         it.compileOnlyApiConfigurationName,
         it.compileOnlyConfigurationName,
         it.runtimeOnlyConfigurationName,
+        it.runtimeClasspathConfigurationName,
     ).forEach { config ->
         configurations.findByName(config)?.apply {
-            (kotlinStdlib + coroutines).forEach { coordinates ->
+            (kotlinStdlib).forEach { coordinates ->
                 exclude(coordinates.groupId, coordinates.artifactId)
             }
             listOf("kotlin-reflect").forEach { dep ->
                 exclude("org.jetbrains.kotlin", dep)
             }
+            listOf(
+                "kotlinx-coroutines-core",
+                "kotlinx-coroutines-slf4j",
+                "kotlinx-collections-immutable",
+                "kotlinx-serialization-core",
+                "kotlinx-serialization-json",
+                "kotlinx-serialization-json-io",
+                "kotlinx-io-core",
+                "kotlinx-io-bytestring",
+
+                ).forEach { dep ->
+                exclude(group = "org.jetbrains.kotlinx", module = dep)
+            }
+            exclude(group = "org.slf4j", module = "slf4j-api")
         }
     }
 }
