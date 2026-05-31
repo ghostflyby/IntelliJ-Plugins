@@ -16,6 +16,10 @@ plugins {
 
 version = "1.0.4"
 
+buildLogic {
+    platformVersion = "2026.1"
+    pluginSinceBuild = "261"
+}
 
 dependencies {
     api(libs.mcp.kotlin.sdk.server)
