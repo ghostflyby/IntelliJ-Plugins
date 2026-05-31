@@ -5,6 +5,7 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -30,9 +31,10 @@ dependencies {
 
     testImplementation(libs.mcp.kotlin.sdk.testing)
     testImplementation(libs.mcp.kotlin.sdk.client)
-    testImplementation(libs.kotlin.stdlib)
     testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.junit.platform.launcher) {
+        excludeKotlinStdlib()
+    }
     intellijPlatform {
         testFramework(TestFrameworkType.JUnit5)
         bundledModule("intellij.platform.vcs.impl")

@@ -11,7 +11,6 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequest
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolRequestParams
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -19,6 +18,7 @@ import java.lang.reflect.Proxy
 import kotlin.reflect.full.declaredMemberExtensionFunctions
 import kotlin.reflect.full.declaredMemberFunctions
 import kotlin.reflect.full.valueParameters
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.nanoseconds
 
 internal class ToolPerformanceTest {

@@ -5,7 +5,7 @@
  */
 
 plugins {
-    id("repo.intellij-module")
+    id("repo.module")
     alias(libs.plugins.kotlin.serialization)
 }
 

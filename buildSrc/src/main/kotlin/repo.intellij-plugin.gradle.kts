@@ -7,6 +7,9 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
+import org.jetbrains.intellij.platform.gradle.models.coroutines
+import org.jetbrains.intellij.platform.gradle.models.kotlinStdlib
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 
@@ -76,21 +79,29 @@ changelog {
     versionPrefix = project.name + "-v"
 }
 
-tasks {
-    prepareSandbox {
-        disabledPlugins.add("org.jetbrains.completion.full.line")
-        exclude { file ->
-            listOf(
-                "kotlin-stdlib",
-                "kotlin-reflect",
-                "kotlinx",
-                "annotations"
-            ).any {
-                file.name.endsWith("jar") &&
-                        file.name.startsWith(it)
+sourceSets.forEach {
+    listOf(
+        it.apiConfigurationName,
+        it.implementationConfigurationName,
+        it.compileOnlyApiConfigurationName,
+        it.compileOnlyConfigurationName,
+        it.runtimeOnlyConfigurationName,
+    ).forEach { config ->
+        configurations.findByName(config)?.apply {
+            (kotlinStdlib + coroutines).forEach { coordinates ->
+                exclude(coordinates.groupId, coordinates.artifactId)
             }
-
+            listOf("kotlin-reflect").forEach { dep ->
+                exclude("org.jetbrains.kotlin", dep)
+            }
         }
+    }
+}
+
+
+tasks {
+    tasks.withType<PrepareSandboxTask> {
+        disabledPlugins.add("org.jetbrains.completion.full.line")
     }
     publishPlugin { dependsOn(patchChangelog) }
 
