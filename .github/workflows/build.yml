@@ -33,6 +33,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
       - name: Determine modules
         id: discover
         shell: pwsh
@@ -126,6 +127,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -211,6 +213,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          submodules: recursive
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -252,6 +255,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          submodules: recursive
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
