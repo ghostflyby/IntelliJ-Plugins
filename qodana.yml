@@ -6,8 +6,11 @@ projectJDK: "21"
 linter: qodana-jvm-community
 withinDocker: "false"
 profile:
-  base:
-    name: qodana.recommended
+  path: .idea/inspectionProfiles/Project_Default.xml
+  inspections:
+    - group: ALL
+      ignore:
+        - "scope#gitignore"
 plugins:
   - id: DevKit
 exclude:
