@@ -6,123 +6,18 @@
 
 package dev.ghostflyby.mcp.filecontent
 
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.tools.FileContentWriteTools
-import dev.ghostflyby.mcp.sdk.project
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeature
 import dev.ghostflyby.mcp.server.WorkspaceMcpFeatureRegistrationContext
-import dev.ghostflyby.mcp.server.route.resources.FileContentQuery
-import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
-import dev.ghostflyby.mcp.server.route.resources.VfsResource
-import io.modelcontextprotocol.kotlin.sdk.types.BlobResourceContents
-import io.modelcontextprotocol.kotlin.sdk.types.ReadResourceResult
-import io.modelcontextprotocol.kotlin.sdk.types.ResourceContents
-import io.modelcontextprotocol.kotlin.sdk.types.TextResourceContents
 
 /**
- * Unified content access feature.
- *
- * Routes:
- * - `vfs/{rawVfsUrl...}` with optional `meta` and `content` query params — project-independent, read-only raw VFS access
- * - `projects/{projectKey}/files/{relativePath...}` with optional `meta` and `content` query params — project-scoped file access via Document API (read+write)
- *
- * Query params:
- * - no query → content only
- * - `?meta` → metadata JSON (all fields)
- * - `?meta=length,name` → metadata with field filter
- * - `?content` → content only
- * - `?meta&content` → both content + metadata
- * - `?exists` → existence check appended alongside other requested data
- * - `?meta&exists` → metadata + existence
- * - `?structure` → file structure overview (declarations)
+ * File content feature: resource reads migrated to REST API at /api/v1/.
+ * File writes remain as MCP tools.
  */
 internal class FileContentFeature : WorkspaceMcpFeature {
     override val featureName: String = "file-content"
 
     override fun WorkspaceMcpFeatureRegistrationContext.register() {
-        read<VfsResource> { resource ->
-            readFileContent(
-                call.request.params.uri,
-                resolveFileByRawUrlOrNull(resource.rawVfsUrl),
-                projectForStructure = { call.project() },
-                projectForGlob = null,
-                resource,
-            )
-        }
-
-        read<ProjectFileResource> { resource ->
-            val project = call.project()
-            readFileContent(
-                call.request.params.uri,
-                resolveFileByRelativePathOrNull(project, resource.relativePath),
-                projectForStructure = { project },
-                projectForGlob = project,
-                resource,
-            )
-        }
-
-        // -- document write tools --
         registerToolClass<FileContentWriteTools>()
-
-
     }
-
-    private suspend fun readFileContent(
-        uri: String,
-        file: VirtualFile?,
-        projectForStructure: suspend () -> Project,
-        projectForGlob: Project?,
-        query: FileContentQuery,
-    ): ReadResourceResult {
-        // Glob is handled independently; it only needs a directory, not content/meta/structure resolution.
-        val hasGlob = query.glob != null
-        val wantsContent =
-            !hasGlob && (query.content != null || (query.meta == null && !query.exists && !query.structure))
-        val needsFile = wantsContent || query.meta != null || query.structure || hasGlob
-
-        if (needsFile && file == null) throw ContentReadException("File not found")
-
-        val items = mutableListOf<ResourceContents>()
-
-        // Content
-        if (wantsContent) {
-            val result = readContentResult(file!!)
-            items += if (result.isBinary) {
-                BlobResourceContents(uri = uri, mimeType = result.mimeType, blob = result.payload)
-            } else {
-                TextResourceContents(uri = uri, mimeType = result.mimeType, text = result.payload)
-            }
-        }
-
-        // Metadata
-        val meta = query.meta
-        if (meta != null) {
-            val metaResult = readMetaResult(file!!, meta)
-            items += TextResourceContents(uri = uri, mimeType = metaResult.mimeType, text = metaResult.payload)
-        }
-
-        // Existence
-        if (query.exists) {
-            items += TextResourceContents(uri = uri, mimeType = "application/json", text = (file != null).toString())
-        }
-
-        // Structure
-        if (query.structure) {
-            items += TextResourceContents(
-                uri = uri,
-                mimeType = "application/json",
-                text = readStructureResult(projectForStructure(), file!!),
-            )
-        }
-
-        // Glob
-        if (hasGlob) {
-            val result = readGlobResult(file!!, query.glob!!, projectForGlob)
-            items += TextResourceContents(uri = uri, mimeType = result.mimeType, text = result.payload)
-        }
-
-        return ReadResourceResult(contents = items)
-    }
-
 }

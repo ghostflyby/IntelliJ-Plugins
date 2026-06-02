@@ -29,6 +29,7 @@ dependencies {
     ksp(libs.kotlinx.schema.ksp)
 
     implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.server.resources)
     implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))
     implementation(project(":modules:workspace-mcp-server"))
