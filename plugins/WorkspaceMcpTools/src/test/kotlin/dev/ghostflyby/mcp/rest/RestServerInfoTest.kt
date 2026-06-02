@@ -1,0 +1,42 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
+package dev.ghostflyby.mcp.rest
+
+import io.ktor.client.request.get
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.resources.Resources
+import io.ktor.server.routing.routing
+import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+internal class RestServerInfoTest {
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun `server info returns instance key and version`() {
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/server/info")
+            assertEquals(HttpStatusCode.OK, response.status)
+
+            val body = response.bodyAsText()
+            val parsed = json.decodeFromString<Map<String, String>>(body)
+            assertTrue(parsed.containsKey("instanceKey"))
+            assertTrue(parsed.containsKey("version"))
+        }
+    }
+}

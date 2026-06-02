@@ -13,11 +13,8 @@ import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.server.route.resources.FileContentQuery
-import dev.ghostflyby.mcp.server.route.resources.ProjectFileResource
-import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
@@ -25,8 +22,7 @@ import kotlin.io.encoding.Base64
 
 /**
  * Compound file response. Query parameters (meta, content, exists, structure, glob)
- * are declared in the @Resource classes [VfsResource] / [ProjectFileResource]
- * via the [FileContentQuery] interface.
+ * mirror the [FileContentQuery] interface used by the @Resource classes in modules/.
  */
 @Serializable
 private data class FileContentResponse(
@@ -37,43 +33,68 @@ private data class FileContentResponse(
     val structure: FileStructure? = null,
 )
 
+/** Manual DTO bridging URL query params to [FileContentQuery]. */
+private data class SimpleFileQuery(
+    override val meta: String?,
+    override val content: String?,
+    override val exists: Boolean,
+    override val structure: Boolean,
+    override val glob: String?,
+) : FileContentQuery
+
+private fun ApplicationCall.fileQuery(): SimpleFileQuery {
+    val params = request.queryParameters
+    val hasContent = params["content"] != null
+    val hasMeta = params["meta"] != null
+    val hasExists = params["exists"] != null
+    val hasStructure = params["structure"] != null
+    val hasGlob = params["glob"] != null
+    return SimpleFileQuery(
+        meta = params["meta"],
+        content = if (hasContent) "" else null,
+        exists = hasExists,
+        structure = hasStructure,
+        glob = params["glob"],
+    )
+}
+
 // -- Route registrations --
 
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    get<VfsResource> { vfs ->
-        val file = resolveFileByRawUrlOrNull(vfs.rawVfsUrl)
-        val project = projectForVfs(vfs, file, resolver)
-        respondFileContent(call, file, vfs, project)
+    get("/vfs/{rawVfsUrl...}") {
+        val rawVfsUrl = call.parameters.getAll("rawVfsUrl")?.joinToString("/") ?: return@get
+        val q = call.fileQuery()
+        val file = resolveFileByRawUrlOrNull(rawVfsUrl)
+        val project = if (file != null && (q.structure || q.glob != null))
+            projectForRawVfsUrl(rawVfsUrl, resolver) else null
+        respondFileContent(call, file, q, project)
     }
 
-    get<ProjectFileResource> { file ->
-        when (val resolved = resolver.resolve(projectKey = file.parent.projectKey)) {
+    get("/projects/{projectKey}/files/{relativePath...}") {
+        val projectKey = call.parameters["projectKey"] ?: return@get
+        val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return@get
+        val q = call.fileQuery()
+        when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
-                val vf = resolveFileByRelativePathOrNull(resolved.project, file.relativePath)
-                respondFileContent(call, vf, file, resolved.project)
+                val vf = resolveFileByRelativePathOrNull(resolved.project, relativePath)
+                respondFileContent(call, vf, q, resolved.project)
             }
-
             is WorkspaceProjectResolution.Unresolved -> {
                 call.respond(HttpStatusCode.NotFound, mapOf(
-                    "error" to resolved.message, "projectKey" to file.parent.projectKey,
+                    "error" to resolved.message, "projectKey" to projectKey,
                 ))
             }
         }
     }
 }
 
-private suspend fun projectForVfs(
-    vfs: VfsResource, file: VirtualFile?, resolver: WorkspaceProjectResolver,
-): Project? {
-    if (file == null) return null
-    val needsProject = vfs.structure || vfs.glob != null
-    if (!needsProject) return null
-    return when (val r = resolver.resolve(rawVfsUrl = vfs.rawVfsUrl)) {
-        is WorkspaceProjectResolution.Resolved -> r.project
-        is WorkspaceProjectResolution.Unresolved -> null
-    }
+private suspend fun projectForRawVfsUrl(
+    rawVfsUrl: String, resolver: WorkspaceProjectResolver,
+): Project? = when (val r = resolver.resolve(rawVfsUrl = rawVfsUrl)) {
+    is WorkspaceProjectResolution.Resolved -> r.project
+    is WorkspaceProjectResolution.Unresolved -> null
 }
 
 // -- Response dispatch --

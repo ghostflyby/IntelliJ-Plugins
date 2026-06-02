@@ -36,6 +36,7 @@ dependencies {
 
     testImplementation(libs.mcp.kotlin.sdk.testing)
     testImplementation(libs.mcp.kotlin.sdk.client)
+    testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher) {
         excludeKotlinStdlib()
