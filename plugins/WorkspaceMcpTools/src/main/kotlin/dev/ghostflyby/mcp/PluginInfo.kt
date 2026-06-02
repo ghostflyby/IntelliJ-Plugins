@@ -6,15 +6,44 @@
 
 package dev.ghostflyby.mcp
 
-import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.ide.plugins.IdeaPluginDescriptor
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.extensions.PluginAware
+import com.intellij.openapi.extensions.PluginDescriptor
 
 private val LOG = Logger.getInstance("dev.ghostflyby.mcp.PluginInfo")
-private val WORKSPACE_MCP_PLUGIN_ID = PluginId.getId("dev.ghostflyby.mcp.workspace")
+
+/**
+ * Application-level service providing the owning plugin's version string.
+ *
+ * Implements [PluginAware] so the IntelliJ container injects the owning plugin's
+ * [PluginDescriptor] at construction time.  In test environments where the
+ * container does not inject the descriptor, [version] falls back to "unknown"
+ * without throwing.
+ */
+@Service(Service.Level.APP)
+internal class PluginVersionService : PluginAware {
+    private var _pluginDescriptor: PluginDescriptor? = null
+
+    override fun setPluginDescriptor(pluginDescriptor: PluginDescriptor) {
+        _pluginDescriptor = pluginDescriptor
+    }
+
+    val version: String
+        get() {
+            val desc = _pluginDescriptor ?: run {
+                LOG.warn("Plugin descriptor not injected; reporting version as unknown.")
+                return "unknown"
+            }
+            val result = (desc as? IdeaPluginDescriptor)?.version
+            if (result == null) {
+                LOG.warn("Plugin descriptor has no version; reporting as unknown.")
+            }
+            return result ?: "unknown"
+        }
+}
 
 internal val pluginVersion: String
-    get() = PluginManagerCore.getPlugin(WORKSPACE_MCP_PLUGIN_ID)?.version
-        ?: "unknown".also {
-            LOG.warn("Plugin descriptor was not found for $WORKSPACE_MCP_PLUGIN_ID; reporting version as unknown.")
-        }
+    get() = service<PluginVersionService>().version
