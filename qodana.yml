@@ -10,3 +10,7 @@ profile:
     name: qodana.recommended
 plugins:
   - id: DevKit
+exclude:
+  - name: All
+    paths:
+      - third-party/
