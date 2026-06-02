@@ -343,7 +343,7 @@ private fun validateTimeout(timeoutMillis: Int) {
 private fun relativizePath(projectBasePath: String?, filePath: String): String? =
     relativizePathOrNull(projectBasePath, filePath)
 
-private suspend fun resolveFileByUrl(project: Project, fileUrl: String): VirtualFile {
+private suspend fun resolveFileByUrl(fileUrl: String): VirtualFile {
     val file = findFileByUrlWithRefresh(fileUrl)
         ?: throw WorkspaceResourceException("File not found for URL: $fileUrl")
     if (file.isDirectory) {
@@ -717,9 +717,10 @@ private fun encodeJson(obj: Any): String {
     }
 }
 
+@Suppress("unused")
 internal class QualityTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_get_file_problems(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityGetFileProblems(
         @Description("VFS URL of the file to clean up.")
         fileUrl: String,
         @Description("Whether to include only errors or include both errors and warnings.")
@@ -729,7 +730,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         validateTimeout(timeoutMillis)
-        val file = resolveFileByUrl(project, fileUrl)
+        val file = resolveFileByUrl(fileUrl)
         val filePath = relativizePath(project.basePath, file.path)
         var timedOut = false
         val problems = withTimeoutOrNull(timeoutMillis.milliseconds) {
@@ -754,7 +755,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityGetScopeProblems(
         scope: ScopeProgramDescriptorDto,
         @Description("Whether to include only errors or include both errors and warnings.")
         errorsOnly: Boolean = true,
@@ -796,7 +797,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityGetScopeProblemsQuick(
         @Description("Preset scope identifier.")
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @Description("Whether to include only errors or include both errors and warnings.")
@@ -812,7 +813,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
-        return quality_get_scope_problems(
+        return qualityGetScopeProblems(
             descriptor,
             errorsOnly,
             maxFileCount,
@@ -824,7 +825,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_reformat_file(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityReformatFile(
         @Description("VFS URL of the file to clean up.")
         fileUrl: String,
         @Description("Timeout in milliseconds.")
@@ -832,7 +833,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         validateTimeout(timeoutMillis)
-        val file = resolveFileByUrl(project, fileUrl)
+        val file = resolveFileByUrl(fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
         val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             runCodeProcessor(ReformatCodeProcessor(psiFile, false))
@@ -856,7 +857,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_optimize_imports_file(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityOptimizeImportsFile(
         @Description("VFS URL of the file to clean up.")
         fileUrl: String,
         @Description("Timeout in milliseconds.")
@@ -864,7 +865,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         validateTimeout(timeoutMillis)
-        val file = resolveFileByUrl(project, fileUrl)
+        val file = resolveFileByUrl(fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
         val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
             runCodeProcessor(OptimizeImportsProcessor(project, psiFile))
@@ -888,7 +889,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_reformat_scope_files(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityReformatScopeFiles(
         scope: ScopeProgramDescriptorDto,
         @Description("Maximum number of files to process.")
         maxFileCount: Int = 200,
@@ -912,7 +913,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_optimize_imports_scope_files(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityOptimizeImportsScopeFiles(
         scope: ScopeProgramDescriptorDto,
         @Description("Maximum number of files to process.")
         maxFileCount: Int = 200,
@@ -936,7 +937,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_by_severity(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityGetScopeProblemsBySeverity(
         scope: ScopeProgramDescriptorDto,
         @Description("Minimum severity threshold.")
         minSeverity: QualitySeverityThreshold = QualitySeverityThreshold.WARNING,
@@ -1010,7 +1011,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_get_scope_problems_by_severity_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityGetScopeProblemsBySeverityQuick(
         @Description("Preset scope identifier.")
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @Description("Minimum severity threshold.")
@@ -1028,7 +1029,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
-        return quality_get_scope_problems_by_severity(
+        return qualityGetScopeProblemsBySeverity(
             descriptor,
             minSeverity,
             maxFileCount,
@@ -1041,7 +1042,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_file_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityFixFileQuick(
         @Description("VFS URL of the file to clean up.")
         fileUrl: String,
         @Description("Timeout in milliseconds.")
@@ -1049,7 +1050,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         validateTimeout(timeoutMillis)
-        val file = resolveFileByUrl(project, fileUrl)
+        val file = resolveFileByUrl(fileUrl)
         var optimizeImportsApplied = false
         var reformatApplied = false
         val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
@@ -1079,7 +1080,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_scope_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityFixScopeQuick(
         scope: ScopeProgramDescriptorDto,
         @Description("Maximum number of files to process.")
         maxFileCount: Int = 200,
@@ -1197,7 +1198,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_fix_scope_quick_by_preset(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityFixScopeQuickByPreset(
         @Description("Preset scope identifier.")
         scopePreset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @Description("Maximum number of files to process.")
@@ -1209,7 +1210,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         val descriptor = buildPresetScopeDescriptor(project, scopePreset, allowUiInteractiveScopes = false)
-        return quality_fix_scope_quick(
+        return qualityFixScopeQuick(
             descriptor,
             maxFileCount,
             timeoutMillis,
@@ -1219,7 +1220,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_list_inspection_profiles(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityListInspectionProfiles(
         @Description("Whether to include application-level profile names.")
         includeApplicationProfiles: Boolean = true,
     ): CallToolResult {
@@ -1247,7 +1248,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_code_cleanup_file(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityCodeCleanupFile(
         @Description("VFS URL of the file to clean up.")
         fileUrl: String,
         @Description("Inspection profile name. Defaults to current active profile.")
@@ -1257,7 +1258,7 @@ internal class QualityTools {
     ): CallToolResult {
         val project = call.project()
         validateTimeout(timeoutMillis)
-        val file = resolveFileByUrl(project, fileUrl)
+        val file = resolveFileByUrl(fileUrl)
         val psiFile = resolveWritablePsiFile(project, file)
         val profile = resolveInspectionProfile(project, inspectionProfileName)
         val timedOut = withTimeoutOrNull(timeoutMillis.milliseconds) {
@@ -1291,7 +1292,7 @@ internal class QualityTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.quality_code_cleanup_scope_files(
+    internal suspend fun McpCallContext<CallToolRequest>.qualityCodeCleanupScopeFiles(
         scope: ScopeProgramDescriptorDto,
         @Description("Inspection profile name. Defaults to current active profile.")
         inspectionProfileName: String? = null,

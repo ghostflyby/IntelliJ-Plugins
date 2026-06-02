@@ -76,7 +76,11 @@ internal fun parseCodexRawHunks(rawLines: List<String>, baseText: CharSequence):
             (s - 1) to (s + c - 1)
         } else if (line.startsWith("@@")) {
             findContextStart(baseLines, rawLines, i + 1) ?: run {
-                while (++i < rawLines.size && !rawLines[i].startsWith("@@") && !rawLines[i].startsWith("***")) {}
+                while (true) {
+                    if (++i >= rawLines.size) break
+                    val l = rawLines[i]
+                    if (l.startsWith("@@") || l.startsWith("***")) break
+                }
                 continue
             }
         } else {
@@ -96,7 +100,8 @@ internal fun parseCodexRawHunks(rawLines: List<String>, baseText: CharSequence):
             }
             i++
         }
-        val oldCount = numberedMatch?.let { it.groupValues[2].takeIf { it.isNotEmpty() }?.toInt() ?: 1 } ?: (oldEnd - oldStart + 1)
+        val oldCount = numberedMatch?.let { it.groupValues[2].takeIf { str -> str.isNotEmpty() }?.toInt() ?: 1 }
+            ?: (oldEnd - oldStart + 1)
         val hunk = PatchHunk(oldStart, oldStart + oldCount, newStart, newStart + newLineCount)
         newLines.forEach(hunk::addLine)
         hunks += hunk

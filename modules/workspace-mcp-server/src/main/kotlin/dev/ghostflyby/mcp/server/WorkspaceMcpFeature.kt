@@ -25,7 +25,7 @@ public class WorkspaceMcpFeatureRegistrationContext(
     public val invalidationSink: WorkspaceMcpInvalidationSink,
     public val callFactory: McpCallFactory = mcpCallFactory(),
 ) {
-    public val trackedTools: MutableSet<String> = mutableSetOf<String>()
+    public val trackedTools: MutableSet<String> = mutableSetOf()
     public val segmentCollector: ResourceSegmentCollector = ResourceSegmentCollector()
 
     /**

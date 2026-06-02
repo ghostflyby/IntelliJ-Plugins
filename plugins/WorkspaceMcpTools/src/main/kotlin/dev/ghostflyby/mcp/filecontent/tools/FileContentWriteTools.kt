@@ -46,7 +46,7 @@ internal class FileContentWriteTools {
             try {
                 val target = resolveProjectPatchPath(project, path)
                 succeeded += when {
-                    textPatch.isNewFile -> createPatchedFile(project, target, textPatch.getSingleHunkPatchText())
+                    textPatch.isNewFile -> createPatchedFile(project, target, textPatch.singleHunkPatchText)
                     textPatch.isDeletedFile -> deletePatchedFile(target, textPatch.hunks)
                     else -> applyPatchToFile(project, target, textPatch.hunks)
                 }

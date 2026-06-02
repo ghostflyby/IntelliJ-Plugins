@@ -267,8 +267,8 @@ public fun buildMethodHandleHandler(plan: ToolInvocationPlan): Handler {
 }
 
 private sealed class ToolArgumentDecodeResult {
-    public data class Decoded(val valueByName: Map<String?, Any?>) : ToolArgumentDecodeResult()
-    public data class Failed(val result: CallToolResult) : ToolArgumentDecodeResult()
+    data class Decoded(val valueByName: Map<String?, Any?>) : ToolArgumentDecodeResult()
+    data class Failed(val result: CallToolResult) : ToolArgumentDecodeResult()
 }
 
 private fun decodeToolArguments(

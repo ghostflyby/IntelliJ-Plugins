@@ -87,7 +87,7 @@ internal data class ScopeSymbolSearchHealthcheckResultDto(
 
 internal class ScopeSymbolSearchTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchSymbols(
         @Description("Query string to search")
         query: String,
         @Description("Scope program descriptor.")
@@ -154,7 +154,7 @@ internal class ScopeSymbolSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchSymbolsQuick(
         @Description("Query string to search")
         query: String,
         @Description("Preset scope for quick symbol search.")
@@ -221,7 +221,7 @@ internal class ScopeSymbolSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_with_stage_progress(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchSymbolsWithStageProgress(
         @Description("Query string to search")
         query: String,
         @Description("Scope program descriptor.")
@@ -284,7 +284,7 @@ internal class ScopeSymbolSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_symbols_healthcheck(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchSymbolsHealthcheck(
         @Description("Scope program descriptor.")
         scope: ScopeProgramDescriptorDto,
         @Description("Whether UI-interactive scopes are allowed.")

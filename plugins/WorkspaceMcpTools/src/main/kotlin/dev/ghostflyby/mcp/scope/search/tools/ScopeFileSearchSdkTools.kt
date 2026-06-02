@@ -39,7 +39,7 @@ private val WHITESPACE_REGEX = Regex("\\s+")
 
 internal class ScopeFileSearchTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_files(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchFiles(
         @Description("Query string")
         query: String = "",
         @Description("Optional explicit ordered keywords.")
@@ -83,7 +83,7 @@ internal class ScopeFileSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_files_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchFilesQuick(
         @Description("Query string")
         query: String = "",
         @Description("Optional explicit ordered keywords.")
@@ -128,7 +128,7 @@ internal class ScopeFileSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_find_files_by_name_keyword(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeFindFilesByNameKeyword(
         @Description("Filename keyword text.")
         nameKeyword: String = "",
         @Description("Optional explicit ordered keywords.")
@@ -166,7 +166,7 @@ internal class ScopeFileSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_find_files_by_path_keyword(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeFindFilesByPathKeyword(
         @Description("Path keyword text.")
         pathKeyword: String = "",
         @Description("Optional explicit ordered keywords.")
@@ -204,7 +204,7 @@ internal class ScopeFileSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.find_in_directory_using_glob(
+    internal suspend fun McpCallContext<CallToolRequest>.findInDirectoryUsingGlob(
         @Description("VFS directory URL to search within.")
         directoryUrl: String,
         @Description("Glob pattern to match against file path.")
@@ -243,7 +243,7 @@ internal class ScopeFileSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_find_source_file_by_class_name(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeFindSourceFileByClassName(
         @Description("Class name, simple or qualified.")
         className: String,
         @Description("Scope program descriptor. Defaults to All Places if omitted.")

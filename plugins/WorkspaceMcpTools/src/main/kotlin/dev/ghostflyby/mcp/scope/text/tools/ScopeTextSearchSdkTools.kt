@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
 
 internal class ScopeTextSearchTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchText(
         query: String,
         mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
         @Description("Whether to search in a case-sensitive manner.")
@@ -113,7 +113,7 @@ internal class ScopeTextSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_quick(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchTextQuick(
         query: String,
         mode: ScopeTextQueryMode = ScopeTextQueryMode.PLAIN,
         @Description("Preset scope identifier.")
@@ -175,7 +175,7 @@ internal class ScopeTextSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_by_plain(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchTextByPlain(
         query: String,
         @Description("Scope program descriptor.")
         scope: ScopeProgramDescriptorDto,
@@ -218,7 +218,7 @@ internal class ScopeTextSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_search_text_by_regex(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeSearchTextByRegex(
         query: String,
         @Description("Scope program descriptor.")
         scope: ScopeProgramDescriptorDto,
@@ -264,7 +264,7 @@ internal class ScopeTextSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_replace_text_preview(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeReplaceTextPreview(
         @Description("Search and scope configuration.")
         search: ScopeTextSearchRequestDto,
         @Description("Replacement text.")
@@ -318,7 +318,7 @@ internal class ScopeTextSearchTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_replace_text_apply(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeReplaceTextApply(
         @Description("Search and scope configuration.")
         search: ScopeTextSearchRequestDto,
         @Description("Replacement text.")

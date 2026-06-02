@@ -41,7 +41,7 @@ import kotlinx.schema.Schema
 
 internal class NavigationTools {
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetSymbolInfo(
         uri: String,
         row: Int,
         column: Int,
@@ -53,7 +53,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_by_offset(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetSymbolInfoByOffset(
         uri: String,
         offset: Int,
     ): CallToolResult {
@@ -76,7 +76,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_auto_position(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetSymbolInfoAutoPosition(
         uri: String,
         row: Int? = null,
         column: Int? = null,
@@ -103,7 +103,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_quick(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetSymbolInfoQuick(
         uri: String,
         row: Int,
         column: Int,
@@ -133,7 +133,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_symbol_info_batch(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetSymbolInfoBatch(
         inputs: List<NavigationSymbolInfoPosition>,
         continueOnError: Boolean = true,
     ): CallToolResult {
@@ -166,7 +166,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_to_reference(
+    suspend fun McpCallContext<CallToolRequest>.navigationToReference(
         uri: String,
         row: Int,
         column: Int,
@@ -182,7 +182,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_to_type_definition(
+    suspend fun McpCallContext<CallToolRequest>.navigationToTypeDefinition(
         uri: String,
         row: Int,
         column: Int,
@@ -200,7 +200,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_to_implementation(
+    suspend fun McpCallContext<CallToolRequest>.navigationToImplementation(
         uri: String,
         row: Int,
         column: Int,
@@ -233,7 +233,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_find_overrides(
+    suspend fun McpCallContext<CallToolRequest>.navigationFindOverrides(
         uri: String,
         row: Int,
         column: Int,
@@ -266,7 +266,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_find_inheritors(
+    suspend fun McpCallContext<CallToolRequest>.navigationFindInheritors(
         uri: String,
         row: Int,
         column: Int,
@@ -300,7 +300,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_find_references(
+    suspend fun McpCallContext<CallToolRequest>.navigationFindReferences(
         uri: String,
         row: Int,
         column: Int,
@@ -320,7 +320,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_get_callers(
+    suspend fun McpCallContext<CallToolRequest>.navigationGetCallers(
         uri: String,
         row: Int,
         column: Int,
@@ -341,7 +341,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_to_reference_batch(
+    suspend fun McpCallContext<CallToolRequest>.navigationToReferenceBatch(
         inputs: List<NavigationSourcePosition>,
         continueOnError: Boolean = true,
     ): CallToolResult {
@@ -378,7 +378,7 @@ internal class NavigationTools {
     }
 
     @Schema
-    suspend fun McpCallContext<CallToolRequest>.navigation_find_references_batch(
+    suspend fun McpCallContext<CallToolRequest>.navigationFindReferencesBatch(
         inputs: List<NavigationSourcePosition>,
         limit: Int = 50,
         continueOnError: Boolean = true,

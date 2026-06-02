@@ -15,7 +15,6 @@ import com.intellij.openapi.project.ProjectManager.getInstance
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerSettings
 import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.io.path.absolutePathString

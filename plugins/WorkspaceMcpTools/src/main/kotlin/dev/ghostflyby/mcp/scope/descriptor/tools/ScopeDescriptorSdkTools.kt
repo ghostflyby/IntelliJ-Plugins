@@ -45,7 +45,7 @@ internal data class ScopeSdkCatalogIntentResultDto(
 
 internal class ScopeDescriptorTools {
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_list_catalog(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeListCatalog(
         @Description("Whether to include scopes that depend on current UI context.")
         includeInteractiveScopes: Boolean = true,
     ): CallToolResult {
@@ -55,7 +55,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_get_default_descriptor(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeGetDefaultDescriptor(
         @Description("Preset scope to use.")
         preset: ScopeQuickPreset = ScopeQuickPreset.PROJECT_FILES,
         @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
@@ -72,7 +72,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_resolve_standard_descriptor(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeResolveStandardDescriptor(
         @Description("Standard scope id, for example 'Project Files' or 'All Places'.")
         standardScopeId: String,
         @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
@@ -95,7 +95,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_catalog_find_by_intent(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeCatalogFindByIntent(
         @Description("Selection intent for reducing catalog candidates.")
         intent: ScopeSdkCatalogIntent,
         @Description("Maximum number of catalog items to return.")
@@ -158,7 +158,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_validate_pattern(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeValidatePattern(
         @Description("Scope pattern text in IntelliJ PackageSet syntax.")
         patternText: String,
     ): CallToolResult {
@@ -168,7 +168,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_resolve_program(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeResolveProgram(
         @Description("Compile request with atoms and RPN tokens.")
         request: ScopeResolveRequestDto,
     ): CallToolResult {
@@ -179,7 +179,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_normalize_program_descriptor(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeNormalizeProgramDescriptor(
         @Description("Existing scope descriptor to normalize.")
         descriptor: ScopeProgramDescriptorDto,
         @Description("Whether UI-interactive scopes are allowed during descriptor resolution.")
@@ -203,7 +203,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_contains_file(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeContainsFile(
         @Description("VFS URL of the file to check.")
         fileUrl: String,
         @Description("Scope program descriptor.")
@@ -218,13 +218,10 @@ internal class ScopeDescriptorTools {
             descriptor = scope,
             allowUiInteractiveScopes = allowUiInteractiveScopes,
         )
-        val file = findFileByUrlWithRefresh(fileUrl)
-        if (file == null) {
-            return CallToolResult(
-                content = listOf(TextContent(text = "File URL '$fileUrl' not found.")),
-                isError = true,
-            )
-        }
+        val file = findFileByUrlWithRefresh(fileUrl) ?: return CallToolResult(
+            content = listOf(TextContent(text = "File URL '$fileUrl' not found.")),
+            isError = true,
+        )
         if (file.isDirectory) {
             return CallToolResult(
                 content = listOf(TextContent(text = "URL '$fileUrl' points to a directory, not a file.")),
@@ -243,7 +240,7 @@ internal class ScopeDescriptorTools {
     }
 
     @Schema
-    internal suspend fun McpCallContext<CallToolRequest>.scope_filter_files(
+    internal suspend fun McpCallContext<CallToolRequest>.scopeFilterFiles(
         @Description("Input file URLs to test against the scope.")
         fileUrls: List<String>,
         @Description("Scope program descriptor.")
