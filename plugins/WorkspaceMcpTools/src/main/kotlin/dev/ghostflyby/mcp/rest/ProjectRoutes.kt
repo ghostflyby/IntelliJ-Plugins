@@ -7,11 +7,11 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.components.service
+import dev.ghostflyby.mcp.filecontent.exposedWorkspaceRoots
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import dev.ghostflyby.mcp.server.route.resources.ProjectResource
-import dev.ghostflyby.mcp.filecontent.exposedWorkspaceRoots
 import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.response.*
@@ -46,7 +46,7 @@ internal fun Route.projectRoutes() {
         call.respond(projects)
     }
 
-    get("/projects/{projectKey}/file-roots") {
+    get("/projects/{projectKey}/roots") {
         val projectKey = call.parameters["projectKey"] ?: return@get
         when (val r = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> call.respond(exposedWorkspaceRoots(r.project).map { it.toDto() })

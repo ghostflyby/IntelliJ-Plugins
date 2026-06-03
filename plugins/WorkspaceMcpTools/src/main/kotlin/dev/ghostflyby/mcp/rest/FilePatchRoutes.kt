@@ -6,7 +6,6 @@ import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.patch.*
@@ -58,15 +57,13 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    patch("/projects/{projectKey}/files/{relativePath...}") {
+    patch("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
         val projectKey = call.parameters["projectKey"] ?: return@patch
-        val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return@patch
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val target = call.fileRouteTarget(project) ?: return@patch
-                val access = target.root?.let { resolveProjectFileAccess(project, it, target.relativePath) }
-                    ?: resolveProjectFileAccess(project, target.relativePath)
+                val target = call.rootRouteTargetOrNotFound(project) ?: return@patch
+                val access = resolveProjectFileAccess(project, target.root, target.relativePath)
                 val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
                 if (access.targetIsBinary) {
                     call.respond(
@@ -189,8 +186,7 @@ private suspend fun resolvePatchSectionAccess(
     routeAccess: ProjectFileAccess,
     fileRelPath: String,
 ): ProjectFileAccess {
-    return routeAccess.root?.let { resolveProjectFileAccess(project, it, fileRelPath) }
-        ?: resolveProjectFileAccess(project, fileRelPath)
+    return resolveProjectFileAccess(project, routeAccess.root, fileRelPath)
 }
 
 private fun joinRelativePath(base: String, child: String): String =

@@ -6,22 +6,28 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.resources.Resources
-import io.ktor.server.testing.testApplication
-import kotlinx.serialization.json.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.resources.*
+import io.ktor.server.testing.*
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import kotlin.io.path.createDirectories
+import kotlin.io.path.writeText
 
 @TestApplication
 internal class RestFileTest {
@@ -30,6 +36,8 @@ internal class RestFileTest {
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
     private val moduleFixture = projectFixture.moduleFixture(name = "file-content-test")
+    private val secondRootPathFixture = tempPathFixture()
+    private val secondModuleFixture = projectFixture.moduleFixture(secondRootPathFixture, addPathToSourceRoot = true)
     private val blueprint = Path.of(
         requireNotNull(javaClass.getResource("/fileContentIntegration")).toURI(),
     )
@@ -40,10 +48,16 @@ internal class RestFileTest {
     )
 
     private val json = Json { ignoreUnknownKeys = true }
+    private fun projectRootUrl(): String =
+        requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(projectPathFixture.get())).url
 
     @BeforeEach
     fun refreshFixtureContent() {
+        secondModuleFixture.get()
+        secondRootPathFixture.get().createDirectories()
+        secondRootPathFixture.get().resolve("second.txt").writeText("second root")
         contentRootFixture.get().virtualFile.refresh(false, true)
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())?.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -57,7 +71,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/plain.txt")
+            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
         }
@@ -73,7 +87,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/plain.txt?meta")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -99,7 +113,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/plain.txt?exists")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?exists")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("true", response.bodyAsText())
         }
@@ -115,7 +129,8 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/missing.txt?exists")
+            val response =
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "missing.txt")}?exists")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("false", response.bodyAsText())
         }
@@ -131,7 +146,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/nonexistent.txt")
+            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "nonexistent.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -146,13 +161,87 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get("/api/v1/projects/$key/files/$rootId/plain.txt")
+            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
 
-            val missing = client.get("/api/v1/projects/$key/files/$rootId/not-found.txt")
+            val missing = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "not-found.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
+        }
+    }
+
+    @Test
+    fun `root URL without relative path reads root itself`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
+            val response = client.get("${rootUrl(key, rootId)}?meta")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("true", parsed["isDirectory"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `old file URL without root id no longer resolves project file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/projects/$key/files/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
+        }
+    }
+
+    @Test
+    fun `unknown root id returns 404`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/projects/$key/files/not-a-root/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
+        }
+    }
+
+    @Test
+    fun `second workspace root file is classified by its containing root`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val secondRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())
+                ?: error("second root missing")
+            val secondRootId = client.workspaceRootIdByUrl(key, json, secondRoot.url)
+            val projectRootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
+            val response = client.get("${rootPathUrl(key, secondRootId, "second.txt")}?meta")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
+
+            val wrongRoot = client.get(rootPathUrl(key, projectRootId, "second.txt"))
+            Assertions.assertEquals(HttpStatusCode.NotFound, wrongRoot.status)
         }
     }
 
@@ -166,7 +255,8 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/plain.txt?meta&content")
+            val response =
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -187,7 +277,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/src?glob=*")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")}?glob=*")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()

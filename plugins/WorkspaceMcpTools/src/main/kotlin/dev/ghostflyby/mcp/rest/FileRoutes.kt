@@ -70,22 +70,32 @@ internal fun Route.fileRoutes() {
         respondFileContent(call, file, q, project)
     }
 
-    get("/projects/{projectKey}/files/{relativePath...}") {
-        val projectKey = call.parameters["projectKey"] ?: return@get
-        val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return@get
-        val q = call.fileQuery()
-        when (val resolved = resolver.resolve(projectKey = projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                val target = call.fileRouteTarget(resolved.project) ?: return@get
-                val access = target.root?.let { resolveProjectFileAccess(resolved.project, it, target.relativePath) }
-                    ?: resolveProjectFileAccess(resolved.project, target.relativePath)
-                respondFileContent(call, access.file, q, resolved.project, access.policy)
-            }
-            is WorkspaceProjectResolution.Unresolved -> {
-                call.respond(HttpStatusCode.NotFound, mapOf(
+    get("/projects/{projectKey}/roots/{rootId}") {
+        respondProjectRootFile(call, resolver)
+    }
+
+    get("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
+        respondProjectRootFile(call, resolver)
+    }
+}
+
+private suspend fun respondProjectRootFile(call: ApplicationCall, resolver: WorkspaceProjectResolver) {
+    val projectKey = call.parameters["projectKey"] ?: return
+    val q = call.fileQuery()
+    when (val resolved = resolver.resolve(projectKey = projectKey)) {
+        is WorkspaceProjectResolution.Resolved -> {
+            val target = call.rootRouteTargetOrNotFound(resolved.project) ?: return
+            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
+            respondFileContent(call, access.file, q, resolved.project, access.policy)
+        }
+
+        is WorkspaceProjectResolution.Unresolved -> {
+            call.respond(
+                HttpStatusCode.NotFound,
+                mapOf(
                     "error" to resolved.message, "projectKey" to projectKey,
-                ))
-            }
+                ),
+            )
         }
     }
 }

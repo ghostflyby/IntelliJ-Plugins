@@ -48,19 +48,10 @@ internal data class ProjectFileAccess(
     val policy: FileAccessPolicy,
     val relativePath: String,
     val targetIsBinary: Boolean,
-    val root: ExposedRoot?,
+    val root: ExposedRoot,
     val parent: VirtualFile? = null,
     val targetName: String? = null,
 )
-
-internal suspend fun resolveProjectFileAccess(
-    project: Project,
-    relativePath: String,
-): ProjectFileAccess {
-    val root = defaultWorkspaceRoot(project)
-        ?: return missingAccess(relativePath, null, FileContentClassification.OUTSIDE_PROJECT)
-    return resolveProjectFileAccess(project, root, relativePath)
-}
 
 internal suspend fun resolveProjectFileAccess(
     project: Project,
@@ -94,7 +85,7 @@ internal suspend fun classifyExistingProjectFile(
     project: Project,
     file: VirtualFile,
 ): FileAccessPolicy {
-    val root = defaultWorkspaceRoot(project) ?: return policyFor(FileContentClassification.OUTSIDE_PROJECT)
+    val root = findContainingExposedRoot(project, file) ?: return policyFor(FileContentClassification.OUTSIDE_PROJECT)
     return readAction { policyFor(classify(project, file, root, null)) }
 }
 
@@ -156,17 +147,13 @@ private fun isUnderRoot(root: ExposedRoot, file: VirtualFile): Boolean =
 
 private fun missingAccess(
     relativePath: String,
-    root: ExposedRoot?,
+    root: ExposedRoot,
     classification: FileContentClassification,
 ): ProjectFileAccess = ProjectFileAccess(
     file = null,
     policy = policyFor(
         classification,
-        writableKindsOverride = if (classification == FileContentClassification.MISSING && root?.writable == false) {
-            emptySet()
-        } else {
-            null
-        },
+        writableKindsOverride = if (classification == FileContentClassification.MISSING && !root.writable) emptySet() else null,
     ),
     relativePath = relativePath,
     targetIsBinary = relativePath.substringAfterLast('/', relativePath).let(::isKnownBinaryFileName),

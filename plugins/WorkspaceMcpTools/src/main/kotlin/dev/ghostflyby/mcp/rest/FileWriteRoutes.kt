@@ -44,7 +44,7 @@ private fun Route.vfsWriteRoutes() {
 // ── Project ─────────────────────────────────────────────────
 
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
-    put("/projects/{projectKey}/files/{relativePath...}") {
+    put("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
         projectExec(call, resolver) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -57,7 +57,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             }
         }
     }
-    post("/projects/{projectKey}/files/{relativePath...}") {
+    post("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
         projectExec(call, resolver) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -70,7 +70,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
-    delete("/projects/{projectKey}/files/{relativePath...}") {
+    delete("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
         projectExec(call, resolver) { access, _, _, force ->
             val file = access.file ?: return@projectExec WriteResult.NotFound
             if (!file.isDirectory && file.fileType.isBinary) {
@@ -96,12 +96,10 @@ private suspend fun projectExec(
     op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
     val projectKey = call.parameters["projectKey"] ?: return
-    val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val target = call.fileRouteTarget(resolved.project) ?: return
-            val access = target.root?.let { resolveProjectFileAccess(resolved.project, it, target.relativePath) }
-                ?: resolveProjectFileAccess(resolved.project, target.relativePath)
+            val target = call.rootRouteTargetOrNotFound(resolved.project) ?: return
+            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val body = call.receiveText()
             val force = call.request.force()
             respondResult(call, op(access, resolved.project, body, force), force)

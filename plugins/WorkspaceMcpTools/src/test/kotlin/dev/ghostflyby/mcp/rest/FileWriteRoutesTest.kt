@@ -1,29 +1,20 @@
 package dev.ghostflyby.mcp.rest
 
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.ktor.client.request.delete
-import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.put
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.resources.Resources
-import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.resources.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.net.URI
 import java.nio.file.Path
 
 @TestApplication
@@ -60,13 +51,13 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.post("/api/v1/projects/$key/files/new.txt") {
+            val response = client.post(client.rootPathUrl(key, json, "new.txt")) {
                 setBody("fresh content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
 
             // Verify file exists via GET
-            val getResp = client.get("/api/v1/projects/$key/files/new.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "new.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, getResp.status)
             Assertions.assertEquals("fresh content", getResp.bodyAsText().trim())
         }
@@ -82,7 +73,7 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.post("/api/v1/projects/$key/files/newdir") {
+            val response = client.post(client.rootPathUrl(key, json, "newdir")) {
                 setBody("")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -100,7 +91,7 @@ internal class FileWriteRoutesTest {
             routing { restApi() }
 
             // plain.txt exists from blueprint
-            val response = client.post("/api/v1/projects/$key/files/plain.txt") {
+            val response = client.post(client.rootPathUrl(key, json, "plain.txt")) {
                 setBody("overwrite attempt")
             }
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
@@ -119,7 +110,7 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.put("/api/v1/projects/$key/files/put-created.txt") {
+            val response = client.put(client.rootPathUrl(key, json, "put-created.txt")) {
                 setBody("put content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -136,12 +127,12 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.put("/api/v1/projects/$key/files/plain.txt") {
+            val response = client.put(client.rootPathUrl(key, json, "plain.txt")) {
                 setBody("replaced content")
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("replaced content", getResp.bodyAsText().trim())
         }
     }
@@ -157,21 +148,21 @@ internal class FileWriteRoutesTest {
             routing { restApi() }
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val put = client.put("/api/v1/projects/$key/files/$rootId/plain.txt") {
+            val put = client.put(rootPathUrl(key, rootId, "plain.txt")) {
                 setBody("root replaced")
             }
             Assertions.assertEquals(HttpStatusCode.OK, put.status)
             Assertions.assertEquals(
                 "root replaced",
-                client.get("/api/v1/projects/$key/files/$rootId/plain.txt").bodyAsText().trim(),
+                client.get(rootPathUrl(key, rootId, "plain.txt")).bodyAsText().trim(),
             )
 
-            val post = client.post("/api/v1/projects/$key/files/$rootId/root-created.txt") {
+            val post = client.post(rootPathUrl(key, rootId, "root-created.txt")) {
                 setBody("root created")
             }
             Assertions.assertEquals(HttpStatusCode.Created, post.status)
 
-            val delete = client.delete("/api/v1/projects/$key/files/$rootId/root-created.txt")
+            val delete = client.delete(rootPathUrl(key, rootId, "root-created.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, delete.status)
         }
     }
@@ -188,11 +179,11 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.delete("/api/v1/projects/$key/files/plain.txt")
+            val response = client.delete(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("true", response.bodyAsText())
 
-            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -207,7 +198,7 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.delete("/api/v1/projects/$key/files/doesnotexist.txt")
+            val response = client.delete(client.rootPathUrl(key, json, "doesnotexist.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -222,7 +213,7 @@ internal class FileWriteRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.delete("/api/v1/projects/$key/files/src")
+            val response = client.delete(client.rootPathUrl(key, json, "src"))
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
         }
     }

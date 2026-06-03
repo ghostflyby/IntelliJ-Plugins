@@ -4,23 +4,17 @@ import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.request.patch
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.resources.Resources
-import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.resources.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.net.URI
 import java.nio.file.Path
 
 @TestApplication
@@ -63,10 +57,10 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
         }
     }
@@ -86,10 +80,10 @@ internal class FilePatchRoutesTest {
 +created via patch
 *** End Patch"""
             // Create the parent dir first, then PATCH
-            val resp = client.patch("/api/v1/projects/$key/files/patch-new.txt") { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "patch-new.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/patch-new.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "patch-new.txt"))
             Assertions.assertEquals("created via patch", getResp.bodyAsText().trim())
         }
     }
@@ -111,10 +105,10 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello root patched
 *** End Patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/$rootId/plain.txt") { setBody(patch) }
+            val resp = client.patch(rootPathUrl(key, rootId, "plain.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/$rootId/plain.txt")
+            val getResp = client.get(rootPathUrl(key, rootId, "plain.txt"))
             Assertions.assertEquals("hello root patched", getResp.bodyAsText().trim())
         }
     }
@@ -135,7 +129,7 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("other-file.txt"))
@@ -161,12 +155,12 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
         }
     }
@@ -187,7 +181,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody(diff)
             }
@@ -205,7 +199,7 @@ internal class FilePatchRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody("*** Begin Patch")
             }
@@ -229,7 +223,7 @@ new file mode 100644
 +++ b/newfile.txt
 @@ -0,0 +1 @@
 +created by git patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/newfile.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "newfile.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
@@ -252,12 +246,12 @@ deleted file mode 100644
 +++ /dev/null
 @@ -1 +0,0 @@
 -hello sample"""
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -279,7 +273,7 @@ deleted file mode 100644
 *** Add File: newfile.txt
 +created under directory
 *** End Patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/src") { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("foo.xml"))
@@ -303,7 +297,7 @@ deleted file mode 100644
  -nothing
 +something
 *** End Patch"""
-            val resp = client.patch("/api/v1/projects/$key/files/src") { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("failed"))
@@ -319,7 +313,7 @@ deleted file mode 100644
             install(Resources)
             routing { restApi() }
 
-            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
                 setBody("this is not a patch")
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)

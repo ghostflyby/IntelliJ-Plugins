@@ -7,18 +7,13 @@ import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
-import io.ktor.client.request.delete
-import io.ktor.client.request.get
-import io.ktor.client.request.patch
-import io.ktor.client.request.put
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.resources.Resources
-import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.resources.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -81,16 +76,16 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("/api/v1/projects/$key/files/ignored.generated?meta")
+            val meta = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?meta")
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
 
-            val content = client.get("/api/v1/projects/$key/files/ignored.generated")
+            val content = client.get(client.rootPathUrl(key, json, "ignored.generated"))
             Assertions.assertEquals(HttpStatusCode.OK, content.status)
             Assertions.assertEquals("ignored", content.bodyAsText().trim())
 
-            val structure = client.get("/api/v1/projects/$key/files/ignored.generated?structure")
+            val structure = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?structure")
             Assertions.assertEquals(HttpStatusCode.OK, structure.status)
         }
     }
@@ -104,12 +99,12 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val denied = client.put("/api/v1/projects/$key/files/ignored.generated") {
+            val denied = client.put(client.rootPathUrl(key, json, "ignored.generated")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.OK, denied.status)
 
-            val readBack = client.get("/api/v1/projects/$key/files/ignored.generated")
+            val readBack = client.get(client.rootPathUrl(key, json, "ignored.generated"))
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())
         }
     }
@@ -123,20 +118,20 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("/api/v1/projects/$key/files/binary.bin?meta")
+            val meta = client.get("${client.rootPathUrl(key, json, "binary.bin")}?meta")
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_BINARY", parsed["classification"]?.jsonPrimitive?.content)
 
-            val put = client.put("/api/v1/projects/$key/files/binary.bin") { setBody("nope") }
+            val put = client.put(client.rootPathUrl(key, json, "binary.bin")) { setBody("nope") }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, put.status)
 
-            val patch = client.patch("/api/v1/projects/$key/files/binary.bin") {
+            val patch = client.patch(client.rootPathUrl(key, json, "binary.bin")) {
                 setBody("*** Begin Patch\n*** End Patch")
             }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, patch.status)
 
-            val delete = client.delete("/api/v1/projects/$key/files/binary.bin")
+            val delete = client.delete(client.rootPathUrl(key, json, "binary.bin"))
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, delete.status)
         }
     }
@@ -150,10 +145,10 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val get = client.get("/api/v1/projects/$key/files/excluded/hidden.txt")
+            val get = client.get(client.rootPathUrl(key, json, "excluded/hidden.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, get.status)
 
-            val put = client.put("/api/v1/projects/$key/files/excluded/hidden.txt") {
+            val put = client.put(client.rootPathUrl(key, json, "excluded/hidden.txt")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, put.status)

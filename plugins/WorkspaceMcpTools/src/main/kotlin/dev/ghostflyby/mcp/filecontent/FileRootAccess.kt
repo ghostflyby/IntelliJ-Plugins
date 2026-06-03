@@ -64,11 +64,17 @@ internal suspend fun exposedWorkspaceRoots(project: Project): List<ExposedRoot> 
         }
 }
 
-internal suspend fun defaultWorkspaceRoot(project: Project): ExposedRoot? =
-    exposedWorkspaceRoots(project).firstOrNull()
-
 internal suspend fun findExposedRoot(project: Project, rootId: String): ExposedRoot? =
     exposedWorkspaceRoots(project).firstOrNull { it.id == rootId }
+
+internal suspend fun findContainingExposedRoot(project: Project, file: VirtualFile): ExposedRoot? {
+    val roots = exposedWorkspaceRoots(project)
+    return readAction {
+        roots.firstOrNull { root ->
+            file == root.base || VfsUtilCore.isAncestor(root.base, file, false)
+        }
+    }
+}
 
 internal suspend fun resolveExposedRootFile(root: ExposedRoot, relativePath: String): VirtualFile? = readAction {
     if (relativePath.isBlank()) return@readAction root.base
