@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mcp.filecontent.tools
+package dev.ghostflyby.mcp.patch
 
 import com.intellij.openapi.diff.impl.patch.PatchHunk
 import com.intellij.openapi.diff.impl.patch.PatchLine

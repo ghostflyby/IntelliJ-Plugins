@@ -8,7 +8,7 @@ import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.filecontent.resolveFileByRelativePathOrNull
-import dev.ghostflyby.mcp.filecontent.tools.*
+import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
