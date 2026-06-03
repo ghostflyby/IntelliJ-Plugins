@@ -7,7 +7,7 @@ import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.filecontent.resolveFileByRelativePathOrNull
+import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
@@ -63,7 +63,23 @@ internal fun Route.filePatchRoutes() {
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val targetFile = resolveFileByRelativePathOrNull(project, relativePath)
+                val access = resolveProjectFileAccess(project, relativePath)
+                val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
+                if (access.targetIsBinary) {
+                    call.respond(
+                        HttpStatusCode.UnsupportedMediaType,
+                        PatchResponse(applied = emptyList(), error = "Binary patches are not supported"),
+                    )
+                    return@patch
+                }
+                if (access.file?.isDirectory != true && !access.policy.canWrite(FileContentKind.PATCH, force)) {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        PatchResponse(applied = emptyList(), error = access.policy.reason),
+                    )
+                    return@patch
+                }
+                val targetFile = access.file
                 val isDir = targetFile?.isDirectory == true
                 val body = call.receiveText()
                 when (val format = detectFormat(body, call.request.contentType())) {
@@ -72,8 +88,8 @@ internal fun Route.filePatchRoutes() {
                         PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
                     )
 
-                    is PatchFormat.Codex -> applyCodex(project, relativePath, isDir, format.sections, call)
-                    is PatchFormat.Git -> applyGit(project, relativePath, isDir, format.patches, call)
+                    is PatchFormat.Codex -> applyCodex(project, relativePath, isDir, force, format.sections, call)
+                    is PatchFormat.Git -> applyGit(project, relativePath, isDir, force, format.patches, call)
                 }
             }
 
@@ -91,6 +107,7 @@ internal fun Route.filePatchRoutes() {
 private suspend fun applyCodex(
     project: com.intellij.openapi.project.Project,
     relativePath: String, isDir: Boolean,
+    force: Boolean,
     sections: List<CodexFileSection>, call: io.ktor.server.application.ApplicationCall,
 ) {
     if (sections.isEmpty()) {
@@ -104,6 +121,8 @@ private suspend fun applyCodex(
             val fileRelPath = if (isDir) "$relativePath/${section.filePath}" else section.filePath
             if (!isDir && section.filePath != relativePath)
                 throw IllegalArgumentException("Section targets '${section.filePath}' but target is '$relativePath'")
+            val access = resolveProjectFileAccess(project, fileRelPath)
+            ensurePatchAllowed(access, force)
             val target = resolveProjectPatchPath(project, fileRelPath)
             when (section.operation) {
                 CodexFileOperation.ADD -> {
@@ -115,7 +134,7 @@ private suspend fun applyCodex(
                 }
 
                 CodexFileOperation.UPDATE -> {
-                    applyFileUpdate(project, target, section.rawLines)
+                    applyFileUpdate(project, target, section.rawLines, access.policy, force)
                 }
             }
             applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
@@ -130,7 +149,7 @@ private suspend fun applyCodex(
 
 private suspend fun applyGit(
     project: com.intellij.openapi.project.Project,
-    relativePath: String, isDir: Boolean,
+    relativePath: String, isDir: Boolean, force: Boolean,
     patches: List<TextFilePatch>, call: io.ktor.server.application.ApplicationCall,
 ) {
     val applied = mutableListOf<Map<String, String>>()
@@ -141,11 +160,13 @@ private suspend fun applyGit(
             val fileRelPath = if (isDir) "$relativePath/$path" else path
             if (!isDir && path != relativePath)
                 throw IllegalArgumentException("Git patch targets '$path' but target is '$relativePath'")
+            val access = resolveProjectFileAccess(project, fileRelPath)
+            ensurePatchAllowed(access, force)
             val target = resolveProjectPatchPath(project, fileRelPath)
             when {
                 p.isNewFile -> createPatchedFile(project, target, p.singleHunkPatchText)
                 p.isDeletedFile -> deletePatchedFile(target, p.hunks)
-                else -> applyFileUpdate(project, target, gitHunksToRawLines(p))
+                else -> applyFileUpdate(project, target, gitHunksToRawLines(p), access.policy, force)
             }
             val op = when {
                 p.isNewFile -> "add"; p.isDeletedFile -> "delete"; else -> "update"
@@ -156,6 +177,15 @@ private suspend fun applyGit(
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+}
+
+private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
+    if (!access.policy.canWrite(FileContentKind.PATCH, force)) {
+        throw IllegalArgumentException(access.policy.reason)
+    }
+    if (access.targetIsBinary) {
+        throw IllegalArgumentException("Binary patches are not supported")
+    }
 }
 
 private fun gitHunksToRawLines(patch: TextFilePatch): List<String> {
@@ -180,20 +210,31 @@ private suspend fun applyFileUpdate(
     project: com.intellij.openapi.project.Project,
     target: ProjectPatchPath,
     rawLines: List<String>,
+    policy: FileAccessPolicy,
+    force: Boolean = false,
 ) {
     edtWriteAction {
         val vf = VirtualFileManager.getInstance().findFileByUrl(target.url)
             ?: error("File not found: ${target.relativePath}")
-        val doc = FileDocumentManager.getInstance().getDocument(vf)
-            ?: error("Binary or no text: ${target.relativePath}")
-        if (!doc.isWritable) error("Not writable: ${target.relativePath}")
-        val hunks = parseCodexRawHunks(rawLines, doc.immutableCharSequence)
+        val fileDocumentManager = FileDocumentManager.getInstance()
+        val doc = if (policy.classification == FileContentClassification.IGNORED_TEXT && force) {
+            fileDocumentManager.getCachedDocument(vf)
+        } else {
+            fileDocumentManager.getDocument(vf)
+        }
+        val baseText = doc?.immutableCharSequence ?: String(vf.contentsToByteArray(), vf.charset)
+        val hunks = parseCodexRawHunks(rawLines, baseText)
             ?: error("No valid hunks")
-        val applied = GenericPatchApplier.apply(doc.immutableCharSequence, hunks)
+        val applied = GenericPatchApplier.apply(baseText, hunks)
             ?: error("Patch does not apply for ${target.relativePath}")
-        doc.setText(applied.patchedText)
-        val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
-        mgr.doPostponedOperationsAndUnblockDocument(doc)
-        mgr.commitDocument(doc)
+        if (doc != null) {
+            if (!doc.isWritable) error("Not writable: ${target.relativePath}")
+            doc.setText(applied.patchedText)
+            val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
+            mgr.doPostponedOperationsAndUnblockDocument(doc)
+            mgr.commitDocument(doc)
+        } else {
+            vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
+        }
     }
 }

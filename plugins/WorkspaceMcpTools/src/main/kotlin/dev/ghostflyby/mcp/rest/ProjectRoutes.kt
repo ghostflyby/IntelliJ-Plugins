@@ -11,11 +11,10 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import dev.ghostflyby.mcp.server.route.resources.ProjectResource
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.resources.get
-import io.ktor.server.response.respond
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.get as routingGet
+import io.ktor.http.*
+import io.ktor.server.resources.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -35,7 +34,7 @@ internal fun Route.projectRoutes() {
     val resolver: WorkspaceProjectResolver = service<WorkspaceProjectResolver>()
 
     // Project list
-    routingGet("/projects") {
+    get("/projects") {
         val projects = resolver.openProjects().map { project ->
             ProjectListEntry(
                 projectKey = workspaceProjectKey(project),
@@ -57,6 +56,7 @@ internal fun Route.projectRoutes() {
                         basePath = r.project.basePath,
                     ),
                 )
+                call.respondFile()
             }
 
             is WorkspaceProjectResolution.Unresolved -> {

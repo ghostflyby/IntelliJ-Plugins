@@ -45,10 +45,8 @@ private data class SimpleFileQuery(
 private fun ApplicationCall.fileQuery(): SimpleFileQuery {
     val params = request.queryParameters
     val hasContent = params["content"] != null
-    val hasMeta = params["meta"] != null
     val hasExists = params["exists"] != null
     val hasStructure = params["structure"] != null
-    val hasGlob = params["glob"] != null
     return SimpleFileQuery(
         meta = params["meta"],
         content = if (hasContent) "" else null,
@@ -78,8 +76,8 @@ internal fun Route.fileRoutes() {
         val q = call.fileQuery()
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
-                val vf = resolveFileByRelativePathOrNull(resolved.project, relativePath)
-                respondFileContent(call, vf, q, resolved.project)
+                val access = resolveProjectFileAccess(resolved.project, relativePath)
+                respondFileContent(call, access.file, q, resolved.project, access.policy)
             }
             is WorkspaceProjectResolution.Unresolved -> {
                 call.respond(HttpStatusCode.NotFound, mapOf(
@@ -100,7 +98,11 @@ private suspend fun projectForRawVfsUrl(
 // -- Response dispatch --
 
 private suspend fun respondFileContent(
-    call: ApplicationCall, file: VirtualFile?, query: FileContentQuery, project: Project?,
+    call: ApplicationCall,
+    file: VirtualFile?,
+    query: FileContentQuery,
+    project: Project?,
+    policy: FileAccessPolicy? = null,
 ) {
     val hasGlob = query.glob != null
     val wantsContent = !hasGlob && (query.content != null || (query.meta == null && !query.exists && !query.structure))
@@ -118,19 +120,49 @@ private suspend fun respondFileContent(
         call.respond(HttpStatusCode.NotFound, mapOf("error" to "File not found"))
         return
     }
+    val effectivePolicy = policy ?: file?.let { f ->
+        project?.let { p -> classifyExistingProjectFile(p, f) } ?: fileMetaPolicyFallback(f)
+    } ?: FileAccessPolicy(
+        classification = FileContentClassification.MISSING,
+        readableKinds = emptySet(),
+        writableKinds = emptySet(),
+        requiresForceForWrite = false,
+        reason = "File not found",
+    )
+    if (needsFile && effectivePolicy.classification in setOf(
+            FileContentClassification.EXCLUDED,
+            FileContentClassification.OUTSIDE_PROJECT,
+        )
+    ) {
+        call.respond(HttpStatusCode.NotFound, mapOf("error" to "File not found"))
+        return
+    }
+    if (hasGlob && !effectivePolicy.canRead(FileContentKind.GLOB)) {
+        call.respond(HttpStatusCode.Forbidden, mapOf("error" to effectivePolicy.reason))
+        return
+    }
+    if (wantsStructure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
+        call.respond(HttpStatusCode.Forbidden, mapOf("error" to effectivePolicy.reason))
+        return
+    }
+    if (wantsContent && !effectivePolicy.canRead(FileContentKind.CONTENT) && !effectivePolicy.canRead(FileContentKind.BYTES)
+    ) {
+        call.respond(HttpStatusCode.Forbidden, mapOf("error" to effectivePolicy.reason))
+        return
+    }
 
     // Single-responsibility paths
-    if (hasGlob && !wantsMeta && !wantsContent && !wantsExists && !wantsStructure)
+    if (hasGlob && !wantsMeta && !wantsExists && !wantsStructure)
         return globOnly(call, file!!, query.glob!!, project)
     if (wantsStructure && !wantsMeta && !wantsContent && !wantsExists)
         return structureOnly(call, file!!, project)
     if (wantsMeta && !wantsContent && !wantsExists)
-        return metaOnly(call, file!!)
+        return metaOnly(call, file!!, effectivePolicy)
     if (!wantsMeta && !wantsExists && !wantsStructure)
         return contentOnly(call, file!!)
 
     // Compound: at least two of meta/content/exists/structure/glob
-    compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project)
+    compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy)
 }
 
 // -- Single response modes --
@@ -144,8 +176,8 @@ private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile) {
     }
 }
 
-private suspend fun metaOnly(call: ApplicationCall, file: VirtualFile) {
-    call.respondText(readMetaResult(file, "").payload, ContentType.Application.Json)
+private suspend fun metaOnly(call: ApplicationCall, file: VirtualFile, policy: FileAccessPolicy) {
+    call.respondText(readMetaResult(file, "", policy).payload, ContentType.Application.Json)
 }
 
 private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, project: Project?) {
@@ -163,8 +195,10 @@ private suspend fun compoundResult(
     call: ApplicationCall, file: VirtualFile,
     wantsMeta: Boolean, wantsContent: Boolean, wantsExists: Boolean, wantsStructure: Boolean,
     project: Project?,
+    policy: FileAccessPolicy?,
 ) {
-    val meta = if (wantsMeta) decodeFromJson<FileMeta>(readMetaResult(file, "").payload) else null
+    val effectivePolicy = policy ?: fileMetaPolicyFallback(file)
+    val meta = if (wantsMeta) decodeFromJson<FileMeta>(readMetaResult(file, "", effectivePolicy).payload) else null
     val content = if (wantsContent) readContentResult(file) else null
     val structure = if (wantsStructure && project != null) decodeFromJson(readStructureResult(project, file)) else null
     call.respond(

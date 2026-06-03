@@ -16,13 +16,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.resources.Resources
-import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.net.URI
 import java.nio.file.Path
 
 @TestApplication
@@ -81,6 +79,13 @@ internal class RestFileTest {
             val body = response.bodyAsText()
             val parsed = json.parseToJsonElement(body).jsonObject
             Assertions.assertEquals("plain.txt", parsed["name"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
+            Assertions.assertTrue(
+                parsed["readableKinds"]?.jsonArray?.any { it.jsonPrimitive.content == "structure" } == true,
+            )
+            Assertions.assertTrue(
+                parsed["writableKinds"]?.jsonArray?.any { it.jsonPrimitive.content == "patch" } == true,
+            )
         }
     }
 

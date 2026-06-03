@@ -18,7 +18,6 @@ import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeRegistry
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
@@ -49,16 +48,6 @@ internal data class ContentResult(
 )
 
 // -- resolve VirtualFile --
-
-internal suspend fun resolveFileByRelativePathOrNull(
-    project: Project,
-    relativePath: String,
-): VirtualFile? {
-    validateProjectRelativePath(relativePath)
-    val basePath = project.basePath ?: return null
-    val fullPath = "$basePath/$relativePath"
-    return readAction { LocalFileSystem.getInstance().findFileByPath(fullPath) }
-}
 
 internal suspend fun resolveFileByRawUrlOrNull(rawVfsUrl: String): VirtualFile? {
     val vfsManager = service<VirtualFileManager>()
@@ -150,9 +139,18 @@ internal data class FileMeta(
     val lineCount: Int? = null,
     val modificationStamp: Long? = null,
     val dirty: Boolean? = null,
+    val classification: String = FileContentClassification.DEPENDENCY_OR_SDK.name,
+    val readableKinds: List<String> = emptyList(),
+    val writableKinds: List<String> = emptyList(),
+    val requiresForceForWrite: Boolean = false,
+    val reason: String = "",
 )
 
-internal suspend fun readMetaResult(file: VirtualFile, fields: String /* ""=all; "a,b"=subset */): ContentResult {
+internal suspend fun readMetaResult(
+    file: VirtualFile,
+    fields: String, /* ""=all; "a,b"=subset */
+    policy: FileAccessPolicy = fileMetaPolicyFallback(file),
+): ContentResult {
     val meta = readAction {
         val doc = getOrCreateDocument(file)
         FileMeta(
@@ -170,6 +168,11 @@ internal suspend fun readMetaResult(file: VirtualFile, fields: String /* ""=all;
             lineCount = doc?.lineCount,
             modificationStamp = doc?.modificationStamp,
             dirty = doc?.let { FileDocumentManager.getInstance().isDocumentUnsaved(it) },
+            classification = policy.classification.name,
+            readableKinds = policy.readableKindNames(),
+            writableKinds = policy.writableKindNames(),
+            requiresForceForWrite = policy.requiresForceForWrite,
+            reason = policy.reason,
         )
     }
     val json = filterAndSerialize(meta, fields)

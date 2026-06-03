@@ -1,8 +1,8 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -10,18 +10,16 @@ import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
-import dev.ghostflyby.mcp.filecontent.resolveFileByRawUrlOrNull
-import dev.ghostflyby.mcp.filecontent.resolveFileByRelativePathOrNull
+import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import io.ktor.http.ContentType
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
-import io.ktor.server.request.receiveText
-import io.ktor.server.response.respond
-import io.ktor.server.response.respondText
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import java.nio.file.Path
+
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
     vfsWriteRoutes()
@@ -51,26 +49,39 @@ private fun Route.vfsWriteRoutes() {
 
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
     put("/projects/{projectKey}/files/{relativePath...}") {
-        projectExec(call, resolver) { file, project, relPath, body ->
+        projectExec(call, resolver) { access, project, body, force ->
+            if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
+            writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
+            val file = access.file
             if (file != null) {
-                setDocText(file, project, body); WriteResult.Replaced(file)
+                setTextWithPolicy(file, project, body, access.policy, force)
+                WriteResult.Replaced(file)
             } else {
-                WriteResult.Created(createAndWriteFile(project, relPath, body))
+                WriteResult.Created(createAndWriteFile(project, access.relativePath, body))
             }
         }
     }
     post("/projects/{projectKey}/files/{relativePath...}") {
-        projectExec(call, resolver) { file, project, relPath, body ->
+        projectExec(call, resolver) { access, project, body, force ->
+            if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
+            writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
+            val file = access.file
             if (file != null) return@projectExec WriteResult.Conflict
             if (body.isEmpty()) {
-                val dir = createDir(project, relPath) ?: return@projectExec WriteResult.Conflict
+                val dir = createDir(project, access.relativePath) ?: return@projectExec WriteResult.Conflict
                 return@projectExec WriteResult.DirCreated(dir)
             }
-            WriteResult.Created(createAndWriteFile(project, relPath, body))
+            WriteResult.Created(createAndWriteFile(project, access.relativePath, body))
         }
     }
     delete("/projects/{projectKey}/files/{relativePath...}") {
-        projectExec(call, resolver) { file, _, _, _ -> deleteFileResult(file) }
+        projectExec(call, resolver) { access, _, _, force ->
+            if (access.file?.isDirectory != true && access.file?.fileType?.isBinary == true) {
+                return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
+            }
+            writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
+            deleteFileResult(access.file)
+        }
     }
 }
 
@@ -85,22 +96,26 @@ private suspend fun vfsExec(call: ApplicationCall, op: suspend (VirtualFile?, By
 
 private suspend fun projectExec(
     call: ApplicationCall, resolver: WorkspaceProjectResolver,
-    op: suspend (VirtualFile?, Project, String, String) -> WriteResult,
+    op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
     val projectKey = call.parameters["projectKey"] ?: return
     val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val file = resolveFileByRelativePathOrNull(resolved.project, relativePath)
+            val access = resolveProjectFileAccess(resolved.project, relativePath)
             val body = call.receiveText()
-            respondResult(call, op(file, resolved.project, relativePath, body))
+            val force = call.request.force()
+            respondResult(call, op(access, resolved.project, body, force), force)
         }
         is WorkspaceProjectResolution.Unresolved ->
             call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
     }
 }
 
-private suspend fun respondResult(call: ApplicationCall, result: WriteResult) {
+private fun ApplicationRequest.force(): Boolean =
+    queryParameters["force"]?.toBooleanStrictOrNull() == true
+
+private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {
         is WriteResult.Created -> call.respond(HttpStatusCode.Created, mapOf("uri" to result.file.url))
         is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, mapOf("uri" to result.dir.url))
@@ -109,6 +124,12 @@ private suspend fun respondResult(call: ApplicationCall, result: WriteResult) {
         is WriteResult.Conflict -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "Resource already exists"))
         is WriteResult.NotFound -> call.respond(HttpStatusCode.NotFound, mapOf("error" to "Resource not found"))
         is WriteResult.NotEmpty -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "Directory not empty"))
+        is WriteResult.Forbidden -> call.respond(
+            HttpStatusCode.Forbidden,
+            mapOf("error" to result.reason, "force" to "$force"),
+        )
+
+        is WriteResult.Unsupported -> call.respond(HttpStatusCode.UnsupportedMediaType, mapOf("error" to result.reason))
     }
 }
 
@@ -120,9 +141,28 @@ private sealed interface WriteResult {
     data object Conflict : WriteResult
     data object NotFound : WriteResult
     data object NotEmpty : WriteResult
+    data class Forbidden(val reason: String) : WriteResult
+    data class Unsupported(val reason: String) : WriteResult
 }
 
 // ── Implementations ─────────────────────────────────────────
+
+private fun writeGate(
+    access: ProjectFileAccess,
+    kind: FileContentKind,
+    force: Boolean,
+): WriteResult? {
+    if (access.policy.classification in setOf(
+            FileContentClassification.EXCLUDED,
+            FileContentClassification.OUTSIDE_PROJECT,
+            FileContentClassification.DEPENDENCY_OR_SDK,
+        )
+    ) {
+        return WriteResult.Forbidden(access.policy.reason)
+    }
+    if (!access.policy.canWrite(kind, force)) return WriteResult.Forbidden(access.policy.reason)
+    return null
+}
 
 private suspend fun createAndWriteFile(project: Project, relPath: String, text: String): VirtualFile {
     val basePath = project.basePath ?: error("no basePath")
@@ -162,9 +202,20 @@ private suspend fun deleteFileResult(file: VirtualFile?): WriteResult {
     return WriteResult.Deleted
 }
 
-private suspend fun setDocText(file: VirtualFile, project: Project, text: String) {
+private suspend fun setTextWithPolicy(
+    file: VirtualFile,
+    project: Project,
+    text: String,
+    policy: FileAccessPolicy,
+    force: Boolean,
+) {
     edtWriteAction {
-        val doc = FileDocumentManager.getInstance().getDocument(file)
+        val fileDocumentManager = FileDocumentManager.getInstance()
+        val doc = if (policy.classification == FileContentClassification.IGNORED_TEXT && force) {
+            fileDocumentManager.getCachedDocument(file)
+        } else {
+            fileDocumentManager.getDocument(file)
+        }
         if (doc != null) {
             doc.setText(text)
             val mgr = PsiDocumentManager.getInstance(project)
