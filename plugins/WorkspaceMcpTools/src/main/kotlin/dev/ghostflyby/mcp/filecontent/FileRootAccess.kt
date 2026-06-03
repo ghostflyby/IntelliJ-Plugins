@@ -1,6 +1,7 @@
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.project.BaseProjectDirectories.Companion.getBaseDirectories
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VfsUtilCore
@@ -47,7 +48,7 @@ internal data class ExposedRoot(
 internal suspend fun exposedWorkspaceRoots(project: Project): List<ExposedRoot> = readAction {
     val contentRoots = ProjectRootManager.getInstance(project).contentRoots.toList()
     val roots = contentRoots.ifEmpty {
-        project.baseDir?.let { listOf(it) } ?: emptyList()
+        project.getBaseDirectories()
     }
     roots
         .distinctBy { it.url }
