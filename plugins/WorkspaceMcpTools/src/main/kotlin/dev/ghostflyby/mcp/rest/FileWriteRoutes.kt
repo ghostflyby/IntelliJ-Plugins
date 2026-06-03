@@ -2,13 +2,10 @@ package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
@@ -18,7 +15,6 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.nio.file.Path
 
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -57,7 +53,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
                 setTextWithPolicy(file, project, body, access.policy, force)
                 WriteResult.Replaced(file)
             } else {
-                WriteResult.Created(createAndWriteFile(project, access.relativePath, body))
+                WriteResult.Created(createAndWriteFile(project, access, body))
             }
         }
     }
@@ -68,19 +64,20 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             val file = access.file
             if (file != null) return@projectExec WriteResult.Conflict
             if (body.isEmpty()) {
-                val dir = createDir(project, access.relativePath) ?: return@projectExec WriteResult.Conflict
+                val dir = createDir(access) ?: return@projectExec WriteResult.Conflict
                 return@projectExec WriteResult.DirCreated(dir)
             }
-            WriteResult.Created(createAndWriteFile(project, access.relativePath, body))
+            WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
     delete("/projects/{projectKey}/files/{relativePath...}") {
         projectExec(call, resolver) { access, _, _, force ->
-            if (access.file?.isDirectory != true && access.file?.fileType?.isBinary == true) {
+            val file = access.file ?: return@projectExec WriteResult.NotFound
+            if (!file.isDirectory && file.fileType.isBinary) {
                 return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
             }
             writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
-            deleteFileResult(access.file)
+            deleteFileResult(file)
         }
     }
 }
@@ -102,7 +99,9 @@ private suspend fun projectExec(
     val relativePath = call.parameters.getAll("relativePath")?.joinToString("/") ?: return
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val access = resolveProjectFileAccess(resolved.project, relativePath)
+            val target = call.fileRouteTarget(resolved.project) ?: return
+            val access = target.root?.let { resolveProjectFileAccess(resolved.project, it, target.relativePath) }
+                ?: resolveProjectFileAccess(resolved.project, target.relativePath)
             val body = call.receiveText()
             val force = call.request.force()
             respondResult(call, op(access, resolved.project, body, force), force)
@@ -164,17 +163,12 @@ private fun writeGate(
     return null
 }
 
-private suspend fun createAndWriteFile(project: Project, relPath: String, text: String): VirtualFile {
-    val basePath = project.basePath ?: error("no basePath")
-    val nioPath = Path.of(basePath, relPath).normalize()
-    if (!nioPath.startsWith(Path.of(basePath))) error("path traversal: $relPath")
-    val existing = readAction { service<VirtualFileManager>().findFileByUrl("file://${nioPath}") }
-    if (existing != null) throw IllegalStateException("File already exists: $relPath")
+private suspend fun createAndWriteFile(project: Project, access: ProjectFileAccess, text: String): VirtualFile {
+    if (access.file != null) throw IllegalStateException("File already exists: ${access.relativePath}")
+    val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
+    val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
     val vf = edtWriteAction {
-        VfsUtil.createDirectories(nioPath.parent.toString())
-        val parent = service<VirtualFileManager>().findFileByUrl("file://${nioPath.parent}")
-            ?: error("parent dir not found: ${nioPath.parent}")
-        val vf = parent.createChildData(Any(), nioPath.fileName.toString())
+        val vf = parent.createChildData(Any(), targetName)
         val doc = FileDocumentManager.getInstance().getDocument(vf)
         if (doc != null) {
             doc.setText(text)
@@ -189,10 +183,11 @@ private suspend fun createAndWriteFile(project: Project, relPath: String, text: 
     return vf
 }
 
-private suspend fun createDir(project: Project, relPath: String): VirtualFile? {
-    val basePath = project.basePath ?: return null
-    val nioPath = Path.of(basePath, relPath).normalize()
-    return backgroundWriteAction { VfsUtil.createDirectories(nioPath.toString()) }
+private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
+    if (access.file != null) return null
+    val parent = access.parent ?: return null
+    val targetName = access.targetName ?: return null
+    return backgroundWriteAction { parent.createChildDirectory(Any(), targetName) }
 }
 
 private suspend fun deleteFileResult(file: VirtualFile?): WriteResult {

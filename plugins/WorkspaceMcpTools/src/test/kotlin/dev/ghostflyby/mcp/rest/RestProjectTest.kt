@@ -73,6 +73,29 @@ internal class RestProjectTest {
     }
 
     @Test
+    fun `project file roots lists workspace roots without exposing absolute id`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/projects/$key/file-roots")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val root = json.parseToJsonElement(response.bodyAsText()).jsonArray.first().jsonObject
+            val id = root["id"]?.jsonPrimitive?.content ?: ""
+            Assertions.assertTrue(id.startsWith("workspace"))
+            Assertions.assertFalse(id.contains("/"))
+            Assertions.assertEquals("workspace", root["kind"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("true", root["readable"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("true", root["writable"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
     fun `unknown project key falls back to single open project`() {
         project
         testApplication {

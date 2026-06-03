@@ -73,7 +73,7 @@ internal class FileAccessPolicyRoutesTest {
     }
 
     @Test
-    fun `ignored text is readable but structure is forbidden`() {
+    fun `gitignore file alone does not classify file as ignored`() {
         val key = workspaceProjectKey(project)
 
         testApplication {
@@ -84,19 +84,19 @@ internal class FileAccessPolicyRoutesTest {
             val meta = client.get("/api/v1/projects/$key/files/ignored.generated?meta")
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
-            Assertions.assertEquals("IGNORED_TEXT", parsed["classification"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
 
             val content = client.get("/api/v1/projects/$key/files/ignored.generated")
             Assertions.assertEquals(HttpStatusCode.OK, content.status)
             Assertions.assertEquals("ignored", content.bodyAsText().trim())
 
             val structure = client.get("/api/v1/projects/$key/files/ignored.generated?structure")
-            Assertions.assertEquals(HttpStatusCode.Forbidden, structure.status)
+            Assertions.assertEquals(HttpStatusCode.OK, structure.status)
         }
     }
 
     @Test
-    fun `ignored text writes require force`() {
+    fun `gitignore file alone does not require force for writes`() {
         val key = workspaceProjectKey(project)
 
         testApplication {
@@ -107,12 +107,7 @@ internal class FileAccessPolicyRoutesTest {
             val denied = client.put("/api/v1/projects/$key/files/ignored.generated") {
                 setBody("changed")
             }
-            Assertions.assertEquals(HttpStatusCode.Forbidden, denied.status)
-
-            val forced = client.put("/api/v1/projects/$key/files/ignored.generated?force=true") {
-                setBody("changed")
-            }
-            Assertions.assertEquals(HttpStatusCode.OK, forced.status)
+            Assertions.assertEquals(HttpStatusCode.OK, denied.status)
 
             val readBack = client.get("/api/v1/projects/$key/files/ignored.generated")
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())

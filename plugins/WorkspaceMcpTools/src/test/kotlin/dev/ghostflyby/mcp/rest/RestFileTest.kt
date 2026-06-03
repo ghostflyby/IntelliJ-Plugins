@@ -137,6 +137,26 @@ internal class RestFileTest {
     }
 
     @Test
+    fun `root URL reads workspace file and missing root file returns 404`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val response = client.get("/api/v1/projects/$key/files/$rootId/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals("hello sample", response.bodyAsText().trim())
+
+            val missing = client.get("/api/v1/projects/$key/files/$rootId/not-found.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
+        }
+    }
+
+    @Test
     fun `file meta and content compound response`() {
         project
         val key = workspaceProjectKey(project)

@@ -15,6 +15,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.resources.Resources
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -36,6 +37,7 @@ internal class FilePatchRoutesTest {
         pathFixture = projectFixture.pathInProjectFixture(Path.of("")),
         blueprintResourcePath = blueprint,
     )
+    private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
     fun refresh() {
@@ -89,6 +91,31 @@ internal class FilePatchRoutesTest {
 
             val getResp = client.get("/api/v1/projects/$key/files/patch-new.txt")
             Assertions.assertEquals("created via patch", getResp.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `root URL PATCH updates an existing workspace file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val patch = """*** Begin Patch
+*** Update File: plain.txt
+@@
+-hello sample
++hello root patched
+*** End Patch"""
+            val resp = client.patch("/api/v1/projects/$key/files/$rootId/plain.txt") { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val getResp = client.get("/api/v1/projects/$key/files/$rootId/plain.txt")
+            Assertions.assertEquals("hello root patched", getResp.bodyAsText().trim())
         }
     }
 

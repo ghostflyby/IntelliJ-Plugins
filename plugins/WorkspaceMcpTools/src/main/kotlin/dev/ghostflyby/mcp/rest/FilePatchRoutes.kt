@@ -6,6 +6,7 @@ import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.patch.*
@@ -63,7 +64,9 @@ internal fun Route.filePatchRoutes() {
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val access = resolveProjectFileAccess(project, relativePath)
+                val target = call.fileRouteTarget(project) ?: return@patch
+                val access = target.root?.let { resolveProjectFileAccess(project, it, target.relativePath) }
+                    ?: resolveProjectFileAccess(project, target.relativePath)
                 val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
                 if (access.targetIsBinary) {
                     call.respond(
@@ -88,8 +91,8 @@ internal fun Route.filePatchRoutes() {
                         PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
                     )
 
-                    is PatchFormat.Codex -> applyCodex(project, relativePath, isDir, force, format.sections, call)
-                    is PatchFormat.Git -> applyGit(project, relativePath, isDir, force, format.patches, call)
+                    is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.sections, call)
+                    is PatchFormat.Git -> applyGit(project, access, isDir, force, format.patches, call)
                 }
             }
 
@@ -106,7 +109,8 @@ internal fun Route.filePatchRoutes() {
 
 private suspend fun applyCodex(
     project: com.intellij.openapi.project.Project,
-    relativePath: String, isDir: Boolean,
+    routeAccess: ProjectFileAccess,
+    isDir: Boolean,
     force: Boolean,
     sections: List<CodexFileSection>, call: io.ktor.server.application.ApplicationCall,
 ) {
@@ -118,12 +122,12 @@ private suspend fun applyCodex(
     val failed = mutableListOf<String>()
     for (section in sections) {
         try {
-            val fileRelPath = if (isDir) "$relativePath/${section.filePath}" else section.filePath
-            if (!isDir && section.filePath != relativePath)
-                throw IllegalArgumentException("Section targets '${section.filePath}' but target is '$relativePath'")
-            val access = resolveProjectFileAccess(project, fileRelPath)
+            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else section.filePath
+            if (!isDir && section.filePath != routeAccess.relativePath)
+                throw IllegalArgumentException("Section targets '${section.filePath}' but target is '${routeAccess.relativePath}'")
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
-            val target = resolveProjectPatchPath(project, fileRelPath)
+            val target = patchPathFor(access)
             when (section.operation) {
                 CodexFileOperation.ADD -> {
                     createPatchedFile(project, target, parseCodexAddContent(section.rawLines))
@@ -149,7 +153,8 @@ private suspend fun applyCodex(
 
 private suspend fun applyGit(
     project: com.intellij.openapi.project.Project,
-    relativePath: String, isDir: Boolean, force: Boolean,
+    routeAccess: ProjectFileAccess,
+    isDir: Boolean, force: Boolean,
     patches: List<TextFilePatch>, call: io.ktor.server.application.ApplicationCall,
 ) {
     val applied = mutableListOf<Map<String, String>>()
@@ -157,12 +162,12 @@ private suspend fun applyGit(
     for (p in patches) {
         val path = p.afterName ?: p.beforeName ?: continue
         try {
-            val fileRelPath = if (isDir) "$relativePath/$path" else path
-            if (!isDir && path != relativePath)
-                throw IllegalArgumentException("Git patch targets '$path' but target is '$relativePath'")
-            val access = resolveProjectFileAccess(project, fileRelPath)
+            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, path) else path
+            if (!isDir && path != routeAccess.relativePath)
+                throw IllegalArgumentException("Git patch targets '$path' but target is '${routeAccess.relativePath}'")
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
-            val target = resolveProjectPatchPath(project, fileRelPath)
+            val target = patchPathFor(access)
             when {
                 p.isNewFile -> createPatchedFile(project, target, p.singleHunkPatchText)
                 p.isDeletedFile -> deletePatchedFile(target, p.hunks)
@@ -179,6 +184,18 @@ private suspend fun applyGit(
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
 }
 
+private suspend fun resolvePatchSectionAccess(
+    project: com.intellij.openapi.project.Project,
+    routeAccess: ProjectFileAccess,
+    fileRelPath: String,
+): ProjectFileAccess {
+    return routeAccess.root?.let { resolveProjectFileAccess(project, it, fileRelPath) }
+        ?: resolveProjectFileAccess(project, fileRelPath)
+}
+
+private fun joinRelativePath(base: String, child: String): String =
+    if (base.isBlank()) child else "$base/$child"
+
 private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
     if (!access.policy.canWrite(FileContentKind.PATCH, force)) {
         throw IllegalArgumentException(access.policy.reason)
@@ -186,6 +203,20 @@ private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
     if (access.targetIsBinary) {
         throw IllegalArgumentException("Binary patches are not supported")
     }
+}
+
+private fun patchPathFor(access: ProjectFileAccess): ProjectPatchPath {
+    val file = access.file
+    if (file != null) {
+        return ProjectPatchPath(relativePath = access.relativePath, nioPath = java.nio.file.Path.of(file.path), url = file.url)
+    }
+    val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
+    val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
+    return ProjectPatchPath(
+        relativePath = access.relativePath,
+        nioPath = java.nio.file.Path.of(parent.path).resolve(targetName),
+        url = "${parent.url}/$targetName",
+    )
 }
 
 private fun gitHunksToRawLines(patch: TextFilePatch): List<String> {

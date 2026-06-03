@@ -1,16 +1,12 @@
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.fileTypes.FileTypeManager
+import com.intellij.openapi.fileTypes.FileTypeRegistry
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
-import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VFileProperty
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
-import java.nio.file.Path
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.readLines
-import kotlin.io.path.absolutePathString
-import kotlin.io.path.exists
 
 internal enum class FileContentClassification {
     WORKSPACE_TEXT,
@@ -51,34 +47,45 @@ internal data class ProjectFileAccess(
     val file: VirtualFile?,
     val policy: FileAccessPolicy,
     val relativePath: String,
-    val targetPath: Path?,
     val targetIsBinary: Boolean,
+    val root: ExposedRoot?,
+    val parent: VirtualFile? = null,
+    val targetName: String? = null,
 )
 
 internal suspend fun resolveProjectFileAccess(
     project: Project,
     relativePath: String,
 ): ProjectFileAccess {
-    val normalized = normalizeProjectRelativePath(project, relativePath)
-        ?: return ProjectFileAccess(
-            file = null,
-            policy = policyFor(FileContentClassification.OUTSIDE_PROJECT),
-            relativePath = relativePath,
-            targetPath = null,
-            targetIsBinary = false,
-        )
+    val root = defaultWorkspaceRoot(project)
+        ?: return missingAccess(relativePath, null, FileContentClassification.OUTSIDE_PROJECT)
+    return resolveProjectFileAccess(project, root, relativePath)
+}
 
+internal suspend fun resolveProjectFileAccess(
+    project: Project,
+    root: ExposedRoot,
+    relativePath: String,
+): ProjectFileAccess {
+    val file = resolveExposedRootFile(root, relativePath)
+    val parentTarget = if (file == null) resolveExposedRootParent(root, relativePath) else null
+    if (file == null && parentTarget == null) {
+        return missingAccess(relativePath, root, FileContentClassification.MISSING)
+    }
     return readAction {
-        val file = LocalFileSystem.getInstance().findFileByNioFile(normalized.targetPath)
-        val existingForClassification = file ?: findExistingAncestor(project, normalized.targetPath)
-        val classification = classify(project, existingForClassification, file, normalized.targetPath)
+        val classification = classify(project, file, root, parentTarget?.first)
+        val targetName = parentTarget?.second
+        val writableKinds = writableKindsFor(root, file, classification)
         ProjectFileAccess(
             file = file,
-            policy = policyFor(classification),
+            policy = policyFor(classification, writableKinds),
             relativePath = relativePath,
-            targetPath = normalized.targetPath,
             targetIsBinary = file?.let { !it.isDirectory && it.fileType.isBinary }
-                ?: isKnownBinaryFileName(normalized.targetPath.fileName.toString()),
+                ?: targetName?.let(::isKnownBinaryFileName)
+                ?: false,
+            root = root,
+            parent = parentTarget?.first,
+            targetName = targetName,
         )
     }
 }
@@ -86,7 +93,10 @@ internal suspend fun resolveProjectFileAccess(
 internal suspend fun classifyExistingProjectFile(
     project: Project,
     file: VirtualFile,
-): FileAccessPolicy = readAction { policyFor(classify(project, file, file, Path.of(file.path))) }
+): FileAccessPolicy {
+    val root = defaultWorkspaceRoot(project) ?: return policyFor(FileContentClassification.OUTSIDE_PROJECT)
+    return readAction { policyFor(classify(project, file, root, null)) }
+}
 
 internal fun fileMetaPolicyFallback(file: VirtualFile): FileAccessPolicy {
     return policyFor(
@@ -97,49 +107,23 @@ internal fun fileMetaPolicyFallback(file: VirtualFile): FileAccessPolicy {
     )
 }
 
-private data class NormalizedProjectPath(val targetPath: Path)
-
-private fun normalizeProjectRelativePath(project: Project, relativePath: String): NormalizedProjectPath? {
-    if (relativePath.isBlank() || relativePath.startsWith('/')) return null
-    if (relativePath.split('/').any { it == ".." }) return null
-    val basePath = project.basePath ?: return null
-    val base = Path.of(basePath).normalize()
-    val target = base.resolve(relativePath).normalize()
-    if (!target.startsWith(base)) return null
-    return NormalizedProjectPath(target)
-}
-
-private fun findExistingAncestor(project: Project, targetPath: Path): VirtualFile? {
-    val basePath = project.basePath ?: return null
-    val base = Path.of(basePath).normalize()
-    var current: Path? = targetPath
-    while (current != null && current.startsWith(base)) {
-        if (current.exists()) {
-            LocalFileSystem.getInstance().findFileByNioFile(current)?.let { return it }
-        }
-        current = current.parent
-    }
-    return null
-}
-
 private fun classify(
     project: Project,
-    existingForClassification: VirtualFile?,
     exactFile: VirtualFile?,
-    targetPath: Path,
+    root: ExposedRoot,
+    parent: VirtualFile?,
 ): FileContentClassification {
     val fileIndex = ProjectFileIndex.getInstance(project)
-    val fileTypeManager = FileTypeManager.getInstance()
-    val file = existingForClassification ?: return FileContentClassification.MISSING
+    val file = exactFile ?: parent ?: return FileContentClassification.MISSING
+    if (!root.readable || !isUnderRoot(root, file)) return FileContentClassification.OUTSIDE_PROJECT
     if (fileIndex.isExcluded(file)) return FileContentClassification.EXCLUDED
     if (fileIndex.isInLibraryClasses(file) || fileIndex.isInLibrarySource(file)) {
         return FileContentClassification.DEPENDENCY_OR_SDK
     }
+    if (!fileIndex.isInContent(file)) return FileContentClassification.OUTSIDE_PROJECT
     if (exactFile?.isDirectory == true) return FileContentClassification.WORKSPACE_TEXT
-    val ignored = exactFile?.let { fileTypeManager.isFileIgnored(it) }
-        ?: fileTypeManager.isFileIgnored(targetPath.fileName.toString()) ||
-        isIgnoredByProjectGitignore(project, targetPath)
-    val binary = exactFile?.fileType?.isBinary ?: isKnownBinaryFileName(targetPath.fileName.toString())
+    val ignored = exactFile?.let { FileTypeRegistry.getInstance().isFileIgnored(it) } ?: false
+    val binary = exactFile?.fileType?.isBinary ?: false
     return when {
         ignored && binary -> FileContentClassification.IGNORED_BINARY
         ignored -> FileContentClassification.IGNORED_TEXT
@@ -148,40 +132,52 @@ private fun classify(
     }
 }
 
+private fun writableKindsFor(
+    root: ExposedRoot,
+    file: VirtualFile?,
+    classification: FileContentClassification,
+): Set<FileContentKind>? {
+    if (!root.writable) return emptySet()
+    if (classification !in setOf(FileContentClassification.WORKSPACE_TEXT, FileContentClassification.IGNORED_TEXT)) {
+        return null
+    }
+    if (file == null) return setOf(FileContentKind.PUT, FileContentKind.PATCH)
+    if (!file.isWritable || file.`is`(VFileProperty.SPECIAL)) return emptySet()
+    return setOf(FileContentKind.PUT, FileContentKind.PATCH, FileContentKind.DELETE)
+}
+
 private fun isKnownBinaryFileName(fileName: String): Boolean {
-    val fileType = FileTypeManager.getInstance().getFileTypeByFileName(fileName)
+    val fileType = FileTypeRegistry.getInstance().getFileTypeByFileName(fileName)
     return fileType.isBinary && fileType.name != "UNKNOWN"
 }
 
-private fun isIgnoredByProjectGitignore(project: Project, targetPath: Path): Boolean {
-    val basePath = project.basePath ?: return false
-    val base = Path.of(basePath).normalize()
-    val gitignore = base.resolve(".gitignore")
-    if (!gitignore.isRegularFile()) return false
-    val relative = base.relativize(targetPath).joinToString("/")
-    val name = targetPath.fileName.toString()
-    return runCatching {
-        gitignore.readLines()
-            .asSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("#") && !it.startsWith("!") }
-            .any { pattern -> gitignorePatternMatches(pattern, relative, name) }
-    }.getOrDefault(false)
-}
+private fun isUnderRoot(root: ExposedRoot, file: VirtualFile): Boolean =
+    file == root.base || VfsUtilCore.isAncestor(root.base, file, false)
 
-private fun gitignorePatternMatches(pattern: String, relative: String, name: String): Boolean {
-    val normalized = pattern.trim('/').replace("\\", "/")
-    return when {
-        normalized == relative || normalized == name -> true
-        normalized.startsWith("*.") -> name.endsWith(normalized.removePrefix("*"))
-        normalized.endsWith("/") -> relative.startsWith(normalized.trimEnd('/') + "/")
-        "/" in normalized -> relative == normalized
-        else -> name == normalized
-    }
-}
+private fun missingAccess(
+    relativePath: String,
+    root: ExposedRoot?,
+    classification: FileContentClassification,
+): ProjectFileAccess = ProjectFileAccess(
+    file = null,
+    policy = policyFor(
+        classification,
+        writableKindsOverride = if (classification == FileContentClassification.MISSING && root?.writable == false) {
+            emptySet()
+        } else {
+            null
+        },
+    ),
+    relativePath = relativePath,
+    targetIsBinary = relativePath.substringAfterLast('/', relativePath).let(::isKnownBinaryFileName),
+    root = root,
+)
 
-private fun policyFor(classification: FileContentClassification): FileAccessPolicy {
-    return when (classification) {
+private fun policyFor(
+    classification: FileContentClassification,
+    writableKindsOverride: Set<FileContentKind>? = null,
+): FileAccessPolicy {
+    val policy = when (classification) {
         FileContentClassification.WORKSPACE_TEXT -> FileAccessPolicy(
             classification = classification,
             readableKinds = setOf(
@@ -251,6 +247,7 @@ private fun policyFor(classification: FileContentClassification): FileAccessPoli
             reason = "Path is outside the project",
         )
     }
+    return writableKindsOverride?.let { policy.copy(writableKinds = it) } ?: policy
 }
 
 internal fun FileAccessPolicy.readableKindNames(): List<String> =

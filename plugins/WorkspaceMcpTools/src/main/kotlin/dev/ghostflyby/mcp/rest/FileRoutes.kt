@@ -76,7 +76,9 @@ internal fun Route.fileRoutes() {
         val q = call.fileQuery()
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
-                val access = resolveProjectFileAccess(resolved.project, relativePath)
+                val target = call.fileRouteTarget(resolved.project) ?: return@get
+                val access = target.root?.let { resolveProjectFileAccess(resolved.project, it, target.relativePath) }
+                    ?: resolveProjectFileAccess(resolved.project, target.relativePath)
                 respondFileContent(call, access.file, q, resolved.project, access.policy)
             }
             is WorkspaceProjectResolution.Unresolved -> {

@@ -11,6 +11,7 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.filecontent.exposedWorkspaceRoots
 import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.response.*
@@ -45,6 +46,17 @@ internal fun Route.projectRoutes() {
         call.respond(projects)
     }
 
+    get("/projects/{projectKey}/file-roots") {
+        val projectKey = call.parameters["projectKey"] ?: return@get
+        when (val r = resolver.resolve(projectKey = projectKey)) {
+            is WorkspaceProjectResolution.Resolved -> call.respond(exposedWorkspaceRoots(r.project).map { it.toDto() })
+            is WorkspaceProjectResolution.Unresolved -> call.respond(
+                HttpStatusCode.NotFound,
+                ProjectErrorResponse(error = r.message, projectKey = projectKey),
+            )
+        }
+    }
+
     // Project detail — typed @Resource handler
     get<ProjectResource> { project ->
         when (val r = resolver.resolve(projectKey = project.projectKey)) {
@@ -56,7 +68,6 @@ internal fun Route.projectRoutes() {
                         basePath = r.project.basePath,
                     ),
                 )
-                call.respondFile()
             }
 
             is WorkspaceProjectResolution.Unresolved -> {

@@ -19,6 +19,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.resources.Resources
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
+import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -39,6 +40,7 @@ internal class FileWriteRoutesTest {
         pathFixture = projectFixture.pathInProjectFixture(Path.of("")),
         blueprintResourcePath = blueprint,
     )
+    private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
     fun refresh() {
@@ -141,6 +143,36 @@ internal class FileWriteRoutesTest {
 
             val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
             Assertions.assertEquals("replaced content", getResp.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `root URL supports PUT POST and DELETE for workspace text files`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val put = client.put("/api/v1/projects/$key/files/$rootId/plain.txt") {
+                setBody("root replaced")
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, put.status)
+            Assertions.assertEquals(
+                "root replaced",
+                client.get("/api/v1/projects/$key/files/$rootId/plain.txt").bodyAsText().trim(),
+            )
+
+            val post = client.post("/api/v1/projects/$key/files/$rootId/root-created.txt") {
+                setBody("root created")
+            }
+            Assertions.assertEquals(HttpStatusCode.Created, post.status)
+
+            val delete = client.delete("/api/v1/projects/$key/files/$rootId/root-created.txt")
+            Assertions.assertEquals(HttpStatusCode.OK, delete.status)
         }
     }
 
