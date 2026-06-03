@@ -5,6 +5,7 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.patch
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -15,6 +16,7 @@ import io.ktor.server.resources.Resources
 import io.ktor.server.routing.routing
 import io.ktor.server.testing.testApplication
 import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.net.URI
@@ -117,6 +119,123 @@ internal class FilePatchRoutesTest {
     // ── Directory PATCH (multi-file) ───────────────────────
 
     @Test
+    fun `PATCH with git diff format updates existing file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val diff = """diff --git a/plain.txt b/plain.txt
+--- a/plain.txt
++++ b/plain.txt
+@@ -1 +1 @@
+-hello sample
++hello git-patched"""
+            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+                setBody(diff)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `PATCH with text-x-patch content-type requires git format`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val diff = """diff --git a/plain.txt b/plain.txt
+--- a/plain.txt
++++ b/plain.txt
+@@ -1 +1 @@
+-hello sample
++hello git-patched"""
+            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+                header("Content-Type", "text/x-patch")
+                setBody(diff)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+        }
+    }
+
+    @Test
+    fun `PATCH with text-x-patch rejects invalid git format`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+                header("Content-Type", "text/x-patch")
+                setBody("*** Begin Patch")
+            }
+            Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)
+        }
+    }
+
+    @Test
+    fun `PATCH with git diff format creates new file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val diff = """diff --git a/newfile.txt b/newfile.txt
+new file mode 100644
+--- /dev/null
++++ b/newfile.txt
+@@ -0,0 +1 @@
++created by git patch"""
+            val resp = client.patch("/api/v1/projects/$key/files/newfile.txt") {
+                setBody(diff)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+        }
+    }
+
+    @Test
+    fun `PATCH with git diff format deletes file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val diff = """diff --git a/plain.txt b/plain.txt
+deleted file mode 100644
+--- a/plain.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-hello sample"""
+            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+                setBody(diff)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val getResp = client.get("/api/v1/projects/$key/files/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
+        }
+    }
+
+    @Test
     fun `PATCH on directory allows multi-file operations`() {
         project
         val key = workspaceProjectKey(project)
@@ -161,6 +280,22 @@ internal class FilePatchRoutesTest {
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("failed"))
+        }
+    }
+    @Test
+    fun `PATCH with unknown format returns 400`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val resp = client.patch("/api/v1/projects/$key/files/plain.txt") {
+                setBody("this is not a patch")
+            }
+            Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)
         }
     }
 }
