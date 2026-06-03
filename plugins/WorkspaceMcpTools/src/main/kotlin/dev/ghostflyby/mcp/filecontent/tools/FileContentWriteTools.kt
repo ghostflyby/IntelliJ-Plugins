@@ -6,7 +6,7 @@
 
 package dev.ghostflyby.mcp.filecontent.tools
 
-import com.intellij.openapi.application.backgroundWriteAction
+import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchHunk
@@ -81,7 +81,7 @@ internal class FileContentWriteTools {
                         val applied = GenericPatchApplier.apply(document.immutableCharSequence, hunks)
                             ?: throw WorkspaceResourceException("Patch does not apply for: ${section.filePath}")
                         ensureToolWritable(target, document)
-                        backgroundWriteAction {
+                        edtWriteAction {
                             document.setText(applied.patchedText)
                             commitDocument(project, document)
                         }
@@ -95,7 +95,7 @@ internal class FileContentWriteTools {
         return DocumentPatchResult(succeeded, failed)
     }
 
-    private suspend fun applyPatchToFile(
+    internal suspend fun applyPatchToFile(
         project: Project,
         target: ProjectPatchPath,
         hunks: List<PatchHunk>,
@@ -104,7 +104,7 @@ internal class FileContentWriteTools {
         ensureToolWritable(target, document)
         val applied = GenericPatchApplier.apply(document.immutableCharSequence, hunks)
             ?: throw WorkspaceResourceException("Patch does not apply")
-        backgroundWriteAction {
+        edtWriteAction {
             document.setText(applied.patchedText)
             commitDocument(project, document)
         }
@@ -112,13 +112,13 @@ internal class FileContentWriteTools {
     }
 }
 
-private data class ProjectPatchPath(
+internal data class ProjectPatchPath(
     val relativePath: String,
     val nioPath: Path,
     val url: String,
 )
 
-private fun resolveProjectPatchPath(
+internal fun resolveProjectPatchPath(
     project: Project,
     path: String,
 ): ProjectPatchPath {
@@ -143,7 +143,7 @@ private fun resolveProjectPatchPath(
     return ProjectPatchPath(relativePath = relativePath, nioPath = target, url = "file://$target")
 }
 
-private fun filePathFromPatchTarget(path: String): String {
+internal fun filePathFromPatchTarget(path: String): String {
     if (!path.contains("://")) return path
     if (!path.startsWith("file://")) {
         throw WorkspaceResourceException("Only project-local file:// patch targets are supported: $path")
@@ -151,8 +151,8 @@ private fun filePathFromPatchTarget(path: String): String {
     return path.removePrefix("file://")
 }
 
-private suspend fun createPatchedFile(project: Project, target: ProjectPatchPath, text: String): PatchFileSuccess {
-    val document = backgroundWriteAction {
+internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPath, text: String): PatchFileSuccess {
+    val document = edtWriteAction {
         if (service<VirtualFileManager>().findFileByUrl(target.url) != null) {
             throw WorkspaceResourceException("File already exists: ${target.relativePath}")
         }
@@ -169,7 +169,7 @@ private suspend fun createPatchedFile(project: Project, target: ProjectPatchPath
     return PatchFileSuccess(target.relativePath, "add", snapshotToolWriteResult(document))
 }
 
-private suspend fun deletePatchedFile(
+internal suspend fun deletePatchedFile(
     target: ProjectPatchPath,
     hunks: List<PatchHunk>,
 ): PatchFileSuccess {
@@ -179,13 +179,13 @@ private suspend fun deletePatchedFile(
         GenericPatchApplier.apply(document.immutableCharSequence, hunks)
             ?: throw WorkspaceResourceException("Patch does not apply")
     }
-    backgroundWriteAction {
+    edtWriteAction {
         file.delete(FileContentWriteTools::class.java)
     }
     return PatchFileSuccess(target.relativePath, "delete")
 }
 
-private suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<VirtualFile, Document> = readAction {
+internal suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<VirtualFile, Document> = readAction {
     val vfsManager = service<VirtualFileManager>()
     val file = vfsManager.findFileByUrl(target.url)
         ?: throw WorkspaceResourceException("File not found: ${target.relativePath}")
@@ -195,22 +195,22 @@ private suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<V
     file to document
 }
 
-private suspend fun ensureToolWritable(target: ProjectPatchPath, document: Document) {
+internal suspend fun ensureToolWritable(target: ProjectPatchPath, document: Document) {
     val writable = readAction { document.isWritable }
     if (!writable) throw WorkspaceResourceException("Document is not writable: ${target.relativePath}")
 }
 
-private suspend fun ensureFileWritable(file: VirtualFile, target: ProjectPatchPath) {
+internal suspend fun ensureFileWritable(file: VirtualFile, target: ProjectPatchPath) {
     val writable = readAction { file.isWritable }
     if (!writable) throw WorkspaceResourceException("File is not writable: ${target.relativePath}")
 }
 
-private suspend fun snapshotToolWriteResult(document: Document): DocumentSdkWriteResult {
+internal suspend fun snapshotToolWriteResult(document: Document): DocumentSdkWriteResult {
     val (len, lines, stamp) = readAction { Triple(document.textLength, document.lineCount, document.modificationStamp) }
     return DocumentSdkWriteResult(textLength = len, lineCount = lines, modificationStamp = stamp)
 }
 
-private fun commitDocument(project: Project, document: Document) {
+internal fun commitDocument(project: Project, document: Document) {
     val mgr = PsiDocumentManager.getInstance(project)
     mgr.doPostponedOperationsAndUnblockDocument(document)
     mgr.commitDocument(document)

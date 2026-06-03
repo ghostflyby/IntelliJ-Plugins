@@ -6,8 +6,7 @@
 
 package dev.ghostflyby.mcp.rest
 
-import io.ktor.server.routing.Route
-import io.ktor.server.routing.route
+import io.ktor.server.routing.*
 
 /**
  * Mounts all REST API routes under /api/v1: read + write.
@@ -18,5 +17,6 @@ internal fun Route.restApi() {
         projectRoutes()
         fileRoutes()
         fileWriteRoutes()
+        filePatchRoutes()
     }
 }
