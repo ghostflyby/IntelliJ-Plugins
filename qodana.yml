@@ -10,7 +10,7 @@ profile:
   inspections:
     - group: ALL
       ignore:
-        - "scope#gitignore"
+        - "scope#$gitignore"
 plugins:
   - id: DevKit
 exclude:
