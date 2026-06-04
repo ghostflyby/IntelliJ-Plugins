@@ -13,10 +13,14 @@ import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.server.route.resources.FileContentQuery
+import dev.ghostflyby.mcp.server.route.resources.RootFileResource
+import dev.ghostflyby.mcp.server.route.resources.RootResource
+import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
+import io.ktor.server.resources.get
 import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
 
@@ -61,8 +65,8 @@ private fun ApplicationCall.fileQuery(): SimpleFileQuery {
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    get("/vfs/{rawVfsUrl...}") {
-        val rawVfsUrl = call.parameters.getAll("rawVfsUrl")?.joinToString("/") ?: return@get
+    get<VfsResource> { resource ->
+        val rawVfsUrl = resource.rawVfsUrl
         val q = call.fileQuery()
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
         val project = if (file != null && (q.structure || q.glob != null))
@@ -70,21 +74,26 @@ internal fun Route.fileRoutes() {
         respondFileContent(call, file, q, project)
     }
 
-    get("/projects/{projectKey}/roots/{rootId}") {
-        respondProjectRootFile(call, resolver)
+    get<RootResource> { resource ->
+        respondProjectRootFile(call, resolver, resource.rootId, "", resource.parent.parent.projectKey)
     }
 
-    get("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
-        respondProjectRootFile(call, resolver)
+    get<RootFileResource> { resource ->
+        respondProjectRootFile(call, resolver, resource.parent.rootId, resource.relativePath, resource.parent.parent.parent.projectKey)
     }
 }
 
-private suspend fun respondProjectRootFile(call: ApplicationCall, resolver: WorkspaceProjectResolver) {
-    val projectKey = call.parameters["projectKey"] ?: return
+private suspend fun respondProjectRootFile(
+    call: ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    rootId: String,
+    relativePath: String,
+    projectKey: String,
+) {
     val q = call.fileQuery()
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val target = call.rootRouteTargetOrNotFound(resolved.project) ?: return
+            val target = call.rootRouteTargetOrNotFound(resolved.project, rootId, relativePath) ?: return
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             respondFileContent(call, access.file, q, resolved.project, access.policy)
         }

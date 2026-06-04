@@ -10,11 +10,16 @@ import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.server.route.resources.RootFileResource
+import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
+import io.ktor.server.resources.delete
+import io.ktor.server.resources.post
+import io.ktor.server.resources.put
 import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.routing.Route
 
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -25,27 +30,27 @@ internal fun Route.fileWriteRoutes() {
 // ── VFS ─────────────────────────────────────────────────────
 
 private fun Route.vfsWriteRoutes() {
-    put("/vfs/{rawVfsUrl...}") {
-        vfsExec(call) { file, body ->
+    put<VfsResource> { resource: VfsResource ->
+        vfsExec(call, resource.rawVfsUrl) { file, body ->
             if (file != null) { file.setBinaryContent(body); WriteResult.Replaced(file) }
             else WriteResult.NotFound
         }
     }
-    post("/vfs/{rawVfsUrl...}") {
-        vfsExec(call) { file, _ ->
+    post<VfsResource> { resource: VfsResource ->
+        vfsExec(call, resource.rawVfsUrl) { file, _ ->
             if (file != null) WriteResult.Conflict else WriteResult.NotFound
         }
     }
-    delete("/vfs/{rawVfsUrl...}") {
-        vfsExec(call) { file, _ -> deleteFileResult(file) }
+    delete<VfsResource> { resource: VfsResource ->
+        vfsExec(call, resource.rawVfsUrl) { file, _ -> deleteFileResult(file) }
     }
 }
 
 // ── Project ─────────────────────────────────────────────────
 
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
-    put("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
-        projectExec(call, resolver) { access, project, body, force ->
+    put<RootFileResource> { resource: RootFileResource ->
+        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
             val file = access.file
@@ -57,8 +62,8 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             }
         }
     }
-    post("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
-        projectExec(call, resolver) { access, project, body, force ->
+    post<RootFileResource> { resource: RootFileResource ->
+        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
             val file = access.file
@@ -70,8 +75,8 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
-    delete("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
-        projectExec(call, resolver) { access, _, _, force ->
+    delete<RootFileResource> { resource: RootFileResource ->
+        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, _, _, force ->
             val file = access.file ?: return@projectExec WriteResult.NotFound
             if (!file.isDirectory && file.fileType.isBinary) {
                 return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
@@ -84,21 +89,27 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
 
 // ── Dispatchers ─────────────────────────────────────────────
 
-private suspend fun vfsExec(call: ApplicationCall, op: suspend (VirtualFile?, ByteArray) -> WriteResult) {
-    val rawVfsUrl = call.parameters.getAll("rawVfsUrl")?.joinToString("/") ?: return
+private suspend fun vfsExec(
+    call: ApplicationCall,
+    rawVfsUrl: String,
+    op: suspend (VirtualFile?, ByteArray) -> WriteResult,
+) {
     val file = resolveFileByRawUrlOrNull(rawVfsUrl)
     val body = call.receiveText().toByteArray(Charsets.UTF_8)
     respondResult(call, op(file, body))
 }
 
 private suspend fun projectExec(
-    call: ApplicationCall, resolver: WorkspaceProjectResolver,
+    call: ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
     op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
-    val projectKey = call.parameters["projectKey"] ?: return
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val target = call.rootRouteTargetOrNotFound(resolved.project) ?: return
+            val target = call.rootRouteTargetOrNotFound(resolved.project, rootId, relativePath) ?: return
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val body = call.receiveText()
             val force = call.request.force()
@@ -111,6 +122,9 @@ private suspend fun projectExec(
 
 private fun ApplicationRequest.force(): Boolean =
     queryParameters["force"]?.toBooleanStrictOrNull() == true
+
+private val RootFileResource.projectKey: String
+    get() = parent.parent.parent.projectKey
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {

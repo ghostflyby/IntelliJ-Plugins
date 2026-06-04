@@ -21,29 +21,31 @@ public interface FileContentQuery {
 @Resource("/server/info")
 public class ServerInfoResource
 
+
+@Resource("/projects")
+public object Projects
+
 @Serializable
-@Resource("/projects/{projectKey}")
-public data class ProjectResource(val projectKey: String)
+@Resource("/{projectKey}")
+public data class ProjectResource(val parent: Projects, val projectKey: String)
+
+@Serializable
+@Resource("/roots")
+public data class Roots(val parent: ProjectResource)
+
+@Serializable
+@Resource("/{rootId}")
+public data class RootResource(val parent: Roots, val rootId: String)
 
 @Serializable
 @Resource("/vfs/{rawVfsUrl...}")
 public data class VfsResource(
     public val rawVfsUrl: String,
-    override val meta: String? = null,
-    override val content: String? = null,
-    override val exists: Boolean = false,
-    override val structure: Boolean = false,
-    override val glob: String? = null,
-) : FileContentQuery
+)
 
 @Serializable
-@Resource("/files/{relativePath...}")
-public data class ProjectFileResource(
-    public val parent: ProjectResource,
+@Resource("/{relativePath...}")
+public data class RootFileResource(
+    public val parent: RootResource,
     public val relativePath: String,
-    override val meta: String? = null,
-    override val content: String? = null,
-    override val exists: Boolean = false,
-    override val structure: Boolean = false,
-    override val glob: String? = null,
-) : FileContentQuery
+)

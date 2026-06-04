@@ -12,15 +12,21 @@ internal data class RootRouteTarget(
     val relativePath: String,
 )
 
-internal suspend fun ApplicationCall.rootRouteTarget(project: Project): RootRouteTarget? {
-    val rootId = parameters["rootId"] ?: return null
+internal suspend fun rootRouteTarget(
+    project: Project,
+    rootId: String,
+    relativePath: String = "",
+): RootRouteTarget? {
     val root = findExposedRoot(project, rootId) ?: return null
-    val relativePath = parameters.getAll("relativePath")?.joinToString("/") ?: ""
     return RootRouteTarget(root = root, relativePath = relativePath)
 }
 
-internal suspend fun ApplicationCall.rootRouteTargetOrNotFound(project: Project): RootRouteTarget? {
-    val target = rootRouteTarget(project)
+internal suspend fun ApplicationCall.rootRouteTargetOrNotFound(
+    project: Project,
+    rootId: String,
+    relativePath: String = "",
+): RootRouteTarget? {
+    val target = rootRouteTarget(project, rootId, relativePath)
     if (target == null) {
         respond(HttpStatusCode.NotFound, mapOf("error" to "Root not found"))
     }

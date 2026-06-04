@@ -15,8 +15,8 @@ import kotlin.reflect.full.memberProperties
  * Stores deserialized @Resource route objects for typed access from handlers.
  *
  * When a parameterized route matches, the deserialized typed tree is stored
- * here. For example, matching `/projects/my-project/files/src/Foo.kt` produces
- * a [dev.ghostflyby.mcp.server.route.resources.ProjectFileResource] whose parent is a [dev.ghostflyby.mcp.server.route.resources.ProjectResource]. Both are stored
+ * here. For example, matching `/projects/my-project/roots/workspace/src/Foo.kt` produces
+ * a [dev.ghostflyby.mcp.server.route.resources.RootFileResource] whose parent is a [dev.ghostflyby.mcp.server.route.resources.RootResource]. Both are stored
  * so that `resourceHolder.get<ProjectResource>()?.projectKey` works.
  *
  * Handlers access resources via [get], and [call.project()] uses this to

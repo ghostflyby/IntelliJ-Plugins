@@ -11,10 +11,12 @@ import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import dev.ghostflyby.mcp.server.route.resources.RootFileResource
 import io.ktor.http.*
 import io.ktor.server.request.*
+import io.ktor.server.resources.patch
 import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -57,12 +59,12 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    patch("/projects/{projectKey}/roots/{rootId}/{relativePath...}") {
-        val projectKey = call.parameters["projectKey"] ?: return@patch
+    patch<RootFileResource> { resource: RootFileResource ->
+        val projectKey = resource.projectKey
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val target = call.rootRouteTargetOrNotFound(project) ?: return@patch
+                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath) ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
                 val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
                 if (access.targetIsBinary) {
@@ -101,6 +103,9 @@ internal fun Route.filePatchRoutes() {
         }
     }
 }
+
+private val RootFileResource.projectKey: String
+    get() = parent.parent.parent.projectKey
 
 // ── Codex branch ──────────────────────────────────────────
 

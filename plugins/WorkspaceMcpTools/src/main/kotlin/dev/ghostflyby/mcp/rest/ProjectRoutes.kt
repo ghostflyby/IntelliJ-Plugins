@@ -12,6 +12,8 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import dev.ghostflyby.mcp.server.route.resources.ProjectResource
+import dev.ghostflyby.mcp.server.route.resources.Projects
+import dev.ghostflyby.mcp.server.route.resources.Roots
 import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.response.*
@@ -35,7 +37,7 @@ internal fun Route.projectRoutes() {
     val resolver: WorkspaceProjectResolver = service<WorkspaceProjectResolver>()
 
     // Project list
-    get("/projects") {
+    get<Projects> {
         val projects = resolver.openProjects().map { project ->
             ProjectListEntry(
                 projectKey = workspaceProjectKey(project),
@@ -46,8 +48,8 @@ internal fun Route.projectRoutes() {
         call.respond(projects)
     }
 
-    get("/projects/{projectKey}/roots") {
-        val projectKey = call.parameters["projectKey"] ?: return@get
+    get<Roots> {
+        val projectKey = it.parent.projectKey
         when (val r = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> call.respond(exposedWorkspaceRoots(r.project).map { it.toDto() })
             is WorkspaceProjectResolution.Unresolved -> call.respond(
