@@ -14,85 +14,63 @@ import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
-import io.ktor.resources.*
+import io.ktor.server.application.*
 import io.ktor.server.resources.*
 import io.ktor.server.routing.*
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 
-@Serializable
-@Resource("/projects/{projectKey}/glob")
-private data class ProjectGlobResource(val projectKey: String)
-
-@Serializable
-@Resource("/{rootId}")
-private data class RootGlobResource(
-    val parent: ProjectGlobResource,
-    val rootId: String,
-)
-
-@Serializable
-@Resource("/{relativePath...}")
-private data class RootGlobFileResource(
-    val parent: RootGlobResource,
-    val relativePath: String,
-)
+// ── Route registration ────────────────────────────────
 
 internal fun Route.globRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    get<RootGlobResource> { resource ->
-        respondGlob(call, resolver, resource.parent.projectKey, resource.rootId, "")
-    }
-
-    get<RootGlobFileResource> { resource ->
-        respondGlob(
-            call,
-            resolver,
-            resource.parent.parent.projectKey,
-            resource.parent.rootId,
-            resource.relativePath,
-        )
+    get<Api.Project.GlobEntry.Glob> { resource ->
+        val q = FileQuery(call)
+        val patterns = q.glob
+        if (patterns.isEmpty()) {
+            call.respondNegotiatedError(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "glob requires a pattern query parameter"),
+                "glob requires a pattern query parameter",
+            )
+            return@get
+        }
+        respondGlob(call, resolver, resource.parent, resource.relativePath, patterns)
     }
 }
 
 private suspend fun respondGlob(
-    call: io.ktor.server.application.ApplicationCall,
+    call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    rootId: String,
+    entry: Api.Project.GlobEntry,
     relativePath: String,
+    patterns: List<String>,
 ) {
-    val patterns = call.request.queryParameters.getAll("glob").orEmpty()
-    if (patterns.isEmpty()) {
-        call.respondNegotiatedError(
-            HttpStatusCode.BadRequest,
-            mapOf("error" to "glob requires at least one pattern"),
-            "glob requires at least one pattern",
-        )
-        return
-    }
+    val projectKey = entry.parent.projectKey
+    val rootId = entry.rootId
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
             val target = rootRouteTarget(resolved.project, rootId, relativePath)
             if (target == null) {
-                call.respondNegotiatedError(HttpStatusCode.NotFound, mapOf("error" to "Root not found"), "Root not found")
+                call.respondNegotiatedError(
+                    HttpStatusCode.NotFound, mapOf("error" to "Root not found"), "Root not found",
+                )
                 return
             }
-            val access = resolveProjectFileAccess(
-                resolved.project,
-                target.root,
-                target.relativePath,
-            )
+            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val policy = access.policy
             if (access.file == null) {
-                call.respondNegotiatedError(HttpStatusCode.NotFound, mapOf("error" to "File not found"), "File not found")
+                call.respondNegotiatedError(
+                    HttpStatusCode.NotFound, mapOf("error" to "File not found"), "File not found",
+                )
                 return
             }
             if (!policy.canRead(FileContentKind.GLOB)) {
-                call.respondNegotiatedError(HttpStatusCode.Forbidden, mapOf("error" to policy.reason), policy.reason)
+                call.respondNegotiatedError(
+                    HttpStatusCode.Forbidden, mapOf("error" to policy.reason), policy.reason,
+                )
                 return
             }
             val json = try {

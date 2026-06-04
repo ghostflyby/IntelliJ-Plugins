@@ -10,7 +10,6 @@ import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.server.route.Keys
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpCall
 import dev.ghostflyby.mcp.server.route.WorkspaceMcpListProject
-import dev.ghostflyby.mcp.server.route.resources.ProjectResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -18,10 +17,11 @@ import kotlinx.coroutines.coroutineScope
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
+import dev.ghostflyby.mcp.rest.Api.Project as RouteProject
 
 internal suspend fun WorkspaceMcpCall<*>.project(): Project {
     // 1) Try typed resource from the holder first
-    val typedKey = resourceHolder.get<ProjectResource>()?.projectKey
+    val typedKey = resourceHolder.get<RouteProject>()?.projectKey
     if (typedKey != null) {
         val resolver = attributes[SdkKeys.ProjectProvider]
         return when (val r = resolver.resolve(typedKey)) {

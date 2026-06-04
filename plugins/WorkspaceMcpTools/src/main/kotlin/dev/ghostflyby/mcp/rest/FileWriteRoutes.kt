@@ -10,8 +10,6 @@ import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.server.route.resources.RootFileResource
-import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -28,29 +26,27 @@ internal fun Route.fileWriteRoutes() {
 }
 
 // ── VFS ─────────────────────────────────────────────────────
-
 private fun Route.vfsWriteRoutes() {
-    put<VfsResource> { resource: VfsResource ->
+    put<Api.Vfs> { resource: Api.Vfs ->
         vfsExec(call, resource.rawVfsUrl) { file, body ->
             if (file != null) {
                 file.setBinaryContent(body); WriteResult.Replaced(file)
             } else WriteResult.NotFound
         }
     }
-    post<VfsResource> { resource: VfsResource ->
+    post<Api.Vfs> { resource: Api.Vfs ->
         vfsExec(call, resource.rawVfsUrl) { file, _ ->
             if (file != null) WriteResult.Conflict else WriteResult.NotFound
         }
     }
-    delete<VfsResource> { resource: VfsResource ->
+    delete<Api.Vfs> { resource: Api.Vfs ->
         vfsExec(call, resource.rawVfsUrl) { file, _ -> deleteFileResult(file) }
     }
 }
 
 // ── Project ─────────────────────────────────────────────────
-
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
-    put<RootFileResource> { resource: RootFileResource ->
+    put<Api.Project.Root.File> { resource: Api.Project.Root.File ->
         projectExec(
             call,
             resolver,
@@ -69,7 +65,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             }
         }
     }
-    post<RootFileResource> { resource: RootFileResource ->
+    post<Api.Project.Root.File> { resource: Api.Project.Root.File ->
         projectExec(
             call,
             resolver,
@@ -88,7 +84,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
-    delete<RootFileResource> { resource: RootFileResource ->
+    delete<Api.Project.Root.File> { resource: Api.Project.Root.File ->
         projectExec(
             call,
             resolver,
@@ -107,7 +103,6 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
 }
 
 // ── Dispatchers ─────────────────────────────────────────────
-
 private suspend fun vfsExec(
     call: ApplicationCall,
     rawVfsUrl: String,
@@ -131,7 +126,7 @@ private suspend fun projectExec(
             val target = call.rootRouteTargetOrNotFound(resolved.project, rootId, relativePath) ?: return
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val body = call.receiveText()
-            val force = call.request.force()
+            val force = FileQuery(call).force
             respondResult(call, op(access, resolved.project, body, force), force)
         }
 
@@ -140,11 +135,8 @@ private suspend fun projectExec(
     }
 }
 
-private fun ApplicationRequest.force(): Boolean =
-    queryParameters["force"]?.toBooleanStrictOrNull() == true
-
-private val RootFileResource.projectKey: String
-    get() = parent.parent.parent.projectKey
+private val Api.Project.Root.File.projectKey: String
+    get() = parent.parent.projectKey
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {
@@ -177,7 +169,6 @@ private sealed interface WriteResult {
 }
 
 // ── Implementations ─────────────────────────────────────────
-
 private fun writeGate(
     access: ProjectFileAccess,
     kind: FileContentKind,

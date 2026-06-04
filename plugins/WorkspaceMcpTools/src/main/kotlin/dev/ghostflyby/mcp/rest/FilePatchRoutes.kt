@@ -11,21 +11,12 @@ import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.server.route.resources.RootFileResource
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.resources.patch
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
-import kotlin.text.String
-import kotlin.text.isBlank
-import kotlin.text.lowercase
-import kotlin.text.startsWith
-import kotlin.text.substringBefore
-import kotlin.text.toBooleanStrictOrNull
-import kotlin.text.toByteArray
-import kotlin.text.trim
 
 @Serializable
 private data class PatchResponse(
@@ -67,15 +58,15 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    patch<RootFileResource> { resource: RootFileResource ->
-        val projectKey = resource.projectKey
+    patch<Api.Project.Root.File> { resource ->
+        val projectKey = resource.parent.parent.projectKey
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
                 val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath)
                     ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
-                val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
+                val force = FileQuery(call).force
                 if (access.targetIsBinary) {
                     call.respond(
                         HttpStatusCode.UnsupportedMediaType,
@@ -112,9 +103,6 @@ internal fun Route.filePatchRoutes() {
         }
     }
 }
-
-private val RootFileResource.projectKey: String
-    get() = parent.parent.parent.projectKey
 
 // ── Codex branch ──────────────────────────────────────────
 

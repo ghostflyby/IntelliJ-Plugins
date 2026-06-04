@@ -3,7 +3,6 @@
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
-
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.components.service
@@ -12,10 +11,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
-import dev.ghostflyby.mcp.server.route.resources.FileContentQuery
-import dev.ghostflyby.mcp.server.route.resources.RootFileResource
-import dev.ghostflyby.mcp.server.route.resources.RootResource
-import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.resources.*
@@ -24,10 +19,6 @@ import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 import kotlin.io.encoding.Base64
 
-/**
- * Compound file response. Query parameters (meta, content, exists, structure)
- * mirror the [FileContentQuery] interface used by the @Resource classes in modules/.
- */
 @Serializable
 private data class FileContentResponse(
     val content: String? = null,
@@ -37,70 +28,38 @@ private data class FileContentResponse(
     val structure: FileStructure? = null,
 )
 
-/** Manual DTO bridging URL query params to [FileContentQuery]. */
-private data class SimpleFileQuery(
-    override val meta: String?,
-    override val content: String?,
-    override val exists: Boolean,
-    override val structure: Boolean,
-) : FileContentQuery {
-    override val glob: String?
-        get() = null
-}
-
-private fun ApplicationCall.fileQuery(): SimpleFileQuery {
-    val params = request.queryParameters
-    val hasContent = params["content"] != null
-    val hasExists = params["exists"] != null
-    val hasStructure = params["structure"] != null
-    return SimpleFileQuery(
-        meta = params["meta"],
-        content = if (hasContent) "" else null,
-        exists = hasExists,
-        structure = hasStructure,
-    )
-}
-
 // -- Route registrations --
-
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
-
-    get<VfsResource> { resource ->
+    get<Api.Vfs> { resource ->
+        val q = FileQuery(call)
         val rawVfsUrl = resource.rawVfsUrl
-        val q = call.fileQuery()
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
         val project = if (file != null && q.structure)
             projectForRawVfsUrl(rawVfsUrl, resolver) else null
         respondFileContent(call, file, q, project)
     }
 
-    get<RootResource> { resource ->
-        respondProjectRootFile(call, resolver, resource.rootId, "", resource.parent.parent.projectKey)
+    get<Api.Project.Root> { resource ->
+        respondProjectRootFile(call, resolver, resource, query = FileQuery(call))
     }
 
-    get<RootFileResource> { resource ->
-        respondProjectRootFile(
-            call,
-            resolver,
-            resource.parent.rootId,
-            resource.relativePath,
-            resource.parent.parent.parent.projectKey,
-        )
+    get<Api.Project.Root.File> { resource ->
+        respondProjectRootFile(call, resolver, resource.parent, resource.relativePath, FileQuery(call))
     }
 }
 
 private suspend fun respondProjectRootFile(
     call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
-    rootId: String,
-    relativePath: String,
-    projectKey: String,
+    root: Api.Project.Root,
+    relativePath: String = "",
+    query: FileQuery,
 ) {
-    val q = call.fileQuery()
+    val projectKey = root.parent.projectKey
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
         is WorkspaceProjectResolution.Resolved -> {
-            val target = rootRouteTarget(resolved.project, rootId, relativePath)
+            val target = rootRouteTarget(resolved.project, root.rootId, relativePath)
             if (target == null) {
                 call.respondNegotiatedError(
                     HttpStatusCode.NotFound,
@@ -110,7 +69,7 @@ private suspend fun respondProjectRootFile(
                 return
             }
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            respondFileContent(call, access.file, q, resolved.project, access.policy)
+            respondFileContent(call, access.file, query, resolved.project, access.policy)
         }
 
         is WorkspaceProjectResolution.Unresolved -> {
@@ -133,20 +92,18 @@ private suspend fun projectForRawVfsUrl(
 }
 
 // -- Response dispatch --
-
 private suspend fun respondFileContent(
     call: ApplicationCall,
     file: VirtualFile?,
-    query: FileContentQuery,
+    query: FileQuery,
     project: Project?,
     policy: FileAccessPolicy? = null,
 ) {
-    val wantsContent = query.content != null || (query.meta == null && !query.exists && !query.structure)
+    val wantsContent = query.content || (query.meta == null && !query.exists && !query.structure)
     val wantsMeta = query.meta != null
     val wantsExists = query.exists
     val wantsStructure = query.structure
     val needsFile = wantsContent || wantsMeta || wantsStructure
-
     // exists-only: no file required
     if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure) {
         call.respondText("${file != null}", ContentType.Text.Plain)
@@ -165,7 +122,7 @@ private suspend fun respondFileContent(
         requiresForceForWrite = false,
         reason = "File not found",
     )
-    if (needsFile && effectivePolicy.classification in setOf(
+    if (effectivePolicy.classification in setOf(
             FileContentClassification.EXCLUDED,
             FileContentClassification.OUTSIDE_PROJECT,
         )
@@ -190,7 +147,6 @@ private suspend fun respondFileContent(
         )
         return
     }
-
     // Single-responsibility paths
     if (wantsStructure && !wantsMeta && !wantsContent && !wantsExists)
         return structureOnly(call, file!!, project)
@@ -198,13 +154,11 @@ private suspend fun respondFileContent(
         return metaOnly(call, file!!, effectivePolicy)
     if (!wantsMeta && !wantsExists && !wantsStructure)
         return contentOnly(call, file!!)
-
     // Compound: at least two of meta/content/exists/structure
     compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy)
 }
 
 // -- Single response modes --
-
 private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile) {
     val r = readContentResult(file)
     if (r.isBinary) {
@@ -229,7 +183,6 @@ private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, proj
 }
 
 // -- Compound response --
-
 private suspend fun compoundResult(
     call: ApplicationCall, file: VirtualFile,
     wantsMeta: Boolean, wantsContent: Boolean, wantsExists: Boolean, wantsStructure: Boolean,
