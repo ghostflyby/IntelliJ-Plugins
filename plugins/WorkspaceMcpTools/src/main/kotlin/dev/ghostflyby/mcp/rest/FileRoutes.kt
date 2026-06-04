@@ -22,12 +22,10 @@ import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.serializer
 import kotlin.io.encoding.Base64
 
 /**
- * Compound file response. Query parameters (meta, content, exists, structure, glob)
+ * Compound file response. Query parameters (meta, content, exists, structure)
  * mirror the [FileContentQuery] interface used by the @Resource classes in modules/.
  */
 @Serializable
@@ -45,8 +43,10 @@ private data class SimpleFileQuery(
     override val content: String?,
     override val exists: Boolean,
     override val structure: Boolean,
-    override val glob: String?,
-) : FileContentQuery
+) : FileContentQuery {
+    override val glob: String?
+        get() = null
+}
 
 private fun ApplicationCall.fileQuery(): SimpleFileQuery {
     val params = request.queryParameters
@@ -58,7 +58,6 @@ private fun ApplicationCall.fileQuery(): SimpleFileQuery {
         content = if (hasContent) "" else null,
         exists = hasExists,
         structure = hasStructure,
-        glob = params["glob"],
     )
 }
 
@@ -71,7 +70,7 @@ internal fun Route.fileRoutes() {
         val rawVfsUrl = resource.rawVfsUrl
         val q = call.fileQuery()
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
-        val project = if (file != null && (q.structure || q.glob != null))
+        val project = if (file != null && q.structure)
             projectForRawVfsUrl(rawVfsUrl, resolver) else null
         respondFileContent(call, file, q, project)
     }
@@ -81,7 +80,13 @@ internal fun Route.fileRoutes() {
     }
 
     get<RootFileResource> { resource ->
-        respondProjectRootFile(call, resolver, resource.parent.rootId, resource.relativePath, resource.parent.parent.parent.projectKey)
+        respondProjectRootFile(
+            call,
+            resolver,
+            resource.parent.rootId,
+            resource.relativePath,
+            resource.parent.parent.parent.projectKey,
+        )
     }
 }
 
@@ -136,15 +141,14 @@ private suspend fun respondFileContent(
     project: Project?,
     policy: FileAccessPolicy? = null,
 ) {
-    val hasGlob = query.glob != null
-    val wantsContent = !hasGlob && (query.content != null || (query.meta == null && !query.exists && !query.structure))
+    val wantsContent = query.content != null || (query.meta == null && !query.exists && !query.structure)
     val wantsMeta = query.meta != null
     val wantsExists = query.exists
     val wantsStructure = query.structure
-    val needsFile = wantsContent || wantsMeta || wantsStructure || hasGlob
+    val needsFile = wantsContent || wantsMeta || wantsStructure
 
     // exists-only: no file required
-    if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure && !hasGlob) {
+    if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure) {
         call.respondText("${file != null}", ContentType.Text.Plain)
         return
     }
@@ -169,14 +173,6 @@ private suspend fun respondFileContent(
         call.respondNegotiatedError(HttpStatusCode.NotFound, mapOf("error" to "File not found"), "File not found")
         return
     }
-    if (hasGlob && !effectivePolicy.canRead(FileContentKind.GLOB)) {
-        call.respondNegotiatedError(
-            HttpStatusCode.Forbidden,
-            mapOf("error" to effectivePolicy.reason),
-            effectivePolicy.reason,
-        )
-        return
-    }
     if (wantsStructure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
         call.respondNegotiatedError(
             HttpStatusCode.Forbidden,
@@ -196,8 +192,6 @@ private suspend fun respondFileContent(
     }
 
     // Single-responsibility paths
-    if (hasGlob && !wantsMeta && !wantsExists && !wantsStructure)
-        return globOnly(call, file!!, query.glob!!, project)
     if (wantsStructure && !wantsMeta && !wantsContent && !wantsExists)
         return structureOnly(call, file!!, project)
     if (wantsMeta && !wantsContent && !wantsExists)
@@ -205,7 +199,7 @@ private suspend fun respondFileContent(
     if (!wantsMeta && !wantsExists && !wantsStructure)
         return contentOnly(call, file!!)
 
-    // Compound: at least two of meta/content/exists/structure/glob
+    // Compound: at least two of meta/content/exists/structure
     compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy)
 }
 
@@ -232,25 +226,6 @@ private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, proj
     val json = if (project != null) readStructureResult(project, file) else """{"elements":[]}"""
     val structure = decodeFromJson<FileStructure>(json)
     call.respondNegotiatedText(jsonText = json, textBody = renderStructureMarkdown(structure))
-}
-
-private suspend fun globOnly(call: ApplicationCall, file: VirtualFile, pattern: String, project: Project?) {
-    val json = try {
-        readGlobResult(file, pattern, project).payload
-    } catch (error: ContentReadException) {
-        call.respondNegotiatedError(
-            HttpStatusCode.BadRequest,
-            mapOf("error" to error.message.orEmpty()),
-            error.message.orEmpty(),
-        )
-        return
-    }
-    val paths = kotlinx.serialization.json.Json.decodeFromString(ListSerializer(String.serializer()), json)
-    call.respondNegotiatedText(
-        jsonText = json,
-        textBody = renderGlobText(paths),
-        textContentType = ContentType.Text.Plain,
-    )
 }
 
 // -- Compound response --

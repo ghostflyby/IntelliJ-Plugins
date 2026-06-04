@@ -169,7 +169,8 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrl(key, json, "")}?glob=**/*.kt") {
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val response = client.get("${globPathUrl(key, rootId, "")}?glob=**/*.kt") {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)

@@ -14,6 +14,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeRegistry
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
@@ -22,6 +23,10 @@ import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiManager
+import com.intellij.psi.search.FileTypeIndex
+import com.intellij.psi.search.FilenameIndex
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.GlobalSearchScopesCore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import kotlin.io.encoding.Base64
@@ -195,7 +200,7 @@ internal suspend fun readStructureResult(
     val elements = readAction {
         val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList<StructureElement>()
         val builder = LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(psiFile)
-            as? TreeBasedStructureViewBuilder
+                as? TreeBasedStructureViewBuilder
             ?: return@readAction emptyList<StructureElement>()
         val editor = ImaginaryEditor(project, document)
         val model = builder.createStructureViewModel(editor)
@@ -270,30 +275,73 @@ internal suspend fun readGlobResult(
     file: VirtualFile,
     pattern: String,
     project: Project?,
+): ContentResult = readGlobResult(file, listOf(pattern), project)
+
+internal suspend fun readGlobResult(
+    file: VirtualFile,
+    patterns: List<String>,
+    project: Project?,
+    candidateLookup: GlobCandidateLookup = IntelliJGlobCandidateLookup,
 ): ContentResult {
     if (!file.isDirectory) throw ContentReadException("glob requires a directory, but the target is a file: ${file.path}")
 
     val paths = readAction {
-        readGlobViaVfsWalk(file, pattern, project)
+        readGlobPaths(file, patterns, project, candidateLookup)
     }
     return ContentResult(payload = JSON.encodeToString(paths), mimeType = "application/json", isBinary = false)
 }
 
-private fun readGlobViaVfsWalk(dir: VirtualFile, pattern: String, project: Project?): List<String> {
-    val matcher = runCatching { WorkspaceGlobPattern.compile(pattern) }
-        .getOrElse { error -> throw ContentReadException("Invalid glob pattern: ${error.message}") }
-    val result = mutableListOf<String>()
-    val dirPath = dir.path
-    VfsUtilCore.iterateChildrenRecursively(dir, null) { child ->
-        if (!child.isDirectory) {
-            val relative = child.path.removePrefix(dirPath).removePrefix("/")
-            if (matcher.matches(relative) && isVisibleGlobResult(project, child)) {
+internal fun readGlobPaths(
+    dir: VirtualFile,
+    patterns: List<String>,
+    project: Project?,
+    candidateLookup: GlobCandidateLookup = IntelliJGlobCandidateLookup,
+): List<String> {
+    val matchers = patterns.map { pattern ->
+        runCatching { WorkspaceGlobPattern.compile(pattern) }
+            .getOrElse { error -> throw ContentReadException("Invalid glob pattern: ${error.message}") }
+    }
+    if (matchers.isEmpty()) throw ContentReadException("glob requires at least one pattern")
+    val result = linkedSetOf<String>()
+    matchers.forEach { matcher ->
+        readGlobCandidates(dir, matcher, project, candidateLookup).forEach { child ->
+            val relative = matcher.relativePath(child, dir) ?: return@forEach
+            if (!child.isDirectory && relative.isNotBlank() && matcher.matches(relative) && isVisibleGlobResult(
+                    project,
+                    child,
+                )
+            ) {
                 result += relative
             }
         }
+    }
+    return result.sorted()
+}
+
+private fun readGlobCandidates(
+    dir: VirtualFile,
+    matcher: WorkspaceGlobPattern,
+    project: Project?,
+    candidateLookup: GlobCandidateLookup,
+): Collection<VirtualFile> {
+    if (project == null) return candidateLookup.walkFiles(dir)
+    val scope = GlobalSearchScopesCore.directoryScope(project, dir, true)
+    matcher.literalFileName?.let { return candidateLookup.filesByName(project, it, scope) }
+    matcher.extension?.let { extension ->
+        val fileType = FileTypeRegistry.getInstance().getFileTypeByExtension(extension)
+        if (fileType.name != "UNKNOWN") return candidateLookup.filesByType(fileType, scope)
+    }
+    return candidateLookup.walkFiles(dir)
+}
+
+private fun readGlobViaVfsWalk(dir: VirtualFile): List<VirtualFile> {
+    val result = mutableListOf<VirtualFile>()
+    VfsUtilCore.iterateChildrenRecursively(dir, null) { child ->
+        if (!child.isDirectory) {
+            result += child
+        }
         true
     }
-    result.sort()
     return result
 }
 
@@ -303,6 +351,23 @@ private fun isVisibleGlobResult(project: Project?, file: VirtualFile): Boolean {
     if (fileIndex.isExcluded(file)) return false
     if (FileTypeRegistry.getInstance().isFileIgnored(file)) return false
     return fileIndex.isInContent(file) || fileIndex.isInLibrary(file)
+}
+
+internal interface GlobCandidateLookup {
+    fun filesByName(project: Project, fileName: String, scope: GlobalSearchScope): Collection<VirtualFile>
+    fun filesByType(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile>
+    fun walkFiles(root: VirtualFile): Collection<VirtualFile>
+}
+
+private object IntelliJGlobCandidateLookup : GlobCandidateLookup {
+    override fun filesByName(project: Project, fileName: String, scope: GlobalSearchScope): Collection<VirtualFile> =
+        FilenameIndex.getVirtualFilesByName(fileName, scope)
+
+    override fun filesByType(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile> =
+        FileTypeIndex.getFiles(fileType, scope)
+
+    override fun walkFiles(root: VirtualFile): Collection<VirtualFile> =
+        readGlobViaVfsWalk(root)
 }
 
 private val JSON = Json {

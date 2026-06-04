@@ -13,13 +13,13 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.server.*
 import dev.ghostflyby.mcp.rest.restApi
+import dev.ghostflyby.mcp.server.*
+import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
-import io.ktor.server.application.install
 import io.ktor.server.resources.*
-import io.ktor.server.routing.routing
+import io.ktor.server.routing.*
 import io.modelcontextprotocol.kotlin.sdk.server.mcpStreamableHttp
 import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import kotlinx.coroutines.CoroutineScope
@@ -57,8 +57,8 @@ internal class WorkspaceMcpSdkServerService(
                     @Suppress("HttpUrlsUsage")
                     logger.info(
                         "Workspace MCP server started at " +
-                            "http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH (MCP) " +
-                            "http://$LOOPBACK_HOST:$port/api/v1 (REST)"
+                                "http://$LOOPBACK_HOST:$port$MCP_ENDPOINT_PATH (MCP) " +
+                                "http://$LOOPBACK_HOST:$port/api/v1 (REST)",
                     )
                 } finally {
                     core = null

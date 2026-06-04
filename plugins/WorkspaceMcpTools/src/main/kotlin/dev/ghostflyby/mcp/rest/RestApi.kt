@@ -15,6 +15,7 @@ internal fun Route.restApi() {
     route("/api/v1") {
         serverInfoRoutes()
         projectRoutes()
+        globRoutes()
         fileRoutes()
         fileWriteRoutes()
         filePatchRoutes()

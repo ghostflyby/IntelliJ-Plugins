@@ -1,7 +1,6 @@
 package dev.ghostflyby.mcp.filecontent
 
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
@@ -20,6 +19,9 @@ internal class WorkspaceGlobPatternTest {
     fun `globstar slash matches current and nested directories`() {
         val pattern = WorkspaceGlobPattern.compile("**/*.kt")
 
+        assertNull(pattern.literalFileName)
+        assertEquals("kt", pattern.extension)
+        assertTrue(pattern.recursive)
         assertTrue(pattern.matches("FileRoutes.kt"))
         assertTrue(pattern.matches("rest/FileRoutes.kt"))
         assertTrue(pattern.matches("deep/rest/FileRoutes.kt"))
@@ -39,8 +41,22 @@ internal class WorkspaceGlobPatternTest {
     fun `backslash escapes wildcard characters`() {
         val pattern = WorkspaceGlobPattern.compile("""literal\*.kt""")
 
+        assertEquals("literal*.kt", pattern.literalFileName)
         assertTrue(pattern.matches("literal*.kt"))
         assertFalse(pattern.matches("literalA.kt"))
+    }
+
+    @Test
+    fun `plan extracts literal file names and extensions`() {
+        val literal = WorkspaceGlobPattern.compile("src/**/Foo.kt")
+        assertEquals("Foo.kt", literal.literalFileName)
+        assertEquals("kt", literal.extension)
+        assertTrue(literal.recursive)
+
+        val testPattern = WorkspaceGlobPattern.compile("**/*Test.java")
+        assertNull(testPattern.literalFileName)
+        assertEquals("java", testPattern.extension)
+        assertTrue(testPattern.recursive)
     }
 
     @Test

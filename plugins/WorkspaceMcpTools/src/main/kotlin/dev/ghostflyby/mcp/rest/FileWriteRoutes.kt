@@ -15,7 +15,7 @@ import dev.ghostflyby.mcp.server.route.resources.VfsResource
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
-import io.ktor.server.resources.delete
+import io.ktor.server.resources.*
 import io.ktor.server.resources.post
 import io.ktor.server.resources.put
 import io.ktor.server.response.*
@@ -32,8 +32,9 @@ internal fun Route.fileWriteRoutes() {
 private fun Route.vfsWriteRoutes() {
     put<VfsResource> { resource: VfsResource ->
         vfsExec(call, resource.rawVfsUrl) { file, body ->
-            if (file != null) { file.setBinaryContent(body); WriteResult.Replaced(file) }
-            else WriteResult.NotFound
+            if (file != null) {
+                file.setBinaryContent(body); WriteResult.Replaced(file)
+            } else WriteResult.NotFound
         }
     }
     post<VfsResource> { resource: VfsResource ->
@@ -50,7 +51,13 @@ private fun Route.vfsWriteRoutes() {
 
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
     put<RootFileResource> { resource: RootFileResource ->
-        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, project, body, force ->
+        projectExec(
+            call,
+            resolver,
+            resource.projectKey,
+            resource.parent.rootId,
+            resource.relativePath,
+        ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
             val file = access.file
@@ -63,7 +70,13 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
         }
     }
     post<RootFileResource> { resource: RootFileResource ->
-        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, project, body, force ->
+        projectExec(
+            call,
+            resolver,
+            resource.projectKey,
+            resource.parent.rootId,
+            resource.relativePath,
+        ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
             val file = access.file
@@ -76,7 +89,13 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
         }
     }
     delete<RootFileResource> { resource: RootFileResource ->
-        projectExec(call, resolver, resource.projectKey, resource.parent.rootId, resource.relativePath) { access, _, _, force ->
+        projectExec(
+            call,
+            resolver,
+            resource.projectKey,
+            resource.parent.rootId,
+            resource.relativePath,
+        ) { access, _, _, force ->
             val file = access.file ?: return@projectExec WriteResult.NotFound
             if (!file.isDirectory && file.fileType.isBinary) {
                 return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
@@ -115,6 +134,7 @@ private suspend fun projectExec(
             val force = call.request.force()
             respondResult(call, op(access, resolved.project, body, force), force)
         }
+
         is WorkspaceProjectResolution.Unresolved ->
             call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
     }

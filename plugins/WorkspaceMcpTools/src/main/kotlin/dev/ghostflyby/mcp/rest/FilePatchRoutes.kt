@@ -18,6 +18,14 @@ import io.ktor.server.resources.patch
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
+import kotlin.text.String
+import kotlin.text.isBlank
+import kotlin.text.lowercase
+import kotlin.text.startsWith
+import kotlin.text.substringBefore
+import kotlin.text.toBooleanStrictOrNull
+import kotlin.text.toByteArray
+import kotlin.text.trim
 
 @Serializable
 private data class PatchResponse(
@@ -64,7 +72,8 @@ internal fun Route.filePatchRoutes() {
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath) ?: return@patch
+                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath)
+                    ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
                 val force = call.request.queryParameters["force"]?.toBooleanStrictOrNull() == true
                 if (access.targetIsBinary) {
@@ -124,7 +133,8 @@ private suspend fun applyCodex(
     val failed = mutableListOf<String>()
     for (section in sections) {
         try {
-            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else section.filePath
+            val fileRelPath =
+                if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else section.filePath
             if (!isDir && section.filePath != routeAccess.relativePath)
                 throw IllegalArgumentException("Section targets '${section.filePath}' but target is '${routeAccess.relativePath}'")
             val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
@@ -209,7 +219,11 @@ private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
 private fun patchPathFor(access: ProjectFileAccess): ProjectPatchPath {
     val file = access.file
     if (file != null) {
-        return ProjectPatchPath(relativePath = access.relativePath, nioPath = java.nio.file.Path.of(file.path), url = file.url)
+        return ProjectPatchPath(
+            relativePath = access.relativePath,
+            nioPath = java.nio.file.Path.of(file.path),
+            url = file.url,
+        )
     }
     val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
     val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")

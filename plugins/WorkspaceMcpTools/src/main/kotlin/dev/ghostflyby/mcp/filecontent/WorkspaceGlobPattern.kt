@@ -1,7 +1,13 @@
 package dev.ghostflyby.mcp.filecontent
 
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
+
 internal class WorkspaceGlobPattern private constructor(
     private val segments: List<List<Token>>,
+    internal val literalFileName: String?,
+    internal val extension: String?,
+    internal val recursive: Boolean,
 ) {
     internal fun matches(relativePath: String): Boolean {
         val pathSegments = normalizePath(relativePath)
@@ -57,6 +63,9 @@ internal class WorkspaceGlobPattern private constructor(
         return dp[tokens.size][text.length]
     }
 
+    internal fun relativePath(file: VirtualFile, root: VirtualFile): String? =
+        VfsUtilCore.getRelativePath(file, root, '/')
+
     private sealed interface Token {
         data object Star : Token
         data object Question : Token
@@ -72,7 +81,12 @@ internal class WorkspaceGlobPattern private constructor(
             val parts = normalizePath(normalized)
             require(parts.none { it == ".." }) { "Glob pattern must not contain '..' segments: $rawPattern" }
             val segments = parts.map { parseSegment(it, rawPattern) }
-            return WorkspaceGlobPattern(segments)
+            return WorkspaceGlobPattern(
+                segments = segments,
+                literalFileName = literalFileName(parts, segments),
+                extension = extension(parts, segments),
+                recursive = segments.any { it.singleOrNull() == Token.GlobStar },
+            )
         }
 
         private fun normalizePath(path: String): List<String> =
@@ -84,8 +98,7 @@ internal class WorkspaceGlobPattern private constructor(
             val tokens = mutableListOf<Token>()
             var index = 0
             while (index < segment.length) {
-                val char = segment[index]
-                when (char) {
+                when (val char = segment[index]) {
                     '*' -> tokens += Token.Star
                     '?' -> tokens += Token.Question
                     '\\' -> {
@@ -100,5 +113,32 @@ internal class WorkspaceGlobPattern private constructor(
             }
             return tokens
         }
+
+        private fun literalFileName(parts: List<String>, segments: List<List<Token>>): String? {
+            val lastSegment = segments.lastOrNull() ?: return null
+            if (lastSegment.any { it !is Token.Literal }) return null
+            return literalText(lastSegment)
+        }
+
+        private fun extension(parts: List<String>, segments: List<List<Token>>): String? {
+            val lastPart = parts.lastOrNull() ?: return null
+            val lastSegment = segments.lastOrNull() ?: return null
+            if (lastSegment.any { it is Token.GlobStar }) return null
+            if (lastSegment.all { it is Token.Literal }) return lastPart.substringAfterLast(
+                '.',
+                missingDelimiterValue = "",
+            )
+                .takeIf { it.isNotBlank() }
+            val dotIndex = lastSegment.indexOfLast { it == Token.Literal('.') }
+            if (dotIndex == -1) return null
+            val suffix = lastSegment.drop(dotIndex + 1)
+            if (suffix.any { it !is Token.Literal }) return null
+            return suffix
+                .joinToString("") { (it as Token.Literal).value.toString() }
+                .takeIf { it.isNotBlank() }
+        }
+
+        private fun literalText(tokens: List<Token>): String =
+            tokens.joinToString("") { (it as Token.Literal).value.toString() }
     }
 }

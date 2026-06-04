@@ -29,6 +29,7 @@ private fun StringBuilder.appendYamlValue(key: String, value: Any?) {
             appendLine("$key:")
             value.forEach { item -> appendLine("  - ${yamlScalar(item)}") }
         }
+
         else -> appendLine("$key: ${yamlScalar(value)}")
     }
 }
@@ -78,7 +79,13 @@ internal fun renderDirectoryListingText(listing: DirectoryListing): String {
 }
 
 internal fun renderGlobText(paths: List<String>): String {
-    return paths.joinToString(separator = "\n", postfix = if (paths.isEmpty()) "" else "\n")
+    return paths.joinToString(separator = "\n", postfix = if (paths.isEmpty()) "" else "\n") { path ->
+        val segments = path.split('/').filter { it.isNotEmpty() }
+        buildString {
+            repeat((segments.size - 1).coerceAtLeast(0)) { append('\t') }
+            append(segments.lastOrNull().orEmpty())
+        }
+    }
 }
 
 internal fun fencedCode(content: String, language: String): String {
