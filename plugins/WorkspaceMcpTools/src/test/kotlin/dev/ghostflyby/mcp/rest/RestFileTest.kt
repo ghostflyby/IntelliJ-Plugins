@@ -14,6 +14,7 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.resources.*
@@ -363,7 +364,7 @@ internal class RestFileTest {
             Assertions.assertEquals(ContentType.Text.Plain.withCharset(Charsets.UTF_8), response.responseContentType())
 
             val names = response.bodyAsText().lines().filter { it.isNotBlank() }
-            Assertions.assertEquals(listOf("RootFile.kt", "\tNestedFile.kt"), names)
+            Assertions.assertEquals(listOf("@ ", "RootFile.kt", "@ nested/", "NestedFile.kt"), names)
         }
     }
 
@@ -407,6 +408,74 @@ internal class RestFileTest {
 
             val invalid = client.get("${globPathUrl(key, rootId, "glob")}?glob=**foo")
             Assertions.assertEquals(HttpStatusCode.BadRequest, invalid.status)
+        }
+    }
+
+    @Test
+    fun `glob prefix block single root file`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
+            val response = client.get("${globPathUrl(key, rootId, "glob")}?glob=*.txt") {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            // JSON is unchanged; this test validates fixture
+            val body = json.parseToJsonElement(response.bodyAsText()).jsonArray
+            Assertions.assertEquals(listOf("RootFile.txt"), body.map { it.jsonPrimitive.content })
+        }
+    }
+
+    @Test
+    fun `glob prefix block mixed root and nested`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
+            val response = client.get("${globPathUrl(key, rootId, "glob")}?glob=**/*.kt")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val lines = response.bodyAsText().lines().filter { it.isNotBlank() }
+            // RootFile.kt is at root (prefix @ ), NestedFile.kt in nested/
+            Assertions.assertEquals(4, lines.size)
+            Assertions.assertEquals("@ ", lines[0])
+            Assertions.assertEquals("RootFile.kt", lines[1])
+            Assertions.assertEquals("@ nested/", lines[2])
+            Assertions.assertEquals("NestedFile.kt", lines[3])
+        }
+    }
+
+    @Test
+    fun `glob prefix block multiple files same directory`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
+            val response = client.get("${globPathUrl(key, rootId, "glob")}?glob=**/*.*")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val lines = response.bodyAsText().lines().filter { it.isNotBlank() }
+            // All .txt/.kt/.kts files in glob/
+            val prefixLines = lines.filter { it.startsWith("@") }
+            // Should have @  and @ nested/
+            Assertions.assertTrue(prefixLines.contains("@ "))
+            Assertions.assertTrue(prefixLines.contains("@ nested/"))
         }
     }
 
