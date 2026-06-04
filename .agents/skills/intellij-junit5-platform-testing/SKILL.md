@@ -115,7 +115,8 @@ assertEquals(expected, actual)
 - When a test name says a fast path or special route is used, make that route observable. Result equality alone often
   only proves behaviour, not the path taken.
 - Avoid top-level mutable state for route-observation tests. Inject a small strategy or fake object per test instead.
-
+- If filetype needed, use common types like plain text or XML instead of plugin-dependent ones like Kotlin unless the
+  plugin is explicitly depending on the providing plugin.
 ## Cleanup
 
 - Prefer fixture-owned clean-up to manual deletion.
