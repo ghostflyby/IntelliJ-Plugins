@@ -3,17 +3,26 @@ package dev.ghostflyby.mcp.rest
 import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
+import io.ktor.http.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+internal val TestMarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
+
+internal fun HttpResponse.responseContentType(): ContentType? {
+    return headers[HttpHeaders.ContentType]?.let(ContentType::parse)
+}
 
 internal suspend fun HttpClient.firstWorkspaceRootId(projectKey: String, json: Json): String {
     return workspaceRootId(projectKey, json, index = 0)
 }
 
 internal suspend fun HttpClient.workspaceRootId(projectKey: String, json: Json, index: Int): String {
-    val roots = get("/api/v1/projects/$projectKey/roots")
+    val roots = get("/api/v1/projects/$projectKey/roots") {
+        accept(ContentType.Application.Json)
+    }
     return json.parseToJsonElement(roots.bodyAsText())
         .jsonArray
         .getOrNull(index)
@@ -25,7 +34,9 @@ internal suspend fun HttpClient.workspaceRootId(projectKey: String, json: Json, 
 }
 
 internal suspend fun HttpClient.workspaceRootIdByUrl(projectKey: String, json: Json, rootUrl: String): String {
-    val roots = get("/api/v1/projects/$projectKey/roots")
+    val roots = get("/api/v1/projects/$projectKey/roots") {
+        accept(ContentType.Application.Json)
+    }
     return json.parseToJsonElement(roots.bodyAsText())
         .jsonArray
         .firstOrNull { root ->

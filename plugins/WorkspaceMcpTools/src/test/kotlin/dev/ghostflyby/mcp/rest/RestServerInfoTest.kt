@@ -6,14 +6,13 @@
 
 package dev.ghostflyby.mcp.rest
 
-import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.HttpStatusCode
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.server.resources.Resources
-import io.ktor.server.routing.routing
-import io.ktor.server.testing.testApplication
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.resources.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -30,13 +29,33 @@ internal class RestServerInfoTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/server/info")
+            val response = client.get("/api/v1/server/info") {
+                accept(ContentType.Application.Json)
+            }
             assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
             val parsed = json.decodeFromString<Map<String, String>>(body)
             assertTrue(parsed.containsKey("instanceKey"))
             assertTrue(parsed.containsKey("version"))
+        }
+    }
+
+    @Test
+    fun `server info defaults to markdown front matter`() {
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/server/info")
+            assertEquals(HttpStatusCode.OK, response.status)
+            assertEquals(TestMarkdownContentType, response.responseContentType())
+
+            val body = response.bodyAsText()
+            assertTrue(body.startsWith("---\n"))
+            assertTrue(body.contains("instanceKey:"))
+            assertTrue(body.contains("version:"))
         }
     }
 }

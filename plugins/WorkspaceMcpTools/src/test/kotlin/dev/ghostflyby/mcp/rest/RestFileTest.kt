@@ -87,7 +87,9 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -100,6 +102,27 @@ internal class RestFileTest {
             Assertions.assertTrue(
                 parsed["writableKinds"]?.jsonArray?.any { it.jsonPrimitive.content == "patch" } == true,
             )
+        }
+    }
+
+    @Test
+    fun `file meta defaults to markdown front matter`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+
+            val body = response.bodyAsText()
+            Assertions.assertTrue(body.startsWith("---\n"))
+            Assertions.assertTrue(body.contains("name: plain.txt"))
+            Assertions.assertTrue(body.contains("classification: WORKSPACE_TEXT"))
         }
     }
 
@@ -181,7 +204,9 @@ internal class RestFileTest {
             routing { restApi() }
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get("${rootUrl(key, rootId)}?meta")
+            val response = client.get("${rootUrl(key, rootId)}?meta") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -234,7 +259,9 @@ internal class RestFileTest {
                 ?: error("second root missing")
             val secondRootId = client.workspaceRootIdByUrl(key, json, secondRoot.url)
             val projectRootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get("${rootPathUrl(key, secondRootId, "second.txt")}?meta")
+            val response = client.get("${rootPathUrl(key, secondRootId, "second.txt")}?meta") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -256,7 +283,9 @@ internal class RestFileTest {
             routing { restApi() }
 
             val response =
-                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content")
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content") {
+                    accept(ContentType.Application.Json)
+                }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -264,6 +293,28 @@ internal class RestFileTest {
             Assertions.assertTrue(parsed.containsKey("meta"))
             Assertions.assertTrue(parsed.containsKey("content"))
             Assertions.assertEquals("hello sample", parsed["content"]?.jsonPrimitive?.content?.trim())
+        }
+    }
+
+    @Test
+    fun `file meta and content default to markdown document`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response =
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+
+            val body = response.bodyAsText()
+            Assertions.assertTrue(body.startsWith("---\n"))
+            Assertions.assertTrue(body.contains("name: plain.txt"))
+            Assertions.assertTrue(body.contains("```txt\nhello sample\n```"))
         }
     }
 
@@ -277,7 +328,9 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")}?glob=*")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")}?glob=*") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -285,6 +338,32 @@ internal class RestFileTest {
             Assertions.assertTrue(parsed.isNotEmpty())
             val names = parsed.map { it.jsonPrimitive.content }
             Assertions.assertTrue(names.any { it.endsWith(".md") || it.endsWith(".xml") })
+        }
+    }
+
+    @Test
+    fun `directory content defaults to tab indented text and JSON accept returns listing`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val defaultResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src"))
+            Assertions.assertEquals(HttpStatusCode.OK, defaultResponse.status)
+            Assertions.assertEquals(
+                ContentType.Text.Plain.withCharset(Charsets.UTF_8),
+                defaultResponse.responseContentType(),
+            )
+            Assertions.assertTrue(defaultResponse.bodyAsText().lines().any { it.isNotBlank() })
+
+            val jsonResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, jsonResponse.status)
+            Assertions.assertTrue(json.parseToJsonElement(jsonResponse.bodyAsText()).jsonObject.containsKey("children"))
         }
     }
 }

@@ -41,7 +41,9 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects")
+            val response = client.get("/api/v1/projects") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -56,6 +58,21 @@ internal class RestProjectTest {
     }
 
     @Test
+    fun `project list defaults to markdown table`() {
+        project
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/projects")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            Assertions.assertTrue(response.bodyAsText().contains("| projectKey | name | basePath |"))
+        }
+    }
+
+    @Test
     fun `project detail returns project metadata`() {
         project
         val key = workspaceProjectKey(project)
@@ -65,7 +82,9 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key")
+            val response = client.get("/api/v1/projects/$key") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
@@ -84,7 +103,9 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/roots")
+            val response = client.get("/api/v1/projects/$key/roots") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val root = json.parseToJsonElement(response.bodyAsText()).jsonArray.first().jsonObject
@@ -94,6 +115,25 @@ internal class RestProjectTest {
             Assertions.assertEquals("workspace", root["kind"]?.jsonPrimitive?.content)
             Assertions.assertEquals("true", root["readable"]?.jsonPrimitive?.content)
             Assertions.assertEquals("true", root["writable"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `project roots default to markdown table`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("/api/v1/projects/$key/roots")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            Assertions.assertTrue(
+                response.bodyAsText().contains("| id | displayName | kind | readable | writable | url |"),
+            )
         }
     }
 

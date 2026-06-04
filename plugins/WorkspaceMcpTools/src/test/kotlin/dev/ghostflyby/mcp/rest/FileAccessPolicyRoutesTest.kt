@@ -76,7 +76,9 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?meta")
+            val meta = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?meta") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
@@ -118,7 +120,9 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("${client.rootPathUrl(key, json, "binary.bin")}?meta")
+            val meta = client.get("${client.rootPathUrl(key, json, "binary.bin")}?meta") {
+                accept(ContentType.Application.Json)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_BINARY", parsed["classification"]?.jsonPrimitive?.content)
