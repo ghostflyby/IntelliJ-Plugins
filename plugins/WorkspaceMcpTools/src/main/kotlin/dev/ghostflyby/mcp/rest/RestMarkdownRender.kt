@@ -78,13 +78,29 @@ internal fun renderDirectoryListingText(listing: DirectoryListing): String {
     return listing.children.joinToString(separator = "\n", postfix = if (listing.children.isEmpty()) "" else "\n")
 }
 
-internal fun renderGlobText(paths: List<String>): String {
-    return paths.joinToString(separator = "\n", postfix = if (paths.isEmpty()) "" else "\n") { path ->
-        val segments = path.split('/').filter { it.isNotEmpty() }
-        buildString {
-            repeat((segments.size - 1).coerceAtLeast(0)) { append('\t') }
-            append(segments.lastOrNull().orEmpty())
+/**
+ * Prefix Block format: compresses repeated directory prefixes.
+ * Each prefix block holds up to 16 entries before repeating the prefix.
+ *
+ * @ <prefix>/
+ * <filename>
+ * ...
+ */
+internal fun renderPrefixBlock(paths: List<String>): String = buildString {
+    var currentPrefix: String? = null
+    var count = 0
+    for (path in paths) {
+        val lastSlash = path.lastIndexOf('/')
+        val prefix = if (lastSlash >= 0) path.substring(0, lastSlash + 1) else ""
+        val name = if (lastSlash >= 0) path.substring(lastSlash + 1) else path
+
+        if (prefix != currentPrefix || count >= 16) {
+            if (prefix.isNotEmpty()) appendLine("@ $prefix") else appendLine("@ ")
+            currentPrefix = prefix
+            count = 0
         }
+        appendLine(name)
+        count++
     }
 }
 

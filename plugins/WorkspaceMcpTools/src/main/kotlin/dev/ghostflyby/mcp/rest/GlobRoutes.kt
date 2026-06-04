@@ -86,7 +86,7 @@ private suspend fun respondGlob(
             val paths = Json.decodeFromString(ListSerializer(String.serializer()), json)
             call.respondNegotiatedText(
                 jsonText = json,
-                textBody = renderGlobText(paths),
+                textBody = renderPrefixBlock(paths),
                 textContentType = ContentType.Text.Plain,
             )
         }
