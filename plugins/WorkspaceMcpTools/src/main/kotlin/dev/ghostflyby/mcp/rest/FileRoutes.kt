@@ -235,7 +235,16 @@ private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, proj
 }
 
 private suspend fun globOnly(call: ApplicationCall, file: VirtualFile, pattern: String, project: Project?) {
-    val json = readGlobResult(file, pattern, project).payload
+    val json = try {
+        readGlobResult(file, pattern, project).payload
+    } catch (error: ContentReadException) {
+        call.respondNegotiatedError(
+            HttpStatusCode.BadRequest,
+            mapOf("error" to error.message.orEmpty()),
+            error.message.orEmpty(),
+        )
+        return
+    }
     val paths = kotlinx.serialization.json.Json.decodeFromString(ListSerializer(String.serializer()), json)
     call.respondNegotiatedText(
         jsonText = json,

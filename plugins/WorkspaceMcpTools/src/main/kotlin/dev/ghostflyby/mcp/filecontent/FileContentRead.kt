@@ -14,21 +14,16 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.fileTypes.FileTypeRegistry
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiManager
-import com.intellij.psi.search.FileTypeIndex
-import com.intellij.psi.search.GlobalSearchScope
-import com.intellij.psi.search.GlobalSearchScopesCore
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
-import java.nio.file.FileSystems
-import java.nio.file.Path
 import kotlin.io.encoding.Base64
 
 internal fun validateProjectRelativePath(relativePath: String) {
@@ -271,50 +266,28 @@ internal data class DirectoryListing(
     val children: List<String>,
 )
 
-// -- glob expansion --
-
-internal fun interface FileTypeIndexLookup {
-    fun getFiles(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile>
-}
-
-private object IntelliJFileTypeIndexLookup : FileTypeIndexLookup {
-    override fun getFiles(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile> =
-        FileTypeIndex.getFiles(fileType, scope)
-}
-
 internal suspend fun readGlobResult(
     file: VirtualFile,
     pattern: String,
     project: Project?,
-    fileTypeIndexLookup: FileTypeIndexLookup = IntelliJFileTypeIndexLookup,
 ): ContentResult {
     if (!file.isDirectory) throw ContentReadException("glob requires a directory, but the target is a file: ${file.path}")
 
     val paths = readAction {
-        project?.let { p ->
-            tryFastExtensionGlob(pattern)?.let { (ft, _) ->
-                readGlobViaIndex(
-                    file,
-                    ft,
-                    pattern,
-                    p,
-                    fileTypeIndexLookup,
-                )
-            }
-        }
-            ?: readGlobViaVfsWalk(file, pattern)
+        readGlobViaVfsWalk(file, pattern, project)
     }
     return ContentResult(payload = JSON.encodeToString(paths), mimeType = "application/json", isBinary = false)
 }
 
-private fun readGlobViaVfsWalk(dir: VirtualFile, pattern: String): List<String> {
-    val matcher = createGlobMatcher(pattern)
+private fun readGlobViaVfsWalk(dir: VirtualFile, pattern: String, project: Project?): List<String> {
+    val matcher = runCatching { WorkspaceGlobPattern.compile(pattern) }
+        .getOrElse { error -> throw ContentReadException("Invalid glob pattern: ${error.message}") }
     val result = mutableListOf<String>()
     val dirPath = dir.path
     VfsUtilCore.iterateChildrenRecursively(dir, null) { child ->
         if (!child.isDirectory) {
             val relative = child.path.removePrefix(dirPath).removePrefix("/")
-            if (matcher(relative)) {
+            if (matcher.matches(relative) && isVisibleGlobResult(project, child)) {
                 result += relative
             }
         }
@@ -324,46 +297,12 @@ private fun readGlobViaVfsWalk(dir: VirtualFile, pattern: String): List<String> 
     return result
 }
 
-private fun createGlobMatcher(pattern: String): (String) -> Boolean {
-    val matchers = buildList {
-        add(createPathMatcher(pattern))
-        if (pattern.startsWith("**/")) {
-            add(createPathMatcher(pattern.removePrefix("**/")))
-        }
-    }
-    return { relative -> matchers.any { matcher -> matcher.matches(Path.of(relative)) } }
-}
-
-private fun createPathMatcher(pattern: String) =
-    runCatching { FileSystems.getDefault().getPathMatcher("glob:$pattern") }
-        .getOrElse { throw ContentReadException("Invalid glob pattern: $pattern") }
-
-private val EXT_ONLY_GLOB = Regex("^(.+/)?\\*\\.(\\w+)$")
-
-private fun tryFastExtensionGlob(pattern: String): Pair<FileType, String>? {
-    val match = EXT_ONLY_GLOB.matchEntire(pattern) ?: return null
-    val extension = match.groupValues[2]
-    val fileType = FileTypeRegistry.getInstance().getFileTypeByExtension(extension)
-    return fileType to extension
-}
-
-private fun readGlobViaIndex(
-    dir: VirtualFile,
-    fileType: FileType,
-    pattern: String,
-    project: Project,
-    fileTypeIndexLookup: FileTypeIndexLookup,
-): List<String> {
-    val scope = GlobalSearchScopesCore.directoryScope(project, dir, true)
-    val matcher = createGlobMatcher(pattern)
-    val dirPath = dir.path + "/"
-    return fileTypeIndexLookup.getFiles(fileType, scope)
-        .filter { f ->
-            val relative = f.path.removePrefix(dirPath)
-            relative != f.path && matcher(relative)
-        }
-        .map { it.path.removePrefix(dirPath) }
-        .sorted()
+private fun isVisibleGlobResult(project: Project?, file: VirtualFile): Boolean {
+    if (project == null) return true
+    val fileIndex = ProjectFileIndex.getInstance(project)
+    if (fileIndex.isExcluded(file)) return false
+    if (FileTypeRegistry.getInstance().isFileIgnored(file)) return false
+    return fileIndex.isInContent(file) || fileIndex.isInLibrary(file)
 }
 
 private val JSON = Json {

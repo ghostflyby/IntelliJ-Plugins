@@ -56,6 +56,11 @@ internal class RestFileTest {
         secondModuleFixture.get()
         secondRootPathFixture.get().createDirectories()
         secondRootPathFixture.get().resolve("second.txt").writeText("second root")
+        val globDir = projectPathFixture.get().resolve("glob")
+        globDir.resolve("nested").createDirectories()
+        globDir.resolve("RootFile.kt").writeText("class RootFile")
+        globDir.resolve("RootFile.txt").writeText("plain")
+        globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
         contentRootFixture.get().virtualFile.refresh(false, true)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())?.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
@@ -319,7 +324,7 @@ internal class RestFileTest {
     }
 
     @Test
-    fun `file glob lists source root files`() {
+    fun `file glob star matches current directory files only`() {
         project
         val key = workspaceProjectKey(project)
 
@@ -328,16 +333,52 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")}?glob=*") {
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob")}?glob=*.kt") {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val body = response.bodyAsText()
             val parsed = json.parseToJsonElement(body).jsonArray
-            Assertions.assertTrue(parsed.isNotEmpty())
             val names = parsed.map { it.jsonPrimitive.content }
-            Assertions.assertTrue(names.any { it.endsWith(".md") || it.endsWith(".xml") })
+            Assertions.assertEquals(listOf("RootFile.kt"), names)
+        }
+    }
+
+    @Test
+    fun `file glob globstar matches current and nested directory files`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob")}?glob=**/*.kt")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(ContentType.Text.Plain.withCharset(Charsets.UTF_8), response.responseContentType())
+
+            val names = response.bodyAsText().lines().filter { it.isNotBlank() }
+            Assertions.assertEquals(listOf("RootFile.kt", "nested/NestedFile.kt"), names)
+        }
+    }
+
+    @Test
+    fun `file glob rejects file targets and invalid patterns`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val fileTarget = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?glob=*.kt")
+            Assertions.assertEquals(HttpStatusCode.BadRequest, fileTarget.status)
+
+            val invalid = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob")}?glob=**foo")
+            Assertions.assertEquals(HttpStatusCode.BadRequest, invalid.status)
         }
     }
 

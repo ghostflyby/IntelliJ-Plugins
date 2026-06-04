@@ -43,8 +43,9 @@ internal class FileAccessPolicyRoutesTest {
         Files.writeString(root.resolve("normal.txt"), "normal")
         Files.write(root.resolve("binary.bin"), byteArrayOf(0, 1, 2, 3))
         Files.writeString(root.resolve("ignored.generated"), "ignored")
+        Files.writeString(root.resolve("visible.kt"), "class Visible")
         Files.createDirectories(root.resolve("excluded"))
-        Files.writeString(root.resolve("excluded/hidden.txt"), "hidden")
+        Files.writeString(root.resolve("excluded/hidden.kt"), "class Hidden")
         Files.createDirectories(root.resolve("src"))
         Files.writeString(root.resolve("src/source.txt"), "source")
 
@@ -149,13 +150,33 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val get = client.get(client.rootPathUrl(key, json, "excluded/hidden.txt"))
+            val get = client.get(client.rootPathUrl(key, json, "excluded/hidden.kt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, get.status)
 
-            val put = client.put(client.rootPathUrl(key, json, "excluded/hidden.txt")) {
+            val put = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, put.status)
+        }
+    }
+
+    @Test
+    fun `glob silently filters excluded files`() {
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("${client.rootPathUrl(key, json, "")}?glob=**/*.kt") {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val body = response.bodyAsText()
+            Assertions.assertTrue(body.contains("visible.kt"))
+            Assertions.assertFalse(body.contains("excluded/hidden.kt"))
         }
     }
 }
