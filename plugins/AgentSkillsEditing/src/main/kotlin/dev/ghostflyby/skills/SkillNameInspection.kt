@@ -28,7 +28,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
-import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFrontMatterHeader
+import com.intellij.psi.util.elementType
+import org.intellij.plugins.markdown.lang.MarkdownElementType
+import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
 import org.jetbrains.yaml.YAMLElementGenerator
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
@@ -49,8 +51,7 @@ internal class SkillNameInspection : LocalInspectionTool() {
         val yamlFile = holder.file as? YAMLFile ?: return PsiElementVisitor.EMPTY_VISITOR
         val injectionManager = getInstance(yamlFile.project)
         val host = injectionManager.getInjectionHost(yamlFile) ?: return PsiElementVisitor.EMPTY_VISITOR
-        @Suppress("UnstableApiUsage")
-        if (host !is MarkdownFrontMatterHeader) return PsiElementVisitor.EMPTY_VISITOR
+        if (host.elementType != MarkdownElementType.platformType(FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER)) return PsiElementVisitor.EMPTY_VISITOR
         val physicalFile = host.containingFile
         if (physicalFile.name != "SKILL.md") return PsiElementVisitor.EMPTY_VISITOR
 
