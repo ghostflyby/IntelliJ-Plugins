@@ -77,7 +77,7 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?meta=true") {
+            val meta = client.get(client.rootPathUrl(key, json, "ignored.generated", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
@@ -88,7 +88,7 @@ internal class FileAccessPolicyRoutesTest {
             Assertions.assertEquals(HttpStatusCode.OK, content.status)
             Assertions.assertEquals("ignored", content.bodyAsText().trim())
 
-            val structure = client.get("${client.rootPathUrl(key, json, "ignored.generated")}?structure=true")
+            val structure = client.get(client.rootPathUrl(key, json, "ignored.generated", structure = true))
             Assertions.assertEquals(HttpStatusCode.OK, structure.status)
         }
     }
@@ -121,7 +121,7 @@ internal class FileAccessPolicyRoutesTest {
             install(Resources)
             routing { restApi() }
 
-            val meta = client.get("${client.rootPathUrl(key, json, "binary.bin")}?meta=true") {
+            val meta = client.get(client.rootPathUrl(key, json, "binary.bin", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
@@ -158,13 +158,13 @@ internal class FileAccessPolicyRoutesTest {
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, put.status)
 
-            val explicitFalse = client.put("${client.rootPathUrl(key, json, "excluded/hidden.kt")}?force=false") {
+            val explicitFalse = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt", force = false)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitFalse.status)
             Assertions.assertTrue(explicitFalse.bodyAsText().contains("\"force\":\"false\""))
 
-            val explicitTrue = client.put("${client.rootPathUrl(key, json, "excluded/hidden.kt")}?force=true") {
+            val explicitTrue = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt", force = true)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitTrue.status)
@@ -182,7 +182,7 @@ internal class FileAccessPolicyRoutesTest {
             routing { restApi() }
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get("${globPathUrl(key, rootId, "")}?glob=**/*.kt") {
+            val response = client.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)

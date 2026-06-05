@@ -41,7 +41,7 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects") {
+            val response = client.get(apiUrl(Api.Projects())) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -65,7 +65,7 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects")
+            val response = client.get(apiUrl(Api.Projects()))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             Assertions.assertTrue(response.bodyAsText().contains("| projectKey | name | basePath |"))
@@ -82,7 +82,7 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key") {
+            val response = client.get(apiUrl(Api.Project(key))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -103,7 +103,7 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/roots") {
+            val response = client.get(apiUrl(Api.Project.Roots(Api.Project(key)))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -128,7 +128,7 @@ internal class RestProjectTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/roots")
+            val response = client.get(apiUrl(Api.Project.Roots(Api.Project(key))))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             Assertions.assertTrue(
@@ -146,7 +146,7 @@ internal class RestProjectTest {
             routing { restApi() }
 
             // With only one open project, the resolver falls back to it
-            val response = client.get("/api/v1/projects/nonexistent")
+            val response = client.get(apiUrl(Api.Project("nonexistent")))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             val body = response.bodyAsText()
             Assertions.assertTrue(body.contains("projectKey"))

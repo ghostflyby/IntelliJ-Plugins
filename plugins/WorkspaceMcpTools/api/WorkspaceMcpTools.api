@@ -48,11 +48,11 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$GlobEntry$Companion {
 
 public final class dev/ghostflyby/mcp/rest/Api$Project$GlobEntry$Glob : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry$Glob$Companion;
-	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry;Ljava/lang/String;)V
-	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry;Ljava/util/List;)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry;
 	public fun getProjectKey ()Ljava/lang/String;
-	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRelativePath ()Ljava/util/List;
 	public fun getRootId ()Ljava/lang/String;
 }
 
@@ -100,15 +100,15 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$Root$Companion {
 
 public final class dev/ghostflyby/mcp/rest/Api$Project$Root$File : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$Root$File$Companion;
-	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/lang/String;ZZZZZ)V
-	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/lang/String;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZ)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getContent ()Z
 	public final fun getExists ()Z
 	public final fun getForce ()Z
 	public final fun getMeta ()Z
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project$Root;
 	public fun getProjectKey ()Ljava/lang/String;
-	public final fun getRelativePath ()Ljava/lang/String;
+	public final fun getRelativePath ()Ljava/util/List;
 	public fun getRootId ()Ljava/lang/String;
 	public final fun getStructure ()Z
 }
@@ -187,13 +187,14 @@ public final class dev/ghostflyby/mcp/rest/Api$ServerInfo$Companion {
 
 public final class dev/ghostflyby/mcp/rest/Api$Vfs {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Vfs$Companion;
-	public fun <init> (Ljava/lang/String;ZZZZZ)V
-	public synthetic fun <init> (Ljava/lang/String;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> ()V
+	public fun <init> (Ljava/util/List;ZZZZZ)V
+	public synthetic fun <init> (Ljava/util/List;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getContent ()Z
 	public final fun getExists ()Z
 	public final fun getForce ()Z
 	public final fun getMeta ()Z
-	public final fun getRawVfsUrl ()Ljava/lang/String;
+	public final fun getRawVfsUrl ()Ljava/util/List;
 	public final fun getStructure ()Z
 }
 

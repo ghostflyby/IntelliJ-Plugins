@@ -36,7 +36,7 @@ internal fun Route.globRoutes() {
             )
             return@get
         }
-        respondGlob(call, resolver, resource.parent, resource.relativePath, patterns)
+        respondGlob(call, resolver, resource.parent, resource.relativePath.toRoutePath(), patterns)
     }
 }
 

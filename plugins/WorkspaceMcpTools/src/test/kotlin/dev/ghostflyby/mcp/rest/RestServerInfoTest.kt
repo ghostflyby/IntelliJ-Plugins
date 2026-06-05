@@ -29,7 +29,7 @@ internal class RestServerInfoTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/server/info") {
+            val response = client.get(apiUrl(Api.ServerInfo())) {
                 accept(ContentType.Application.Json)
             }
             assertEquals(HttpStatusCode.OK, response.status)
@@ -48,7 +48,7 @@ internal class RestServerInfoTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/server/info")
+            val response = client.get(apiUrl(Api.ServerInfo()))
             assertEquals(HttpStatusCode.OK, response.status)
             assertEquals(TestMarkdownContentType, response.responseContentType())
 

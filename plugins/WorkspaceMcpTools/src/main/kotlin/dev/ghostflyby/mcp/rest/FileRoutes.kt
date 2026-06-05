@@ -32,7 +32,7 @@ private data class FileContentResponse(
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
     get<Api.Vfs> { resource ->
-        val rawVfsUrl = resource.rawVfsUrl
+        val rawVfsUrl = resource.rawVfsUrl.toRoutePath()
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
         val project = if (file != null && resource.structure)
             projectForRawVfsUrl(rawVfsUrl, resolver) else null
@@ -56,7 +56,7 @@ internal fun Route.fileRoutes() {
             call,
             resolver,
             resource.parent,
-            resource.relativePath,
+            resource.relativePath.toRoutePath(),
             resource.meta,
             resource.content,
             resource.exists,

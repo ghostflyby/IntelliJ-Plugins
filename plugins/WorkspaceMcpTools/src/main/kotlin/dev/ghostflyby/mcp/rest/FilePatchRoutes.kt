@@ -63,7 +63,8 @@ internal fun Route.filePatchRoutes() {
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
-                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath)
+                val relativePath = resource.relativePath.toRoutePath()
+                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, relativePath)
                     ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
                 val force = resource.force

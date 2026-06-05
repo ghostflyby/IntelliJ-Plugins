@@ -28,19 +28,19 @@ internal fun Route.fileWriteRoutes() {
 // ── VFS ─────────────────────────────────────────────────────
 private fun Route.vfsWriteRoutes() {
     put<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl) { file, body ->
+        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, body ->
             if (file != null) {
                 file.setBinaryContent(body); WriteResult.Replaced(file)
             } else WriteResult.NotFound
         }
     }
     post<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl) { file, _ ->
+        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, _ ->
             if (file != null) WriteResult.Conflict else WriteResult.NotFound
         }
     }
     delete<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl) { file, _ -> deleteFileResult(file) }
+        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, _ -> deleteFileResult(file) }
     }
 }
 
@@ -53,7 +53,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             resolver,
             resource.projectKey,
             resource.parent.rootId,
-            resource.relativePath,
+            resource.relativePath.toRoutePath(),
             force,
         ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
@@ -74,7 +74,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             resolver,
             resource.projectKey,
             resource.parent.rootId,
-            resource.relativePath,
+            resource.relativePath.toRoutePath(),
             force,
         ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
@@ -95,7 +95,7 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             resolver,
             resource.projectKey,
             resource.parent.rootId,
-            resource.relativePath,
+            resource.relativePath.toRoutePath(),
             force,
         ) { access, _, _, force ->
             val file = access.file ?: return@projectExec WriteResult.NotFound

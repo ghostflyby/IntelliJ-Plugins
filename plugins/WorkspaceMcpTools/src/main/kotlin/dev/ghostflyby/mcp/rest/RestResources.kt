@@ -52,7 +52,7 @@ public object Api {
             @Resource("/{relativePath...}")
             public class File(
                 public val parent: Root,
-                public val relativePath: String = "",
+                public val relativePath: List<String> = emptyList(),
                 public val meta: Boolean = false,
                 public val content: Boolean = false,
                 public val exists: Boolean = false,
@@ -72,7 +72,7 @@ public object Api {
             @Resource("/{relativePath...}")
             public class Glob(
                 public val parent: GlobEntry,
-                public val relativePath: String = "",
+                public val relativePath: List<String> = emptyList(),
             ) : ProjectProvider by parent, RootProvider by parent
         }
     }
@@ -80,7 +80,7 @@ public object Api {
     @Serializable
     @Resource("/vfs/{rawVfsUrl...}")
     public class Vfs(
-        public val rawVfsUrl: String,
+        public val rawVfsUrl: List<String> = emptyList(),
         public val meta: Boolean = false,
         public val content: Boolean = false,
         public val exists: Boolean = false,
