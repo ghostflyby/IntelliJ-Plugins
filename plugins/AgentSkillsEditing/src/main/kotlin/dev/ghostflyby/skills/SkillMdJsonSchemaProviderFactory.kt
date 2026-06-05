@@ -42,7 +42,11 @@ private class SkillMdJsonSchemaFileProvider : JsonSchemaFileProvider {
 
     override fun getPresentableName(): String = getName()
 
-    override fun getSchemaType(): SchemaType = SchemaType.embeddedSchema
+    /**
+     * When multiple [JsonSchemaFileProvider] available, multiple non-userschema cause
+     * the final schema to be no-schema, so we give it a userschema
+     */
+    override fun getSchemaType(): SchemaType = SchemaType.userSchema
 
     override fun isAvailable(file: VirtualFile): Boolean {
         return file.name == "SKILL.md"
