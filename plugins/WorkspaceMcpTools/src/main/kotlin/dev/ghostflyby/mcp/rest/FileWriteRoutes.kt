@@ -47,12 +47,14 @@ private fun Route.vfsWriteRoutes() {
 // ── Project ─────────────────────────────────────────────────
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
     put<Api.Project.Root.File> { resource: Api.Project.Root.File ->
+        val force = resource.force
         projectExec(
             call,
             resolver,
             resource.projectKey,
             resource.parent.rootId,
             resource.relativePath,
+            force,
         ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -66,12 +68,14 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
         }
     }
     post<Api.Project.Root.File> { resource: Api.Project.Root.File ->
+        val force = resource.force
         projectExec(
             call,
             resolver,
             resource.projectKey,
             resource.parent.rootId,
             resource.relativePath,
+            force,
         ) { access, project, body, force ->
             if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
             writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -85,12 +89,14 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
         }
     }
     delete<Api.Project.Root.File> { resource: Api.Project.Root.File ->
+        val force = resource.force
         projectExec(
             call,
             resolver,
             resource.projectKey,
             resource.parent.rootId,
             resource.relativePath,
+            force,
         ) { access, _, _, force ->
             val file = access.file ?: return@projectExec WriteResult.NotFound
             if (!file.isDirectory && file.fileType.isBinary) {
@@ -119,6 +125,7 @@ private suspend fun projectExec(
     projectKey: String,
     rootId: String,
     relativePath: String,
+    force: Boolean,
     op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
@@ -126,7 +133,6 @@ private suspend fun projectExec(
             val target = call.rootRouteTargetOrNotFound(resolved.project, rootId, relativePath) ?: return
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val body = call.receiveText()
-            val force = FileQuery(call).force
             respondResult(call, op(access, resolved.project, body, force), force)
         }
 
@@ -134,9 +140,6 @@ private suspend fun projectExec(
             call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
     }
 }
-
-private val Api.Project.Root.File.projectKey: String
-    get() = parent.parent.projectKey
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {

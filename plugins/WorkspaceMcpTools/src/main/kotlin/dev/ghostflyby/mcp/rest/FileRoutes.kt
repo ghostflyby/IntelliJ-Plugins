@@ -32,20 +32,36 @@ private data class FileContentResponse(
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
     get<Api.Vfs> { resource ->
-        val q = FileQuery(call)
         val rawVfsUrl = resource.rawVfsUrl
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
-        val project = if (file != null && q.structure)
+        val project = if (file != null && resource.structure)
             projectForRawVfsUrl(rawVfsUrl, resolver) else null
-        respondFileContent(call, file, q, project)
+        respondFileContent(call, file, resource.meta, resource.content, resource.exists, resource.structure, project)
     }
 
     get<Api.Project.Root> { resource ->
-        respondProjectRootFile(call, resolver, resource, query = FileQuery(call))
+        respondProjectRootFile(
+            call,
+            resolver,
+            resource,
+            meta = resource.meta,
+            content = resource.content,
+            exists = resource.exists,
+            structure = resource.structure,
+        )
     }
 
     get<Api.Project.Root.File> { resource ->
-        respondProjectRootFile(call, resolver, resource.parent, resource.relativePath, FileQuery(call))
+        respondProjectRootFile(
+            call,
+            resolver,
+            resource.parent,
+            resource.relativePath,
+            resource.meta,
+            resource.content,
+            resource.exists,
+            resource.structure,
+        )
     }
 }
 
@@ -54,7 +70,10 @@ private suspend fun respondProjectRootFile(
     resolver: WorkspaceProjectResolver,
     root: Api.Project.Root,
     relativePath: String = "",
-    query: FileQuery,
+    meta: Boolean = false,
+    content: Boolean = false,
+    exists: Boolean = false,
+    structure: Boolean = false,
 ) {
     val projectKey = root.parent.projectKey
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
@@ -69,7 +88,7 @@ private suspend fun respondProjectRootFile(
                 return
             }
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            respondFileContent(call, access.file, query, resolved.project, access.policy)
+            respondFileContent(call, access.file, meta, content, exists, structure, resolved.project, access.policy)
         }
 
         is WorkspaceProjectResolution.Unresolved -> {
@@ -95,14 +114,17 @@ private suspend fun projectForRawVfsUrl(
 private suspend fun respondFileContent(
     call: ApplicationCall,
     file: VirtualFile?,
-    query: FileQuery,
+    meta: Boolean,
+    content: Boolean,
+    exists: Boolean,
+    structure: Boolean,
     project: Project?,
     policy: FileAccessPolicy? = null,
 ) {
-    val wantsContent = query.content || (query.meta == null && !query.exists && !query.structure)
-    val wantsMeta = query.meta != null
-    val wantsExists = query.exists
-    val wantsStructure = query.structure
+    val wantsContent = content || (!meta && !exists && !structure)
+    val wantsMeta = meta
+    val wantsExists = exists
+    val wantsStructure = structure
     val needsFile = wantsContent || wantsMeta || wantsStructure
     // exists-only: no file required
     if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure) {

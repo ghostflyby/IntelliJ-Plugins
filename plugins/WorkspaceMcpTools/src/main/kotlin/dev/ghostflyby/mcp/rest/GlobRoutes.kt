@@ -27,8 +27,7 @@ internal fun Route.globRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
     get<Api.Project.GlobEntry.Glob> { resource ->
-        val q = FileQuery(call)
-        val patterns = q.glob
+        val patterns = resource.parent.glob
         if (patterns.isEmpty()) {
             call.respondNegotiatedError(
                 HttpStatusCode.BadRequest,

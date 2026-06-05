@@ -14,7 +14,6 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.client.request.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.resources.*
@@ -94,7 +93,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta") {
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta=true") {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -122,7 +121,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta=true")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
 
@@ -130,6 +129,22 @@ internal class RestFileTest {
             Assertions.assertTrue(body.startsWith("---\n"))
             Assertions.assertTrue(body.contains("name: plain.txt"))
             Assertions.assertTrue(body.contains("classification: WORKSPACE_TEXT"))
+        }
+    }
+
+    @Test
+    fun `file meta false returns content body`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            install(ContentNegotiation) { json() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta=false")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals("hello sample", response.bodyAsText().trim())
         }
     }
 
@@ -143,7 +158,7 @@ internal class RestFileTest {
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?exists")
+            val response = client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?exists=true")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("true", response.bodyAsText())
         }
@@ -160,7 +175,7 @@ internal class RestFileTest {
             routing { restApi() }
 
             val response =
-                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "missing.txt")}?exists")
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "missing.txt")}?exists=true")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("false", response.bodyAsText())
         }
@@ -211,7 +226,7 @@ internal class RestFileTest {
             routing { restApi() }
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get("${rootUrl(key, rootId)}?meta") {
+            val response = client.get("${rootUrl(key, rootId)}?meta=true") {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -266,7 +281,7 @@ internal class RestFileTest {
                 ?: error("second root missing")
             val secondRootId = client.workspaceRootIdByUrl(key, json, secondRoot.url)
             val projectRootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get("${rootPathUrl(key, secondRootId, "second.txt")}?meta") {
+            val response = client.get("${rootPathUrl(key, secondRootId, "second.txt")}?meta=true") {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -290,7 +305,7 @@ internal class RestFileTest {
             routing { restApi() }
 
             val response =
-                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content") {
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta=true&content=true") {
                     accept(ContentType.Application.Json)
                 }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -314,7 +329,7 @@ internal class RestFileTest {
             routing { restApi() }
 
             val response =
-                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta&content")
+                client.get("${client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt")}?meta=true&content=true")
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
 

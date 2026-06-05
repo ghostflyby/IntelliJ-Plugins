@@ -79,7 +79,7 @@ internal fun rootUrl(projectKey: String, rootId: String): String {
 }
 
 internal fun rootPathUrl(projectKey: String, rootId: String, relativePath: String): String {
-    return "${rootUrl(projectKey, rootId)}/files/$relativePath"
+    return "${rootUrl(projectKey, rootId)}/$relativePath"
 }
 
 internal fun globPathUrl(projectKey: String, rootId: String, relativePath: String): String {

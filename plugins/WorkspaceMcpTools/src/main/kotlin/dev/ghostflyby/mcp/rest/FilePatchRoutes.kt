@@ -59,14 +59,14 @@ internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
     patch<Api.Project.Root.File> { resource ->
-        val projectKey = resource.parent.parent.projectKey
+        val projectKey = resource.projectKey
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
                 val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, resource.relativePath)
                     ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
-                val force = FileQuery(call).force
+                val force = resource.force
                 if (access.targetIsBinary) {
                     call.respond(
                         HttpStatusCode.UnsupportedMediaType,
