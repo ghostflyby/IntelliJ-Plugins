@@ -15,6 +15,7 @@ internal val MarkdownContentType: ContentType = ContentType("text", "markdown").
 internal fun ApplicationCall.wantsJson(): Boolean {
     val acceptHeaders = request.headers.getAll(HttpHeaders.Accept) ?: return false
     return acceptHeaders
+        .asSequence()
         .flatMap { it.split(',') }
         .map { it.substringBefore(';').trim() }
         .filter { it.isNotEmpty() }
