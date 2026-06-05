@@ -1,103 +1,62 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of IntelliJ-Plugins by ghostflyby
+ *
+ * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3.0 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, see
+ * <https://www.gnu.org/licenses/>.
+ */
+
+@file:Suppress("UnstableApiUsage")
 package dev.ghostflyby.skills
 
-import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiElement
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.PsiFile
-import com.intellij.psi.util.PsiTreeUtil
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFrontMatterHeader
-import org.yaml.snakeyaml.LoaderOptions
-import org.yaml.snakeyaml.Yaml
+import org.jetbrains.yaml.psi.YAMLDocument
+import org.jetbrains.yaml.psi.YAMLFile
+import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLMapping
 
-/**
- * Result of parsing a SKILL.md frontmatter.
- * Each inspection consumes this to report problems.
- */
-internal data class AnalyzerResult(
-    /** The PsiFile */
-    val psiFile: PsiFile,
-    /** The virtual file, may be null for non-physical files */
-    val virtualFile: VirtualFile?,
-    /** The MarkdownFrontMatterHeader PSI element, null if not found */
-    val frontMatterHeader: MarkdownFrontMatterHeader?,
-    /** Parsed YAML as a Map, null if YAML parse failed or not a mapping */
-    val parsed: Map<String, Any?>?,
-    /** Text range covering the full ---...--- block */
-    val range: TextRange?,
-    /** Error message if YAML parsing failed */
-    val parseError: String?,
+/** Context for a YAML file injected into a SKILL.md frontmatter. */
+internal data class SkillContext(
+    val yamlFile: YAMLFile,
+    val physicalFile: PsiFile,
+    val hostHeader: MarkdownFrontMatterHeader,
+    val document: YAMLDocument?,
+    val topMapping: YAMLMapping?,
+    val keyValues: Map<String, YAMLKeyValue>,
 )
 
 /**
- * Shared frontmatter analyzer for SKILL.md files.
- * YAML is parsed once; results are consumed by all inspections.
+ * Resolves whether [file] is a YAML PSI file injected into a SKILL.md
+ * Markdown frontmatter. Returns [SkillContext] if so, null otherwise.
  */
-internal object SkillFrontmatterAnalyzer {
-
-    private val yaml = Yaml(LoaderOptions())
-
-    fun analyze(file: PsiFile): AnalyzerResult {
-        if (file.name != "SKILL.md") return emptyResult(file)
-        val vf = file.virtualFile
-
-        val header = PsiTreeUtil.findChildOfType(file, MarkdownFrontMatterHeader::class.java)
-        if (header == null) return emptyResult(file)
-
-        val text = header.text
-        val range = header.textRange
-
-        val yamlText = extractYamlText(text) ?: return AnalyzerResult(
-            psiFile = file, virtualFile = vf,
-            frontMatterHeader = header, parsed = null,
-            range = range, parseError = null,
-        )
-
-        return try {
-            val raw = yaml.load<Any?>(yamlText)
-            if (raw is Map<*, *>) {
-                @Suppress("UNCHECKED_CAST")
-                AnalyzerResult(file, vf, header, raw as Map<String, Any?>, range, null)
-            } else {
-                AnalyzerResult(file, vf, header, null, range, null)
-            }
-        } catch (e: Exception) {
-            AnalyzerResult(file, vf, header, null, range, e.message ?: "parse error")
-        }
-    }
-
-    private fun extractYamlText(frontMatterText: String): String? {
-        val lines = frontMatterText.lines()
-        if (lines.size < 2) return null
-        val firstLine = lines.first().trim()
-        val lastLine = lines.last().trim()
-        val contentLines = when {
-            firstLine == "---" && lastLine == "---" && lines.size >= 3 ->
-                lines.subList(1, lines.size - 1)
-            firstLine == "---" && lines.size == 2 -> emptyList()
-            else -> return null
-        }
-        return contentLines.joinToString("\n")
-    }
-
-    private fun emptyResult(file: PsiFile) = AnalyzerResult(
-        psiFile = file, virtualFile = file.virtualFile,
-        frontMatterHeader = null, parsed = null,
-        range = null, parseError = null,
-    )
+internal fun resolveSkillContext(file: PsiFile): SkillContext? {
+    if (file !is YAMLFile) return null
+    val injectionManager = InjectedLanguageManager.getInstance(file.project)
+    val host = injectionManager.getInjectionHost(file) ?: return null
+    if (host !is MarkdownFrontMatterHeader) return null
+    val physicalFile = host.containingFile
+    if (physicalFile.name != "SKILL.md") return null
+    val doc = file.documents.firstOrNull()
+    val mapping = doc?.topLevelValue as? YAMLMapping
+    val keyValues = mapping?.keyValues?.associateBy { it.keyText } ?: emptyMap()
+    return SkillContext(file, physicalFile, host, doc, mapping, keyValues)
 }
-
-/** Helper to get a YAML scalar value as String from the parsed map. */
-internal fun Map<String, Any?>.stringField(key: String): String? =
-    (this[key] as? String)?.takeIf { it.isNotBlank() }
-
-/** Helper to get a YAML scalar value as String, allowing blank. */
-internal fun Map<String, Any?>.rawStringField(key: String): String? =
-    this[key] as? String
-
-internal val KNOWN_FRONTMATTER_FIELDS = setOf(
-    "name", "description", "license",
-    "compatibility", "metadata", "allowed-tools",
-)
 
 internal val NAME_REGEX = Regex("""^[a-z0-9]([a-z0-9-]*[a-z0-9])?$""")
 internal const val NAME_MAX_LENGTH = 64

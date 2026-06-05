@@ -18,36 +18,36 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <localInspection
-                language=""
+                language="yaml"
                 shortName="SkillFrontmatterStructureInspection"
-                displayName="Skill frontmatter structure"
+                displayName="Skill Frontmatter Structure"
                 groupName="Agent Skills"
                 enabledByDefault="true"
                 level="WARNING"
                 implementationClass="dev.ghostflyby.skills.SkillFrontmatterStructureInspection"/>
 
         <localInspection
-                language=""
+                language="yaml"
                 shortName="SkillNameInspection"
-                displayName="Skill name"
+                displayName="Skill Name"
                 groupName="Agent Skills"
                 enabledByDefault="true"
                 level="WARNING"
                 implementationClass="dev.ghostflyby.skills.SkillNameInspection"/>
 
         <localInspection
-                language=""
+                language="yaml"
                 shortName="SkillDescriptionInspection"
-                displayName="Skill description"
+                displayName="Skill Description"
                 groupName="Agent Skills"
                 enabledByDefault="true"
                 level="WARNING"
                 implementationClass="dev.ghostflyby.skills.SkillDescriptionInspection"/>
 
         <localInspection
-                language=""
+                language="yaml"
                 shortName="SkillOptionalFieldsInspection"
-                displayName="Skill optional fields"
+                displayName="Skill Optional Fields"
                 groupName="Agent Skills"
                 enabledByDefault="true"
                 level="WARNING"
