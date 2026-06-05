@@ -1,0 +1,29 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <id>dev.ghostflyby.agent-skills-editing</id>
+    <name>Agent Skills Editing</name>
+    <vendor>ghostflyby</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.json</depends>
+    <depends>org.intellij.plugins.markdown</depends>
+
+    <extensions defaultExtensionNs="JavaScript">
+        <JsonSchema.ProviderFactory
+                implementation="dev.ghostflyby.skills.SkillMdJsonSchemaProviderFactory"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <localInspection
+                language=""
+                shortName="SkillMdInspection"
+                displayName="SKILL.md metadata inspection"
+                groupName="Agent Skills"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillMdInspection"/>
+    </extensions>
+
+</idea-plugin>
