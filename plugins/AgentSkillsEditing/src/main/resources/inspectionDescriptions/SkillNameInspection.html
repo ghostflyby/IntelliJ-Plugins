@@ -1,21 +1,12 @@
 <html lang="en">
 <body>
-Reports issues with the <code>name</code> field in <code>SKILL.md</code> frontmatter.
+Reports invalid <code>name</code> field or a mismatch with the parent directory name in <code>SKILL.md</code>
+frontmatter.
 <p>
-    Validates that the <code>name</code> field:
+    The <code>name</code> field must follow the Agent Skills naming convention:
+    lowercase letters, digits, and single hyphens only. The name must also
+    match the parent directory name.
 </p>
-<ul>
-    <li>Is present and non-empty</li>
-    <li>Is 1–64 characters long</li>
-    <li>Contains only lowercase letters, digits, and hyphens</li>
-    <li>Does not start or end with a hyphen</li>
-    <li>Does not contain consecutive hyphens</li>
-    <li>Matches the parent directory name</li>
-</ul>
 <!-- tooltip end -->
-<p>
-    QuickFix actions are available to convert the name to a valid format
-    or to match the parent directory name.
-</p>
 </body>
 </html>

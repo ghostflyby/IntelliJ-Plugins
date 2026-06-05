@@ -13,10 +13,13 @@
 
     <extensions defaultExtensionNs="JavaScript">
         <JsonSchema.ProviderFactory order="first"
-                implementation="dev.ghostflyby.skills.SkillMdJsonSchemaProviderFactory"/>
+                                    implementation="dev.ghostflyby.skills.SkillMdJsonSchemaProviderFactory"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
+        <psi.referenceContributor
+                implementation="dev.ghostflyby.skills.SkillNameReferenceContributor" language="yaml"/>
+
         <localInspection
                 language="Markdown"
                 shortName="SkillMdFrontmatterInspection"
