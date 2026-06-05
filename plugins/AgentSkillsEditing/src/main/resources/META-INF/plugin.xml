@@ -9,6 +9,7 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.json</depends>
     <depends>org.intellij.plugins.markdown</depends>
+    <depends>org.jetbrains.plugins.yaml</depends>
 
     <extensions defaultExtensionNs="JavaScript">
         <JsonSchema.ProviderFactory
@@ -18,12 +19,39 @@
     <extensions defaultExtensionNs="com.intellij">
         <localInspection
                 language=""
-                shortName="SkillMdInspection"
-                displayName="SKILL.md metadata inspection"
+                shortName="SkillFrontmatterStructureInspection"
+                displayName="Skill frontmatter structure"
                 groupName="Agent Skills"
                 enabledByDefault="true"
                 level="WARNING"
-                implementationClass="dev.ghostflyby.skills.SkillMdInspection"/>
+                implementationClass="dev.ghostflyby.skills.SkillFrontmatterStructureInspection"/>
+
+        <localInspection
+                language=""
+                shortName="SkillNameInspection"
+                displayName="Skill name"
+                groupName="Agent Skills"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillNameInspection"/>
+
+        <localInspection
+                language=""
+                shortName="SkillDescriptionInspection"
+                displayName="Skill description"
+                groupName="Agent Skills"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillDescriptionInspection"/>
+
+        <localInspection
+                language=""
+                shortName="SkillOptionalFieldsInspection"
+                displayName="Skill optional fields"
+                groupName="Agent Skills"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillOptionalFieldsInspection"/>
     </extensions>
 
 </idea-plugin>
