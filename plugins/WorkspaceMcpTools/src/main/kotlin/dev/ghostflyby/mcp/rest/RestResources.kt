@@ -12,25 +12,18 @@ import kotlinx.serialization.Serializable
 
 // ── Path-only resource classes ─────────────────────────────
 
-@Serializable
-@Resource("/api/v1")
-public class Api {
+public object Api {
     @Serializable
     @Resource("/server/info")
-    public class ServerInfo(
-        public val parent: Api = Api(),
-    )
+    public class ServerInfo
 
     @Serializable
     @Resource("/projects")
-    public class Projects(
-        public val parent: Api = Api(),
-    )
+    public class Projects
 
     @Serializable
     @Resource("/projects/{projectKey}")
     public class Project(
-        public val parent: Api = Api(),
         public val projectKey: String,
     ) {
         @Serializable
@@ -71,7 +64,6 @@ public class Api {
     @Serializable
     @Resource("/vfs/{rawVfsUrl...}")
     public class Vfs(
-        public val parent: Api = Api(),
         public val rawVfsUrl: String,
     )
 }

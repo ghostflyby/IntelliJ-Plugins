@@ -12,10 +12,12 @@ import io.ktor.server.routing.*
  * Mounts all REST API routes under /api/v1: read + write.
  */
 internal fun Route.restApi() {
-    serverInfoRoutes()
-    projectRoutes()
-    globRoutes()
-    fileRoutes()
-    fileWriteRoutes()
-    filePatchRoutes()
+    route("/api/v1") {
+        serverInfoRoutes()
+        projectRoutes()
+        globRoutes()
+        fileRoutes()
+        fileWriteRoutes()
+        filePatchRoutes()
+    }
 }
