@@ -38,7 +38,7 @@ internal class SkillMdJsonSchemaProviderFactory : JsonSchemaProviderFactory, Dum
 
 private class SkillMdJsonSchemaFileProvider : JsonSchemaFileProvider {
 
-    override fun getName(): String = SkillMdBundle.message("skill.md.schema.display.name")
+    override fun getName(): String = SkillMdBundle.message("schema.display.name")
 
     override fun getPresentableName(): String = getName()
 

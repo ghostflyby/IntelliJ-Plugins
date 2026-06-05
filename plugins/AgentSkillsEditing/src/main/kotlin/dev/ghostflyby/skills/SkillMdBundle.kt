@@ -30,7 +30,7 @@ import org.jetbrains.annotations.PropertyKey
 @NonNls
 private const val BUNDLE = "messages.SkillMdBundle"
 
-internal object SkillMdBundle : DynamicBundle(BUNDLE) {
+internal object SkillMdBundle : DynamicBundle(SkillMdBundle::class.java,BUNDLE) {
 
     @Nls
     fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): String =

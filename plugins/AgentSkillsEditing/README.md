@@ -12,11 +12,11 @@ Provides editing support for Codex SKILL.md files:
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| JSON Schema | Provides schema for `name` (kebab-case pattern) and `description` |
-| Inspection | Validates front-matter structure, required fields, and naming conventions |
-| QuickFix | Auto-convert names to kebab-case or match parent directory |
+| Feature     | Description                                                               |
+|-------------|---------------------------------------------------------------------------|
+| JSON Schema | Provides schema for `name` (kebab-case pattern) and `description`         |
+| Inspection  | Validates front-matter structure, required fields, and naming conventions |
+| QuickFix    | Auto-convert names to kebab-case or match parent directory                |
 
 ## SKILL.md Format
 
@@ -29,5 +29,3 @@ description: A brief description of the skill's purpose
 # Skill Title
 ... documentation body ...
 ```
-***
-End Patch

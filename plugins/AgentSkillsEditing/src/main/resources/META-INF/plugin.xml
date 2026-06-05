@@ -12,46 +12,32 @@
     <depends>org.jetbrains.plugins.yaml</depends>
 
     <extensions defaultExtensionNs="JavaScript">
-        <JsonSchema.ProviderFactory
+        <JsonSchema.ProviderFactory order="first"
                 implementation="dev.ghostflyby.skills.SkillMdJsonSchemaProviderFactory"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
         <localInspection
-                language="yaml"
-                shortName="SkillFrontmatterStructureInspection"
-                displayName="Skill Frontmatter Structure"
-                groupName="Agent Skills"
+                language="Markdown"
+                shortName="SkillMdFrontmatterInspection"
+                key="inspection.skills.frontmatter.display.name"
+                bundle="messages.SkillMdBundle"
+                groupKey="inspection.skills.group.name"
+                groupBundle="messages.SkillMdBundle"
                 enabledByDefault="true"
                 level="WARNING"
-                implementationClass="dev.ghostflyby.skills.SkillFrontmatterStructureInspection"/>
+                implementationClass="dev.ghostflyby.skills.SkillMdFrontmatterInspection"/>
 
         <localInspection
                 language="yaml"
                 shortName="SkillNameInspection"
-                displayName="Skill Name"
-                groupName="Agent Skills"
+                key="inspection.skills.name.display.name"
+                bundle="messages.SkillMdBundle"
+                groupKey="inspection.skills.group.name"
+                groupBundle="messages.SkillMdBundle"
                 enabledByDefault="true"
                 level="WARNING"
                 implementationClass="dev.ghostflyby.skills.SkillNameInspection"/>
-
-        <localInspection
-                language="yaml"
-                shortName="SkillDescriptionInspection"
-                displayName="Skill Description"
-                groupName="Agent Skills"
-                enabledByDefault="true"
-                level="WARNING"
-                implementationClass="dev.ghostflyby.skills.SkillDescriptionInspection"/>
-
-        <localInspection
-                language="yaml"
-                shortName="SkillOptionalFieldsInspection"
-                displayName="Skill Optional Fields"
-                groupName="Agent Skills"
-                enabledByDefault="true"
-                level="WARNING"
-                implementationClass="dev.ghostflyby.skills.SkillOptionalFieldsInspection"/>
     </extensions>
 
 </idea-plugin>

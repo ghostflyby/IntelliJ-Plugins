@@ -22,57 +22,95 @@
 
 package dev.ghostflyby.skills
 
-import com.intellij.codeInspection.LocalInspectionTool
-import com.intellij.codeInspection.ProblemHighlightType
-import com.intellij.codeInspection.ProblemsHolder
-import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.codeInspection.*
+import com.intellij.lang.injection.InjectedLanguageManager.getInstance
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
-import org.jetbrains.yaml.psi.YAMLScalar
+import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFrontMatterHeader
+import org.jetbrains.yaml.YAMLElementGenerator
+import org.jetbrains.yaml.psi.YAMLFile
+import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLMapping
+import org.jetbrains.yaml.psi.YamlPsiElementVisitor
 
+/**
+ * Validates the SKILL.md `name` field beyond what JSON Schema can express:
+ *
+ * - name regex with user-friendly error message + QuickFix
+ * - name must match parent directory name + QuickFix
+ *
+ * Structural checks (required, maxLength, pattern) are handled by JSON Schema.
+ */
 internal class SkillNameInspection : LocalInspectionTool() {
 
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
-        return object : PsiElementVisitor() {
+        val yamlFile = holder.file as? YAMLFile ?: return PsiElementVisitor.EMPTY_VISITOR
+        val injectionManager = getInstance(yamlFile.project)
+        val host = injectionManager.getInjectionHost(yamlFile) ?: return PsiElementVisitor.EMPTY_VISITOR
+        @Suppress("UnstableApiUsage")
+        if (host !is MarkdownFrontMatterHeader) return PsiElementVisitor.EMPTY_VISITOR
+        val physicalFile = host.containingFile
+        if (physicalFile.name != "SKILL.md") return PsiElementVisitor.EMPTY_VISITOR
+
+        val parentDir = physicalFile.virtualFile?.parent?.name
+
+        return object : YamlPsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
-                val ctx = resolveSkillContext(file) ?: return
-                val injectionManager = InjectedLanguageManager.getInstance(file.project)
-                val header = ctx.hostHeader
-                val hr = header.textRange
-                val kv = ctx.keyValues["name"]
-
-                if (kv == null) {
-                    holder.registerProblem(header, SkillMdBundle.message("name.error.missing"),
-                        ProblemHighlightType.GENERIC_ERROR_OR_WARNING, hr,
-                        RenameFieldQuickFix("name", "my-new-skill"))
-                    return
-                }
-
-                val scalar = kv.value as? YAMLScalar
-                val rawName = scalar?.textValue ?: ""
-                val vr = kv.value?.let { injectionManager.injectedToHost(it, it.textRange) } ?: hr
-
-                if (rawName.isEmpty()) {
-                    holder.registerProblem(header, SkillMdBundle.message("name.error.empty"),
-                        ProblemHighlightType.WARNING, vr,
-                        RenameFieldQuickFix("name", "my-new-skill"))
-                    return
-                }
+                if (file !== yamlFile) return
+                val mapping = yamlFile.documents.firstOrNull()?.topLevelValue as? YAMLMapping ?: return
+                val keyValue = mapping.getKeyValueByKey("name") ?: return
+                val rawName = keyValue.valueText
+                val range = TextRange(0, keyValue.textLength)
 
                 if (!NAME_REGEX.matches(rawName)) {
-                    val fixed = rawName.lowercase().replace(Regex("[^a-z0-9-]+"), "-").replace(Regex("-{2,}"), "-").trim('-')
-                    holder.registerProblem(header, SkillMdBundle.message("name.error.invalid.chars", rawName),
-                        ProblemHighlightType.WARNING, vr,
-                        RenameFieldQuickFix("name", fixed))
+                    holder.registerProblem(
+                        keyValue,
+                        SkillMdBundle.message("name.error.invalid.chars", rawName),
+                        ProblemHighlightType.WARNING,
+                        range,
+                        RenameFieldQuickFix(rawName.toValidSkillName()),
+                    )
                 }
 
-                val parentDir = ctx.physicalFile.virtualFile?.parent?.name
                 if (parentDir != null && rawName != parentDir) {
-                    holder.registerProblem(header, SkillMdBundle.message("name.error.mismatch", rawName, parentDir),
-                        ProblemHighlightType.WARNING, vr,
-                        RenameFieldQuickFix("name", parentDir))
+                    holder.registerProblem(
+                        keyValue,
+                        SkillMdBundle.message("name.error.mismatch", rawName, parentDir),
+                        ProblemHighlightType.WARNING,
+                        range,
+                        RenameFieldQuickFix(parentDir),
+                    )
                 }
             }
         }
     }
 }
+
+/**
+ * Renames a YAML key's value using a PSI pointer to the exact element.
+ * Applies the change as a document-level write action on the host file.
+ */
+internal class RenameFieldQuickFix(
+    private val newValue: String,
+) : LocalQuickFix {
+
+    override fun getName(): String = SkillMdBundle.message("quickfix.rename.field", newValue)
+    override fun getFamilyName(): String = SkillMdBundle.message("quickfix.family.rename.field")
+
+    override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
+        val keyValue = descriptor.psiElement as? YAMLKeyValue ?: return
+        val y = YAMLElementGenerator.getInstance(project)
+        val new = y.createYamlKeyValue(keyValue.keyText, newValue)
+        keyValue.replace(new)
+    }
+}
+
+private val NAME_REGEX = Regex("""^[a-z0-9]([a-z0-9-]*[a-z0-9])?$""")
+
+private fun String.toValidSkillName(): String =
+    lowercase()
+        .replace(Regex("[^a-z0-9-]+"), "-")
+        .replace(Regex("-{2,}"), "-")
+        .trim('-')
