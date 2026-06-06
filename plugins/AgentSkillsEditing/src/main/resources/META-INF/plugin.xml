@@ -17,11 +17,16 @@
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
-        <psi.referenceContributor
-                implementation="dev.ghostflyby.skills.SkillNameReferenceContributor" language="yaml"/>
-
         <referencesSearch
                 implementation="dev.ghostflyby.skills.SkillDirRenameSearchExecutor"/>
+        <renameHandler
+                implementation="dev.ghostflyby.skills.SkillNameRenameHandler"
+                order="first"/>
+        <renamePsiElementProcessor
+                implementation="dev.ghostflyby.skills.SkillNameRenamePsiElementProcessor"
+                order="first"/>
+        <gotoDeclarationHandler
+                implementation="dev.ghostflyby.skills.SkillNameGotoDeclarationHandler"/>
 
         <localInspection
                 language="Markdown"

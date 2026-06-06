@@ -24,9 +24,15 @@ package dev.ghostflyby.skills
 
 import com.intellij.openapi.application.QueryExecutorBase
 import com.intellij.psi.PsiDirectory
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
+import com.intellij.psi.PsiReferenceBase
 import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.psi.util.parentOfType
 import com.intellij.util.Processor
+import org.jetbrains.yaml.YAMLElementGenerator
+import org.jetbrains.yaml.psi.YAMLKeyValue
+import org.jetbrains.yaml.psi.YAMLScalar
 
 internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>() {
 
@@ -38,8 +44,26 @@ internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, Re
         val dir = element as? PsiDirectory ?: return
         val skillFile = dir.skillMarkdownFile ?: return
         val scalar = skillFile.skillNameScalar() ?: return
-        for (ref in scalar.references) {
-            if (ref.isReferenceTo(dir) && !consumer.process(ref)) break
+        val reference = SkillDirectoryNameReference(scalar, dir)
+        if (reference.isReferenceTo(dir)) {
+            consumer.process(reference)
         }
+    }
+}
+
+internal class SkillDirectoryNameReference(
+    element: YAMLScalar,
+    private val directory: PsiDirectory,
+) : PsiReferenceBase<YAMLScalar>(element, false) {
+    override fun resolve(): PsiElement = directory
+
+    override fun handleElementRename(newElementName: String): PsiElement? {
+        val scalar = directory.skillMarkdownFile?.skillNameScalar() ?: return null
+        val gen = YAMLElementGenerator.getInstance(directory.project)
+        val kv = scalar.parentOfType<YAMLKeyValue>() ?: return null
+        val newKv = gen.createYamlKeyValue(kv.keyText, newElementName)
+        val newValue = newKv.value ?: return null
+        kv.setValue(newValue)
+        return kv.value
     }
 }

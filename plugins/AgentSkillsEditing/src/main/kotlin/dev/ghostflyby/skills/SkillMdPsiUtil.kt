@@ -25,6 +25,7 @@ package dev.ghostflyby.skills
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.elementType
 import org.intellij.plugins.markdown.lang.MarkdownElementType
@@ -73,6 +74,54 @@ internal fun YAMLFile.topLevelKeyValue(key: String): YAMLKeyValue? = topLevelMap
 
 internal val YAMLKeyValue.isTopLevel: Boolean
     get() = parent == (containingFile as? YAMLFile)?.topLevelMapping
+
+internal val YAMLScalar.isSkillNameScalar: Boolean
+    get() {
+        val kv = parent as? YAMLKeyValue ?: return false
+        if (kv.value != this) return false
+        if (kv.keyText != SKILL_NAME_KEY || !kv.isTopLevel) return false
+        val yamlFile = containingFile as? YAMLFile ?: return false
+        return yamlFile.skillDirectory != null
+    }
+
+internal fun PsiElement.enclosingSkillNameScalar(): YAMLScalar? {
+    var current: PsiElement? = this
+    while (current != null) {
+        when (current) {
+            is YAMLScalar -> if (current.isSkillNameScalar) return current
+            is YAMLKeyValue -> return current.skillNameScalar()
+            is YAMLFile -> return null
+        }
+        current = current.parent
+    }
+    return null
+}
+
+internal fun YAMLKeyValue.skillNameScalar(): YAMLScalar? {
+    if (keyText != SKILL_NAME_KEY || !isTopLevel) return null
+    val yamlFile = containingFile as? YAMLFile ?: return null
+    if (yamlFile.skillDirectory == null) return null
+    return value as? YAMLScalar
+}
+
+internal fun PsiFile.skillNameScalarAt(offset: Int): YAMLScalar? {
+    val direct = findElementAt(offset)?.enclosingSkillNameScalar()
+    if (direct != null) return direct
+
+    if (!isSkillMarkdownFile) return null
+    val injectionManager = InjectedLanguageManager.getInstance(project)
+    injectionManager.findInjectedElementAt(this, offset)?.enclosingSkillNameScalar()?.let { return it }
+
+    val text = viewProvider.document?.charsSequence ?: return null
+    var previousOffset = offset - 1
+    while (previousOffset >= 0 && (previousOffset >= text.length || text[previousOffset].isWhitespace())) {
+        previousOffset--
+    }
+    if (previousOffset < 0) return null
+
+    return findElementAt(previousOffset)?.enclosingSkillNameScalar()
+        ?: injectionManager.findInjectedElementAt(this, previousOffset)?.enclosingSkillNameScalar()
+}
 
 internal fun PsiFile.skillNameScalar(): YAMLScalar? {
     if (!hasSkillMdFrontmatter) return null
