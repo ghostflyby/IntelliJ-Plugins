@@ -32,6 +32,8 @@ import com.intellij.openapi.project.Project
 import kotlinx.coroutines.delay
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 internal fun resolveGradleTaskToCancel(
     project: Project,
@@ -121,14 +123,14 @@ internal suspend fun cancelRunningExternalTaskWithRetry(
     externalProjectPath: Path,
     taskId: ExternalSystemTaskId? = null,
     attempts: Int = 8,
-    retryDelayMillis: Long = 125,
+    retryDelay: Duration = 125.milliseconds,
 ): Boolean {
     repeat(attempts) { attempt ->
         if (cancelRunningExternalTask(project, processingManager, taskType, externalProjectPath, taskId)) {
             return true
         }
         if (attempt < attempts - 1) {
-            delay(retryDelayMillis)
+            delay(retryDelay)
         }
     }
     return false

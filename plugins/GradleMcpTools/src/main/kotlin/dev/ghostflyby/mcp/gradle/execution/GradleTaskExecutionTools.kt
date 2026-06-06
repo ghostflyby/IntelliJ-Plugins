@@ -37,13 +37,7 @@ import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.gradle.Bundle
-import dev.ghostflyby.mcp.gradle.common.activityValue
-import dev.ghostflyby.mcp.gradle.common.cancelRunningExternalTask
-import dev.ghostflyby.mcp.gradle.common.cancelRunningExternalTaskWithRetry
-import dev.ghostflyby.mcp.gradle.common.getLinkedGradleProjectPaths
-import dev.ghostflyby.mcp.gradle.common.reportActivity
-import dev.ghostflyby.mcp.gradle.common.resolveGradleTaskToCancel
-import dev.ghostflyby.mcp.gradle.common.selectTargetProjectPath
+import dev.ghostflyby.mcp.gradle.common.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.plugins.gradle.util.GradleConstants
@@ -51,6 +45,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
+import kotlin.time.Duration
 
 internal object GradleTaskExecutionTools {
     internal suspend fun runGradleTasks(
@@ -58,7 +53,7 @@ internal object GradleTaskExecutionTools {
         taskNames: List<String>,
         externalProjectPath: String?,
         scriptParameters: String,
-        timeoutMillis: Int,
+        timeout: Duration,
     ): ExecutionToolset.RunConfigurationResult {
         val cleanedTaskNames = taskNames
             .map { it.trim() }
@@ -66,7 +61,7 @@ internal object GradleTaskExecutionTools {
         if (cleanedTaskNames.isEmpty()) {
             throw McpExpectedError("taskNames must contain at least one Gradle task.")
         }
-        if (timeoutMillis <= 0) {
+        if (!timeout.isPositive()) {
             throw McpExpectedError("timeoutMillis must be greater than 0.")
         }
         reportActivity(
@@ -74,7 +69,7 @@ internal object GradleTaskExecutionTools {
                 "tool.activity.gradle.run.tasks",
                 cleanedTaskNames.joinToString(","),
                 activityValue(externalProjectPath),
-                timeoutMillis,
+                timeout,
             ),
         )
 
@@ -95,7 +90,7 @@ internal object GradleTaskExecutionTools {
         val cancelOnStart = AtomicBoolean(false)
         val timeoutCancellationRequested = AtomicBoolean(false)
 
-        val successOrFailure = withTimeoutOrNull(timeoutMillis.toLong()) {
+        val successOrFailure = withTimeoutOrNull(timeout) {
             suspendCancellableCoroutine { continuation ->
                 val callback = object : TaskCallback {
                     override fun onSuccess() {
@@ -198,7 +193,7 @@ internal object GradleTaskExecutionTools {
             }
             if (timedOut) {
                 if (isNotEmpty()) append('\n')
-                append("Gradle task execution timed out after $timeoutMillis ms.")
+                append("Gradle task execution timed out after $timeout ms.")
                 if (timeoutCancellationRequested.get()) {
                     append(" Cancellation requested.")
                 } else {

@@ -203,9 +203,9 @@ internal class CocoaRecentProjectsCoordinator(
     )
 
     private sealed interface WorkerStep {
-        data class Delay(
+       data class Delay(
             val delayMillis: Long,
-        ) : WorkerStep
+       ) : WorkerStep
 
         data class Sync(
             val request: PendingSyncRequest,
@@ -217,6 +217,6 @@ internal class CocoaRecentProjectsCoordinator(
     private companion object {
         private const val DEFAULT_DEBOUNCE_MILLIS = 250L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
-        private val LOG = Logger.getInstance(CocoaRecentProjectsCoordinator::class.java)
-    }
+       private val LOG = Logger.getInstance(CocoaRecentProjectsCoordinator::class.java)
+   }
 }
