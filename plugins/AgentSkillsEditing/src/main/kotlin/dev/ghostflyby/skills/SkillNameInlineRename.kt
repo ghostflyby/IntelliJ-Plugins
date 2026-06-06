@@ -28,13 +28,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Pair
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiNamedElement
-import com.intellij.psi.PsiReference
-import com.intellij.psi.PsiReferenceBase
+import com.intellij.psi.*
 import com.intellij.psi.impl.PsiElementBase
 import com.intellij.refactoring.rename.inplace.VariableInplaceRenamer
 import com.intellij.util.IncorrectOperationException
@@ -49,13 +43,13 @@ internal class SkillNameInlineElement(
     private val project: Project,
 ) : PsiElementBase(), PsiNamedElement {
 
-    override fun getName(): String? = scalar.textValue
-    override fun setName(newName: String): PsiElement? =
+    override fun getName(): String = scalar.textValue
+    override fun setName(newName: String): PsiElement =
         throw IncorrectOperationException("Use renameSynthetic in SkillNameInlineRenamer")
     override fun getProject(): Project = project
     override fun getLanguage(): Language = hostFile.language
     override fun getParent(): PsiElement? = null
-    override fun getChildren(): Array<PsiElement> = PsiElement.EMPTY_ARRAY
+    override fun getChildren(): Array<PsiElement> = EMPTY_ARRAY
     override fun getContainingFile(): PsiFile = hostFile
     override fun getTextRange(): TextRange = hostTextRange
     override fun getTextOffset(): Int = hostTextRange.startOffset
