@@ -49,7 +49,7 @@ private class SkillMdJsonSchemaFileProvider : JsonSchemaFileProvider {
     override fun getSchemaType(): SchemaType = SchemaType.userSchema
 
     override fun isAvailable(file: VirtualFile): Boolean {
-        return file.name == "SKILL.md"
+        return file.isSkillMarkdownFile
     }
 
     override fun getSchemaFile(): VirtualFile? {

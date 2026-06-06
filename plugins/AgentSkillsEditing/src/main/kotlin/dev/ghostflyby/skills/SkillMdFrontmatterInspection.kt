@@ -29,10 +29,6 @@ import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
-import com.intellij.psi.util.elementType
-import org.intellij.plugins.markdown.lang.MarkdownElementType
-import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
-import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
 
 /**
  * Checks that SKILL.md has a YAML frontmatter block (--- delimiters).
@@ -43,8 +39,8 @@ internal class SkillMdFrontmatterInspection : LocalInspectionTool() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean): PsiElementVisitor {
         return object : PsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
-                if (file.name != "SKILL.md" || file !is MarkdownFile) return
-                if (file.firstChild.elementType != MarkdownElementType.platformType(FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER)) {
+                if (!file.isSkillMarkdownFile) return
+                if (!file.hasSkillMdFrontmatter) {
                     holder.registerProblem(
                         file, file.textRange,
                         SkillMdBundle.message("frontmatter.missing"),

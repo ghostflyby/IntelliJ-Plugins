@@ -23,7 +23,6 @@
 package dev.ghostflyby.skills
 
 import com.intellij.codeInspection.*
-import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
@@ -31,28 +30,11 @@ import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
 import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.SmartPsiElementPointer
-import com.intellij.psi.util.elementType
 import com.intellij.refactoring.RefactoringActionHandlerFactory
-import org.intellij.plugins.markdown.lang.MarkdownElementType
-import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
 import org.jetbrains.yaml.YAMLElementGenerator
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
-import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLValue
-
-private val NAME_REGEX = Regex("""^[a-z0-9]([a-z0-9-]*[a-z0-9])?$""")
-private val FM_TYPE = MarkdownElementType.platformType(FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER)
-
-private fun fixName(name: String) = name.lowercase()
-    .replace(Regex("[^a-z0-9-]+"), "-")
-    .replace(Regex("-{2,}"), "-").trim('-')
-
-private fun canAutoFix(name: String): Boolean {
-    if (name.isBlank()) return false
-    val fixed = fixName(name)
-    return fixed.isNotEmpty() && NAME_REGEX.matches(fixed)
-}
 
 internal class SkillNameInspection : LocalInspectionTool() {
 
@@ -60,19 +42,13 @@ internal class SkillNameInspection : LocalInspectionTool() {
         return object : PsiElementVisitor() {
             override fun visitFile(file: PsiFile) {
                 if (file !is YAMLFile) return
-                val injectionManager = InjectedLanguageManager.getInstance(file.project)
-                val host = injectionManager.getInjectionHost(file) ?: return
-                if (host.elementType != FM_TYPE) return
-                val physicalFile = host.containingFile
-                if (physicalFile.name != "SKILL.md") return
-                val doc = file.documents.firstOrNull()
-                val mapping = doc?.topLevelValue as? YAMLMapping
-                val kv = mapping?.getKeyValueByKey("name") ?: return
+                val physicalFile = file.skillMarkdownFile ?: return
+                val kv = file.topLevelKeyValue(SKILL_NAME_KEY) ?: return
                 val rawName = kv.valueText
                 val dirName = physicalFile.parent?.name ?: return
                 val range = TextRange(0, kv.textLength)
-                val nameValid = rawName.isNotEmpty() && NAME_REGEX.matches(rawName)
-                val dirValid = NAME_REGEX.matches(dirName)
+                val nameValid = rawName.isValidSkillName()
+                val dirValid = dirName.isValidSkillName()
                 val match = rawName == dirName
 
                 when {
@@ -97,7 +73,7 @@ internal class SkillNameInspection : LocalInspectionTool() {
 
                     !nameValid -> {
                         val fixes = mutableListOf<LocalQuickFix>()
-                        if (canAutoFix(rawName)) fixes.add(FixNameQuickFix(fixName(rawName)))
+                        if (rawName.canBeFixedToSkillName()) fixes.add(FixNameQuickFix(rawName.toSkillNameCandidate()))
                         fixes.add(RenameSkillQuickFix(SmartPointerManager.createPointer(kv.value ?: return)))
                         holder.registerProblem(
                             kv, SkillMdBundle.message("consistency.mismatch", dirName),
@@ -107,7 +83,7 @@ internal class SkillNameInspection : LocalInspectionTool() {
 
                     !dirValid -> {
                         val fixes = mutableListOf<LocalQuickFix>()
-                        if (canAutoFix(dirName)) fixes.add(RenameDirQuickFix(fixName(dirName)))
+                        if (dirName.canBeFixedToSkillName()) fixes.add(RenameDirQuickFix(dirName.toSkillNameCandidate()))
                         fixes.add(RenameSkillQuickFix(SmartPointerManager.createPointer(kv.value ?: return)))
                         holder.registerProblem(
                             kv, SkillMdBundle.message("consistency.mismatch", dirName),
@@ -121,7 +97,7 @@ internal class SkillNameInspection : LocalInspectionTool() {
 
     private fun reportFormat(holder: ProblemsHolder, kv: YAMLKeyValue, range: TextRange, rawName: String) {
         val fixes = mutableListOf<LocalQuickFix>()
-        if (canAutoFix(rawName)) fixes.add(FixNameQuickFix(fixName(rawName)))
+        if (rawName.canBeFixedToSkillName()) fixes.add(FixNameQuickFix(rawName.toSkillNameCandidate()))
         fixes.add(RenameSkillQuickFix(SmartPointerManager.createPointer(kv.value ?: return)))
         holder.registerProblem(
             kv, SkillMdBundle.message("format.name.invalid", rawName),
@@ -145,9 +121,7 @@ internal class RenameDirQuickFix(private val newName: String) : LocalQuickFix {
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         val kv = descriptor.psiElement as? YAMLKeyValue ?: return
         val yamlFile = kv.containingFile as? YAMLFile ?: return
-        val host = InjectedLanguageManager.getInstance(project).getInjectionHost(yamlFile) ?: return
-        if (host.elementType != FM_TYPE) return
-        host.containingFile.parent?.virtualFile?.rename(this, newName)
+        yamlFile.skillDirectory?.virtualFile?.rename(this, newName)
     }
 }
 

@@ -22,21 +22,14 @@
 
 package dev.ghostflyby.skills
 
-import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.*
-import com.intellij.psi.util.elementType
 import com.intellij.psi.util.parentOfType
 import com.intellij.util.ProcessingContext
-import org.intellij.plugins.markdown.lang.MarkdownElementType
-import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
 import org.jetbrains.yaml.YAMLElementGenerator
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
-import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
-
-private val FM_TYPE = MarkdownElementType.platformType(FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER)
 
 internal class SkillNameReferenceContributor : PsiReferenceContributor() {
 
@@ -57,10 +50,9 @@ private class YamlToDirProvider : PsiReferenceProvider() {
     override fun getReferencesByElement(element: PsiElement, context: ProcessingContext): Array<PsiReference> {
         val scalar = element as? YAMLScalar ?: return PsiReference.EMPTY_ARRAY
         val kv = scalar.parent as? YAMLKeyValue ?: return PsiReference.EMPTY_ARRAY
-        if (kv.keyText != "name") return PsiReference.EMPTY_ARRAY
-        if (!isTopLevelName(kv)) return PsiReference.EMPTY_ARRAY
+        if (kv.keyText != SKILL_NAME_KEY || !kv.isTopLevel) return PsiReference.EMPTY_ARRAY
         val yamlFile = kv.containingFile as? YAMLFile ?: return PsiReference.EMPTY_ARRAY
-        if (resolveDir(yamlFile) == null) return PsiReference.EMPTY_ARRAY
+        if (yamlFile.skillDirectory == null) return PsiReference.EMPTY_ARRAY
         return arrayOf(YamlToDirRef(scalar))
     }
 }
@@ -68,7 +60,7 @@ private class YamlToDirProvider : PsiReferenceProvider() {
 internal class YamlToDirRef(
     element: YAMLScalar,
 ) : PsiReferenceBase<YAMLScalar>(element, false) {
-    override fun resolve(): PsiElement? = resolveDir(element.containingFile as? YAMLFile ?: return null)
+    override fun resolve(): PsiElement? = (element.containingFile as? YAMLFile)?.skillDirectory
 
     override fun handleElementRename(newElementName: String): PsiElement? {
         val gen = YAMLElementGenerator.getInstance(element.containingFile.project)
@@ -77,19 +69,4 @@ internal class YamlToDirRef(
         kv.replace(newKv)
         return newKv.value
     }
-}
-
-// ── Helpers ──
-
-private fun resolveDir(yamlFile: YAMLFile): PsiDirectory? {
-    val host = InjectedLanguageManager.getInstance(yamlFile.project).getInjectionHost(yamlFile) ?: return null
-    if (host.elementType != FM_TYPE) return null
-    if (host.containingFile.name != "SKILL.md") return null
-    return host.containingFile.parent
-}
-
-private fun isTopLevelName(kv: YAMLKeyValue): Boolean {
-    val yamlFile = kv.containingFile as? YAMLFile ?: return false
-    val mapping = yamlFile.documents.firstOrNull()?.topLevelValue as? YAMLMapping ?: return false
-    return kv.parent == mapping
 }

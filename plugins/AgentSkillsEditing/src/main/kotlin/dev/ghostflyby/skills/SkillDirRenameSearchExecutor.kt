@@ -22,21 +22,11 @@
 
 package dev.ghostflyby.skills
 
-import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.application.QueryExecutorBase
 import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.searches.ReferencesSearch
-import com.intellij.psi.util.elementType
 import com.intellij.util.Processor
-import org.intellij.plugins.markdown.lang.MarkdownElementType
-import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
-import org.jetbrains.yaml.psi.YAMLFile
-import org.jetbrains.yaml.psi.YAMLMapping
-import org.jetbrains.yaml.psi.YAMLScalar
-
-private val FM_TYPE = MarkdownElementType.platformType(FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER)
 
 internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>() {
 
@@ -46,25 +36,10 @@ internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, Re
     ) {
         val element = queryParameters.elementToSearch
         val dir = element as? PsiDirectory ?: return
-        val skillFile = dir.findFile("SKILL.md") ?: return
-        val scalar = findNameScalar(skillFile) ?: return
+        val skillFile = dir.skillMarkdownFile ?: return
+        val scalar = skillFile.skillNameScalar() ?: return
         for (ref in scalar.references) {
             if (ref.isReferenceTo(dir) && !consumer.process(ref)) break
         }
     }
-}
-
-private fun findNameScalar(skillFile: PsiFile): YAMLScalar? {
-    val header = skillFile.firstChild
-    if (header == null || header.elementType != FM_TYPE) return null
-    var result: YAMLScalar? = null
-    InjectedLanguageManager.getInstance(skillFile.project).enumerate(header) { injectedFile, _ ->
-        if (result != null) return@enumerate
-        val yamlFile = injectedFile as? YAMLFile ?: return@enumerate
-        val kv = yamlFile.documents.firstOrNull()
-            ?.topLevelValue.let { it as? YAMLMapping }
-            ?.getKeyValueByKey("name") ?: return@enumerate
-        result = kv.value as? YAMLScalar
-    }
-    return result
 }
