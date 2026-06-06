@@ -27,11 +27,11 @@ import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.*
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
-import kotlin.time.Instant
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Service(Service.Level.APP)
 internal class CocoaRecentProjectsSyncService(
@@ -63,7 +63,7 @@ internal class CocoaRecentProjectsCoordinator(
     private val stateLock = Any()
     private val pendingStartupProjects = LinkedHashMap<String, String>()
     private var pendingRecentPaths: List<String>? = null
-    private var scheduledSyncAtNanos: Instant = Clock.System.now()
+    private var scheduledSyncDeadline: TimeMark = TimeSource.Monotonic.markNow()
     private var workerJob: Job? = null
     private var syncedUris: List<URI> = emptyList()
     private var hasSynced: Boolean = false
@@ -82,7 +82,7 @@ internal class CocoaRecentProjectsCoordinator(
                 pendingStartupProjects[projectKey] = projectPath
             }
             recentProjectKeys.forEach(pendingStartupProjects::remove)
-            scheduledSyncAtNanos = Clock.System.now() + debounce
+            scheduledSyncDeadline = TimeSource.Monotonic.markNow() + debounce
             if (workerJob?.isActive != true) {
                 workerJob = coroutineScope.launch {
                     processPendingRequests()
@@ -173,10 +173,7 @@ internal class CocoaRecentProjectsCoordinator(
                 workerJob = null
                 WorkerStep.Stop
             } else {
-                val remainingNanos = scheduledSyncAtNanos - Clock.System.now()
-                if (remainingNanos.isPositive()) {
-                    WorkerStep.Delay(remainingNanos + 1.milliseconds - 1.nanoseconds)
-                } else {
+                if (scheduledSyncDeadline.hasPassedNow()) {
                     pendingRecentPaths = null
                     WorkerStep.Sync(
                         PendingSyncRequest(
@@ -184,6 +181,9 @@ internal class CocoaRecentProjectsCoordinator(
                             startupProjects = LinkedHashMap(pendingStartupProjects),
                         ),
                     )
+                } else {
+                    val elapsed = scheduledSyncDeadline.elapsedNow()
+                    WorkerStep.Delay(-elapsed + 1.milliseconds - 1.nanoseconds)
                 }
             }
         }
