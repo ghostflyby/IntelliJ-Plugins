@@ -24,7 +24,9 @@ package dev.ghostflyby.skills
 
 import com.intellij.codeInsight.intention.PriorityAction
 import com.intellij.codeInspection.*
+import com.intellij.lang.injection.InjectedLanguageManager.getInstance
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElementVisitor
 import com.intellij.psi.PsiFile
@@ -181,7 +183,10 @@ private class ManualRenameQuickFix(
 
     override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
         val scalar = scalarPtr?.element as? YAMLScalar ?: return
-        val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return
+        val hostVFile = getInstance(project)
+            .getTopLevelFile(scalar.containingFile)?.virtualFile ?: return
+        val editor = FileEditorManager.getInstance(project)
+            .openTextEditor(OpenFileDescriptor(project, hostVFile), true) ?: return
         performSkillNameInlineRename(scalar, editor, project)
     }
 }
