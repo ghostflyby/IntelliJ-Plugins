@@ -2,7 +2,9 @@
 
 <!-- Keep a changelog entry for the current unreleased version -->
 
-## Unreleased
+## [Unreleased]
+
+## [1.0.0] - 2026-06-06
 
 ### Added
 
@@ -12,3 +14,6 @@
 - Validation of consecutive hyphens in skill names
 - Go to Declaration from `name` to parent skill directory
 - Update from skill directory to `SKILL.md` on rename
+
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/AgentSkillsEditing-v1.0.0...HEAD
+[1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/AgentSkillsEditing-v1.0.0
