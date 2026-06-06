@@ -43,7 +43,7 @@ internal val SKILL_MD_FRONTMATTER_TYPE = MarkdownElementType.platformType(
     FrontMatterHeaderMarkerProvider.FRONT_MATTER_HEADER,
 )
 
-private val SKILL_NAME_REGEX = Regex("""^[a-z0-9]([a-z0-9-]*[a-z0-9])?$""")
+private val SKILL_NAME_REGEX = Regex("""^[a-z0-9]+(-[a-z0-9]+)*$""")
 
 internal val PsiFile.isSkillMarkdownFile: Boolean
     get() = name == SKILL_MD_FILE_NAME && this is MarkdownFile
@@ -144,4 +144,35 @@ internal fun String.toSkillNameCandidate(): String = lowercase()
 internal fun String.canBeFixedToSkillName(): Boolean {
     if (isBlank()) return false
     return toSkillNameCandidate().isValidSkillName()
+}
+
+internal fun String.normalizeSkillNameOrNull(): String? {
+    val candidate = toSkillNameCandidate()
+    return candidate.takeIf { it.isValidSkillName() }
+}
+
+internal enum class NameQuality { VALID, NORMALIZABLE, INVALID }
+
+internal data class NamePart(
+    val value: String,
+    val quality: NameQuality,
+    val normalized: String?,
+) {
+    val candidate: String? get() = when (quality) {
+        NameQuality.VALID -> value
+        NameQuality.NORMALIZABLE -> normalized
+        NameQuality.INVALID -> null
+    }
+}
+
+internal fun analyzeSkillName(value: String): NamePart {
+    if (value.isValidSkillName()) {
+        return NamePart(value, NameQuality.VALID, value)
+    }
+    val normalized = value.normalizeSkillNameOrNull()
+    return if (normalized != null) {
+        NamePart(value, NameQuality.NORMALIZABLE, normalized)
+    } else {
+        NamePart(value, NameQuality.INVALID, null)
+    }
 }

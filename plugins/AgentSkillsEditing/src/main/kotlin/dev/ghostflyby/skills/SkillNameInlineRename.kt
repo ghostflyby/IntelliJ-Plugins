@@ -25,6 +25,7 @@ package dev.ghostflyby.skills
 import com.intellij.lang.ASTNode
 import com.intellij.lang.Language
 import com.intellij.openapi.editor.Editor
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Pair
 import com.intellij.openapi.util.TextRange
@@ -136,4 +137,20 @@ internal class SkillNameInlineRenamer(
             dir.virtualFile.rename(this, newName)
         }
     }
+}
+
+
+/** Convenience helper: create the inline element + renamer for a scalar
+ *  and start inline rename.  Shared by the rename handler and quickfix. */
+internal fun performSkillNameInlineRename(
+    scalar: YAMLScalar,
+    editor: Editor,
+    project: Project,
+) {
+    val injectionManager = InjectedLanguageManager.getInstance(project)
+    val hostFile = injectionManager.getTopLevelFile(scalar.containingFile) ?: return
+    val hostTextRange = injectionManager.injectedToHost(scalar, scalar.textRange)
+    editor.caretModel.moveToOffset(hostTextRange.startOffset)
+    val delegate = SkillNameInlineElement(scalar, hostFile, hostTextRange, project)
+    SkillNameInlineRenamer(delegate, editor).performInplaceRename()
 }

@@ -22,13 +22,13 @@
 
 package dev.ghostflyby.skills
 
-import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.refactoring.rename.RenameHandler
 import org.jetbrains.yaml.psi.YAMLScalar
 
@@ -43,12 +43,7 @@ internal class SkillNameRenameHandler : RenameHandler {
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?, dataContext: DataContext?) {
         if (editor == null) return
         val scalar = dataContext?.let(::findRenameContext) ?: return
-
-        val injectionManager = InjectedLanguageManager.getInstance(project)
-        val hostFile = injectionManager.getTopLevelFile(scalar.containingFile) ?: return
-        val hostTextRange = injectionManager.injectedToHost(scalar, scalar.textRange)
-        val delegate = SkillNameInlineElement(scalar, hostFile, hostTextRange, project)
-        SkillNameInlineRenamer(delegate, editor).performInplaceRename()
+        performSkillNameInlineRename(scalar, editor, project)
     }
 
     override fun invoke(project: Project, elements: Array<out PsiElement>, dataContext: DataContext?) = Unit

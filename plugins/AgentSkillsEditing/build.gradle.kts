@@ -24,7 +24,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "0.2.0"
+version = "1.0.0"
 
 dependencies.intellijPlatform {
     bundledPlugin("com.intellij.modules.json")
