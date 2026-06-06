@@ -106,7 +106,7 @@ private fun fixesForProblem(state: SkillNameState, problem: ProblemKind): List<N
             ProblemKind.INVALID_DIRECTORY ->
                 it.decision is AutoRenameDir || it.decision is AutoRenameBoth || it.decision is ManualRename
             ProblemKind.MISMATCH ->
-                it.priority <= FixPriority.NORMALIZED_SYNC ||
+                it.priority <= FixPriority.EXACT_SYNC ||
                 it.decision is AutoRenameBoth ||
                 it.decision is ManualRename
         }
