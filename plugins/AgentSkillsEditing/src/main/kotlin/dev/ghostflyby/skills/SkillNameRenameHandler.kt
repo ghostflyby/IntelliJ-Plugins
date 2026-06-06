@@ -29,7 +29,6 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.refactoring.rename.PsiElementRenameHandler
 import com.intellij.refactoring.rename.RenameHandler
 import org.jetbrains.yaml.psi.YAMLScalar
 
@@ -44,18 +43,25 @@ internal class SkillNameRenameHandler : RenameHandler {
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?, dataContext: DataContext?) {
         if (editor == null) return
         val scalar = dataContext?.let(::findRenameContext) ?: return
-        PsiElementRenameHandler.invoke(scalar, project, scalar, editor, true)
+
+        val injectionManager = InjectedLanguageManager.getInstance(project)
+        val hostFile = injectionManager.getTopLevelFile(scalar.containingFile) ?: return
+        val hostTextRange = injectionManager.injectedToHost(scalar, scalar.textRange)
+        val delegate = SkillNameInlineElement(scalar, hostFile, hostTextRange, project)
+        SkillNameInlineRenamer(delegate, editor).performInplaceRename()
     }
 
     override fun invoke(project: Project, elements: Array<out PsiElement>, dataContext: DataContext?) = Unit
 
     private fun findRenameContext(dataContext: DataContext): YAMLScalar? {
-        val editor = CommonDataKeys.EDITOR.getData(dataContext) ?: return null
         val file = CommonDataKeys.PSI_FILE.getData(dataContext) ?: return null
-        file.skillNameScalarAt(editor.caretModel.offset)?.let { return it }
+        val injectionManager = InjectedLanguageManager.getInstance(file.project)
+        val hostFile = injectionManager.getTopLevelFile(file)
 
-        val hostEditor = CommonDataKeys.HOST_EDITOR.getData(dataContext) ?: return null
-        val hostFile = InjectedLanguageManager.getInstance(file.project).getTopLevelFile(file)
+        val hostEditor = CommonDataKeys.HOST_EDITOR.getData(dataContext)
+            ?: CommonDataKeys.EDITOR.getData(dataContext)
+            ?: return null
+
         return hostFile.skillNameScalarAt(hostEditor.caretModel.offset)
     }
 }
