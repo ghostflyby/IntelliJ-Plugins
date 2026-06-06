@@ -30,32 +30,29 @@ import com.intellij.openapi.externalSystem.service.internal.ExternalSystemProces
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.gradle.Bundle
-import dev.ghostflyby.mcp.gradle.common.activityValue
-import dev.ghostflyby.mcp.gradle.common.cancelRunningExternalTaskWithRetry
-import dev.ghostflyby.mcp.gradle.common.getLinkedGradleProjectPaths
-import dev.ghostflyby.mcp.gradle.common.reportActivity
-import dev.ghostflyby.mcp.gradle.common.selectTargetPaths
+import dev.ghostflyby.mcp.gradle.common.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.resume
+import kotlin.time.Duration
 
 internal object GradleProjectSyncTools {
     internal suspend fun syncGradleProjects(
         project: Project,
         externalProjectPath: String?,
-        timeoutMillis: Int,
+        timeout: Duration,
     ): ExecutionToolset.RunConfigurationResult {
-        if (timeoutMillis <= 0) {
+        if (!timeout.isPositive()) {
             throw McpExpectedError("timeoutMillis must be greater than 0.")
         }
         reportActivity(
             Bundle.message(
                 "tool.activity.gradle.sync.projects",
                 activityValue(externalProjectPath),
-                timeoutMillis,
+                timeout,
             ),
         )
 
@@ -73,11 +70,11 @@ internal object GradleProjectSyncTools {
                     path.toString(),
                 ),
             )
-            when (val result = requestImportAndWait(project, path, timeoutMillis)) {
+            when (val result = requestImportAndWait(project, path, timeout)) {
                 is FutureWaitResult.Success -> syncLogs += "Synced: $path"
                 is FutureWaitResult.Timeout -> {
                     val output = buildString {
-                        append("Gradle sync timed out for $path after $timeoutMillis ms.")
+                        append("Gradle sync timed out for $path after $timeout.")
                         if (result.cancellationRequested) {
                             append(" Cancellation requested.")
                         } else {
@@ -122,7 +119,7 @@ internal object GradleProjectSyncTools {
     private suspend fun requestImportAndWait(
         project: Project,
         externalProjectPath: Path,
-        timeoutMillis: Int,
+        timeout: Duration,
     ): FutureWaitResult {
         val processingManager = ExternalSystemProcessingManager.getInstance()
         val importFuture = CompletableFuture<Void>()
@@ -130,7 +127,7 @@ internal object GradleProjectSyncTools {
             .withCallback(importFuture)
             .build()
         ExternalSystemUtil.refreshProject(externalProjectPath.toString(), importSpec)
-        val outcome = awaitFuture(importFuture, timeoutMillis)
+        val outcome = awaitFuture(importFuture, timeout)
             ?: return FutureWaitResult.Timeout(
                 cancellationRequested = cancelRunningExternalTaskWithRetry(
                     project = project,
@@ -147,9 +144,9 @@ internal object GradleProjectSyncTools {
 
     private suspend fun awaitFuture(
         future: CompletableFuture<Void>,
-        timeoutMillis: Int,
+        timeout: Duration,
     ): Result<Unit>? {
-        return withTimeoutOrNull(timeoutMillis.toLong()) {
+        return withTimeoutOrNull(timeout) {
             suspendCancellableCoroutine { continuation ->
                 future.whenComplete { _, throwable ->
                     if (!continuation.isActive) return@whenComplete

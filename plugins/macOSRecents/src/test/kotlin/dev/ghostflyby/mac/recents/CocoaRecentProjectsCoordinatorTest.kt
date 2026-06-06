@@ -27,6 +27,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.net.URI
 import kotlin.io.path.Path
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 internal class CocoaRecentProjectsCoordinatorTest {
 
@@ -122,16 +124,16 @@ internal class CocoaRecentProjectsCoordinatorTest {
     fun `scheduler resets debounce window for the latest snapshot`() = runBlocking {
         val bridge = RecordingBridge()
         val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 100L)
+        val coordinator = coordinator(bridge, coordinatorScope, debounce = 100.milliseconds)
 
         try {
             coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
-            delay(80L)
+            delay(80L.milliseconds)
             coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-c", "/tmp/recent-b"))
-            delay(60L)
+            delay(60L.milliseconds)
             assertEquals(emptyList<String>(), bridge.operations)
 
-            delay(120L)
+            delay(120L.milliseconds)
 
             assertEquals(
                 listOf("replace:file:///tmp/recent-b,file:///tmp/recent-c"),
@@ -147,21 +149,21 @@ internal class CocoaRecentProjectsCoordinatorTest {
         val startupPath = "/tmp/startup-project.ipr"
         val bridge = RecordingBridge()
         val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 50L)
+        val coordinator = coordinator(bridge, coordinatorScope, debounce = 50.milliseconds)
 
         try {
             coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(listOf("replace:file:///tmp/startup-project.ipr"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(listOf("append:file:///tmp/recent-a"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(startupPath, "/tmp/recent-a"))
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(
                 listOf("replace:file:///tmp/recent-a,file:///tmp/startup-project.ipr"),
                 bridge.operations,
@@ -177,21 +179,21 @@ internal class CocoaRecentProjectsCoordinatorTest {
         val recentProjectPath = "/tmp/directory-project"
         val bridge = RecordingBridge()
         val coordinatorScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val coordinator = coordinator(bridge, coordinatorScope, debounceMillis = 50L)
+        val coordinator = coordinator(bridge, coordinatorScope, debounce = 50.milliseconds)
 
         try {
             coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(listOf("replace:file:///tmp/directory-project/.idea/misc.xml"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(listOf("replace:file:///tmp/directory-project"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
-            delay(150L)
+            delay(150L.milliseconds)
             assertEquals(emptyList<String>(), bridge.operations)
         } finally {
             coordinatorScope.cancel()
@@ -201,12 +203,12 @@ internal class CocoaRecentProjectsCoordinatorTest {
     private fun coordinator(
         bridge: RecordingBridge,
         coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-        debounceMillis: Long = 250L,
+        debounce: Duration = 250.milliseconds,
     ): CocoaRecentProjectsCoordinator {
         return CocoaRecentProjectsCoordinator(
             coroutineScope = coroutineScope,
             documentsBridge = bridge,
-            debounceMillis = debounceMillis,
+            debounce = debounce,
         )
     }
 
