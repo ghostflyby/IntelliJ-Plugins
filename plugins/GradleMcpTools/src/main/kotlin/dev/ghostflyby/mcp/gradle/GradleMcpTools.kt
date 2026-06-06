@@ -33,6 +33,7 @@ import dev.ghostflyby.mcp.gradle.listing.GradleTaskListingTools
 import dev.ghostflyby.mcp.gradle.sync.GradleProjectSyncTools
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
+import kotlin.time.Duration.Companion.milliseconds
 
 @Suppress("FunctionName")
 public class GradleMcpTools : McpToolset {
@@ -96,7 +97,7 @@ public class GradleMcpTools : McpToolset {
         GradleProjectSyncTools.syncGradleProjects(
             project = currentCoroutineContext().project,
             externalProjectPath = externalProjectPath,
-            timeoutMillis = timeoutMillis,
+            timeout = timeoutMillis.milliseconds,
         )
 
     @McpTool
@@ -160,7 +161,7 @@ public class GradleMcpTools : McpToolset {
             taskNames = taskNames,
             externalProjectPath = externalProjectPath,
             scriptParameters = scriptParameters,
-            timeoutMillis = timeoutMillis,
+            timeout = timeoutMillis.milliseconds,
         )
 
     @McpTool

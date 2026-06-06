@@ -27,6 +27,11 @@ import com.intellij.openapi.diagnostic.Logger
 import kotlinx.coroutines.*
 import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.nanoseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 @Service(Service.Level.APP)
 internal class CocoaRecentProjectsSyncService(
@@ -52,13 +57,13 @@ internal class CocoaRecentProjectsSyncService(
 internal class CocoaRecentProjectsCoordinator(
     private val coroutineScope: CoroutineScope,
     private val documentsBridge: CocoaRecentDocumentsBridge,
-    private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
+    private val debounce: Duration = DEFAULT_DEBOUNCE_MILLIS,
     private val onFailure: (Throwable) -> Unit = {},
 ) {
     private val stateLock = Any()
     private val pendingStartupProjects = LinkedHashMap<String, String>()
     private var pendingRecentPaths: List<String>? = null
-    private var scheduledSyncAtNanos: Long = 0L
+    private var scheduledSyncDeadline: TimeMark = TimeSource.Monotonic.markNow()
     private var workerJob: Job? = null
     private var syncedUris: List<URI> = emptyList()
     private var hasSynced: Boolean = false
@@ -77,7 +82,7 @@ internal class CocoaRecentProjectsCoordinator(
                 pendingStartupProjects[projectKey] = projectPath
             }
             recentProjectKeys.forEach(pendingStartupProjects::remove)
-            scheduledSyncAtNanos = System.nanoTime() + debounceMillis * NANOS_PER_MILLISECOND
+            scheduledSyncDeadline = TimeSource.Monotonic.markNow() + debounce
             if (workerJob?.isActive != true) {
                 workerJob = coroutineScope.launch {
                     processPendingRequests()
@@ -125,7 +130,7 @@ internal class CocoaRecentProjectsCoordinator(
     private suspend fun processPendingRequests() {
         while (true) {
             when (val step = nextWorkerStep()) {
-                is WorkerStep.Delay -> delay(step.delayMillis)
+                is WorkerStep.Delay -> delay(step.delay)
                 is WorkerStep.Stop -> return
                 is WorkerStep.Sync -> {
                     try {
@@ -168,10 +173,7 @@ internal class CocoaRecentProjectsCoordinator(
                 workerJob = null
                 WorkerStep.Stop
             } else {
-                val remainingNanos = scheduledSyncAtNanos - System.nanoTime()
-                if (remainingNanos > 0L) {
-                    WorkerStep.Delay((remainingNanos + NANOS_PER_MILLISECOND - 1L) / NANOS_PER_MILLISECOND)
-                } else {
+                if (scheduledSyncDeadline.hasPassedNow()) {
                     pendingRecentPaths = null
                     WorkerStep.Sync(
                         PendingSyncRequest(
@@ -179,6 +181,9 @@ internal class CocoaRecentProjectsCoordinator(
                             startupProjects = LinkedHashMap(pendingStartupProjects),
                         ),
                     )
+                } else {
+                    val elapsed = scheduledSyncDeadline.elapsedNow()
+                    WorkerStep.Delay(-elapsed + 1.milliseconds - 1.nanoseconds)
                 }
             }
         }
@@ -202,7 +207,7 @@ internal class CocoaRecentProjectsCoordinator(
 
     private sealed interface WorkerStep {
         data class Delay(
-            val delayMillis: Long,
+            val delay: Duration,
         ) : WorkerStep
 
         data class Sync(
@@ -213,8 +218,7 @@ internal class CocoaRecentProjectsCoordinator(
     }
 
     private companion object {
-        private const val DEFAULT_DEBOUNCE_MILLIS = 250L
-        private const val NANOS_PER_MILLISECOND = 1_000_000L
+        private val DEFAULT_DEBOUNCE_MILLIS = 250.milliseconds
         private val LOG = Logger.getInstance(CocoaRecentProjectsCoordinator::class.java)
     }
 }
