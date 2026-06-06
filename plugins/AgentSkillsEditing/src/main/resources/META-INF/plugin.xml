@@ -1,0 +1,54 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <id>dev.ghostflyby.agent-skills-editing</id>
+    <name>Agent Skills Editing</name>
+    <vendor>ghostflyby</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.json</depends>
+    <depends>org.intellij.plugins.markdown</depends>
+    <depends>org.jetbrains.plugins.yaml</depends>
+
+    <extensions defaultExtensionNs="JavaScript">
+        <JsonSchema.ProviderFactory order="first"
+                                    implementation="dev.ghostflyby.skills.SkillMdJsonSchemaProviderFactory"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <referencesSearch
+                implementation="dev.ghostflyby.skills.SkillDirRenameSearchExecutor"/>
+        <renameHandler
+                implementation="dev.ghostflyby.skills.SkillNameRenameHandler"
+                order="first"/>
+        <renamePsiElementProcessor
+                implementation="dev.ghostflyby.skills.SkillNameRenamePsiElementProcessor"
+                order="first"/>
+        <gotoDeclarationHandler
+                implementation="dev.ghostflyby.skills.SkillNameGotoDeclarationHandler"/>
+
+        <localInspection
+                language="Markdown"
+                shortName="SkillMdFrontmatterInspection"
+                key="inspection.skills.frontmatter.display.name"
+                bundle="messages.SkillMdBundle"
+                groupKey="inspection.skills.group.name"
+                groupBundle="messages.SkillMdBundle"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillMdFrontmatterInspection"/>
+
+        <localInspection
+                language="yaml"
+                shortName="SkillNameInspection"
+                key="inspection.skills.name.display.name"
+                bundle="messages.SkillMdBundle"
+                groupKey="inspection.skills.group.name"
+                groupBundle="messages.SkillMdBundle"
+                enabledByDefault="true"
+                level="WARNING"
+                implementationClass="dev.ghostflyby.skills.SkillNameInspection"/>
+    </extensions>
+
+</idea-plugin>
