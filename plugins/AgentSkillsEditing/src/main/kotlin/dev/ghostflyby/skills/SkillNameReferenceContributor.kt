@@ -26,9 +26,11 @@ import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.patterns.PlatformPatterns
 import com.intellij.psi.*
 import com.intellij.psi.util.elementType
+import com.intellij.psi.util.parentOfType
 import com.intellij.util.ProcessingContext
 import org.intellij.plugins.markdown.lang.MarkdownElementType
 import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
+import org.jetbrains.yaml.YAMLElementGenerator
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
@@ -63,14 +65,17 @@ private class YamlToDirProvider : PsiReferenceProvider() {
     }
 }
 
-private class YamlToDirRef(
+internal class YamlToDirRef(
     element: YAMLScalar,
 ) : PsiReferenceBase<YAMLScalar>(element, false) {
     override fun resolve(): PsiElement? = resolveDir(element.containingFile as? YAMLFile ?: return null)
 
-    override fun bindToElement(element: PsiElement): PsiElement {
-        val dir = element as? PsiDirectory ?: return this.element
-        return handleElementRename(dir.name)
+    override fun handleElementRename(newElementName: String): PsiElement? {
+        val gen = YAMLElementGenerator.getInstance(element.containingFile.project)
+        val kv = element.parentOfType<YAMLKeyValue>() ?: return null
+        val newKv = gen.createYamlKeyValue(kv.keyText, newElementName)
+        kv.replace(newKv)
+        return newKv.value
     }
 }
 

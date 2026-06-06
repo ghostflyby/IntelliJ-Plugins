@@ -20,6 +20,9 @@
         <psi.referenceContributor
                 implementation="dev.ghostflyby.skills.SkillNameReferenceContributor" language="yaml"/>
 
+        <referencesSearch
+                implementation="dev.ghostflyby.skills.SkillDirRenameSearchExecutor"/>
+
         <localInspection
                 language="Markdown"
                 shortName="SkillMdFrontmatterInspection"
