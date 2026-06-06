@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SKILL.md Frontmatter Schema",
+  "description": "JSON Schema for Agent Skills SKILL.md YAML frontmatter per agentskills.io specification",
+  "type": "object",
+  "properties": {
+    "name": {
+      "description": "Skill name. 1-64 chars, lowercase alphanumeric and hyphens only. Must not start/end with hyphen, no consecutive hyphens. Must match parent directory name.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+    },
+    "description": {
+      "description": "One-line description of what the skill does and when to use it. Max 1024 characters.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "license": {
+      "description": "License name or reference to a bundled license file.",
+      "type": "string"
+    },
+    "compatibility": {
+      "description": "Environment requirements. Max 500 characters.",
+      "type": "string",
+      "maxLength": 500
+    },
+    "metadata": {
+      "description": "Arbitrary key-value mapping for additional metadata.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "allowed-tools": {
+      "description": "Space-separated string of pre-approved tools. (Experimental)",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "description"
+  ]
+}
