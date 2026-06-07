@@ -25,11 +25,13 @@ internal fun Route.serverInfoRoutes() {
             version = pluginVersion,
         )
         call.respondNegotiated(
-            jsonValue = response,
-            textBody = yamlFrontMatter(
-                linkedMapOf(
-                    "instanceKey" to response.instanceKey,
-                    "version" to response.version,
+            negotiatedMarkdown(
+                response,
+                yamlFrontMatter(
+                    linkedMapOf(
+                        "instanceKey" to response.instanceKey,
+                        "version" to response.version,
+                    ),
                 ),
             ),
         )

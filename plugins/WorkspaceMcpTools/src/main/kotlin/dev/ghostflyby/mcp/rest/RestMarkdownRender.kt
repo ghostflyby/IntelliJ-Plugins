@@ -6,39 +6,28 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator
 import dev.ghostflyby.mcp.filecontent.DirectoryListing
 import dev.ghostflyby.mcp.filecontent.FileMeta
 import dev.ghostflyby.mcp.filecontent.FileStructure
 import dev.ghostflyby.mcp.filecontent.StructureElement
 
+private val YamlMapper: ObjectMapper = ObjectMapper(
+    YAMLFactory.builder()
+        .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+        .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
+        .build(),
+)
+
 internal fun yamlFrontMatter(values: Map<String, Any?>): String {
+    val yaml = YamlMapper.writeValueAsString(values).removeSuffix("...\n").trimEnd()
     return buildString {
         appendLine("---")
-        values.forEach { (key, value) ->
-            appendYamlValue(key, value)
-        }
+        if (yaml.isNotEmpty()) appendLine(yaml)
         appendLine("---")
     }
-}
-
-private fun StringBuilder.appendYamlValue(key: String, value: Any?) {
-    when (value) {
-        null -> appendLine("$key: null")
-        is Boolean, is Number -> appendLine("$key: $value")
-        is Iterable<*> -> {
-            appendLine("$key:")
-            value.forEach { item -> appendLine("  - ${yamlScalar(item)}") }
-        }
-
-        else -> appendLine("$key: ${yamlScalar(value)}")
-    }
-}
-
-private fun yamlScalar(value: Any?): String {
-    val text = value?.toString() ?: return "null"
-    if (text.isEmpty()) return "\"\""
-    val simple = text.all { it.isLetterOrDigit() || it in setOf('-', '_', '.', '/') }
-    return if (simple) text else "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 }
 
 internal fun renderMetaMarkdown(meta: FileMeta): String = yamlFrontMatter(metaYamlValues(meta))

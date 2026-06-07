@@ -7,8 +7,6 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
@@ -47,7 +45,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -71,7 +69,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -94,7 +92,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -119,7 +117,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -145,7 +143,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -171,7 +169,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -195,7 +193,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -213,7 +211,7 @@ internal class FilePatchRoutesTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -236,7 +234,7 @@ new file mode 100644
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -261,7 +259,7 @@ deleted file mode 100644
         project
         val key = workspaceProjectKey(project)
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -287,7 +285,7 @@ deleted file mode 100644
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -309,7 +307,7 @@ deleted file mode 100644
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 

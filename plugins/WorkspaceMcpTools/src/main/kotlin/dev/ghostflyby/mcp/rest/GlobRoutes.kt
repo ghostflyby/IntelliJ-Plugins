@@ -29,10 +29,12 @@ internal fun Route.globRoutes() {
     get<Api.Project.GlobEntry.Glob> { resource ->
         val patterns = resource.parent.glob
         if (patterns.isEmpty()) {
-            call.respondNegotiatedError(
+            call.respondNegotiated(
+                negotiatedError(
+                    mapOf("error" to "glob requires a pattern query parameter"),
+                    "glob requires a pattern query parameter",
+                ),
                 HttpStatusCode.BadRequest,
-                mapOf("error" to "glob requires a pattern query parameter"),
-                "glob requires a pattern query parameter",
             )
             return@get
         }
@@ -53,48 +55,45 @@ private suspend fun respondGlob(
         is WorkspaceProjectResolution.Resolved -> {
             val target = rootRouteTarget(resolved.project, rootId, relativePath)
             if (target == null) {
-                call.respondNegotiatedError(
-                    HttpStatusCode.NotFound, mapOf("error" to "Root not found"), "Root not found",
+                call.respondNegotiated(
+                    negotiatedError(mapOf("error" to "Root not found"), "Root not found"),
+                    HttpStatusCode.NotFound,
                 )
                 return
             }
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
             val policy = access.policy
             if (access.file == null) {
-                call.respondNegotiatedError(
-                    HttpStatusCode.NotFound, mapOf("error" to "File not found"), "File not found",
+                call.respondNegotiated(
+                    negotiatedError(mapOf("error" to "File not found"), "File not found"),
+                    HttpStatusCode.NotFound,
                 )
                 return
             }
             if (!policy.canRead(FileContentKind.GLOB)) {
-                call.respondNegotiatedError(
-                    HttpStatusCode.Forbidden, mapOf("error" to policy.reason), policy.reason,
+                call.respondNegotiated(
+                    negotiatedError(mapOf("error" to policy.reason), policy.reason),
+                    HttpStatusCode.Forbidden,
                 )
                 return
             }
             val json = try {
                 readGlobResult(access.file, patterns, resolved.project).payload
             } catch (error: ContentReadException) {
-                call.respondNegotiatedError(
+                call.respondNegotiated(
+                    negotiatedError(mapOf("error" to error.message.orEmpty()), error.message.orEmpty()),
                     HttpStatusCode.BadRequest,
-                    mapOf("error" to error.message.orEmpty()),
-                    error.message.orEmpty(),
                 )
                 return
             }
             val paths = Json.decodeFromString(ListSerializer(String.serializer()), json)
-            call.respondNegotiatedText(
-                jsonText = json,
-                textBody = renderPrefixBlock(paths),
-                textContentType = ContentType.Text.Plain,
-            )
+            call.respondNegotiated(negotiatedText(json, renderPrefixBlock(paths)))
         }
 
         is WorkspaceProjectResolution.Unresolved -> {
-            call.respondNegotiatedError(
+            call.respondNegotiated(
+                negotiatedError(mapOf("error" to resolved.message, "projectKey" to projectKey), resolved.message),
                 HttpStatusCode.NotFound,
-                mapOf("error" to resolved.message, "projectKey" to projectKey),
-                resolved.message,
             )
         }
     }

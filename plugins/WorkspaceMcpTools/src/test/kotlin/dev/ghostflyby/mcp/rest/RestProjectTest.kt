@@ -13,8 +13,6 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.serialization.kotlinx.json.*
-import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
@@ -37,7 +35,7 @@ internal class RestProjectTest {
     fun `project list returns open projects`() {
         project
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -61,7 +59,7 @@ internal class RestProjectTest {
     fun `project list defaults to markdown table`() {
         project
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -78,7 +76,7 @@ internal class RestProjectTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -99,7 +97,7 @@ internal class RestProjectTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -124,7 +122,7 @@ internal class RestProjectTest {
         val key = workspaceProjectKey(project)
 
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
@@ -141,7 +139,7 @@ internal class RestProjectTest {
     fun `unknown project key falls back to single open project`() {
         project
         testApplication {
-            install(ContentNegotiation) { json() }
+            application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 

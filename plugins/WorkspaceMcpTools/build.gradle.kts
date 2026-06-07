@@ -29,6 +29,8 @@ dependencies {
     ksp(libs.kotlinx.schema.ksp)
 
     implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.ktor.serialization.jackson)
+    implementation(libs.jackson.dataformat.yaml)
     implementation(libs.ktor.server.resources)
     implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))
@@ -57,8 +59,9 @@ compileKotlin.compilerOptions {
     freeCompilerArgs.set(listOf("-Xannotation-default-target=param-property"))
 }
 
-tasks.withType<Test>().configureEach {
+tasks.test {
     useJUnitPlatform()
+    systemProperty("java.awt.headless", true)
 }
 
 configurations.all {

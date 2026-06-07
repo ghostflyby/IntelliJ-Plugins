@@ -41,7 +41,7 @@ internal fun Route.projectRoutes() {
                 basePath = project.basePath,
             )
         }
-        call.respondNegotiated(projects, renderProjectList(projects))
+        call.respondNegotiated(negotiatedMarkdown(projects, renderProjectList(projects)))
     }
 
     get<Api.Project.Roots> {
@@ -49,13 +49,12 @@ internal fun Route.projectRoutes() {
         when (val r = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val roots = exposedWorkspaceRoots(r.project).map { it.toDto() }
-                call.respondNegotiated(roots, renderRootList(roots))
+                call.respondNegotiated(negotiatedMarkdown(roots, renderRootList(roots)))
             }
 
-            is WorkspaceProjectResolution.Unresolved -> call.respondNegotiatedError(
+            is WorkspaceProjectResolution.Unresolved -> call.respondNegotiated(
+                negotiatedError(ProjectErrorResponse(error = r.message, projectKey = projectKey), r.message),
                 HttpStatusCode.NotFound,
-                ProjectErrorResponse(error = r.message, projectKey = projectKey),
-                r.message,
             )
         }
     }
@@ -69,17 +68,16 @@ internal fun Route.projectRoutes() {
                     name = r.project.name,
                     basePath = r.project.basePath,
                 )
-                call.respondNegotiated(
-                    jsonValue = entry,
-                    textBody = renderProject(entry),
-                )
+                call.respondNegotiated(negotiatedMarkdown(entry, renderProject(entry)))
             }
 
             is WorkspaceProjectResolution.Unresolved -> {
-                call.respondNegotiatedError(
+                call.respondNegotiated(
+                    negotiatedError(
+                        ProjectErrorResponse(error = r.message, projectKey = project.projectKey),
+                        r.message,
+                    ),
                     HttpStatusCode.NotFound,
-                    ProjectErrorResponse(error = r.message, projectKey = project.projectKey),
-                    r.message,
                 )
             }
         }

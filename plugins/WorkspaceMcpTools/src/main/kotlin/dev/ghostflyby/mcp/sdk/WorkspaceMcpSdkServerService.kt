@@ -13,6 +13,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import dev.ghostflyby.mcp.pluginVersion
+import dev.ghostflyby.mcp.rest.installWorkspaceRestContentNegotiation
 import dev.ghostflyby.mcp.rest.restApi
 import dev.ghostflyby.mcp.server.*
 import io.ktor.server.application.*
@@ -50,6 +51,7 @@ internal class WorkspaceMcpSdkServerService(
                     val port = service<WorkspaceMcpSdkServerSettings>().port
                     core = createdCore
                     embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
+                        installWorkspaceRestContentNegotiation()
                         install(Resources)
                         mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdCore.server }
                         routing { restApi() }
