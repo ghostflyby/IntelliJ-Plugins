@@ -14,6 +14,7 @@ import java.net.URI
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.io.path.Path
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 @OptIn(ExperimentalCoroutinesApi::class)
 internal class CocoaRecentProjectsCoordinatorTest {
@@ -195,9 +196,9 @@ internal class CocoaRecentProjectsCoordinatorTest {
             debounceMillis = debounceMillis,
             startupProjectLookupDispatcher =
                 coroutineScope.coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher ?: Dispatchers.IO,
-            nanoTime = (coroutineScope as? TestScope)
-                ?.let { testScope -> { testScope.testScheduler.currentTime * NANOS_PER_MILLISECOND } }
-                ?: System::nanoTime,
+            timeSource = (coroutineScope as? TestScope)
+                ?.testTimeSource
+                ?: TimeSource.Monotonic,
         )
     }
 
@@ -224,7 +225,4 @@ internal class CocoaRecentProjectsCoordinatorTest {
         }
     }
 
-    private companion object {
-        private const val NANOS_PER_MILLISECOND = 1_000_000L
-    }
 }
