@@ -8,7 +8,9 @@ package dev.ghostflyby.mcp.rest
 
 import dev.ghostflyby.mcp.pluginVersion
 import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
+import io.ktor.server.application.*
 import io.ktor.server.resources.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 
@@ -20,19 +22,10 @@ private data class ServerInfoResponse(
 
 internal fun Route.serverInfoRoutes() {
     get<Api.ServerInfo> {
-        val response = ServerInfoResponse(
-            instanceKey = workspaceInstanceKey(),
-            version = pluginVersion,
-        )
-        call.respondNegotiated(
-            negotiatedMarkdown(
-                response,
-                yamlFrontMatter(
-                    linkedMapOf(
-                        "instanceKey" to response.instanceKey,
-                        "version" to response.version,
-                    ),
-                ),
+        call.respond(
+            ServerInfoResponse(
+                instanceKey = workspaceInstanceKey(),
+                version = pluginVersion,
             ),
         )
     }

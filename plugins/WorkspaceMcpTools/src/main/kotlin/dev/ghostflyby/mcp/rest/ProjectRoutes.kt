@@ -13,6 +13,7 @@ import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.http.*
 import io.ktor.server.resources.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
 
@@ -21,12 +22,6 @@ private data class ProjectListEntry(
     val projectKey: String,
     val name: String,
     val basePath: String?,
-)
-
-@Serializable
-private data class ProjectErrorResponse(
-    val error: String,
-    val projectKey: String,
 )
 
 internal fun Route.projectRoutes() {
@@ -41,7 +36,7 @@ internal fun Route.projectRoutes() {
                 basePath = project.basePath,
             )
         }
-        call.respondNegotiated(negotiatedMarkdown(projects, renderProjectList(projects)))
+        call.respond(projects)
     }
 
     get<Api.Project.Roots> {
@@ -49,12 +44,12 @@ internal fun Route.projectRoutes() {
         when (val r = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val roots = exposedWorkspaceRoots(r.project).map { it.toDto() }
-                call.respondNegotiated(negotiatedMarkdown(roots, renderRootList(roots)))
+                call.respond(roots)
             }
 
-            is WorkspaceProjectResolution.Unresolved -> call.respondNegotiated(
-                negotiatedError(ProjectErrorResponse(error = r.message, projectKey = projectKey), r.message),
+            is WorkspaceProjectResolution.Unresolved -> call.respond(
                 HttpStatusCode.NotFound,
+                RestError(error = r.message, projectKey = projectKey),
             )
         }
     }
@@ -68,42 +63,15 @@ internal fun Route.projectRoutes() {
                     name = r.project.name,
                     basePath = r.project.basePath,
                 )
-                call.respondNegotiated(negotiatedMarkdown(entry, renderProject(entry)))
+                call.respond(entry)
             }
 
             is WorkspaceProjectResolution.Unresolved -> {
-                call.respondNegotiated(
-                    negotiatedError(
-                        ProjectErrorResponse(error = r.message, projectKey = project.projectKey),
-                        r.message,
-                    ),
+                call.respond(
                     HttpStatusCode.NotFound,
+                    RestError(error = r.message, projectKey = project.projectKey),
                 )
             }
         }
-    }
-}
-
-private fun renderProjectList(projects: List<ProjectListEntry>): String = buildString {
-    appendLine("| projectKey | name | basePath |")
-    appendLine("| --- | --- | --- |")
-    projects.forEach { project ->
-        appendLine("| ${project.projectKey} | ${project.name} | ${project.basePath.orEmpty()} |")
-    }
-}
-
-private fun renderProject(project: ProjectListEntry): String = yamlFrontMatter(
-    linkedMapOf(
-        "projectKey" to project.projectKey,
-        "name" to project.name,
-        "basePath" to project.basePath,
-    ),
-)
-
-private fun renderRootList(roots: List<dev.ghostflyby.mcp.filecontent.ExposedRootDto>): String = buildString {
-    appendLine("| id | displayName | kind | readable | writable | url |")
-    appendLine("| --- | --- | --- | --- | --- | --- |")
-    roots.forEach { root ->
-        appendLine("| ${root.id} | ${root.displayName} | ${root.kind} | ${root.readable} | ${root.writable} | ${root.url} |")
     }
 }

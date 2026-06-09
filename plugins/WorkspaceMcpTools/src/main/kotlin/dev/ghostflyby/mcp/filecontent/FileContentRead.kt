@@ -27,9 +27,8 @@ import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.*
-import kotlin.io.encoding.Base64
 
 internal fun validateProjectRelativePath(relativePath: String) {
     require(relativePath.isNotBlank()) { "relativePath must not be blank." }
@@ -41,11 +40,21 @@ internal fun validateProjectRelativePath(relativePath: String) {
 
 internal class ContentReadException(message: String) : RuntimeException(message)
 
-internal data class ContentResult(
-    val payload: String,
-    val mimeType: String,
-    val isBinary: Boolean,
-)
+/** Raw file content served directly (text/bytes) or a directory listing. */
+internal sealed interface FileContent {
+    data class Text(val text: String, val mimeType: String) : FileContent
+    data class Binary(val bytes: ByteArray, val mimeType: String) : FileContent {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is Binary) return false
+            return bytes.contentEquals(other.bytes) && mimeType == other.mimeType
+        }
+
+        override fun hashCode(): Int = 31 * bytes.contentHashCode() + mimeType.hashCode()
+    }
+
+    data class Directory(val listing: DirectoryListing) : FileContent
+}
 
 // -- resolve VirtualFile --
 
@@ -53,25 +62,6 @@ internal suspend fun resolveFileByRawUrlOrNull(rawVfsUrl: String): VirtualFile? 
     val vfsManager = service<VirtualFileManager>()
     return readAction { vfsManager.findFileByUrl(rawVfsUrl) }
 }
-
-// -- unified read --
-
-private sealed interface ReadData
-
-private data class DirReadData(val listing: DirectoryListing) : ReadData
-private data class BinaryReadData(val bytes: ByteArray) : ReadData {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (other !is BinaryReadData) return false
-        return bytes.contentEquals(other.bytes)
-    }
-
-    override fun hashCode(): Int {
-        return bytes.contentHashCode()
-    }
-}
-
-private data class TextReadData(val text: String) : ReadData
 
 // -- Document LRU cache --
 
@@ -87,38 +77,15 @@ private fun getOrCreateDocument(file: VirtualFile): Document? {
     return doc
 }
 
-internal suspend fun readContentResult(file: VirtualFile): ContentResult {
-    val data = readAction {
-        if (file.isDirectory) {
-            DirReadData(file.readDirectoryListing())
-        } else if (file.fileType.isBinary) {
-            BinaryReadData(file.contentsToByteArray())
-        } else {
+internal suspend fun readContentResult(file: VirtualFile): FileContent = readAction {
+    when {
+        file.isDirectory -> FileContent.Directory(file.readDirectoryListing())
+        file.fileType.isBinary -> FileContent.Binary(file.contentsToByteArray(), file.inferMimeType())
+        else -> {
             val document = getOrCreateDocument(file)
-            TextReadData(document?.text ?: String(file.contentsToByteArray(), file.charset))
+            FileContent.Text(document?.text ?: String(file.contentsToByteArray(), file.charset), file.inferMimeType())
         }
     }
-    return buildContentResult(file, data)
-}
-
-private fun buildContentResult(file: VirtualFile, data: ReadData): ContentResult = when (data) {
-    is DirReadData -> ContentResult(
-        payload = JSON.encodeToString(data.listing),
-        mimeType = "application/json",
-        isBinary = false,
-    )
-
-    is BinaryReadData -> ContentResult(
-        payload = Base64.encode(data.bytes),
-        mimeType = file.inferMimeType(),
-        isBinary = true,
-    )
-
-    is TextReadData -> ContentResult(
-        payload = data.text,
-        mimeType = file.inferMimeType(),
-        isBinary = false,
-    )
 }
 
 // -- metadata read --
@@ -148,10 +115,9 @@ internal data class FileMeta(
 
 internal suspend fun readMetaResult(
     file: VirtualFile,
-    fields: String, /* ""=all; "a,b"=subset */
     policy: FileAccessPolicy = fileMetaPolicyFallback(file),
-): ContentResult {
-    val meta = readAction {
+): FileMeta {
+    return readAction {
         val doc = getOrCreateDocument(file)
         FileMeta(
             name = file.name,
@@ -175,14 +141,17 @@ internal suspend fun readMetaResult(
             reason = policy.reason,
         )
     }
-    val json = filterAndSerialize(meta, fields)
-    return ContentResult(payload = json, mimeType = "application/json", isBinary = false)
 }
 
 // -- structure read --
 
 @Serializable
-internal data class FileStructure(val elements: List<StructureElement>)
+internal data class FileStructure(val elements: List<StructureElement>) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        appendLine("## Structure")
+        append(renderStructureText(this@FileStructure))
+    }
+}
 
 @Serializable
 internal data class StructureElement(
@@ -191,12 +160,24 @@ internal data class StructureElement(
     val children: List<StructureElement> = emptyList(),
 )
 
+internal fun renderStructureText(structure: FileStructure): String = buildString {
+    structure.elements.forEach { appendStructureElement(it, 0) }
+}
+
+private fun StringBuilder.appendStructureElement(element: StructureElement, depth: Int) {
+    repeat(depth) { append('\t') }
+    append(element.name)
+    if (element.type.isNotBlank()) append(" (").append(element.type).append(")")
+    appendLine()
+    element.children.forEach { appendStructureElement(it, depth + 1) }
+}
+
 internal suspend fun readStructureResult(
     project: Project,
     file: VirtualFile,
-): String {
+): FileStructure {
     val document = readAction { FileDocumentManager.getInstance().getDocument(file) }
-        ?: return """{"elements":[]}"""
+        ?: return FileStructure(emptyList())
     val elements = readAction {
         val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList<StructureElement>()
         val builder = LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(psiFile)
@@ -206,7 +187,7 @@ internal suspend fun readStructureResult(
         val model = builder.createStructureViewModel(editor)
         collectElements(model.root)
     }
-    return JSON.encodeToString(FileStructure.serializer(), FileStructure(elements))
+    return FileStructure(elements)
 }
 
 private fun collectElements(element: Any?): List<StructureElement> {
@@ -215,19 +196,6 @@ private fun collectElements(element: Any?): List<StructureElement> {
     val type = element.presentation.locationString ?: ""
     val children = element.children.toList().flatMap { collectElements(it) }
     return listOf(StructureElement(name, type, children))
-}
-
-// -- helpers --
-
-private fun filterAndSerialize(meta: FileMeta, fields: String): String {
-    if (fields.isBlank()) return JSON.encodeToString(FileMeta.serializer(), meta)
-    val set = fields.split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-    val map = linkedMapOf<String, JsonElement>()
-    val jsonObj = JSON.encodeToJsonElement(FileMeta.serializer(), meta).jsonObject
-    jsonObj.forEach { (k, v) ->
-        if (k in set) map[k] = v
-    }
-    return JSON.encodeToString(JsonObject.serializer(), buildJsonObject { map.forEach { (k, v) -> put(k, v) } })
 }
 
 // -- private helpers --
@@ -269,26 +237,22 @@ private fun VirtualFile.readDirectoryListing(): DirectoryListing {
 @Serializable
 internal data class DirectoryListing(
     val children: List<String>,
-)
-
-internal suspend fun readGlobResult(
-    file: VirtualFile,
-    pattern: String,
-    project: Project?,
-): ContentResult = readGlobResult(file, listOf(pattern), project)
+) : TextBody {
+    override fun renderTextBody(): String =
+        children.joinToString(separator = "\n", postfix = if (children.isEmpty()) "" else "\n")
+}
 
 internal suspend fun readGlobResult(
     file: VirtualFile,
     patterns: List<String>,
     project: Project?,
     candidateLookup: GlobCandidateLookup = IntelliJGlobCandidateLookup,
-): ContentResult {
+): List<String> {
     if (!file.isDirectory) throw ContentReadException("glob requires a directory, but the target is a file: ${file.path}")
 
-    val paths = readAction {
+    return readAction {
         readGlobPaths(file, patterns, project, candidateLookup)
     }
-    return ContentResult(payload = JSON.encodeToString(paths), mimeType = "application/json", isBinary = false)
 }
 
 internal fun readGlobPaths(
@@ -368,9 +332,4 @@ private object IntelliJGlobCandidateLookup : GlobCandidateLookup {
 
     override fun walkFiles(root: VirtualFile): Collection<VirtualFile> =
         readGlobViaVfsWalk(root)
-}
-
-private val JSON = Json {
-    prettyPrint = true
-    encodeDefaults = true
 }

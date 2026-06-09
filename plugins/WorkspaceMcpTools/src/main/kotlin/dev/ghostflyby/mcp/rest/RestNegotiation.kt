@@ -6,14 +6,14 @@
 
 package dev.ghostflyby.mcp.rest
 
+import dev.ghostflyby.mcp.rest.markdown.MarkdownDocumentRenderer
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.serialization.*
-import io.ktor.serialization.kotlinx.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.response.*
 import io.ktor.util.reflect.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.charsets.*
@@ -23,103 +23,46 @@ internal val MarkdownContentType: ContentType = ContentType("text", "markdown").
 internal val XMarkdownContentType: ContentType = ContentType("text", "x-markdown").withCharset(Charsets.UTF_8)
 private val PlainTextContentType: ContentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8)
 
-private val RestJson: Json = Json {
+internal val RestJson: Json = Json {
     ignoreUnknownKeys = true
     encodeDefaults = true
 }
 
 internal fun Application.installWorkspaceRestContentNegotiation() {
     install(ContentNegotiation) {
-        val converter = RestNegotiatedResponseConverter(
-            jsonConverter = KotlinxSerializationConverter(RestJson),
-        )
-        register(MarkdownContentType, converter)
-        register(XMarkdownContentType, converter)
-        register(PlainTextContentType, converter)
-        register(ContentType.Application.Json, converter)
+        val model = MarkdownModelConverter()
+        // Markdown is registered first so Accept: */* (or no Accept) defaults to markdown.
+        register(MarkdownContentType, model)
+        register(XMarkdownContentType, model)
+        register(PlainTextContentType, model)
         json(RestJson)
     }
 }
 
-internal data class RestNegotiatedResponse(
-    val jsonValue: Any?,
-    val markdownBody: String? = null,
-    val plainBody: String? = null,
-    val jsonText: String? = null,
-    val jsonTypeInfo: TypeInfo? = null,
-)
-
-internal inline fun <reified T : Any> negotiatedMarkdown(
-    jsonValue: T,
-    markdownBody: String,
-): RestNegotiatedResponse = RestNegotiatedResponse(
-    jsonValue = jsonValue,
-    markdownBody = markdownBody,
-    jsonTypeInfo = typeInfo<T>(),
-)
-
-internal fun negotiatedText(
-    jsonText: String,
-    textBody: String,
-    markdown: Boolean = false,
-): RestNegotiatedResponse = RestNegotiatedResponse(
-    jsonValue = jsonText,
-    markdownBody = textBody.takeIf { markdown },
-    plainBody = textBody.takeUnless { markdown },
-    jsonText = jsonText,
-)
-
-internal inline fun <reified T : Any> negotiatedError(
-    jsonValue: T,
-    textBody: String,
-): RestNegotiatedResponse = RestNegotiatedResponse(
-    jsonValue = jsonValue,
-    plainBody = textBody,
-    jsonTypeInfo = typeInfo<T>(),
-)
-
-internal suspend fun ApplicationCall.respondNegotiated(
-    response: RestNegotiatedResponse,
-    status: HttpStatusCode = HttpStatusCode.OK,
-) {
-    respond(status, response)
-}
-
-private class RestNegotiatedResponseConverter(
-    private val jsonConverter: ContentConverter,
-) : ContentConverter {
-
+/**
+ * Renders response values for the textual content types. [TextBody] values render themselves
+ * (identical for plain and Markdown); other models render as a Markdown document via
+ * [MarkdownDocumentRenderer]. Raw [Map]/[CharSequence] values and non-[TextBody] models on
+ * text/plain return null, falling through to the JSON converter.
+ */
+private class MarkdownModelConverter : ContentConverter {
     override suspend fun serialize(
         contentType: ContentType,
         charset: Charset,
         typeInfo: TypeInfo,
         value: Any?,
     ): OutgoingContent? {
-        val response = value as? RestNegotiatedResponse ?: return null
-        return when {
-            contentType.match(ContentType.Application.Json) -> response.serializeJson(contentType, charset)
-            contentType.match(MarkdownContentType) || contentType.match(XMarkdownContentType) ->
-                response.markdownBody?.let { TextContent(it, contentType.withCharset(charset)) }
-
-            contentType.match(ContentType.Text.Plain) ->
-                (response.plainBody ?: response.markdownBody)?.let { TextContent(it, contentType.withCharset(charset)) }
-
-            else -> null
+        if (value == null) return null
+        val isMarkdown = contentType.match(MarkdownContentType) || contentType.match(XMarkdownContentType)
+        val isPlain = contentType.match(ContentType.Text.Plain)
+        if (!isMarkdown && !isPlain) return null
+        if (value is TextBody) {
+            return TextContent(value.renderTextBody(), contentType.withCharset(charset))
         }
-    }
-
-    private suspend fun RestNegotiatedResponse.serializeJson(
-        contentType: ContentType,
-        charset: Charset,
-    ): OutgoingContent? {
-        jsonText?.let { return TextContent(it, contentType.withCharset(charset)) }
-        val payload = jsonValue ?: return null
-        return jsonConverter.serialize(
-            contentType = contentType,
-            charset = charset,
-            typeInfo = jsonTypeInfo ?: TypeInfo(payload::class),
-            value = payload,
-        )
+        // Raw maps/strings keep their JSON form; models have no plain-text form.
+        if (value is Map<*, *> || value is CharSequence || !isMarkdown) return null
+        val markdown = MarkdownDocumentRenderer.render(value, typeInfo.kotlinType?.arguments?.firstOrNull()?.type)
+        return TextContent(markdown, contentType.withCharset(charset))
     }
 
     override suspend fun deserialize(charset: Charset, typeInfo: TypeInfo, content: ByteReadChannel): Any? = null

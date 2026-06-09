@@ -21,10 +21,10 @@ internal enum class ExposedRootKind {
 internal data class ExposedRootDto(
     val id: String,
     val displayName: String,
-    val url: String,
     val kind: String,
     val readable: Boolean,
     val writable: Boolean,
+    val url: String,
 )
 
 internal data class ExposedRoot(

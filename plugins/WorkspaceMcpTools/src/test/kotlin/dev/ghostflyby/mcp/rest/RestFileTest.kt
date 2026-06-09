@@ -374,7 +374,7 @@ internal class RestFileTest {
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
             val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt")))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
-            Assertions.assertEquals(ContentType.Text.Plain.withCharset(Charsets.UTF_8), response.responseContentType())
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
 
             val names = response.bodyAsText().lines().filter { it.isNotBlank() }
             Assertions.assertEquals(listOf("@ ", "RootFile.kt", "@ nested/", "NestedFile.kt"), names)
@@ -493,7 +493,7 @@ internal class RestFileTest {
     }
 
     @Test
-    fun `directory content defaults to tab indented text and JSON accept returns listing`() {
+    fun `directory content defaults to markdown listing and JSON accept returns listing`() {
         project
         val key = workspaceProjectKey(project)
 
@@ -504,10 +504,7 @@ internal class RestFileTest {
 
             val defaultResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src"))
             Assertions.assertEquals(HttpStatusCode.OK, defaultResponse.status)
-            Assertions.assertEquals(
-                ContentType.Text.Plain.withCharset(Charsets.UTF_8),
-                defaultResponse.responseContentType(),
-            )
+            Assertions.assertEquals(TestMarkdownContentType, defaultResponse.responseContentType())
             Assertions.assertTrue(defaultResponse.bodyAsText().lines().any { it.isNotBlank() })
 
             val jsonResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")) {

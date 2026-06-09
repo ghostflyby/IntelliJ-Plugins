@@ -31,6 +31,7 @@ dependencies {
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.ktor.serialization.jackson)
     implementation(libs.jackson.dataformat.yaml)
+    implementation(libs.jackson.module.kotlin)
     implementation(libs.ktor.server.resources)
     implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))

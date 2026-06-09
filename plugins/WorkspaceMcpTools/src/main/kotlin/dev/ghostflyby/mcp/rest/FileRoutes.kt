@@ -8,7 +8,10 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.fasterxml.jackson.annotation.JsonIgnore
 import dev.ghostflyby.mcp.filecontent.*
+import dev.ghostflyby.mcp.rest.markdown.BlockKind
+import dev.ghostflyby.mcp.rest.markdown.MarkdownBlock
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -17,15 +20,26 @@ import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlin.io.encoding.Base64
 
 @Serializable
 private data class FileContentResponse(
-    val content: String? = null,
-    val contentFormat: String? = null,
     val meta: FileMeta? = null,
     val exists: Boolean? = null,
+    @MarkdownBlock(
+        BlockKind.CODE_FENCE,
+        languageProperty = "language",
+        skipWhenProperty = "contentFormat",
+        skipWhenEquals = "base64",
+    )
+    val content: String? = null,
+    @MarkdownBlock(BlockKind.STRUCTURE_TREE, heading = "## Structure")
     val structure: FileStructure? = null,
+    @Transient @JsonIgnore
+    val language: String = "",
+    @JsonIgnore
+    val contentFormat: String? = null,
 )
 
 // -- Route registrations --
@@ -80,10 +94,7 @@ private suspend fun respondProjectRootFile(
         is WorkspaceProjectResolution.Resolved -> {
             val target = rootRouteTarget(resolved.project, root.rootId, relativePath)
             if (target == null) {
-                call.respondNegotiated(
-                    negotiatedError(mapOf("error" to "Root not found"), "Root not found"),
-                    HttpStatusCode.NotFound,
-                )
+                call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
                 return
             }
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
@@ -91,13 +102,7 @@ private suspend fun respondProjectRootFile(
         }
 
         is WorkspaceProjectResolution.Unresolved -> {
-            call.respondNegotiated(
-                negotiatedError(
-                    mapOf("error" to resolved.message, "projectKey" to projectKey),
-                    resolved.message,
-                ),
-                HttpStatusCode.NotFound,
-            )
+            call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
         }
     }
 }
@@ -131,10 +136,7 @@ private suspend fun respondFileContent(
         return
     }
     if (needsFile && file == null) {
-        call.respondNegotiated(
-            negotiatedError(mapOf("error" to "File not found"), "File not found"),
-            HttpStatusCode.NotFound,
-        )
+        call.respond(HttpStatusCode.NotFound, RestError("File not found"))
         return
     }
     val effectivePolicy = policy ?: file?.let { f ->
@@ -151,25 +153,16 @@ private suspend fun respondFileContent(
             FileContentClassification.OUTSIDE_PROJECT,
         )
     ) {
-        call.respondNegotiated(
-            negotiatedError(mapOf("error" to "File not found"), "File not found"),
-            HttpStatusCode.NotFound,
-        )
+        call.respond(HttpStatusCode.NotFound, RestError("File not found"))
         return
     }
     if (wantsStructure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
-        call.respondNegotiated(
-            negotiatedError(mapOf("error" to effectivePolicy.reason), effectivePolicy.reason),
-            HttpStatusCode.Forbidden,
-        )
+        call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
         return
     }
     if (wantsContent && !effectivePolicy.canRead(FileContentKind.CONTENT) && !effectivePolicy.canRead(FileContentKind.BYTES)
     ) {
-        call.respondNegotiated(
-            negotiatedError(mapOf("error" to effectivePolicy.reason), effectivePolicy.reason),
-            HttpStatusCode.Forbidden,
-        )
+        call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
         return
     }
     // Single-responsibility paths
@@ -185,32 +178,19 @@ private suspend fun respondFileContent(
 
 // -- Single response modes --
 private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile) {
-    val r = readContentResult(file)
-    if (r.isBinary) {
-        call.respondBytes(Base64.decode(r.payload), ContentType.parse(r.mimeType))
-    } else if (file.isDirectory) {
-        call.respondNegotiated(negotiatedText(r.payload, renderDirectoryListingText(decodeFromJson(r.payload))))
-    } else {
-        call.respondText(r.payload, ContentType.parse(r.mimeType))
+    when (val c = readContentResult(file)) {
+        is FileContent.Binary -> call.respondBytes(c.bytes, ContentType.parse(c.mimeType))
+        is FileContent.Directory -> call.respond(c.listing)
+        is FileContent.Text -> call.respondText(c.text, ContentType.parse(c.mimeType))
     }
 }
 
 private suspend fun metaOnly(call: ApplicationCall, file: VirtualFile, policy: FileAccessPolicy) {
-    val json = readMetaResult(file, "", policy).payload
-    val meta = decodeFromJson<FileMeta>(json)
-    call.respondNegotiated(negotiatedText(jsonText = json, textBody = renderMetaMarkdown(meta), markdown = true))
+    call.respond(readMetaResult(file, policy))
 }
 
 private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, project: Project?) {
-    val json = if (project != null) readStructureResult(project, file) else """{"elements":[]}"""
-    val structure = decodeFromJson<FileStructure>(json)
-    call.respondNegotiated(
-        negotiatedText(
-            jsonText = json,
-            textBody = renderStructureMarkdown(structure),
-            markdown = true,
-        ),
-    )
+    call.respond(if (project != null) readStructureResult(project, file) else FileStructure(emptyList()))
 }
 
 // -- Compound response --
@@ -221,32 +201,25 @@ private suspend fun compoundResult(
     policy: FileAccessPolicy?,
 ) {
     val effectivePolicy = policy ?: fileMetaPolicyFallback(file)
-    val meta = if (wantsMeta) decodeFromJson<FileMeta>(readMetaResult(file, "", effectivePolicy).payload) else null
+    val meta = if (wantsMeta) readMetaResult(file, effectivePolicy) else null
     val content = if (wantsContent) readContentResult(file) else null
-    val structure = if (wantsStructure && project != null) decodeFromJson(readStructureResult(project, file)) else null
+    val structure = if (wantsStructure && project != null) readStructureResult(project, file) else null
     val response = FileContentResponse(
-        content = content?.payload,
-        contentFormat = if (content?.isBinary == true) "base64" else null,
         meta = meta,
         exists = if (wantsExists) true else null,
+        content = content?.let {
+            when (it) {
+                is FileContent.Text -> it.text
+                is FileContent.Binary -> Base64.encode(it.bytes)
+                is FileContent.Directory -> it.listing.renderTextBody()
+            }
+        },
         structure = structure,
+        language = file.markdownLanguageTag(),
+        contentFormat = if (content is FileContent.Binary) "base64" else null,
     )
-    call.respondNegotiated(
-        negotiatedMarkdown(
-            response,
-            renderCompoundMarkdown(
-                meta = meta,
-                content = content?.takeUnless { it.isBinary }?.payload,
-                language = file.markdownLanguageTag(),
-                structure = structure,
-                exists = if (wantsExists) true else null,
-            ),
-        ),
-    )
+    call.respond(response)
 }
-
-private inline fun <reified T> decodeFromJson(json: String): T =
-    kotlinx.serialization.json.Json.decodeFromString(json)
 
 private fun VirtualFile.markdownLanguageTag(): String {
     return extension?.lowercase() ?: fileType.name.lowercase().takeUnless { it == "unknown" }.orEmpty()
