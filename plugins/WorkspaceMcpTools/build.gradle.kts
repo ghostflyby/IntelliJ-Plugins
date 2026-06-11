@@ -29,13 +29,13 @@ dependencies {
     ksp(libs.kotlinx.schema.ksp)
 
     implementation(libs.ktor.server.content.negotiation)
-    implementation(libs.ktor.serialization.jackson)
-    implementation(libs.jackson.dataformat.yaml)
-    implementation(libs.jackson.module.kotlin)
+    implementation(libs.snakeyaml)
     implementation(libs.ktor.server.resources)
     implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))
     implementation(project(":modules:workspace-mcp-server"))
+
+    implementation(kotlin("reflect"))
 
     testImplementation(libs.mcp.kotlin.sdk.testing)
     testImplementation(libs.mcp.kotlin.sdk.client)
@@ -68,3 +68,5 @@ tasks.test {
 configurations.all {
     resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }
+
+sourceSets.map { it.classesTaskName }

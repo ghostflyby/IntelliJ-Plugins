@@ -8,10 +8,10 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.fasterxml.jackson.annotation.JsonIgnore
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.rest.markdown.BlockKind
 import dev.ghostflyby.mcp.rest.markdown.MarkdownBlock
+import dev.ghostflyby.mcp.rest.markdown.MarkdownExclude
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -20,7 +20,6 @@ import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 import kotlin.io.encoding.Base64
 
 @Serializable
@@ -36,9 +35,9 @@ private data class FileContentResponse(
     val content: String? = null,
     @MarkdownBlock(BlockKind.STRUCTURE_TREE, heading = "## Structure")
     val structure: FileStructure? = null,
-    @Transient @JsonIgnore
+    @MarkdownExclude
     val language: String = "",
-    @JsonIgnore
+    @MarkdownExclude
     val contentFormat: String? = null,
 )
 

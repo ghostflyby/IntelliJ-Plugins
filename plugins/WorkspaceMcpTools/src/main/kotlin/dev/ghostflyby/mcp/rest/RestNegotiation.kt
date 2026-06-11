@@ -18,6 +18,8 @@ import io.ktor.util.reflect.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.charsets.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.serializer
+import kotlin.reflect.KClass
 
 internal val MarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
 internal val XMarkdownContentType: ContentType = ContentType("text", "x-markdown").withCharset(Charsets.UTF_8)
@@ -61,7 +63,10 @@ private class MarkdownModelConverter : ContentConverter {
         }
         // Raw maps/strings keep their JSON form; models have no plain-text form.
         if (value is Map<*, *> || value is CharSequence || !isMarkdown) return null
-        val markdown = MarkdownDocumentRenderer.render(value, typeInfo.kotlinType?.arguments?.firstOrNull()?.type)
+        val kotlinType = typeInfo.kotlinType ?: return null
+        val tree = RestJson.encodeToJsonElement(RestJson.serializersModule.serializer(kotlinType), value)
+        val elementType = kotlinType.arguments.firstOrNull()?.type?.classifier as? KClass<*>
+        val markdown = MarkdownDocumentRenderer.render(tree, value::class, elementType)
         return TextContent(markdown, contentType.withCharset(charset))
     }
 
