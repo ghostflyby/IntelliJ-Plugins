@@ -129,18 +129,20 @@ internal fun rootPathUrl(
     )
 }
 
-internal fun globPathUrl(projectKey: String, rootId: String, relativePath: String, glob: List<String> = emptyList()): String {
+internal fun globPathUrl(projectKey: String, rootId: String, relativePath: String, glob: List<String> = emptyList(), limit: Int = 0): String {
     return apiUrl(
         Api.Project.GlobEntry.Glob(
             parent = Api.Project.GlobEntry(
                 parent = Api.Project(projectKey),
                 rootId = rootId,
+                limit = limit,
                 glob = glob,
             ),
             relativePath = relativePath.toResourcePathSegments(),
         ),
         Parameters.build {
             glob.forEach { append("glob", it) }
+            if (limit > 0) append("limit", limit.toString())
         },
     )
 }

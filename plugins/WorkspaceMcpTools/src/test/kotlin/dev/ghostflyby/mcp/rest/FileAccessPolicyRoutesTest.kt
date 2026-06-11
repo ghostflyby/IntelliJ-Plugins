@@ -13,6 +13,7 @@ import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions
@@ -46,6 +47,10 @@ internal class FileAccessPolicyRoutesTest {
         Files.writeString(root.resolve("excluded/hidden.kt"), "class Hidden")
         Files.createDirectories(root.resolve("src"))
         Files.writeString(root.resolve("src/source.txt"), "source")
+
+        Files.writeString(root.resolve("a_one.kt"), "class AOne")
+        Files.writeString(root.resolve("b_two.kt"), "class BTwo")
+        Files.writeString(root.resolve("c_three.kt"), "class CThree")
 
         val excluded = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root.resolve("excluded"))
             ?: error("excluded dir missing")
@@ -188,6 +193,26 @@ internal class FileAccessPolicyRoutesTest {
             val body = response.bodyAsText()
             Assertions.assertTrue(body.contains("visible.kt"))
             Assertions.assertFalse(body.contains("excluded/hidden.kt"))
+        }
+    }
+
+    @Test
+    fun `glob limit caps returned paths`() {
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val limited = client.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"), limit = 2)) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, limited.status)
+            val body = json.parseToJsonElement(limited.bodyAsText())
+            Assertions.assertTrue(body is JsonArray, "expected array but got $body")
+            Assertions.assertEquals(2, (body as JsonArray).size)
         }
     }
 }

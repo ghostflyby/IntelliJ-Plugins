@@ -92,7 +92,8 @@ private suspend fun respondGlob(
                 call.respond(HttpStatusCode.BadRequest, RestError(error.message.orEmpty()))
                 return
             }
-            call.respond(GlobResult(paths))
+            val limited = if (entry.limit > 0) paths.take(entry.limit) else paths
+            call.respond(GlobResult(limited))
         }
 
         is WorkspaceProjectResolution.Unresolved -> {

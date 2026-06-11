@@ -66,6 +66,7 @@ public object Api {
         public class GlobEntry(
             public val parent: Project,
             public override val rootId: String,
+            public val limit: Int = 0,
             public val glob: List<String> = emptyList(),
         ) : ProjectProvider by parent, RootProvider {
             @Serializable
