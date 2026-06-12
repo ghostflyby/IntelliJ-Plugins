@@ -11,7 +11,7 @@ For long text bodies, use a heredoc to avoid manual escaping:
 curl -i -X PUT \
   -H 'Content-Type: text/plain; charset=utf-8' \
   --data-binary @- \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Demo.kt" <<'EOF'
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Demo.kt" <<'EOF'
 package demo
 
 class Demo
@@ -23,9 +23,9 @@ EOF
 Project-root scoped writes:
 
 ```text
-PUT    /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
-POST   /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
-DELETE /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
+PUT    /api/v1/projects/{projectKey}/files/{rootId}/{relativePath...}
+POST   /api/v1/projects/{projectKey}/files/{rootId}/{relativePath...}
+DELETE /api/v1/projects/{projectKey}/files/{rootId}/{relativePath...}
 ```
 
 Raw VFS writes are also supported:
@@ -42,7 +42,7 @@ Use `PUT` to create or replace text:
 curl -i -X PUT \
   -H 'Content-Type: text/plain; charset=utf-8' \
   --data-binary $'package demo\n\nclass Demo\n' \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Demo.kt"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Demo.kt"
 ```
 
 Use `POST` to create only when absent. Empty body creates a directory:
@@ -51,17 +51,17 @@ Use `POST` to create only when absent. Empty body creates a directory:
 curl -i -X POST \
   -H 'Content-Type: text/plain; charset=utf-8' \
   --data-binary 'note' \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/notes/today.txt"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/notes/today.txt"
 
 curl -i -X POST \
   --data-binary '' \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/new-directory"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/new-directory"
 ```
 
 Use `DELETE` for files or empty directories:
 
 ```bash
-curl -i -X DELETE "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/notes/today.txt"
+curl -i -X DELETE "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/notes/today.txt"
 ```
 
 ## Force
@@ -72,7 +72,7 @@ Only pass `force=true` intentionally:
 curl -i -X PUT \
   -H 'Content-Type: text/plain; charset=utf-8' \
   --data-binary 'override ignored text' \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/generated.txt?force=true"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/generated.txt?force=true"
 ```
 
 `force=false` is explicit false and must not bypass policy. Do not rely on bare `?force`.
@@ -89,7 +89,7 @@ curl -i -X PUT \
 Always inspect headers and body:
 
 ```bash
-curl -i -X DELETE "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/notes/today.txt"
+curl -i -X DELETE "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/notes/today.txt"
 ```
 
 ## Patch Routes
@@ -97,7 +97,7 @@ curl -i -X DELETE "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/notes/today.txt"
 Patch only project-root scoped paths:
 
 ```text
-PATCH /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
+PATCH /api/v1/projects/{projectKey}/files/{rootId}/{relativePath...}
 ```
 
 The target may be a file or directory. If the target is a file, patch body paths are ignored or normalized and all
@@ -121,7 +121,7 @@ Codex patch format is auto-detected when the body starts with `*** `:
 curl -i -X PATCH \
   -H 'Content-Type: text/plain; charset=utf-8' \
   --data-binary @change.patch \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt"
 ```
 
 Git patch format is auto-detected from `diff --git` or `--- `, or explicitly selected with `text/x-patch`:
@@ -130,7 +130,7 @@ Git patch format is auto-detected from `diff --git` or `--- `, or explicitly sel
 curl -i -X PATCH \
   -H 'Content-Type: text/x-patch' \
   --data-binary @change.diff \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID"
 ```
 
 Patch responses use the usual REST negotiation rules. Omit `Accept` for the default Markdown/frontmatter rendering, or
@@ -155,7 +155,7 @@ Patch rejects binary targets and respects write policy. Use `force=true` only fo
 curl -i -X PATCH \
   -H 'Content-Type: text/x-patch' \
   --data-binary @change.diff \
-  "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID?force=true"
+  "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID?force=true"
 ```
 
 ## Patch Recovery

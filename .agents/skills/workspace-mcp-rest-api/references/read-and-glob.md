@@ -7,13 +7,13 @@ Load `negotiation-and-discovery.md` first if `BASE`, `PROJECT_KEY`, or `ROOT_ID`
 Project-root scoped paths:
 
 ```text
-GET /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
+GET /api/v1/projects/{projectKey}/files/{rootId}/{relativePath...}
 ```
 
 Root itself:
 
 ```text
-GET /api/v1/projects/{projectKey}/roots/{rootId}
+GET /api/v1/projects/{projectKey}/roots/{rootId}          # root metadata only
 ```
 
 Raw VFS URL:
@@ -37,8 +37,8 @@ File content is the default when no read flag is provided. A plain file GET and 
 body, without YAML frontmatter or wrapper text, so they can be piped directly to command-line tools:
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt"
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?content=true"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?content=true"
 ```
 
 Binary content-only reads return direct bytes with the detected media type.
@@ -48,19 +48,19 @@ Binary content-only reads return direct bytes with the detected media type.
 Default metadata responses are optimized for direct reading:
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?meta=true"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?meta=true"
 ```
 
 Use JSON for structured consumption:
 
 ```bash
-curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?meta=true"
+curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?meta=true"
 ```
 
 ## Existence
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?exists=true"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?exists=true"
 ```
 
 `exists=true` only returns direct `text/plain` `true` or `false`.
@@ -68,23 +68,24 @@ curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?exists=true"
 ## Structure
 
 Use `structure=true` as a lightweight file overview before reading a large source file. It returns a declaration or
-document tree such as classes, functions, properties, or Markdown headings.
+document tree such as classes, functions, properties, or Markdown headings. No line numbers are included in the current
+implementation; use `content=true` for full text or targeted peek reads for partial views.
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?structure=true"
-curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?structure=true"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?structure=true"
+curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?structure=true"
 ```
 
-Example Markdown/plain output:
+Example Markdown/plain output (declarations without line numbers):
 
 ```text
 ## Structure
-App (class) [3-18]
-	run (function) [6-12]
+App (class)
+	run (function)
 ```
 
-Structure elements include 1-based inclusive `startLine` and `endLine` when the IDE can locate the declaration. Some
-fallback elements may still have `null` ranges, but available ranges can be used for targeted follow-up reads.
+Planned: adding line numbers to structure elements would enable the `structure`-then-peek workflow
+(G4 in rest-api-improvement-notes.md). Currently, use full `?content=true` for targeted exploration.
 
 ## Range And Peek Reads
 
@@ -94,9 +95,9 @@ returned content and count as a content request by themselves; they do not suppr
 responses keep the normal Markdown/JSON wrapper and include the ranged text in the `content` field/body.
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?startLine=25&endLine=82"
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?aroundLine=40&radius=5"
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?startLine=25&maxLines=20"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?startLine=25&endLine=82"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?aroundLine=40&radius=5"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?startLine=25&maxLines=20"
 ```
 
 Supported modes are mutually exclusive:
@@ -113,8 +114,8 @@ Line numbers are 1-based. `maxLines` must be positive, `radius` may be zero, and
 Combine flags when one call should return several views:
 
 ```bash
-curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?meta=true&content=true&structure=true&exists=true"
-curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID/src/Main.kt?meta=true&content=true"
+curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?meta=true&content=true&structure=true&exists=true"
+curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?meta=true&content=true"
 ```
 
 Compound responses can include `content`, `contentFormat`, `meta`, `exists`, and `structure`. They are wrapped as
