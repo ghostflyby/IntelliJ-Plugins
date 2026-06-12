@@ -366,6 +366,7 @@ deleted file mode 100644
             Assertions.assertTrue(text.contains("failed"))
         }
     }
+
     @Test
     fun `PATCH with unknown format returns 400`() {
         project

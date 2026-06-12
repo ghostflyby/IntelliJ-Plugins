@@ -107,8 +107,10 @@ internal class ScopeResolverService {
         for ((index, token) in request.tokens.withIndex()) {
             when (token.op) {
                 ScopeProgramOp.PUSH_ATOM -> {
-                    val atomId = token.atomId ?: throw WorkspaceResourceException("Token[$index] PUSH_ATOM requires atomId.")
-                    val atom = atomById[atomId] ?: throw WorkspaceResourceException("Token[$index] references unknown atomId '$atomId'.")
+                    val atomId =
+                        token.atomId ?: throw WorkspaceResourceException("Token[$index] PUSH_ATOM requires atomId.")
+                    val atom = atomById[atomId]
+                        ?: throw WorkspaceResourceException("Token[$index] references unknown atomId '$atomId'.")
                     val scope = runCatching {
                         resolveAtom(project, atom, request.allowUiInteractiveScopes)
                     }.getOrElse { error ->
@@ -116,7 +118,10 @@ internal class ScopeResolverService {
                         val nonStrictFallbackMode = atom.onResolveFailure ?: request.nonStrictDefaultFailureMode
                         when {
                             request.strict -> throw WorkspaceResourceException(message)
-                            nonStrictFallbackMode == ScopeAtomFailureMode.FAIL -> throw WorkspaceResourceException(message)
+                            nonStrictFallbackMode == ScopeAtomFailureMode.FAIL -> throw WorkspaceResourceException(
+                                message,
+                            )
+
                             nonStrictFallbackMode == ScopeAtomFailureMode.SKIP -> {
                                 diagnostics += "$message Fallback mode=SKIP."
                                 null
@@ -185,7 +190,7 @@ internal class ScopeResolverService {
         }
         val resolved = stack.single().scope ?: throw WorkspaceResourceException(
             "Scope program resolved to empty expression after fallback processing. " +
-                "Provide at least one resolvable atom or use EMPTY_SCOPE fallback.",
+                    "Provide at least one resolvable atom or use EMPTY_SCOPE fallback.",
         )
         return ResolvedScope(
             scope = resolved,
@@ -249,13 +254,16 @@ internal class ScopeResolverService {
             }
 
             ScopeAtomKind.MODULE -> {
-                val moduleName = atom.moduleName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleName.")
-                val flavor = atom.moduleFlavor ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleFlavor.")
+                val moduleName = atom.moduleName
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleName.")
+                val flavor = atom.moduleFlavor
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleFlavor.")
                 atom.copy(scopeRefId = ScopeCatalogService.moduleRefId(moduleName, flavor))
             }
 
             ScopeAtomKind.NAMED_SCOPE -> {
-                val scopeName = atom.namedScopeName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind NAMED_SCOPE requires namedScopeName.")
+                val scopeName = atom.namedScopeName
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind NAMED_SCOPE requires namedScopeName.")
                 if (!atom.namedScopeHolderId.isNullOrBlank()) {
                     atom.copy(scopeRefId = ScopeCatalogService.namedRefId(atom.namedScopeHolderId, scopeName))
                 } else {
@@ -291,11 +299,13 @@ internal class ScopeResolverService {
             }
 
             ScopeAtomKind.PATTERN -> {
-                val rawPattern = atom.patternText ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind PATTERN requires patternText.")
+                val rawPattern = atom.patternText
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind PATTERN requires patternText.")
                 val normalizedPattern = runCatching {
                     readAction { PackageSetFactory.getInstance().compile(rawPattern).text }
                 }.getOrElse { error ->
-                    val message = (error as? ParsingException)?.message ?: error.message ?: "Invalid pattern in atom '${atom.atomId}'."
+                    val message = (error as? ParsingException)?.message ?: error.message
+                    ?: "Invalid pattern in atom '${atom.atomId}'."
                     failOrDiagnose(strict, diagnostics, message)
                     rawPattern
                 }
@@ -306,7 +316,8 @@ internal class ScopeResolverService {
             }
 
             ScopeAtomKind.DIRECTORY -> {
-                val directoryUrl = atom.directoryUrl ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind DIRECTORY requires directoryUrl.")
+                val directoryUrl = atom.directoryUrl
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind DIRECTORY requires directoryUrl.")
                 atom.copy(scopeRefId = atom.scopeRefId ?: "directory:$directoryUrl")
             }
 
@@ -362,7 +373,8 @@ internal class ScopeResolverService {
                     project = project,
                     standardScopeId = standardScopeId,
                     allowUiInteractiveScopes = allowUiInteractiveScopes,
-                ) ?: throw WorkspaceResourceException("Standard scope '$standardScopeId' cannot be resolved in this context.")
+                )
+                    ?: throw WorkspaceResourceException("Standard scope '$standardScopeId' cannot be resolved in this context.")
             }
 
             ScopeAtomKind.MODULE -> resolveModuleAtom(project, atom)
@@ -377,21 +389,25 @@ internal class ScopeResolverService {
     }
 
     private suspend fun resolveModuleAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val moduleName = atom.moduleName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleName.")
-        val flavor = atom.moduleFlavor ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleFlavor.")
+        val moduleName =
+            atom.moduleName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleName.")
+        val flavor =
+            atom.moduleFlavor ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleFlavor.")
         val module = readAction { ModuleManager.getInstance(project).findModuleByName(moduleName) }
             ?: throw WorkspaceResourceException("Module '$moduleName' not found.")
         return readAction { flavor.scopeFor(module) }
     }
 
     private suspend fun resolveNamedScopeAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val scopeName = atom.namedScopeName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires namedScopeName.")
+        val scopeName =
+            atom.namedScopeName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires namedScopeName.")
         val holderId = atom.namedScopeHolderId
         val namedScope = readAction {
             if (holderId.isNullOrBlank()) {
                 NamedScopesHolder.getScope(project, scopeName)
             } else {
-                val holder = NamedScopesHolder.getAllNamedScopeHolders(project).firstOrNull { it.javaClass.name == holderId }
+                val holder =
+                    NamedScopesHolder.getAllNamedScopeHolders(project).firstOrNull { it.javaClass.name == holderId }
                 holder?.getScope(scopeName)
             }
         } ?: throw WorkspaceResourceException("Named scope '$scopeName' not found.")
@@ -403,7 +419,8 @@ internal class ScopeResolverService {
     }
 
     private suspend fun resolvePatternAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val patternText = atom.patternText ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires patternText.")
+        val patternText =
+            atom.patternText ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires patternText.")
         val packageSet = readAction {
             PackageSetFactory.getInstance().compile(patternText)
         }
@@ -412,7 +429,8 @@ internal class ScopeResolverService {
     }
 
     private suspend fun resolveDirectoryAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val directoryUrl = atom.directoryUrl ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires directoryUrl.")
+        val directoryUrl =
+            atom.directoryUrl ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires directoryUrl.")
         val directory = findFileByUrlWithRefresh(directoryUrl)
             ?: throw WorkspaceResourceException("Directory URL '$directoryUrl' not found.")
         if (!directory.isDirectory) {
@@ -480,8 +498,8 @@ internal class ScopeResolverService {
 
     private fun isSelfResolvedKind(kind: ScopeAtomKind): Boolean {
         return kind == ScopeAtomKind.PATTERN ||
-            kind == ScopeAtomKind.DIRECTORY ||
-            kind == ScopeAtomKind.FILES
+                kind == ScopeAtomKind.DIRECTORY ||
+                kind == ScopeAtomKind.FILES
     }
 
     private fun failOrDiagnose(strict: Boolean, diagnostics: MutableList<String>, message: String) {

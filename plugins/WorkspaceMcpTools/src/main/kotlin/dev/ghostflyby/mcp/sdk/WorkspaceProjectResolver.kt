@@ -87,14 +87,20 @@ internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
         // 1. explicit projectKey
         projectKey?.takeIf { it.isNotBlank() }?.let { key ->
             findByProjectKey(key)?.let { project ->
-                return WorkspaceProjectResolution.Resolved(project, WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_KEY)
+                return WorkspaceProjectResolution.Resolved(
+                    project,
+                    WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_KEY,
+                )
             }
         }
 
         // 2. explicit projectPath
         projectPath?.takeIf { it.isNotBlank() }?.let { path ->
             findByProjectPath(path)?.let { project ->
-                return WorkspaceProjectResolution.Resolved(project, WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_PATH)
+                return WorkspaceProjectResolution.Resolved(
+                    project,
+                    WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_PATH,
+                )
             }
         }
 
@@ -131,7 +137,11 @@ internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
         val projects = openProjects()
         return when (projects.size) {
             0 -> WorkspaceProjectResolution.Unresolved("No open IntelliJ projects are available.")
-            1 -> WorkspaceProjectResolution.Resolved(projects.single(), WorkspaceProjectResolutionReason.SINGLE_OPEN_PROJECT)
+            1 -> WorkspaceProjectResolution.Resolved(
+                projects.single(),
+                WorkspaceProjectResolutionReason.SINGLE_OPEN_PROJECT,
+            )
+
             else -> {
                 val candidates = projects.joinToString("; ") { p ->
                     "'${workspaceProjectKey(p)}' (${p.name}, ${p.basePath ?: "?"})"
@@ -165,7 +175,7 @@ internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
 
     private fun Project.owns(file: VirtualFile): Boolean {
         return ProjectFileIndex.getInstance(this).isInContent(file) ||
-            basePath?.let { file.path.startsWith(it) } == true
+                basePath?.let { file.path.startsWith(it) } == true
     }
 
     private fun normalizePath(path: String): String {

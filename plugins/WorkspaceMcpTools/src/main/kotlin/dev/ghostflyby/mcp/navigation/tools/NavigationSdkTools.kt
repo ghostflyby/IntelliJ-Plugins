@@ -464,7 +464,10 @@ private suspend fun resolveSymbolInfo(
         readSymbolInfoContext(project, uri, row, column)
     }
     return NavigationSymbolInfoResult(
-        documentation = if (context.documentationHtml.isBlank()) "" else context.documentationHtml.replace(Regex("<[^>]+>"), ""),
+        documentation = if (context.documentationHtml.isBlank()) "" else context.documentationHtml.replace(
+            Regex("<[^>]+>"),
+            "",
+        ),
     )
 }
 
@@ -522,7 +525,13 @@ private fun resolveCommittedSourceDocument(project: Project, uri: String): Docum
     val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
         ?: throw WorkspaceResourceException("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
     return PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
-        ?: throw WorkspaceResourceException("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
+        ?: throw WorkspaceResourceException(
+            "No committed text document available for URL: $uri. Commit pending changes and retry.${
+                vfsReadHint(
+                    sourceFile,
+                )
+            }",
+        )
 }
 
 private fun resolveSourceOffset(
@@ -562,7 +571,13 @@ private fun readSymbolInfoContext(
     val sourcePsiFile = PsiManager.getInstance(project).findFile(sourceFile)
         ?: throw WorkspaceResourceException("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
     val sourceDocument = PsiDocumentManager.getInstance(project).getLastCommittedDocument(sourcePsiFile)
-        ?: throw WorkspaceResourceException("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
+        ?: throw WorkspaceResourceException(
+            "No committed text document available for URL: $uri. Commit pending changes and retry.${
+                vfsReadHint(
+                    sourceFile,
+                )
+            }",
+        )
     val sourceOffset = resolveSourceOffset(sourceDocument, row, column)
     val lineStartOffset = sourceDocument.getLineStartOffset(row - 1)
     val sourceElement = findElementAt(sourcePsiFile, sourceOffset, lineStartOffset)
@@ -621,7 +636,13 @@ private fun resolveReferenceContext(
         ?: throw WorkspaceResourceException("No PSI file available for URL: $uri${vfsReadHint(sourceFile)}")
     val psiDocumentManager = PsiDocumentManager.getInstance(project)
     val sourceDocument = psiDocumentManager.getLastCommittedDocument(sourcePsiFile)
-        ?: throw WorkspaceResourceException("No committed text document available for URL: $uri. Commit pending changes and retry.${vfsReadHint(sourceFile)}")
+        ?: throw WorkspaceResourceException(
+            "No committed text document available for URL: $uri. Commit pending changes and retry.${
+                vfsReadHint(
+                    sourceFile,
+                )
+            }",
+        )
 
     if (row > sourceDocument.lineCount) {
         throw WorkspaceResourceException("row must be in [1, ${sourceDocument.lineCount}], but was $row")
@@ -676,9 +697,9 @@ private fun isLikelyCallReference(reference: PsiReference): Boolean {
         .map { it.javaClass.simpleName }
         .any { className ->
             className.contains("Call", ignoreCase = true) ||
-                className.contains("Invocation", ignoreCase = true) ||
-                className.contains("NewExpression", ignoreCase = true) ||
-                className.contains("Constructor", ignoreCase = true)
+                    className.contains("Invocation", ignoreCase = true) ||
+                    className.contains("NewExpression", ignoreCase = true) ||
+                    className.contains("Constructor", ignoreCase = true)
         }
 }
 
@@ -733,15 +754,17 @@ private fun collectDefinitions(
     val unique = LinkedHashMap<String, NavigationResult>()
     val originalKey = toNavigationResult(searchTarget, psiDocumentManager)?.let(::toResultKey)
     var hasDefinitions = false
-    DefinitionsScopedSearch.search(searchTarget).forEach(Processor { candidate ->
-        hasDefinitions = true
-        val result = toNavigationResult(candidate, psiDocumentManager) ?: return@Processor true
-        if (excludeOriginalTarget && originalKey != null && toResultKey(result) == originalKey) {
-            return@Processor true
-        }
-        addUniqueResult(unique, result)
-        unique.size < limit
-    })
+    DefinitionsScopedSearch.search(searchTarget).forEach(
+        Processor { candidate ->
+            hasDefinitions = true
+            val result = toNavigationResult(candidate, psiDocumentManager) ?: return@Processor true
+            if (excludeOriginalTarget && originalKey != null && toResultKey(result) == originalKey) {
+                return@Processor true
+            }
+            addUniqueResult(unique, result)
+            unique.size < limit
+        },
+    )
     if (!hasDefinitions && includeTargetWhenEmpty) {
         toNavigationResult(searchTarget, psiDocumentManager)?.let { addUniqueResult(unique, it) }
     }
@@ -755,13 +778,15 @@ private fun collectReferences(
     referenceFilter: (PsiReference) -> Boolean = { true },
 ): List<NavigationResult> {
     val unique = LinkedHashMap<String, NavigationResult>()
-    ReferencesSearch.search(searchTarget).forEach(Processor { reference ->
-        if (!referenceFilter(reference)) {
-            return@Processor true
-        }
-        toNavigationResult(reference.element, psiDocumentManager)?.let { addUniqueResult(unique, it) }
-        unique.size < limit
-    })
+    ReferencesSearch.search(searchTarget).forEach(
+        Processor { reference ->
+            if (!referenceFilter(reference)) {
+                return@Processor true
+            }
+            toNavigationResult(reference.element, psiDocumentManager)?.let { addUniqueResult(unique, it) }
+            unique.size < limit
+        },
+    )
     return unique.values.toList()
 }
 

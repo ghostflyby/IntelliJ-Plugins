@@ -195,10 +195,14 @@ internal class NoReceiverTool {
     suspend fun no_receiver(a: NrIn): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "ok")))
 }
+
 internal class MultiParamTool {
-    @Serializable data class A(val x: Int)
+    @Serializable
+    data class A(val x: Int)
+
     @Serializable
     data class B(val y: String)
+
     @Schema
     suspend fun McpCallContext<CallToolRequest>.do_multi(a: A, b: B): CallToolResult =
         CallToolResult(content = listOf(TextContent(text = "${a.x}, ${b.y}")))

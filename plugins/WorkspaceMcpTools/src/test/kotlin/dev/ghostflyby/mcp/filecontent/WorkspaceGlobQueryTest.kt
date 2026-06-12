@@ -2,18 +2,19 @@ package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
-import kotlinx.coroutines.runBlocking
 
 @TestApplication
 internal class WorkspaceGlobQueryTest {
@@ -118,7 +119,11 @@ internal class WorkspaceGlobQueryTest {
         var typeCalls: Int = 0
         var walkCalls: Int = 0
 
-        override fun filesByName(project: com.intellij.openapi.project.Project, fileName: String, scope: GlobalSearchScope): Collection<VirtualFile> {
+        override fun filesByName(
+            project: Project,
+            fileName: String,
+            scope: GlobalSearchScope,
+        ): Collection<VirtualFile> {
             nameCalls++
             return nameFiles
         }

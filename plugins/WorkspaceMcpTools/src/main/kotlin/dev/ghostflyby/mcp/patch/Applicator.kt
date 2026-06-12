@@ -18,13 +18,18 @@ import java.nio.file.Path
 
 internal fun resolveProjectPatchPath(project: Project, path: String): ProjectPatchPath {
     val basePath = project.basePath ?: throw WorkspaceResourceException("...")
-    val base = try { Path.of(basePath).toAbsolutePath().normalize() }
-    catch (e: InvalidPathException) { throw WorkspaceResourceException("...") }
+    val base = try {
+        Path.of(basePath).toAbsolutePath().normalize()
+    } catch (e: InvalidPathException) {
+        throw WorkspaceResourceException("...")
+    }
     val rawPath = filePathFromPatchTarget(path)
     val target = try {
         val parsed = Path.of(rawPath)
         if (parsed.isAbsolute) parsed.normalize() else base.resolve(parsed).normalize()
-    } catch (e: InvalidPathException) { throw WorkspaceResourceException("...") }
+    } catch (e: InvalidPathException) {
+        throw WorkspaceResourceException("...")
+    }
     if (!target.startsWith(base)) throw WorkspaceResourceException("...")
     val rel = base.relativize(target).toString().replace('\\', '/')
     return ProjectPatchPath(relativePath = rel, nioPath = target, url = "file://$target")
@@ -51,7 +56,8 @@ internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPat
 internal suspend fun deletePatchedFile(target: ProjectPatchPath, hunks: List<PatchHunk>) {
     val (file, document) = resolveTextDocumentForTool(target)
     ensureFileWritable(file, target)
-    if (hunks.isNotEmpty()) GenericPatchApplier.apply(document.immutableCharSequence, hunks) ?: throw WorkspaceResourceException("...")
+    if (hunks.isNotEmpty()) GenericPatchApplier.apply(document.immutableCharSequence, hunks)
+        ?: throw WorkspaceResourceException("...")
     edtWriteAction { file.delete(Any()) }
 }
 

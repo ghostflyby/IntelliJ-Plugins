@@ -93,9 +93,15 @@ internal fun parseCodexRawHunks(rawLines: List<String>, baseText: CharSequence):
         while (i < rawLines.size && !rawLines[i].startsWith("@@") && !rawLines[i].startsWith("***")) {
             val hl = rawLines[i]
             when {
-                hl.startsWith("+") -> { newLines += PatchLine(PatchLine.Type.ADD, hl.removePrefix("+")); newLineCount++ }
+                hl.startsWith("+") -> {
+                    newLines += PatchLine(PatchLine.Type.ADD, hl.removePrefix("+")); newLineCount++
+                }
+
                 hl.startsWith("-") -> newLines += PatchLine(PatchLine.Type.REMOVE, hl.removePrefix("-"))
-                hl.startsWith(" ") -> { newLines += PatchLine(PatchLine.Type.CONTEXT, hl.removePrefix(" ")); newLineCount++ }
+                hl.startsWith(" ") -> {
+                    newLines += PatchLine(PatchLine.Type.CONTEXT, hl.removePrefix(" ")); newLineCount++
+                }
+
                 hl.startsWith("\\") -> {}
             }
             i++

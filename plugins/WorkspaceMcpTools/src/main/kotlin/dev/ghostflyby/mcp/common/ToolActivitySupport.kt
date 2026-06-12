@@ -7,4 +7,5 @@
 package dev.ghostflyby.mcp.common
 
 @Suppress("RedundantSuspendModifier")
-internal suspend fun reportActivity(key: String, vararg args: Any?) {}
+internal suspend fun reportActivity(key: String, vararg args: Any?) {
+}

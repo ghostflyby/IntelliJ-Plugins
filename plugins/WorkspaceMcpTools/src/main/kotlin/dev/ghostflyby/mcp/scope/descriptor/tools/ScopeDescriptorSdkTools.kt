@@ -266,10 +266,12 @@ internal class ScopeDescriptorTools {
                     missing += url
                     diagnostics += "File URL '$url' not found."
                 }
+
                 file.isDirectory -> {
                     missing += url
                     diagnostics += "URL '$url' points to a directory and was skipped."
                 }
+
                 readAction { resolved.scope.contains(file) } -> matched += url
                 else -> excluded += url
             }

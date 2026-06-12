@@ -159,9 +159,6 @@ private suspend fun respondFileContent(
     rangeQuery: LineRangeQuery = LineRangeQuery(),
 ) {
     val wantsContent = content || rangeQuery.isPresent || (!meta && !exists && !structure)
-    val wantsMeta = meta
-    val wantsExists = exists
-    val wantsStructure = structure
     val lineRange = if (wantsContent) {
         try {
             rangeQuery.toFileLineRange()
@@ -172,13 +169,12 @@ private suspend fun respondFileContent(
     } else {
         null
     }
-    val needsFile = wantsContent || wantsMeta || wantsStructure
     // exists-only: no file required
-    if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure) {
+    if (!wantsContent && !meta && exists && !structure) {
         call.respondText("${file != null}", ContentType.Text.Plain)
         return
     }
-    if (needsFile && file == null) {
+    if (file == null) {
         call.respond(HttpStatusCode.NotFound, RestError("File not found"))
         return
     }
@@ -199,7 +195,7 @@ private suspend fun respondFileContent(
         call.respond(HttpStatusCode.NotFound, RestError("File not found"))
         return
     }
-    if (wantsStructure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
+    if (structure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
         call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
         return
     }
@@ -208,19 +204,29 @@ private suspend fun respondFileContent(
         call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
         return
     }
-    if (wantsContent && lineRange != null && (file!!.isDirectory || file.fileType.isBinary)) {
+    if (wantsContent && lineRange != null && (file.isDirectory || file.fileType.isBinary)) {
         call.respond(HttpStatusCode.BadRequest, RestError("Range reads are supported only for text files"))
         return
     }
     // Single-responsibility paths
-    if (wantsStructure && !wantsMeta && !wantsContent && !wantsExists)
-        return structureOnly(call, file!!, project)
-    if (wantsMeta && !wantsContent && !wantsExists && !wantsStructure)
-        return metaOnly(call, file!!, effectivePolicy)
-    if (!wantsMeta && !wantsExists && !wantsStructure)
-        return contentOnly(call, file!!, lineRange)
+    if (structure && !meta && !wantsContent && !exists)
+        return structureOnly(call, file, project)
+    if (meta && !wantsContent && !exists && !structure)
+        return metaOnly(call, file, effectivePolicy)
+    if (!meta && !exists && !structure)
+        return contentOnly(call, file, lineRange)
     // Compound: at least two of meta/content/exists/structure
-    compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy, lineRange)
+    compoundResult(
+        call,
+        file,
+        meta,
+        wantsContent,
+        exists,
+        structure,
+        project,
+        effectivePolicy,
+        lineRange,
+    )
 }
 
 // -- Single response modes --

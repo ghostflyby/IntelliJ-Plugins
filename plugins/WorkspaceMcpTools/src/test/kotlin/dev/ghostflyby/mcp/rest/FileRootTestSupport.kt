@@ -4,9 +4,8 @@ import io.ktor.client.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.resources.href
-import io.ktor.resources.serialization.ResourcesFormat
-import io.ktor.util.*
+import io.ktor.resources.*
+import io.ktor.resources.serialization.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -70,7 +69,21 @@ internal suspend fun HttpClient.rootPathUrl(
     radius: Int? = null,
 ): String {
     val rootId = firstWorkspaceRootId(projectKey, json)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
+    return rootPathUrl(
+        projectKey,
+        rootId,
+        relativePath,
+        meta,
+        content,
+        exists,
+        structure,
+        force,
+        startLine,
+        endLine,
+        maxLines,
+        aroundLine,
+        radius,
+    )
 }
 
 internal suspend fun HttpClient.rootPathUrl(
@@ -90,7 +103,21 @@ internal suspend fun HttpClient.rootPathUrl(
     radius: Int? = null,
 ): String {
     val rootId = workspaceRootId(projectKey, json, rootIndex)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
+    return rootPathUrl(
+        projectKey,
+        rootId,
+        relativePath,
+        meta,
+        content,
+        exists,
+        structure,
+        force,
+        startLine,
+        endLine,
+        maxLines,
+        aroundLine,
+        radius,
+    )
 }
 
 internal suspend fun HttpClient.rootPathUrlByRootUrl(
@@ -110,7 +137,21 @@ internal suspend fun HttpClient.rootPathUrlByRootUrl(
     radius: Int? = null,
 ): String {
     val rootId = workspaceRootIdByUrl(projectKey, json, rootUrl)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
+    return rootPathUrl(
+        projectKey,
+        rootId,
+        relativePath,
+        meta,
+        content,
+        exists,
+        structure,
+        force,
+        startLine,
+        endLine,
+        maxLines,
+        aroundLine,
+        radius,
+    )
 }
 
 internal fun rootUrl(
@@ -157,7 +198,13 @@ internal fun rootPathUrl(
     )
 }
 
-internal fun globPathUrl(projectKey: String, rootId: String, relativePath: String, glob: List<String> = emptyList(), limit: Int = 0): String {
+internal fun globPathUrl(
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+    glob: List<String> = emptyList(),
+    limit: Int = 0,
+): String {
     return apiUrl(
         Api.Project.GlobEntry.Glob(
             parent = Api.Project.GlobEntry(

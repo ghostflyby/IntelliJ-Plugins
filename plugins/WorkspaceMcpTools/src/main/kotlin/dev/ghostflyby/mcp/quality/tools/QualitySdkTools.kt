@@ -436,19 +436,21 @@ private suspend fun collectProjectContentFilesInScope(
     var truncated = false
     readAction {
         val fileIndex = ProjectRootManager.getInstance(project).fileIndex
-        fileIndex.iterateContent(ContentIterator { file ->
-            ProgressManager.checkCanceled()
-            if (file.isDirectory) return@ContentIterator true
-            scanned++
-            if (!resolvedScope.contains(file)) return@ContentIterator true
-            if (file.fileType.isBinary) return@ContentIterator true
-            files += file
-            if (files.size >= maxFileCount) {
-                truncated = true
-                return@ContentIterator false
-            }
-            true
-        })
+        fileIndex.iterateContent(
+            ContentIterator { file ->
+                ProgressManager.checkCanceled()
+                if (file.isDirectory) return@ContentIterator true
+                scanned++
+                if (!resolvedScope.contains(file)) return@ContentIterator true
+                if (file.fileType.isBinary) return@ContentIterator true
+                files += file
+                if (files.size >= maxFileCount) {
+                    truncated = true
+                    return@ContentIterator false
+                }
+                true
+            },
+        )
     }
     return ScopeFileCollection(
         files = files,
@@ -614,7 +616,9 @@ private fun resolveProblemSeverity(
 ): HighlightSeverity {
     return when (descriptor.highlightType) {
         ProblemHighlightType.ERROR,
-        ProblemHighlightType.GENERIC_ERROR -> HighlightSeverity.ERROR
+        ProblemHighlightType.GENERIC_ERROR,
+            -> HighlightSeverity.ERROR
+
         ProblemHighlightType.WARNING -> HighlightSeverity.WARNING
         ProblemHighlightType.WEAK_WARNING -> HighlightSeverity.WEAK_WARNING
         ProblemHighlightType.INFORMATION -> HighlightSeverity.INFORMATION
@@ -1490,23 +1494,27 @@ private suspend fun processScopeFilesWithOp(
     val skippedCount = scopeFiles.files.size - processedFileCount
 
     return CallToolResult(
-        content = listOf(TextContent(text = encodeJson(
-            QualityScopeOperationResultDto(
-                operation = operation,
-                scopeDisplayName = resolvedScope.displayName,
-                scopeShape = resolvedScope.scopeShape,
-                scannedFileCount = scopeFiles.scannedFileCount,
-                processedFileCount = processedFileCount,
-                successCount = successCount,
-                failureCount = failureCount,
-                skippedCount = skippedCount,
-                items = items,
-                probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
-                timedOut = timedOut,
-                canceled = false,
-                diagnostics = scope.combinedDiagnostics(resolvedScope, diagnostics),
-            )
-        ))),
+        content = listOf(
+            TextContent(
+                text = encodeJson(
+                    QualityScopeOperationResultDto(
+                        operation = operation,
+                        scopeDisplayName = resolvedScope.displayName,
+                        scopeShape = resolvedScope.scopeShape,
+                        scannedFileCount = scopeFiles.scannedFileCount,
+                        processedFileCount = processedFileCount,
+                        successCount = successCount,
+                        failureCount = failureCount,
+                        skippedCount = skippedCount,
+                        items = items,
+                        probablyHasMoreMatchingFiles = probablyHasMoreMatchingFiles,
+                        timedOut = timedOut,
+                        canceled = false,
+                        diagnostics = scope.combinedDiagnostics(resolvedScope, diagnostics),
+                    ),
+                ),
+            ),
+        ),
     )
 }
 
