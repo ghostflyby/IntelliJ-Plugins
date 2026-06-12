@@ -68,24 +68,25 @@ curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?exists=true"
 ## Structure
 
 Use `structure=true` as a lightweight file overview before reading a large source file. It returns a declaration or
-document tree such as classes, functions, properties, or Markdown headings. No line numbers are included in the current
-implementation; use `content=true` for full text or targeted peek reads for partial views.
+document tree such as classes, functions, properties, or Markdown headings. Each element includes `startLine` and
+`endLine` when the IDE can locate the declaration (PSI range, children aggregation, or text-match fallback), making it
+possible to follow up with a targeted content read.
 
 ```bash
 curl -i "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?structure=true"
 curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/files/$ROOT_ID/src/Main.kt?structure=true"
 ```
 
-Example Markdown/plain output (declarations without line numbers):
+Example Markdown/plain output:
 
 ```text
 ## Structure
-App (class)
-	run (function)
+App (class) [3-18]
+	run (function) [6-12]
 ```
 
-Planned: adding line numbers to structure elements would enable the `structure`-then-peek workflow
-(G4 in rest-api-improvement-notes.md). Currently, use full `?content=true` for targeted exploration.
+Null line numbers are omitted from the output and mean the element position could not be determined. Use
+`startLine=N&endLine=M` or `aroundLine=N&radius=M` from a prior structure result for a targeted read.
 
 ## Range And Peek Reads
 

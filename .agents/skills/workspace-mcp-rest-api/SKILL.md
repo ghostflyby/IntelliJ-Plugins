@@ -41,8 +41,8 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 - Read-only exploration should use `GET`; do not use `PUT`, `POST`, `PATCH`, or `DELETE` unless the user clearly asked
   for mutation.
 - For unfamiliar code, use a workflow: glob with `limit=N`, then `meta=true` or `structure=true`, then `content=true`
-  only for files that still need full text. Use `startLine=N&endLine=M` or `aroundLine=N&radius=M` for
-  targeted reads when the line range is already known.
+  only for files that still need full text. After `structure=true`, use the returned line numbers with
+  `startLine=N&endLine=M` or `aroundLine=N&radius=M` for targeted reads of specific declarations.
 
 ## Details
 
