@@ -18,8 +18,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 
 ## Operating Rules
 
-- Examples use `curl`, but any HTTP client is supported. Prefer existing IDE/MCP read tools when they already provide
-  the needed view; use this REST API when testing, debugging, or documenting REST behavior directly.
+- Examples use `curl`, but any HTTP client is supported.
 - Almost always inspect response headers together with the body. At minimum check HTTP status, `Content-Type`,
   redirects/errors, and negotiated format. With `curl`, prefer `-i` during exploration.
 - Usually omit `Accept`, or use `Accept: */*`. The default response is optimized for agent and human reading and aligns
