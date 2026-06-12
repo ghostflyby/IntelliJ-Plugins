@@ -178,15 +178,9 @@ private suspend fun respondFileContent(
         call.respond(HttpStatusCode.NotFound, RestError("File not found"))
         return
     }
-    val effectivePolicy = policy ?: file?.let { f ->
+    val effectivePolicy = policy ?: file.let { f ->
         project?.let { p -> classifyExistingProjectFile(p, f) } ?: fileMetaPolicyFallback(f)
-    } ?: FileAccessPolicy(
-        classification = FileContentClassification.MISSING,
-        readableKinds = emptySet(),
-        writableKinds = emptySet(),
-        requiresForceForWrite = false,
-        reason = "File not found",
-    )
+    }
     if (effectivePolicy.classification in setOf(
             FileContentClassification.EXCLUDED,
             FileContentClassification.OUTSIDE_PROJECT,
