@@ -265,3 +265,42 @@ private fun queryParameters(
 }
 
 private fun String.toResourcePathSegments(): List<String> = split('/').filter { it.isNotEmpty() }
+
+internal fun searchTextUrl(
+    projectKey: String,
+    rootId: String,
+    relativePath: String = "",
+    query: String = "",
+    regex: Boolean = false,
+    caseSensitive: Boolean = true,
+    wholeWord: Boolean = false,
+    context: List<String> = listOf("string", "comment", "other"),
+    fileFilter: String? = null,
+    limit: Int = 100,
+): String {
+    return apiUrl(
+        Api.Project.SearchTextEntry.SearchText(
+            parent = Api.Project.SearchTextEntry(
+                parent = Api.Project(projectKey),
+                rootId = rootId,
+                query = query,
+                regex = regex,
+                caseSensitive = caseSensitive,
+                wholeWord = wholeWord,
+                context = context,
+                fileFilter = fileFilter,
+                limit = limit,
+            ),
+            relativePath = relativePath.toResourcePathSegments(),
+        ),
+        Parameters.build {
+            append("query", query)
+            append("regex", regex.toString())
+            append("caseSensitive", caseSensitive.toString())
+            append("wholeWord", wholeWord.toString())
+            context.forEach { append("context", it) }
+            fileFilter?.let { append("fileFilter", it) }
+            append("limit", limit.toString())
+        },
+    )
+}

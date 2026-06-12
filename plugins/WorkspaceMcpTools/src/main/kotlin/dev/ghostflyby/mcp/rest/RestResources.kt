@@ -97,6 +97,27 @@ public object Api {
                 public val relativePath: List<String> = emptyList(),
             ) : ProjectProvider by parent, RootProvider by parent
         }
+
+        @Serializable
+        @Resource("/search/text/{rootId}")
+        public class SearchTextEntry(
+            public val parent: Project,
+            public override val rootId: String,
+            public val query: String = "",
+            public val regex: Boolean = false,
+            public val caseSensitive: Boolean = true,
+            public val wholeWord: Boolean = false,
+            public val context: List<String> = listOf("string", "comment", "other"),
+            public val fileFilter: String? = null,
+            public val limit: Int = 100,
+        ) : ProjectProvider by parent, RootProvider {
+            @Serializable
+            @Resource("/{relativePath...}")
+            public class SearchText(
+                public val parent: SearchTextEntry,
+                public val relativePath: List<String> = emptyList(),
+            ) : ProjectProvider by parent, RootProvider by parent
+        }
     }
 
     @Serializable
