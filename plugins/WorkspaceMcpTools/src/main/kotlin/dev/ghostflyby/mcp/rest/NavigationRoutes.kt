@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -133,12 +134,7 @@ internal fun Route.navigationRoutes() {
                         failed += "$filePath: ${e.message}"
                     }
                 }
-                call.respond(
-                    mapOf(
-                        "applied" to (gotos + usages + docs),
-                        "failed" to failed,
-                    ),
-                )
+                call.respond(NavigationResponse(gotos, usages, docs, failed))
             }
 
             is WorkspaceProjectResolution.Unresolved ->
@@ -297,4 +293,32 @@ private fun toNavTarget(file: VirtualFile, offset: Int): NavTarget? {
     val lineStart = doc.getLineStartOffset(line - 1)
     val column = offset - lineStart + 1
     return NavTarget(file.url, line, column)
+}
+
+@Serializable
+private data class NavigationResponse(
+    val applied: List<NavGoto> = emptyList(),
+    val appliedUsages: List<NavUsages> = emptyList(),
+    val appliedDocs: List<NavDocumentation> = emptyList(),
+    val failed: List<String> = emptyList(),
+) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        applied.forEach { entry ->
+            appendLine("goto: ${entry.path}")
+            appendLine("  → ${entry.result.fileUrl}:${entry.result.lineNumber}:${entry.result.column}")
+        }
+        appliedUsages.forEach { entry ->
+            appendLine("usages: ${entry.path}")
+            entry.results.forEach { r ->
+                appendLine("  → ${r.fileUrl}:${r.lineNumber}:${r.column}")
+            }
+            if (entry.truncated) appendLine("  (truncated)")
+        }
+        appliedDocs.forEach { entry ->
+            appendLine("documentation: ${entry.path}")
+            appendLine("  name: ${entry.name}")
+            if (entry.documentation.isNotEmpty()) appendLine("  ${entry.documentation}")
+        }
+        failed.forEach { appendLine("FAILED: $it") }
+    }
 }
