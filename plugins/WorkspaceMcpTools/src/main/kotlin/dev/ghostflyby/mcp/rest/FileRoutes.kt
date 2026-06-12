@@ -73,29 +73,40 @@ internal fun Route.fileRoutes() {
     }
 
     get<Api.Project.Root> { resource ->
-        respondProjectRootFile(
-            call,
-            resolver,
-            resource,
-            meta = resource.meta,
-            content = resource.content,
-            exists = resource.exists,
-            structure = resource.structure,
-            rangeQuery = resource.lineRangeQuery(),
-        )
+        val projectKey = resource.parent.projectKey
+        when (val resolved = resolver.resolve(projectKey = projectKey)) {
+            is WorkspaceProjectResolution.Resolved -> {
+                val target = rootRouteTarget(resolved.project, resource.rootId)
+                if (target != null) {
+                    call.respond(
+                        mapOf(
+                            "id" to resource.rootId,
+                            "displayName" to target.root.displayName,
+                            "kind" to "${target.root.kind}".lowercase(),
+                            "url" to target.root.base.url,
+                        ),
+                    )
+                } else {
+                    call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
+                }
+            }
+
+            is WorkspaceProjectResolution.Unresolved ->
+                call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
+        }
     }
 
-    get<Api.Project.Root.File> { resource ->
+    get<Api.Project.FilesEntry.File> { resource ->
         respondProjectRootFile(
             call,
             resolver,
             resource.parent,
             resource.relativePath.toRoutePath(),
-            resource.meta,
-            resource.content,
-            resource.exists,
-            resource.structure,
-            rangeQuery = resource.lineRangeQuery(),
+            resource.parent.meta,
+            resource.parent.content,
+            resource.parent.exists,
+            resource.parent.structure,
+            rangeQuery = resource.parent.lineRangeQuery(),
         )
     }
 }
@@ -103,7 +114,7 @@ internal fun Route.fileRoutes() {
 private suspend fun respondProjectRootFile(
     call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
-    root: Api.Project.Root,
+    root: Api.Project.FilesEntry,
     relativePath: String = "",
     meta: Boolean = false,
     content: Boolean = false,
@@ -290,10 +301,7 @@ private fun VirtualFile.markdownLanguageTag(): String {
 private fun Api.Vfs.lineRangeQuery(): LineRangeQuery =
     LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
 
-private fun Api.Project.Root.lineRangeQuery(): LineRangeQuery =
-    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
-
-private fun Api.Project.Root.File.lineRangeQuery(): LineRangeQuery =
+private fun Api.Project.FilesEntry.lineRangeQuery(): LineRangeQuery =
     LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
 
 private fun LineRangeQuery.toFileLineRange(): FileLineRange? {

@@ -169,7 +169,7 @@ internal fun rootUrl(
     radius: Int? = null,
 ): String {
     return apiUrl(
-        root(projectKey, rootId),
+        Api.Project.Root(Api.Project(projectKey), rootId),
         queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
     )
 }
@@ -190,8 +190,8 @@ internal fun rootPathUrl(
     radius: Int? = null,
 ): String {
     return apiUrl(
-        Api.Project.Root.File(
-            parent = root(projectKey, rootId),
+        Api.Project.FilesEntry.File(
+            parent = fileEntry(projectKey, rootId),
             relativePath = relativePath.toResourcePathSegments(),
         ),
         queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
@@ -228,11 +228,11 @@ internal inline fun <reified T : Any> apiUrl(resource: T, query: Parameters = Pa
     return builder.build().fullPath
 }
 
-private fun root(
+private fun fileEntry(
     projectKey: String,
     rootId: String,
-): Api.Project.Root {
-    return Api.Project.Root(
+): Api.Project.FilesEntry {
+    return Api.Project.FilesEntry(
         parent = Api.Project(projectKey),
         rootId = rootId,
     )

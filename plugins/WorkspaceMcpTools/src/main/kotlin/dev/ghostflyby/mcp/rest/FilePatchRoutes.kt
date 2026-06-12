@@ -58,16 +58,16 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    patch<Api.Project.Root.File> { resource ->
+    patch<Api.Project.FilesEntry.File> { resource ->
         val projectKey = resource.projectKey
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
             is WorkspaceProjectResolution.Resolved -> {
                 val project = resolved.project
                 val relativePath = resource.relativePath.toRoutePath()
-                val target = call.rootRouteTargetOrNotFound(project, resource.parent.rootId, relativePath)
+                val target = call.rootRouteTargetOrNotFound(project, resource.rootId, relativePath)
                     ?: return@patch
                 val access = resolveProjectFileAccess(project, target.root, target.relativePath)
-                val force = resource.force
+                val force = resource.parent.force
                 if (access.targetIsBinary) {
                     call.respond(
                         HttpStatusCode.UnsupportedMediaType,

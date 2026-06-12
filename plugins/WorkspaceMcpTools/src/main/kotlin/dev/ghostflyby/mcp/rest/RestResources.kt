@@ -42,6 +42,13 @@ public object Api {
         public class Root(
             public val parent: Project,
             public override val rootId: String,
+        ) : ProjectProvider by parent, RootProvider
+
+        @Serializable
+        @Resource("/files/{rootId}")
+        public class FilesEntry(
+            public val parent: Project,
+            public override val rootId: String,
             public val meta: Boolean = false,
             public val content: Boolean = false,
             public val exists: Boolean = false,
@@ -56,18 +63,8 @@ public object Api {
             @Serializable
             @Resource("/{relativePath...}")
             public class File(
-                public val parent: Root,
+                public val parent: FilesEntry,
                 public val relativePath: List<String> = emptyList(),
-                public val meta: Boolean = false,
-                public val content: Boolean = false,
-                public val exists: Boolean = false,
-                public val structure: Boolean = false,
-                public val force: Boolean = false,
-                public val startLine: Int? = null,
-                public val endLine: Int? = null,
-                public val maxLines: Int? = null,
-                public val aroundLine: Int? = null,
-                public val radius: Int? = null,
             ) : ProjectProvider by parent, RootProvider by parent
         }
 

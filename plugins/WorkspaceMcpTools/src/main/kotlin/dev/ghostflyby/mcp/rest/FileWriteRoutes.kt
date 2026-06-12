@@ -46,8 +46,8 @@ private fun Route.vfsWriteRoutes() {
 
 // ── Project ─────────────────────────────────────────────────
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
-    put<Api.Project.Root.File> { resource: Api.Project.Root.File ->
-        val force = resource.force
+    put<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
+        val force = resource.parent.force
         projectExec(
             call,
             resolver,
@@ -67,8 +67,8 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             }
         }
     }
-    post<Api.Project.Root.File> { resource: Api.Project.Root.File ->
-        val force = resource.force
+    post<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
+        val force = resource.parent.force
         projectExec(
             call,
             resolver,
@@ -88,13 +88,13 @@ private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
             WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
-    delete<Api.Project.Root.File> { resource: Api.Project.Root.File ->
-        val force = resource.force
+    delete<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
+        val force = resource.parent.force
         projectExec(
             call,
             resolver,
             resource.projectKey,
-            resource.parent.rootId,
+            resource.rootId,
             resource.relativePath.toRoutePath(),
             force,
         ) { access, _, _, force ->
