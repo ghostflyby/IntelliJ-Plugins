@@ -58,41 +58,6 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
-    patch<Api.Project.FilesEntry> { resource ->
-        val projectKey = resource.parent.projectKey
-        when (val resolved = resolver.resolve(projectKey = projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                val project = resolved.project
-                val target = call.rootRouteTargetOrNotFound(project, resource.rootId)
-                    ?: return@patch
-                val access = resolveProjectFileAccess(project, target.root, "")
-                val force = resource.force
-                if (access.file?.isDirectory != true) {
-                    call.respond(
-                        HttpStatusCode.BadRequest,
-                        PatchResponse(applied = emptyList(), error = "Directory-level patch requires a directory target"),
-                    )
-                    return@patch
-                }
-                val body = call.receiveText()
-                when (val format = detectFormat(body, call.request.contentType())) {
-                    is PatchFormat.Unknown -> call.respond(
-                        HttpStatusCode.BadRequest,
-                        PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
-                    )
-                    is PatchFormat.Codex -> applyCodex(project, access, isDir = true, force, format.sections, call)
-                    is PatchFormat.Git -> applyGit(project, access, isDir = true, force, format.patches, call)
-                }
-            }
-
-            is WorkspaceProjectResolution.Unresolved ->
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    PatchResponse(applied = emptyList(), failed = listOf(resolved.message)),
-                )
-        }
-    }
-
     patch<Api.Project.FilesEntry.File> { resource ->
         val projectKey = resource.projectKey
         when (val resolved = resolver.resolve(projectKey = projectKey)) {
