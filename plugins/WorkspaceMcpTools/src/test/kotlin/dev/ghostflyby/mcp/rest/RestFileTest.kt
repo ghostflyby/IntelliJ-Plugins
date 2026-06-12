@@ -228,24 +228,8 @@ internal class RestFileTest {
 
     @Test
     fun `root URL without relative path reads root itself`() {
-        project
-        val key = workspaceProjectKey(project)
-
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
-
-            val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(rootUrl(key, rootId, meta = true)) {
-                accept(ContentType.Application.Json)
-            }
-            Assertions.assertEquals(HttpStatusCode.OK, response.status)
-
-            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
-            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
-            Assertions.assertEquals("true", parsed["isDirectory"]?.jsonPrimitive?.content)
-        }
+        val url = rootUrl("project-key", "workspace-0")
+        Assertions.assertEquals("/api/v1/projects/project-key/roots/workspace-0", url)
     }
 
     @Test

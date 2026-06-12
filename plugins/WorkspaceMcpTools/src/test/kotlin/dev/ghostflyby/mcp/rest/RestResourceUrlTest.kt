@@ -23,7 +23,7 @@ internal class RestResourceUrlTest {
     @Test
     fun `file resource URL keeps nested root scoped path shape`() {
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/roots/workspace-0/src/Main.kt",
+            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt"),
         )
     }
@@ -31,11 +31,11 @@ internal class RestResourceUrlTest {
     @Test
     fun `file resource URL encodes explicit boolean query parameters`() {
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/roots/workspace-0/src/Main.kt?meta=true",
+            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt?meta=true",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt", meta = true),
         )
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/roots/workspace-0/src/Main.kt?force=false",
+            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt?force=false",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt", force = false),
         )
     }

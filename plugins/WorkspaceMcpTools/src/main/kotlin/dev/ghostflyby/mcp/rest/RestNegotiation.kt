@@ -27,7 +27,7 @@ private val PlainTextContentType: ContentType = ContentType.Text.Plain.withChars
 
 internal val RestJson: Json = Json {
     ignoreUnknownKeys = true
-    encodeDefaults = true
+    encodeDefaults = false
 }
 
 internal fun Application.installWorkspaceRestContentNegotiation() {

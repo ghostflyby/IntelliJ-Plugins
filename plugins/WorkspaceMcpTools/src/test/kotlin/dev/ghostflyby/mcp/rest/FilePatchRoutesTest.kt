@@ -139,7 +139,8 @@ internal class FilePatchRoutesTest {
                 setBody(patch)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
-            Assertions.assertTrue(json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]!!.jsonArray.isEmpty())
+            val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
+            Assertions.assertTrue(failed == null || failed.isEmpty())
 
             val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
@@ -196,7 +197,8 @@ internal class FilePatchRoutesTest {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
-            Assertions.assertTrue(json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]!!.jsonArray.isEmpty())
+            val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
+            Assertions.assertTrue(failed == null || failed.isEmpty())
 
             val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())

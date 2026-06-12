@@ -47,7 +47,6 @@ import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.*
 import kotlinx.schema.Description
 import kotlinx.schema.Schema
-import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import java.util.concurrent.atomic.AtomicBoolean
@@ -93,7 +92,6 @@ internal data class QualityFileProblemsResultDto(
     val fileUrl: String,
     val filePath: String? = null,
     val problems: List<QualityProblemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
 )
 
@@ -120,13 +118,9 @@ internal data class QualityScopeProblemsResultDto(
     val filesWithProblems: Int,
     val problemCount: Int,
     val items: List<QualityFileProblemsItemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreMatchingFiles: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreProblems: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
@@ -152,13 +146,9 @@ internal data class QualityScopeProblemsBySeverityResultDto(
     val problemCount: Int,
     val severityCounts: List<QualitySeverityCountDto>,
     val items: List<QualityFileProblemsItemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreMatchingFiles: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreProblems: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
@@ -172,9 +162,7 @@ internal data class QualityFileOperationResultDto(
     val fileUrl: String,
     val filePath: String? = null,
     val success: Boolean,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val error: String? = null,
 )
 
@@ -188,7 +176,6 @@ internal data class QualityQuickFixFileResultDto(
     val optimizeImportsApplied: Boolean,
     val reformatApplied: Boolean,
     val success: Boolean,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
 )
 
@@ -215,11 +202,8 @@ internal data class QualityScopeOperationResultDto(
     val failureCount: Int,
     val skippedCount: Int,
     val items: List<QualityScopeOperationItemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreMatchingFiles: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
@@ -248,11 +232,8 @@ internal data class QualityScopeQuickFixResultDto(
     val failureCount: Int,
     val skippedCount: Int,
     val items: List<QualityScopeQuickFixItemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreMatchingFiles: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
@@ -282,7 +263,6 @@ internal data class QualityCleanupFileResultDto(
     @Description("Inspection profile name. Defaults to current active profile.")
     val inspectionProfileName: String,
     val success: Boolean,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
@@ -311,11 +291,8 @@ internal data class QualityScopeCleanupResultDto(
     val failureCount: Int,
     val skippedCount: Int,
     val items: List<QualityScopeCleanupItemDto>,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val probablyHasMoreMatchingFiles: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val timedOut: Boolean = false,
-    @EncodeDefault(mode = EncodeDefault.Mode.NEVER)
     val canceled: Boolean = false,
     val diagnostics: List<String> = emptyList(),
 )
