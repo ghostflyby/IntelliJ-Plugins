@@ -17,6 +17,20 @@ public interface RootProvider {
     public val rootId: String
 }
 
+public interface FileQuery {
+    public val meta: Boolean
+    public val content: Boolean
+    public val exists: Boolean
+    public val structure: Boolean
+    public val force: Boolean
+    public val startLine: Int?
+    public val endLine: Int?
+    public val maxLines: Int?
+    public val aroundLine: Int?
+    public val radius: Int?
+}
+
+
 public object Api {
     @Serializable
     @Resource("/server/info")
@@ -49,17 +63,17 @@ public object Api {
         public class FilesEntry(
             public val parent: Project,
             public override val rootId: String,
-            public val meta: Boolean = false,
-            public val content: Boolean = false,
-            public val exists: Boolean = false,
-            public val structure: Boolean = false,
-            public val force: Boolean = false,
-            public val startLine: Int? = null,
-            public val endLine: Int? = null,
-            public val maxLines: Int? = null,
-            public val aroundLine: Int? = null,
-            public val radius: Int? = null,
-        ) : ProjectProvider by parent, RootProvider {
+            public override val meta: Boolean = false,
+            public override val content: Boolean = false,
+            public override val exists: Boolean = false,
+            public override val structure: Boolean = false,
+            public override val force: Boolean = false,
+            public override val startLine: Int? = null,
+            public override val endLine: Int? = null,
+            public override val maxLines: Int? = null,
+            public override val aroundLine: Int? = null,
+            public override val radius: Int? = null,
+        ) : ProjectProvider by parent, RootProvider, FileQuery {
             @Serializable
             @Resource("/{relativePath...}")
             public class File(
@@ -89,15 +103,15 @@ public object Api {
     @Resource("/vfs/{rawVfsUrl...}")
     public class Vfs(
         public val rawVfsUrl: List<String> = emptyList(),
-        public val meta: Boolean = false,
-        public val content: Boolean = false,
-        public val exists: Boolean = false,
-        public val structure: Boolean = false,
-        public val force: Boolean = false,
-        public val startLine: Int? = null,
-        public val endLine: Int? = null,
-        public val maxLines: Int? = null,
-        public val aroundLine: Int? = null,
-        public val radius: Int? = null,
-    )
+        public override val meta: Boolean = false,
+        public override val content: Boolean = false,
+        public override val exists: Boolean = false,
+        public override val structure: Boolean = false,
+        public override val force: Boolean = false,
+        public override val startLine: Int? = null,
+        public override val endLine: Int? = null,
+        public override val maxLines: Int? = null,
+        public override val aroundLine: Int? = null,
+        public override val radius: Int? = null,
+    ) : FileQuery
 }

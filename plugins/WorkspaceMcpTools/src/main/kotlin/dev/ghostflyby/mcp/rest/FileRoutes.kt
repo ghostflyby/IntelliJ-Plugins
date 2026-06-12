@@ -41,17 +41,6 @@ private data class FileContentResponse(
     val contentFormat: String? = null,
 )
 
-private data class LineRangeQuery(
-    val startLine: Int? = null,
-    val endLine: Int? = null,
-    val maxLines: Int? = null,
-    val aroundLine: Int? = null,
-    val radius: Int? = null,
-) {
-    val isPresent: Boolean =
-        startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
-}
-
 // -- Route registrations --
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -68,7 +57,7 @@ internal fun Route.fileRoutes() {
             resource.exists,
             resource.structure,
             project,
-            rangeQuery = resource.lineRangeQuery(),
+            rangeQuery = resource,
         )
     }
 
@@ -106,7 +95,7 @@ internal fun Route.fileRoutes() {
             resource.parent.content,
             resource.parent.exists,
             resource.parent.structure,
-            rangeQuery = resource.parent.lineRangeQuery(),
+            rangeQuery = resource.parent,
         )
     }
 }
@@ -120,7 +109,7 @@ private suspend fun respondProjectRootFile(
     content: Boolean = false,
     exists: Boolean = false,
     structure: Boolean = false,
-    rangeQuery: LineRangeQuery = LineRangeQuery(),
+    rangeQuery: FileQuery? = null,
 ) {
     val projectKey = root.parent.projectKey
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
@@ -167,12 +156,12 @@ private suspend fun respondFileContent(
     structure: Boolean,
     project: Project?,
     policy: FileAccessPolicy? = null,
-    rangeQuery: LineRangeQuery = LineRangeQuery(),
+    rangeQuery: FileQuery? = null,
 ) {
-    val wantsContent = content || rangeQuery.isPresent || (!meta && !exists && !structure)
+    val wantsContent = content || (rangeQuery?.hasLineRange == true) || (!meta && !exists && !structure)
     val lineRange = if (wantsContent) {
         try {
-            rangeQuery.toFileLineRange()
+            rangeQuery?.toFileLineRange()
         } catch (e: IllegalArgumentException) {
             call.respond(HttpStatusCode.BadRequest, RestError(e.message.orEmpty()))
             return
@@ -298,21 +287,18 @@ private fun VirtualFile.markdownLanguageTag(): String {
     return extension?.lowercase() ?: fileType.name.lowercase().takeUnless { it == "unknown" }.orEmpty()
 }
 
-private fun Api.Vfs.lineRangeQuery(): LineRangeQuery =
-    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
+private val FileQuery.hasLineRange: Boolean get() =
+    startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
 
-private fun Api.Project.FilesEntry.lineRangeQuery(): LineRangeQuery =
-    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
-
-private fun LineRangeQuery.toFileLineRange(): FileLineRange? {
-    if (!isPresent) return null
+private fun FileQuery.toFileLineRange(): FileLineRange? {
+    if (!hasLineRange) return null
     val hasStartEnd = startLine != null && endLine != null && maxLines == null && aroundLine == null && radius == null
     val hasStartMax = startLine != null && maxLines != null && endLine == null && aroundLine == null && radius == null
     val hasAround = aroundLine != null && radius != null && startLine == null && endLine == null && maxLines == null
     return when {
-        hasStartEnd -> FileLineRange.Lines(startLine, endLine)
-        hasStartMax -> FileLineRange.MaxLines(startLine, maxLines)
-        hasAround -> FileLineRange.Around(aroundLine, radius)
+        hasStartEnd -> FileLineRange.Lines(startLine!!, endLine!!)
+        hasStartMax -> FileLineRange.MaxLines(startLine!!, maxLines!!)
+        hasAround -> FileLineRange.Around(aroundLine!!, radius!!)
         else -> throw IllegalArgumentException(
             "Range query must use exactly one of startLine+endLine, startLine+maxLines, or aroundLine+radius",
         )
