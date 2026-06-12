@@ -3,7 +3,7 @@
 ## Route
 
 ```text
-GET /api/v1/projects/{projectKey}/searchtext/{rootId}/{relativePath...}
+GET /api/v1/projects/{projectKey}/search/text/{rootId}/{relativePath...}
 ```
 
 Follows the existing `/files/` and `/glob/` path prefix convention. `rootId` and the optional
@@ -57,13 +57,13 @@ The combination `string,comment` (search strings and comments but not code) has 
 
 ```bash
 # Search entire root for a class name
-curl -i "$BASE/projects/$PROJECT_KEY/searchtext/$ROOT_ID?query=ApplicationCall&caseSensitive=true&fileFilter=**/*.kt&limit=50"
+curl -i "$BASE/projects/$PROJECT_KEY/search/text/$ROOT_ID?query=ApplicationCall&caseSensitive=true&fileFilter=**/*.kt&limit=50"
 
 # Search a subdirectory with regex, only in code (not strings or comments)
-curl -i "$BASE/projects/$PROJECT_KEY/searchtext/$ROOT_ID/src/main?query=fun\\s+\\w+\\(&regex=true&context=other"
+curl -i "$BASE/projects/$PROJECT_KEY/search/text/$ROOT_ID/src/main?query=fun\\s+\\w+\\(&regex=true&context=other"
 
 # Find TODO in comments only
-curl -i "$BASE/projects/$PROJECT_KEY/searchtext/$ROOT_ID?query=TODO&context=comment"
+curl -i "$BASE/projects/$PROJECT_KEY/search/text/$ROOT_ID?query=TODO&context=comment"
 ```
 
 ---
@@ -73,7 +73,7 @@ curl -i "$BASE/projects/$PROJECT_KEY/searchtext/$ROOT_ID?query=TODO&context=comm
 ### Text (default, omit `Accept`)
 
 ```
-# searchtext
+# search/text
 # query: ApplicationCall
 # root: workspace-44-main/src/main/kotlin
 # fileFilter: **/*.kt
@@ -148,7 +148,7 @@ The backend translates this into existing infrastructure:
 ## Empty results
 
 ```text
-# searchtext
+# search/text
 # query: nothing_matches_this
 # root: workspace-44-main
 # results: 0

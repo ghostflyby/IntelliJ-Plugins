@@ -22,23 +22,23 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
-public final class dev/ghostflyby/mcp/rest/Api$Project$FilesEntry : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
+public final class dev/ghostflyby/mcp/rest/Api$Project$FilesEntry : dev/ghostflyby/mcp/rest/FileQuery, dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$FilesEntry$Companion;
 	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;)V
 	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAroundLine ()Ljava/lang/Integer;
-	public final fun getContent ()Z
-	public final fun getEndLine ()Ljava/lang/Integer;
-	public final fun getExists ()Z
-	public final fun getForce ()Z
-	public final fun getMaxLines ()Ljava/lang/Integer;
-	public final fun getMeta ()Z
+	public fun getAroundLine ()Ljava/lang/Integer;
+	public fun getContent ()Z
+	public fun getEndLine ()Ljava/lang/Integer;
+	public fun getExists ()Z
+	public fun getForce ()Z
+	public fun getMaxLines ()Ljava/lang/Integer;
+	public fun getMeta ()Z
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project;
 	public fun getProjectKey ()Ljava/lang/String;
-	public final fun getRadius ()Ljava/lang/Integer;
+	public fun getRadius ()Ljava/lang/Integer;
 	public fun getRootId ()Ljava/lang/String;
-	public final fun getStartLine ()Ljava/lang/Integer;
-	public final fun getStructure ()Z
+	public fun getStartLine ()Ljava/lang/Integer;
+	public fun getStructure ()Z
 }
 
 public final synthetic class dev/ghostflyby/mcp/rest/Api$Project$FilesEntry$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
@@ -170,6 +170,60 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$Roots$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
+	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$Companion;
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;Ljava/lang/String;ZZZLjava/util/List;Ljava/lang/String;I)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;Ljava/lang/String;ZZZLjava/util/List;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCaseSensitive ()Z
+	public final fun getContext ()Ljava/util/List;
+	public final fun getFileFilter ()Ljava/lang/String;
+	public final fun getLimit ()I
+	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project;
+	public fun getProjectKey ()Ljava/lang/String;
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getRegex ()Z
+	public fun getRootId ()Ljava/lang/String;
+	public final fun getWholeWord ()Z
+}
+
+public final synthetic class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
+	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText$Companion;
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry;Ljava/util/List;)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry;
+	public fun getProjectKey ()Ljava/lang/String;
+	public final fun getRelativePath ()Ljava/util/List;
+	public fun getRootId ()Ljava/lang/String;
+}
+
+public final synthetic class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$Project$SearchTextEntry$SearchText$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class dev/ghostflyby/mcp/rest/Api$Projects {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Projects$Companion;
 	public fun <init> ()V
@@ -208,22 +262,22 @@ public final class dev/ghostflyby/mcp/rest/Api$ServerInfo$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
-public final class dev/ghostflyby/mcp/rest/Api$Vfs {
+public final class dev/ghostflyby/mcp/rest/Api$Vfs : dev/ghostflyby/mcp/rest/FileQuery {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Vfs$Companion;
 	public fun <init> ()V
 	public fun <init> (Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;)V
 	public synthetic fun <init> (Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAroundLine ()Ljava/lang/Integer;
-	public final fun getContent ()Z
-	public final fun getEndLine ()Ljava/lang/Integer;
-	public final fun getExists ()Z
-	public final fun getForce ()Z
-	public final fun getMaxLines ()Ljava/lang/Integer;
-	public final fun getMeta ()Z
-	public final fun getRadius ()Ljava/lang/Integer;
+	public fun getAroundLine ()Ljava/lang/Integer;
+	public fun getContent ()Z
+	public fun getEndLine ()Ljava/lang/Integer;
+	public fun getExists ()Z
+	public fun getForce ()Z
+	public fun getMaxLines ()Ljava/lang/Integer;
+	public fun getMeta ()Z
+	public fun getRadius ()Ljava/lang/Integer;
 	public final fun getRawVfsUrl ()Ljava/util/List;
-	public final fun getStartLine ()Ljava/lang/Integer;
-	public final fun getStructure ()Z
+	public fun getStartLine ()Ljava/lang/Integer;
+	public fun getStructure ()Z
 }
 
 public final synthetic class dev/ghostflyby/mcp/rest/Api$Vfs$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
@@ -238,6 +292,19 @@ public final synthetic class dev/ghostflyby/mcp/rest/Api$Vfs$$serializer : kotli
 
 public final class dev/ghostflyby/mcp/rest/Api$Vfs$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public abstract interface class dev/ghostflyby/mcp/rest/FileQuery {
+	public abstract fun getAroundLine ()Ljava/lang/Integer;
+	public abstract fun getContent ()Z
+	public abstract fun getEndLine ()Ljava/lang/Integer;
+	public abstract fun getExists ()Z
+	public abstract fun getForce ()Z
+	public abstract fun getMaxLines ()Ljava/lang/Integer;
+	public abstract fun getMeta ()Z
+	public abstract fun getRadius ()Ljava/lang/Integer;
+	public abstract fun getStartLine ()Ljava/lang/Integer;
+	public abstract fun getStructure ()Z
 }
 
 public abstract interface class dev/ghostflyby/mcp/rest/ProjectProvider {

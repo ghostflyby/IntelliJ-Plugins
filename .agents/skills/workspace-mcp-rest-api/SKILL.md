@@ -53,4 +53,5 @@ common error handling.
 - `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, VFS reads, compound responses, and
   glob queries.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation
+- `references/search.md`: text search via FindModel, context filtering, file glob, occurrence IDs for PATCH follow-up.
   safety.
