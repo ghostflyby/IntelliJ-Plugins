@@ -24,9 +24,10 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$Companion {
 
 public final class dev/ghostflyby/mcp/rest/Api$Project$GlobEntry : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$GlobEntry$Companion;
-	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;Ljava/util/List;)V
-	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ILjava/util/List;)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ILjava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getGlob ()Ljava/util/List;
+	public final fun getLimit ()I
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project;
 	public fun getProjectKey ()Ljava/lang/String;
 	public fun getRootId ()Ljava/lang/String;
@@ -72,15 +73,20 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$GlobEntry$Glob$Companion 
 
 public final class dev/ghostflyby/mcp/rest/Api$Project$Root : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$Root$Companion;
-	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZ)V
-	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project;Ljava/lang/String;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAroundLine ()Ljava/lang/Integer;
 	public final fun getContent ()Z
+	public final fun getEndLine ()Ljava/lang/Integer;
 	public final fun getExists ()Z
 	public final fun getForce ()Z
+	public final fun getMaxLines ()Ljava/lang/Integer;
 	public final fun getMeta ()Z
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project;
 	public fun getProjectKey ()Ljava/lang/String;
+	public final fun getRadius ()Ljava/lang/Integer;
 	public fun getRootId ()Ljava/lang/String;
+	public final fun getStartLine ()Ljava/lang/Integer;
 	public final fun getStructure ()Z
 }
 
@@ -100,16 +106,21 @@ public final class dev/ghostflyby/mcp/rest/Api$Project$Root$Companion {
 
 public final class dev/ghostflyby/mcp/rest/Api$Project$Root$File : dev/ghostflyby/mcp/rest/ProjectProvider, dev/ghostflyby/mcp/rest/RootProvider {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Project$Root$File$Companion;
-	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZ)V
-	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ldev/ghostflyby/mcp/rest/Api$Project$Root;Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAroundLine ()Ljava/lang/Integer;
 	public final fun getContent ()Z
+	public final fun getEndLine ()Ljava/lang/Integer;
 	public final fun getExists ()Z
 	public final fun getForce ()Z
+	public final fun getMaxLines ()Ljava/lang/Integer;
 	public final fun getMeta ()Z
 	public final fun getParent ()Ldev/ghostflyby/mcp/rest/Api$Project$Root;
 	public fun getProjectKey ()Ljava/lang/String;
+	public final fun getRadius ()Ljava/lang/Integer;
 	public final fun getRelativePath ()Ljava/util/List;
 	public fun getRootId ()Ljava/lang/String;
+	public final fun getStartLine ()Ljava/lang/Integer;
 	public final fun getStructure ()Z
 }
 
@@ -188,13 +199,18 @@ public final class dev/ghostflyby/mcp/rest/Api$ServerInfo$Companion {
 public final class dev/ghostflyby/mcp/rest/Api$Vfs {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$Vfs$Companion;
 	public fun <init> ()V
-	public fun <init> (Ljava/util/List;ZZZZZ)V
-	public synthetic fun <init> (Ljava/util/List;ZZZZZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;)V
+	public synthetic fun <init> (Ljava/util/List;ZZZZZLjava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;Ljava/lang/Integer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAroundLine ()Ljava/lang/Integer;
 	public final fun getContent ()Z
+	public final fun getEndLine ()Ljava/lang/Integer;
 	public final fun getExists ()Z
 	public final fun getForce ()Z
+	public final fun getMaxLines ()Ljava/lang/Integer;
 	public final fun getMeta ()Z
+	public final fun getRadius ()Ljava/lang/Integer;
 	public final fun getRawVfsUrl ()Ljava/util/List;
+	public final fun getStartLine ()Ljava/lang/Integer;
 	public final fun getStructure ()Z
 }
 

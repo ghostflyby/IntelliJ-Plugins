@@ -100,8 +100,20 @@ Patch only project-root scoped paths:
 PATCH /api/v1/projects/{projectKey}/roots/{rootId}/{relativePath...}
 ```
 
-The target may be a file or directory. If the target is a directory, patch section paths are resolved under that
-directory. If the target is a file, patch sections must target that same relative path.
+The target may be a file or directory. If the target is a file, patch body paths are ignored or normalized and all
+hunks apply to the URL target file. If the target is a directory, patch section paths are resolved under that directory.
+
+Choose patch format by task:
+
+| Task | Prefer | Reason |
+|------|--------|--------|
+| Small single-file edit | Codex patch | Compact and easy to write by hand |
+| Multi-file edit under a directory target | Git diff (`text/x-patch`) | File paths are part of the diff format |
+| Programmatically generated patch | Git diff (`text/x-patch`) | Context usually matches exact file output |
+
+For file-targeted PATCH requests, the section path in a Codex patch, or the `---`/`+++` path in a Git patch, does not
+need to match the URL target. For directory-targeted PATCH requests, the patch body path still selects the child file
+under the directory URL.
 
 Codex patch format is auto-detected when the body starts with `*** `:
 
@@ -121,7 +133,8 @@ curl -i -X PATCH \
   "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID"
 ```
 
-Patch responses are JSON:
+Patch responses use the usual REST negotiation rules. Omit `Accept` for the default Markdown/frontmatter rendering, or
+send `Accept: application/json` for a JSON response:
 
 ```json
 {
@@ -145,6 +158,27 @@ curl -i -X PATCH \
   "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID?force=true"
 ```
 
+## Patch Recovery
+
+`No valid hunks` and `Patch does not apply` usually mean the patch context no longer matches the current target text.
+Before retrying:
+
+1. Re-read the target with `GET ...?content=true`.
+2. Regenerate or adjust the patch against the latest text.
+3. For directory-targeted PATCH, check that patch section paths name the intended child files.
+4. Retry with smaller hunks if the edit touches several distant areas.
+
+If a PATCH response has a non-empty `failed` list, treat the failed entries as unapplied even when the HTTP status is
+`200 OK`.
+
+## Edit Session Workflow
+
+1. Read the file or files with `GET ...?content=true`.
+2. Apply `PATCH`, `PUT`, `POST`, or `DELETE`.
+3. Verify IDE-visible REST state with `GET ...?content=true`, `meta=true`, or `exists=true`.
+4. PATCH saves successful Document updates to disk. If persisted state matters, direct filesystem or git verification
+   is still useful as an independent check.
+
 ## Mutation Checklist
 
 1. Confirm the user asked for mutation.
@@ -152,3 +186,5 @@ curl -i -X PATCH \
 3. Use `curl -i` or equivalent header capture.
 4. Do not use `force=true` by default.
 5. Check status and body before assuming the write succeeded.
+6. Verify the resulting REST-visible content.
+7. Verify disk-visible content too when persistence matters.

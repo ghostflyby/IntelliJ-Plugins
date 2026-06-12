@@ -63,9 +63,14 @@ internal suspend fun HttpClient.rootPathUrl(
     exists: Boolean? = null,
     structure: Boolean? = null,
     force: Boolean? = null,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): String {
     val rootId = firstWorkspaceRootId(projectKey, json)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force)
+    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
 }
 
 internal suspend fun HttpClient.rootPathUrl(
@@ -78,9 +83,14 @@ internal suspend fun HttpClient.rootPathUrl(
     exists: Boolean? = null,
     structure: Boolean? = null,
     force: Boolean? = null,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): String {
     val rootId = workspaceRootId(projectKey, json, rootIndex)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force)
+    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
 }
 
 internal suspend fun HttpClient.rootPathUrlByRootUrl(
@@ -93,9 +103,14 @@ internal suspend fun HttpClient.rootPathUrlByRootUrl(
     exists: Boolean? = null,
     structure: Boolean? = null,
     force: Boolean? = null,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): String {
     val rootId = workspaceRootIdByUrl(projectKey, json, rootUrl)
-    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force)
+    return rootPathUrl(projectKey, rootId, relativePath, meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius)
 }
 
 internal fun rootUrl(
@@ -106,8 +121,16 @@ internal fun rootUrl(
     exists: Boolean? = null,
     structure: Boolean? = null,
     force: Boolean? = null,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): String {
-    return apiUrl(root(projectKey, rootId), queryParameters(meta, content, exists, structure, force))
+    return apiUrl(
+        root(projectKey, rootId),
+        queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
+    )
 }
 
 internal fun rootPathUrl(
@@ -119,13 +142,18 @@ internal fun rootPathUrl(
     exists: Boolean? = null,
     structure: Boolean? = null,
     force: Boolean? = null,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): String {
     return apiUrl(
         Api.Project.Root.File(
             parent = root(projectKey, rootId),
             relativePath = relativePath.toResourcePathSegments(),
         ),
-        queryParameters(meta, content, exists, structure, force),
+        queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
     )
 }
 
@@ -169,6 +197,11 @@ private fun queryParameters(
     exists: Boolean?,
     structure: Boolean?,
     force: Boolean?,
+    startLine: Int? = null,
+    endLine: Int? = null,
+    maxLines: Int? = null,
+    aroundLine: Int? = null,
+    radius: Int? = null,
 ): Parameters {
     return Parameters.build {
         meta?.let { append("meta", it.toString()) }
@@ -176,6 +209,11 @@ private fun queryParameters(
         exists?.let { append("exists", it.toString()) }
         structure?.let { append("structure", it.toString()) }
         force?.let { append("force", it.toString()) }
+        startLine?.let { append("startLine", it.toString()) }
+        endLine?.let { append("endLine", it.toString()) }
+        maxLines?.let { append("maxLines", it.toString()) }
+        aroundLine?.let { append("aroundLine", it.toString()) }
+        radius?.let { append("radius", it.toString()) }
     }
 }
 

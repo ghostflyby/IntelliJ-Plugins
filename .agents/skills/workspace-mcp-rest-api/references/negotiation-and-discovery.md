@@ -49,7 +49,7 @@ curl -sS -H 'Accept: application/json' "$BASE/projects" | jq
 JSON responses return the payload directly, not a wrapper. JSON is good for machines, but escaping and nested structure
 make it less ideal for direct agent reading than the default Markdown/plain responses.
 
-Use `-sS -D -` if you need headers and a script-friendly body:
+Use `-sS -D -` if you need header capture together with the body:
 
 ```bash
 curl -sS -D - "$BASE/server/info"
@@ -90,7 +90,8 @@ curl -i "$BASE/projects/$PROJECT_KEY/roots"
 curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/roots"
 ```
 
-Root entries include `id`, display information, access flags, and URL. Use the root `id` as `ROOT_ID`.
+Root entries include `id`, display information, access flags, and URL. Use the root `id` as `ROOT_ID`. Prefer the
+narrowest suitable root for the task, such as a plugin root or source root, before falling back to the repository root.
 
 ## Error Handling
 
@@ -115,5 +116,5 @@ Typical errors include:
 1. Set `BASE`.
 2. Use `curl -i` or equivalent header capture.
 3. Discover `projectKey`.
-4. Discover `ROOT_ID`.
+4. Discover `ROOT_ID`, preferring the narrowest suitable root.
 5. Omit `Accept` unless you need JSON or a specific negotiated format.

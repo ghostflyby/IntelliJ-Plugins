@@ -17,6 +17,9 @@ import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.writeBytes
 import kotlin.io.path.writeText
 
 @TestApplication
@@ -56,10 +60,20 @@ internal class RestFileTest {
         secondRootPathFixture.get().resolve("second.txt").writeText("second root")
         val globDir = projectPathFixture.get().resolve("glob")
         globDir.resolve("nested").createDirectories()
-        globDir.resolve("RootFile.kt").writeText("class RootFile")
+        globDir.resolve("RootFile.kt").writeText(
+            """
+            class RootFile {
+                fun marker() {
+                    println("ok")
+                }
+            }
+            """.trimIndent(),
+        )
         globDir.resolve("RootScript.kts").writeText("println(\"script\")")
         globDir.resolve("RootFile.txt").writeText("plain")
         globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
+        projectPathFixture.get().resolve("range.txt").writeText("one\ntwo\nthree\nfour\nfive\n")
+        projectPathFixture.get().resolve("binary.bin").writeBytes(byteArrayOf(0, 1, 2, 3))
         contentRootFixture.get().virtualFile.refresh(false, true)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())?.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
@@ -339,6 +353,185 @@ internal class RestFileTest {
     }
 
     @Test
+    fun `file structure includes line ranges in JSON and markdown`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val jsonResponse = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
+            ) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, jsonResponse.status)
+            val elements = json.parseToJsonElement(jsonResponse.bodyAsText())
+                .jsonObject["elements"]?.jsonArray ?: error("missing structure elements")
+            Assertions.assertTrue(elements.isNotEmpty())
+            Assertions.assertTrue(elements.hasElementWithLineRange(), jsonResponse.bodyAsText())
+
+            val markdown = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
+            )
+            Assertions.assertEquals(HttpStatusCode.OK, markdown.status)
+            Assertions.assertTrue(Regex("""\[\d+-\d+]""").containsMatchIn(markdown.bodyAsText()), markdown.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `file range reads return raw text`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val byEnd = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 2, endLine = 4),
+            )
+            Assertions.assertEquals(HttpStatusCode.OK, byEnd.status)
+            Assertions.assertEquals("two\nthree\nfour", byEnd.bodyAsText())
+
+            val byMax = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 3, maxLines = 2),
+            )
+            Assertions.assertEquals("three\nfour", byMax.bodyAsText())
+
+            val around = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", aroundLine = 3, radius = 1),
+            )
+            Assertions.assertEquals("two\nthree\nfour", around.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `file range reads trim content inside compound responses`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.get(
+                client.rootPathUrlByRootUrl(
+                    key,
+                    json,
+                    projectRootUrl(),
+                    "range.txt",
+                    meta = true,
+                    content = true,
+                    exists = true,
+                    startLine = 1,
+                    endLine = 2,
+                ),
+            ) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            Assertions.assertTrue(parsed.containsKey("meta"))
+            Assertions.assertEquals("true", parsed["exists"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("one\ntwo", parsed["content"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `file range reads combine with explicit non-content flags`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val exists = client.get(
+                client.rootPathUrlByRootUrl(
+                    key,
+                    json,
+                    projectRootUrl(),
+                    "range.txt",
+                    exists = true,
+                    startLine = 1,
+                    endLine = 2,
+                ),
+            ) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, exists.status)
+            val existsBody = json.parseToJsonElement(exists.bodyAsText()).jsonObject
+            Assertions.assertEquals("true", existsBody["exists"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("one\ntwo", existsBody["content"]?.jsonPrimitive?.content)
+
+            val structure = client.get(
+                client.rootPathUrlByRootUrl(
+                    key,
+                    json,
+                    projectRootUrl(),
+                    "glob/RootFile.kt",
+                    meta = true,
+                    structure = true,
+                    startLine = 1,
+                    endLine = 2,
+                ),
+            )
+            Assertions.assertEquals(HttpStatusCode.OK, structure.status)
+            Assertions.assertEquals(TestMarkdownContentType, structure.responseContentType())
+            Assertions.assertTrue(structure.bodyAsText().contains("name: RootFile.kt"))
+            Assertions.assertTrue(structure.bodyAsText().contains("RootFile"))
+            Assertions.assertTrue(structure.bodyAsText().contains("```kt\nclass RootFile {\n    fun marker() {"), structure.bodyAsText())
+            Assertions.assertFalse(structure.bodyAsText().contains("println(\"ok\")"), structure.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `file range reads validate query and target kind`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val invalidCombination = client.get(
+                client.rootPathUrlByRootUrl(
+                    key,
+                    json,
+                    projectRootUrl(),
+                    "range.txt",
+                    startLine = 1,
+                    endLine = 2,
+                    maxLines = 1,
+                ),
+            )
+            Assertions.assertEquals(HttpStatusCode.BadRequest, invalidCombination.status)
+
+            val invalidValue = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 0, endLine = 1),
+            )
+            Assertions.assertEquals(HttpStatusCode.BadRequest, invalidValue.status)
+
+            val directory = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src", startLine = 1, endLine = 1),
+            )
+            Assertions.assertEquals(HttpStatusCode.BadRequest, directory.status)
+
+            val binary = client.get(
+                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "binary.bin", startLine = 1, endLine = 1),
+            )
+            Assertions.assertEquals(HttpStatusCode.BadRequest, binary.status)
+        }
+    }
+
+    @Test
     fun `file glob star matches current directory files only`() {
         project
         val key = workspaceProjectKey(project)
@@ -513,5 +706,14 @@ internal class RestFileTest {
             Assertions.assertEquals(HttpStatusCode.OK, jsonResponse.status)
             Assertions.assertTrue(json.parseToJsonElement(jsonResponse.bodyAsText()).jsonObject.containsKey("children"))
         }
+    }
+}
+
+private fun JsonArray.hasElementWithLineRange(): Boolean {
+    return any { element ->
+        val obj = element as? JsonObject ?: return@any false
+        val hasRange = obj["startLine"]?.jsonPrimitive?.intOrNull != null &&
+                obj["endLine"]?.jsonPrimitive?.intOrNull != null
+        hasRange || (obj["children"] as? JsonArray)?.hasElementWithLineRange() == true
     }
 }

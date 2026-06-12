@@ -47,6 +47,11 @@ public object Api {
             public val exists: Boolean = false,
             public val structure: Boolean = false,
             public val force: Boolean = false,
+            public val startLine: Int? = null,
+            public val endLine: Int? = null,
+            public val maxLines: Int? = null,
+            public val aroundLine: Int? = null,
+            public val radius: Int? = null,
         ) : ProjectProvider by parent, RootProvider {
             @Serializable
             @Resource("/{relativePath...}")
@@ -58,6 +63,11 @@ public object Api {
                 public val exists: Boolean = false,
                 public val structure: Boolean = false,
                 public val force: Boolean = false,
+                public val startLine: Int? = null,
+                public val endLine: Int? = null,
+                public val maxLines: Int? = null,
+                public val aroundLine: Int? = null,
+                public val radius: Int? = null,
             ) : ProjectProvider by parent, RootProvider by parent
         }
 
@@ -87,5 +97,10 @@ public object Api {
         public val exists: Boolean = false,
         public val structure: Boolean = false,
         public val force: Boolean = false,
+        public val startLine: Int? = null,
+        public val endLine: Int? = null,
+        public val maxLines: Int? = null,
+        public val aroundLine: Int? = null,
+        public val radius: Int? = null,
     )
 }

@@ -41,6 +41,17 @@ private data class FileContentResponse(
     val contentFormat: String? = null,
 )
 
+private data class LineRangeQuery(
+    val startLine: Int? = null,
+    val endLine: Int? = null,
+    val maxLines: Int? = null,
+    val aroundLine: Int? = null,
+    val radius: Int? = null,
+) {
+    val isPresent: Boolean =
+        startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
+}
+
 // -- Route registrations --
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -49,7 +60,16 @@ internal fun Route.fileRoutes() {
         val file = resolveFileByRawUrlOrNull(rawVfsUrl)
         val project = if (file != null && resource.structure)
             projectForRawVfsUrl(rawVfsUrl, resolver) else null
-        respondFileContent(call, file, resource.meta, resource.content, resource.exists, resource.structure, project)
+        respondFileContent(
+            call,
+            file,
+            resource.meta,
+            resource.content,
+            resource.exists,
+            resource.structure,
+            project,
+            rangeQuery = resource.lineRangeQuery(),
+        )
     }
 
     get<Api.Project.Root> { resource ->
@@ -61,6 +81,7 @@ internal fun Route.fileRoutes() {
             content = resource.content,
             exists = resource.exists,
             structure = resource.structure,
+            rangeQuery = resource.lineRangeQuery(),
         )
     }
 
@@ -74,6 +95,7 @@ internal fun Route.fileRoutes() {
             resource.content,
             resource.exists,
             resource.structure,
+            rangeQuery = resource.lineRangeQuery(),
         )
     }
 }
@@ -87,6 +109,7 @@ private suspend fun respondProjectRootFile(
     content: Boolean = false,
     exists: Boolean = false,
     structure: Boolean = false,
+    rangeQuery: LineRangeQuery = LineRangeQuery(),
 ) {
     val projectKey = root.parent.projectKey
     when (val resolved = resolver.resolve(projectKey = projectKey)) {
@@ -97,7 +120,17 @@ private suspend fun respondProjectRootFile(
                 return
             }
             val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            respondFileContent(call, access.file, meta, content, exists, structure, resolved.project, access.policy)
+            respondFileContent(
+                call,
+                access.file,
+                meta,
+                content,
+                exists,
+                structure,
+                resolved.project,
+                access.policy,
+                rangeQuery,
+            )
         }
 
         is WorkspaceProjectResolution.Unresolved -> {
@@ -123,11 +156,22 @@ private suspend fun respondFileContent(
     structure: Boolean,
     project: Project?,
     policy: FileAccessPolicy? = null,
+    rangeQuery: LineRangeQuery = LineRangeQuery(),
 ) {
-    val wantsContent = content || (!meta && !exists && !structure)
+    val wantsContent = content || rangeQuery.isPresent || (!meta && !exists && !structure)
     val wantsMeta = meta
     val wantsExists = exists
     val wantsStructure = structure
+    val lineRange = if (wantsContent) {
+        try {
+            rangeQuery.toFileLineRange()
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, RestError(e.message.orEmpty()))
+            return
+        }
+    } else {
+        null
+    }
     val needsFile = wantsContent || wantsMeta || wantsStructure
     // exists-only: no file required
     if (!wantsContent && !wantsMeta && wantsExists && !wantsStructure) {
@@ -164,19 +208,33 @@ private suspend fun respondFileContent(
         call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
         return
     }
+    if (wantsContent && lineRange != null && (file!!.isDirectory || file.fileType.isBinary)) {
+        call.respond(HttpStatusCode.BadRequest, RestError("Range reads are supported only for text files"))
+        return
+    }
     // Single-responsibility paths
     if (wantsStructure && !wantsMeta && !wantsContent && !wantsExists)
         return structureOnly(call, file!!, project)
-    if (wantsMeta && !wantsContent && !wantsExists)
+    if (wantsMeta && !wantsContent && !wantsExists && !wantsStructure)
         return metaOnly(call, file!!, effectivePolicy)
     if (!wantsMeta && !wantsExists && !wantsStructure)
-        return contentOnly(call, file!!)
+        return contentOnly(call, file!!, lineRange)
     // Compound: at least two of meta/content/exists/structure
-    compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy)
+    compoundResult(call, file!!, wantsMeta, wantsContent, wantsExists, wantsStructure, project, effectivePolicy, lineRange)
 }
 
 // -- Single response modes --
-private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile) {
+private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile, range: FileLineRange? = null) {
+    if (range != null) {
+        val content = try {
+            readTextRangeResult(file, range)
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, RestError(e.message.orEmpty()))
+            return
+        }
+        call.respondText(content.text, ContentType.parse(content.mimeType))
+        return
+    }
     when (val c = readContentResult(file)) {
         is FileContent.Binary -> call.respondBytes(c.bytes, ContentType.parse(c.mimeType))
         is FileContent.Directory -> call.respond(c.listing)
@@ -198,10 +256,15 @@ private suspend fun compoundResult(
     wantsMeta: Boolean, wantsContent: Boolean, wantsExists: Boolean, wantsStructure: Boolean,
     project: Project?,
     policy: FileAccessPolicy?,
+    range: FileLineRange? = null,
 ) {
     val effectivePolicy = policy ?: fileMetaPolicyFallback(file)
     val meta = if (wantsMeta) readMetaResult(file, effectivePolicy) else null
-    val content = if (wantsContent) readContentResult(file) else null
+    val content = if (wantsContent) {
+        if (range != null) readTextRangeResult(file, range) else readContentResult(file)
+    } else {
+        null
+    }
     val structure = if (wantsStructure && project != null) readStructureResult(project, file) else null
     val response = FileContentResponse(
         meta = meta,
@@ -222,4 +285,28 @@ private suspend fun compoundResult(
 
 private fun VirtualFile.markdownLanguageTag(): String {
     return extension?.lowercase() ?: fileType.name.lowercase().takeUnless { it == "unknown" }.orEmpty()
+}
+
+private fun Api.Vfs.lineRangeQuery(): LineRangeQuery =
+    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
+
+private fun Api.Project.Root.lineRangeQuery(): LineRangeQuery =
+    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
+
+private fun Api.Project.Root.File.lineRangeQuery(): LineRangeQuery =
+    LineRangeQuery(startLine, endLine, maxLines, aroundLine, radius)
+
+private fun LineRangeQuery.toFileLineRange(): FileLineRange? {
+    if (!isPresent) return null
+    val hasStartEnd = startLine != null && endLine != null && maxLines == null && aroundLine == null && radius == null
+    val hasStartMax = startLine != null && maxLines != null && endLine == null && aroundLine == null && radius == null
+    val hasAround = aroundLine != null && radius != null && startLine == null && endLine == null && maxLines == null
+    return when {
+        hasStartEnd -> FileLineRange.Lines(startLine, endLine)
+        hasStartMax -> FileLineRange.MaxLines(startLine, maxLines)
+        hasAround -> FileLineRange.Around(aroundLine, radius)
+        else -> throw IllegalArgumentException(
+            "Range query must use exactly one of startLine+endLine, startLine+maxLines, or aroundLine+radius",
+        )
+    }
 }

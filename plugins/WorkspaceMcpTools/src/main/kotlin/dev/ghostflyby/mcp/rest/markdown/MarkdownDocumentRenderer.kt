@@ -219,6 +219,9 @@ internal object MarkdownDocumentRenderer {
         append((element["name"] as? JsonPrimitive)?.content.orEmpty())
         val type = (element["type"] as? JsonPrimitive)?.content.orEmpty()
         if (type.isNotBlank()) append(" (").append(type).append(")")
+        val startLine = (element["startLine"] as? JsonPrimitive)?.intOrNull
+        val endLine = (element["endLine"] as? JsonPrimitive)?.intOrNull
+        if (startLine != null && endLine != null) append(" [").append(startLine).append('-').append(endLine).append(']')
         appendLine()
         val children = element["children"] as? JsonArray ?: return
         for (child in children) {

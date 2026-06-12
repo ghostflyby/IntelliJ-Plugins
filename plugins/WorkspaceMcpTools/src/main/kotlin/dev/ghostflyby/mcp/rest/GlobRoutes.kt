@@ -35,7 +35,7 @@ internal data class GlobResult(val paths: List<String>) : TextBody {
     override fun renderTextBody(): String = renderPrefixBlock(paths)
 }
 
-private object GlobResultSerializer : KSerializer<GlobResult> {
+internal object GlobResultSerializer : KSerializer<GlobResult> {
     private val delegate = ListSerializer(String.serializer())
     override val descriptor: SerialDescriptor = delegate.descriptor
     override fun serialize(encoder: Encoder, value: GlobResult) = delegate.serialize(encoder, value.paths)

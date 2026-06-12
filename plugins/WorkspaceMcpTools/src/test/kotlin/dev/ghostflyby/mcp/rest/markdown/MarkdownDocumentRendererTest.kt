@@ -94,12 +94,14 @@ internal class MarkdownDocumentRendererTest {
             listOf(
                 StructureElement(
                     name = "Foo", type = "class",
-                    children = listOf(StructureElement(name = "bar", type = "fun")),
+                    startLine = 2,
+                    endLine = 6,
+                    children = listOf(StructureElement(name = "bar", type = "fun", startLine = 3, endLine = 5)),
                 ),
             ),
         )
         val md = render(AllBlocks("s", null, structure, null, null))
-        assertTrue(md.contains("## Structure\nFoo (class)\n\tbar (fun)\n"), md)
+        assertTrue(md.contains("## Structure\nFoo (class) [2-6]\n\tbar (fun) [3-5]\n"), md)
     }
 
     @Test

@@ -123,9 +123,7 @@ private suspend fun applyCodex(
     for (section in sections) {
         try {
             val fileRelPath =
-                if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else section.filePath
-            if (!isDir && section.filePath != routeAccess.relativePath)
-                throw IllegalArgumentException("Section targets '${section.filePath}' but target is '${routeAccess.relativePath}'")
+                if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else routeAccess.relativePath
             val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
             val target = patchPathFor(access)
@@ -163,9 +161,7 @@ private suspend fun applyGit(
     for (p in patches) {
         val path = p.afterName ?: p.beforeName ?: continue
         try {
-            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, path) else path
-            if (!isDir && path != routeAccess.relativePath)
-                throw IllegalArgumentException("Git patch targets '$path' but target is '${routeAccess.relativePath}'")
+            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, path) else routeAccess.relativePath
             val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
             val target = patchPathFor(access)
@@ -268,6 +264,7 @@ private suspend fun applyFileUpdate(
             val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
             mgr.doPostponedOperationsAndUnblockDocument(doc)
             mgr.commitDocument(doc)
+            fileDocumentManager.saveDocument(doc)
         } else {
             vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
         }

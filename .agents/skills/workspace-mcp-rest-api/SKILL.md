@@ -18,7 +18,8 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 
 ## Operating Rules
 
-- Examples use `curl`, but any HTTP client is supported.
+- Examples use `curl`, but any HTTP client is supported. Prefer existing IDE/MCP read tools when they already provide
+  the needed view; use this REST API when testing, debugging, or documenting REST behavior directly.
 - Almost always inspect response headers together with the body. At minimum check HTTP status, `Content-Type`,
   redirects/errors, and negotiated format. With `curl`, prefer `-i` during exploration.
 - Usually omit `Accept`, or use `Accept: */*`. The default response is optimized for agent and human reading and aligns
@@ -31,12 +32,16 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
   `?force=true`; do not rely on bare presence-only flags such as `?meta`.
 - Discover project and root identifiers before file operations. Start with `/server/info`, `/projects`, then
   `/projects/{projectKey}/roots`.
+- Prefer the narrowest suitable root for the task. A plugin or source-root scope keeps glob and patch targets smaller
+  than the repository root.
 - For writes and patches, treat `force=true` as an explicit override for protected text paths such as ignored files. Do
   not add it by default.
 - URL-encode path segments and query values. `rootId`, `projectKey`, VFS URLs, and relative paths can contain characters
   that need escaping.
 - Read-only exploration should use `GET`; do not use `PUT`, `POST`, `PATCH`, or `DELETE` unless the user clearly asked
   for mutation.
+- For unfamiliar code, use a workflow: glob with `limit=N`, then `meta=true` or `structure=true`, then `content=true`
+  only for files that still need full text.
 
 ## Details
 

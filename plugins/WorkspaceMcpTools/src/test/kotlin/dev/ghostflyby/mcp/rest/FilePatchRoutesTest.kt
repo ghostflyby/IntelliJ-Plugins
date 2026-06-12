@@ -10,10 +10,13 @@ import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import kotlin.io.path.readText
 
 @TestApplication
 internal class FilePatchRoutesTest {
@@ -55,11 +58,15 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+                header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+                setBody(patch)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
             val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
+            Assertions.assertEquals("hello patched", projectPathFixture.get().resolve("plain.txt").readText().trim())
         }
     }
 
@@ -112,7 +119,7 @@ internal class FilePatchRoutesTest {
     }
 
     @Test
-    fun `PATCH refuses section targeting different file`() {
+    fun `PATCH on file target ignores section path`() {
         project
         val key = workspaceProjectKey(project)
 
@@ -127,11 +134,15 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) { setBody(patch) }
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+                header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+                setBody(patch)
+            }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
-            val text = resp.bodyAsText()
-            Assertions.assertTrue(text.contains("other-file.txt"))
-            Assertions.assertTrue(text.contains("failed"))
+            Assertions.assertTrue(json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]!!.jsonArray.isEmpty())
+
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
         }
     }
 
@@ -154,9 +165,38 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello git-patched"""
             val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+                header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `PATCH with git diff format ignores path for file target`() {
+        project
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val diff = """diff --git a/other-file.txt b/other-file.txt
+--- a/other-file.txt
++++ b/other-file.txt
+@@ -1 +1 @@
+-hello sample
++hello git-patched"""
+            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+                accept(ContentType.Application.Json)
+                setBody(diff)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            Assertions.assertTrue(json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]!!.jsonArray.isEmpty())
 
             val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
@@ -266,7 +306,7 @@ deleted file mode 100644
             val patch = """*** Begin Patch
 *** Update File: foo.xml
 @@
--<root/>
+-<foo/>
 +<root><child/></root>
 *** Add File: newfile.txt
 +created under directory
@@ -276,6 +316,31 @@ deleted file mode 100644
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("foo.xml"))
             Assertions.assertTrue(text.contains("newfile.txt"))
+        }
+    }
+
+    @Test
+    fun `PATCH on directory still uses section paths`() {
+        project
+        val key = workspaceProjectKey(project)
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val patch = """*** Begin Patch
+*** Update File: foo.xml
+@@
+-<foo/>
++<root><child/></root>
+*** End Patch"""
+            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val foo = client.get(client.rootPathUrl(key, json, "src/foo.xml"))
+            Assertions.assertEquals("<root><child/></root>", foo.bodyAsText().trim())
+            val bar = client.get(client.rootPathUrl(key, json, "src/bar.xml"))
+            Assertions.assertEquals("<bar/>", bar.bodyAsText().trim())
         }
     }
 
