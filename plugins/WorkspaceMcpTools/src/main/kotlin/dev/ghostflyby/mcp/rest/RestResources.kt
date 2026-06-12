@@ -118,6 +118,13 @@ public object Api {
                 public val relativePath: List<String> = emptyList(),
             ) : ProjectProvider by parent, RootProvider by parent
         }
+        @Serializable
+        @Resource("/navigation/{rootId}/{relativePath...}")
+        public class NavigationPath(
+            public val parent: Project,
+            public override val rootId: String,
+            public val relativePath: List<String> = emptyList(),
+        ) : ProjectProvider by parent, RootProvider
     }
 
     @Serializable
