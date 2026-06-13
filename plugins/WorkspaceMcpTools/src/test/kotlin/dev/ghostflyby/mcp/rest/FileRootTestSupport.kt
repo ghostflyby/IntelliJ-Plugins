@@ -215,7 +215,7 @@ internal fun rootPathUrl(
     return apiUrl(
         Api.FilesEntry.File(
             parent = fileEntry(),
-            relativePath = relativePath.toResourcePathSegments(),
+            path = relativePath.toResourcePathSegments(),
         ),
         queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
     )

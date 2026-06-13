@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.net.URLEncoder
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
@@ -30,6 +31,7 @@ import kotlin.io.path.writeText
 internal class RestSessionRoutesTest {
 
     private val projectPathFixture = tempPathFixture()
+    private val externalPathFixture = tempPathFixture()
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
     private val moduleFixture = projectFixture.moduleFixture(name = "session-test")
@@ -49,8 +51,10 @@ internal class RestSessionRoutesTest {
         globDir.resolve("RootFile.kt").writeText("class RootFile")
         globDir.resolve("RootFile.txt").writeText("plain")
         globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
+        externalPathFixture.get().resolve("external.txt").writeText("external")
         contentRootFixture.get().virtualFile.refresh(false, true)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(projectPathFixture.get())?.refresh(false, true)
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(externalPathFixture.get())?.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -134,6 +138,63 @@ internal class RestSessionRoutesTest {
                 header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, outside.status)
+        }
+    }
+
+    @Test
+    fun `file route reads full vfs url outside session path prefix`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val plainTextUrl = encodedVfsUrl(projectPathFixture.get().resolve("plain.txt"))
+            val response = client.get("/api/v1/files/$plainTextUrl") {
+                header(RestSessionHeader, sessionId)
+            }
+
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals("hello sample", response.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `file route permits vfs url writes only for files in the session project`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val plainTextUrl = encodedVfsUrl(projectPathFixture.get().resolve("plain.txt"))
+            val replaced = client.put("/api/v1/files/$plainTextUrl") {
+                header(RestSessionHeader, sessionId)
+                setBody("changed through project vfs url")
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, replaced.status)
+
+            val read = client.get("/api/v1/files/$plainTextUrl") {
+                header(RestSessionHeader, sessionId)
+            }
+            Assertions.assertEquals("changed through project vfs url", read.bodyAsText().trim())
+
+            val externalUrl = encodedVfsUrl(externalPathFixture.get().resolve("external.txt"))
+            val externalRead = client.get("/api/v1/files/$externalUrl") {
+                header(RestSessionHeader, sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, externalRead.status)
+            Assertions.assertEquals("external", externalRead.bodyAsText().trim())
+
+            val externalWrite = client.put("/api/v1/files/$externalUrl") {
+                header(RestSessionHeader, sessionId)
+                setBody("must not write")
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, externalWrite.status)
         }
     }
 
@@ -326,5 +387,11 @@ internal class RestSessionRoutesTest {
             ?.jsonPrimitive
             ?.content
             ?: error("missing session id")
+    }
+
+    private fun encodedVfsUrl(path: Path): String {
+        val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+            ?: error("missing test file: $path")
+        return URLEncoder.encode(file.url, Charsets.UTF_8).replace("+", "%20")
     }
 }

@@ -71,17 +71,29 @@ internal fun Route.fileRoutes() {
     }
 
     get<Api.FilesEntry.File> { resource ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@get
-        respondSessionFile(
-            call = call,
-            target = target,
-            meta = resource.parent.meta,
-            content = resource.parent.content,
-            exists = resource.parent.exists,
-            structure = resource.parent.structure,
-            rangeQuery = resource.parent,
-        )
+        when (target) {
+            is RestFileRouteTarget.ProjectFile -> respondSessionFile(
+                call = call,
+                target = target.target,
+                meta = resource.parent.meta,
+                content = resource.parent.content,
+                exists = resource.parent.exists,
+                structure = resource.parent.structure,
+                rangeQuery = resource.parent,
+            )
+
+            is RestFileRouteTarget.VirtualFileReadOnly -> respondVirtualFile(
+                call = call,
+                file = target.file,
+                meta = resource.parent.meta,
+                content = resource.parent.content,
+                exists = resource.parent.exists,
+                structure = resource.parent.structure,
+                rangeQuery = resource.parent,
+            )
+        }
     }
 }
 
@@ -105,6 +117,28 @@ internal suspend fun respondSessionFile(
         target.project,
         access.policy,
         rangeQuery,
+    )
+}
+
+internal suspend fun respondVirtualFile(
+    call: ApplicationCall,
+    file: VirtualFile,
+    meta: Boolean = false,
+    content: Boolean = false,
+    exists: Boolean = false,
+    structure: Boolean = false,
+    rangeQuery: FileQuery? = null,
+) {
+    respondFileContent(
+        call,
+        file,
+        meta,
+        content,
+        exists,
+        structure,
+        project = null,
+        policy = fileMetaPolicyFallback(file),
+        rangeQuery = rangeQuery,
     )
 }
 

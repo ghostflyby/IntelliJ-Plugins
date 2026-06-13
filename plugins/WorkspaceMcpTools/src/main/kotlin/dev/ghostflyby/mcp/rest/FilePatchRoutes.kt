@@ -59,7 +59,21 @@ internal fun Route.filePatchRoutes() {
     val sessions: RestSessionService = service()
 
     patch<Api.FilesEntry.File> { resource ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+            is RestFileRouteTarget.ProjectFile -> resolved.target
+            is RestFileRouteTarget.VirtualFileReadOnly -> {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    PatchResponse(
+                        applied = emptyList(),
+                        error = "VFS URL patches are allowed only for files in the session project workspace",
+                    ),
+                )
+                null
+            }
+
+            null -> null
+        }
             ?: return@patch
         handleSessionPatch(
             call,

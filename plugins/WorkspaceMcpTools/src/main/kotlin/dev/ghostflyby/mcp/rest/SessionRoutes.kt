@@ -6,9 +6,14 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.ExposedRoot
+import dev.ghostflyby.mcp.filecontent.findContainingExposedRoot
+import dev.ghostflyby.mcp.filecontent.resolveFileByRawUrlOrNull
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -54,6 +59,11 @@ internal data class RestSessionRouteTarget(
     val record: RestSessionRecord,
 )
 
+internal sealed class RestFileRouteTarget {
+    data class ProjectFile(val target: RestSessionRouteTarget) : RestFileRouteTarget()
+    data class VirtualFileReadOnly(val file: VirtualFile) : RestFileRouteTarget()
+}
+
 internal fun Route.sessionRoutes() {
     val resolver: WorkspaceProjectResolver = service()
     val sessions: RestSessionService = service()
@@ -71,6 +81,38 @@ internal fun Route.sessionRoutes() {
         sessions.delete(resource.sessionId)
         call.respondText("true", ContentType.Text.Plain)
     }
+}
+
+internal suspend fun ApplicationCall.resolveFileRouteTarget(
+    sessions: RestSessionService,
+    resolver: WorkspaceProjectResolver,
+    path: String,
+): RestFileRouteTarget? {
+    if (!path.isFullVfsUrl()) {
+        return resolveSessionRouteTarget(sessions, resolver, path)?.let(RestFileRouteTarget::ProjectFile)
+    }
+    val record = when (val result = sessions.resolveRecord(request.headers[RestSessionHeader])) {
+        is RestSessionRecordResult.Resolved -> result.record
+        is RestSessionRecordResult.NotFound -> {
+            respond(HttpStatusCode.NotFound, RestError(result.message))
+            return null
+        }
+    }
+    val file = resolveFileByRawUrlOrNull(path)
+    if (file == null) {
+        respond(HttpStatusCode.NotFound, RestError("File not found"))
+        return null
+    }
+    val sessionProject = when (val resolved = resolver.resolve(projectKey = record.projectKey)) {
+        is WorkspaceProjectResolution.Resolved -> resolved.project
+        is WorkspaceProjectResolution.Unresolved -> {
+            respond(HttpStatusCode.NotFound, RestError(resolved.message))
+            return null
+        }
+    }
+    return sessionProject.sessionProjectTargetFor(file, record)
+        ?.let(RestFileRouteTarget::ProjectFile)
+        ?: RestFileRouteTarget.VirtualFileReadOnly(file)
 }
 
 internal suspend fun ApplicationCall.resolveSessionRouteTarget(
@@ -118,6 +160,24 @@ internal suspend fun ApplicationCall.resolveSessionRouteTarget(
         }
     }
 }
+
+private suspend fun Project.sessionProjectTargetFor(
+    file: VirtualFile,
+    record: RestSessionRecord,
+): RestSessionRouteTarget? {
+    val root = findContainingExposedRoot(this, file) ?: return null
+    val relativePath = readAction {
+        VfsUtilCore.getRelativePath(file, root.base, '/')
+    } ?: return null
+    return RestSessionRouteTarget(
+        project = this,
+        root = root,
+        relativePath = relativePath,
+        record = record,
+    )
+}
+
+private fun String.isFullVfsUrl(): Boolean = Regex("^[A-Za-z][A-Za-z0-9+.-]*://").containsMatchIn(this)
 
 private fun RestSessionRecord.toResponse(): SessionCreateResponse {
     return SessionCreateResponse(

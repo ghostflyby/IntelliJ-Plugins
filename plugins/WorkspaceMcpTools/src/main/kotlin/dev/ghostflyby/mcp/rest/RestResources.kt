@@ -62,10 +62,10 @@ public object Api {
         public override val radius: Int? = null,
     ) : FileQuery {
         @Serializable
-        @Resource("/{relativePath...}")
+        @Resource("/{path...}")
         public class File(
             public val parent: FilesEntry,
-            public val relativePath: List<String> = emptyList(),
+            public val path: List<String> = emptyList(),
         )
     }
 

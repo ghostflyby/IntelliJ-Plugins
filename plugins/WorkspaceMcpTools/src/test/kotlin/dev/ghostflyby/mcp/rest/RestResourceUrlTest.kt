@@ -62,7 +62,7 @@ internal class RestResourceUrlTest {
             apiUrl(
                 Api.FilesEntry.File(
                     parent = Api.FilesEntry(),
-                    relativePath = listOf("src", "Main.kt"),
+                    path = listOf("src", "Main.kt"),
                 ),
             ),
         )

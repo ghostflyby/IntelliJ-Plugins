@@ -22,7 +22,7 @@ internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
     val sessions: RestSessionService = service()
     put<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@put
         handleSessionPut(
             call,
@@ -31,7 +31,7 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     post<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@post
         handleSessionPost(
             call,
@@ -40,13 +40,32 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     delete<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@delete
         handleSessionDelete(
             call,
             target,
             resource.parent.force,
         )
+    }
+}
+
+private suspend fun ApplicationCall.resolveWritableFileRouteTarget(
+    sessions: RestSessionService,
+    resolver: WorkspaceProjectResolver,
+    path: String,
+): RestSessionRouteTarget? {
+    return when (val target = resolveFileRouteTarget(sessions, resolver, path)) {
+        is RestFileRouteTarget.ProjectFile -> target.target
+        is RestFileRouteTarget.VirtualFileReadOnly -> {
+            respond(
+                HttpStatusCode.Forbidden,
+                mapOf("error" to "VFS URL writes are allowed only for files in the session project workspace"),
+            )
+            null
+        }
+
+        null -> null
     }
 }
 

@@ -14,9 +14,9 @@ X-Ghostflyby-Workspace-Session-Id: <sessionId>
 ## Write Routes
 
 ```text
-PUT    /api/v1/files/{relativePath...}
-POST   /api/v1/files/{relativePath...}
-DELETE /api/v1/files/{relativePath...}
+PUT    /api/v1/files/{path...}
+POST   /api/v1/files/{path...}
+DELETE /api/v1/files/{path...}
 ```
 
 Use `PUT` to create or replace text:
@@ -69,7 +69,7 @@ curl -i -X PUT \
 ## Patch Route
 
 ```text
-PATCH /api/v1/files/{relativePath...}
+PATCH /api/v1/files/{path...}
 ```
 
 The target may be a file or directory. If the target is a file, patch body paths

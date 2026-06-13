@@ -3,8 +3,9 @@
 Status: Implemented.
 
 The REST API uses a short-lived session to bind file operations to a path prefix.
-After a session is created, file routes use only relative paths; the session id is
-sent in `X-Ghostflyby-Workspace-Session-Id`.
+After a session is created, requests send the session id in
+`X-Ghostflyby-Workspace-Session-Id`. File routes accept either paths relative to
+the session prefix or URL-encoded full VFS URLs.
 
 ## Lifecycle
 
@@ -60,15 +61,17 @@ X-Ghostflyby-Workspace-Session-Id: s_8f4d0f8f2d6f4e0aa0d3c7e3c1a2b9c0
 
 ## File Routes
 
-All file route paths are relative to the session path prefix:
+File routes use `{path...}` so callers can pass a relative path or a
+URL-encoded full VFS URL. Other agent-facing routes remain relative to the
+session path prefix:
 
 | Operation | Route |
 |-----------|-------|
-| Read file, directory, metadata, structure, existence | `GET /api/v1/files/{relativePath...}` |
-| Create or replace text | `PUT /api/v1/files/{relativePath...}` |
-| Create only, or create directory with empty body | `POST /api/v1/files/{relativePath...}` |
-| Delete file or empty directory | `DELETE /api/v1/files/{relativePath...}` |
-| Apply Codex or Git patch | `PATCH /api/v1/files/{relativePath...}` |
+| Read file, directory, metadata, structure, existence | `GET /api/v1/files/{path...}` |
+| Create or replace text | `PUT /api/v1/files/{path...}` |
+| Create only, or create directory with empty body | `POST /api/v1/files/{path...}` |
+| Delete file or empty directory | `DELETE /api/v1/files/{path...}` |
+| Apply Codex or Git patch | `PATCH /api/v1/files/{path...}` |
 | Glob under a directory | `GET /api/v1/glob/{relativePath...}?glob=PATTERN` |
 | Text search under a directory | `GET /api/v1/search/text/{relativePath...}?query=TEXT` |
 | Goto/usages/documentation | `POST /api/v1/navigation/{relativePath...}` |
@@ -112,8 +115,9 @@ Request-time validation:
 
 1. Validate `X-Ghostflyby-Workspace-Session-Id`.
 2. Refresh session expiry.
-3. Resolve `{relativePath...}` under the stored path prefix.
-4. Reject paths outside the session prefix or inferred root.
+3. Resolve relative `{path...}` under the stored path prefix; resolve full VFS
+   URLs directly for file reads.
+4. Reject relative paths outside the session prefix or inferred root.
 5. Apply the same read/write policy as existing workspace file access.
 
 ## Examples
@@ -129,6 +133,9 @@ SESSION_ID=$(curl -sS -X POST "$BASE/sessions" \
 
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/plugins/WorkspaceMcpTools/docs/rest-api-session.md?structure=true"
+
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
+  "$BASE/files/file%3A%2F%2F%2FUsers%2Fghostflyby%2Frepos%2Flearn%2FIntelliJ-Plugins%2FREADME.md"
 
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/glob/plugins/WorkspaceMcpTools/src?glob=**/*.kt&limit=50"

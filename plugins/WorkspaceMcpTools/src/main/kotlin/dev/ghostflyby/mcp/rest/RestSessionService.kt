@@ -48,6 +48,11 @@ internal sealed class RestSessionTargetResult {
     data class Forbidden(val message: String) : RestSessionTargetResult()
 }
 
+internal sealed class RestSessionRecordResult {
+    data class Resolved(val record: RestSessionRecord) : RestSessionRecordResult()
+    data class NotFound(val message: String) : RestSessionRecordResult()
+}
+
 @Service(Service.Level.APP)
 internal class RestSessionService {
     private val sessions = ConcurrentHashMap<String, RestSessionRecord>()
@@ -87,18 +92,26 @@ internal class RestSessionService {
 
     internal fun delete(sessionId: String): Boolean = sessions.remove(sessionId) != null
 
-    internal fun resolveTarget(sessionId: String?, relativePath: String): RestSessionTargetResult {
+    internal fun resolveRecord(sessionId: String?): RestSessionRecordResult {
         if (sessionId.isNullOrBlank()) {
-            return RestSessionTargetResult.NotFound("Missing $RestSessionHeader header")
+            return RestSessionRecordResult.NotFound("Missing $RestSessionHeader header")
         }
         val record = sessions[sessionId]
-            ?: return RestSessionTargetResult.NotFound("Session not found")
+            ?: return RestSessionRecordResult.NotFound("Session not found")
         if (record.expiresAt <= clock.instant()) {
             sessions.remove(sessionId)
-            return RestSessionTargetResult.NotFound("Session expired")
+            return RestSessionRecordResult.NotFound("Session expired")
         }
         val refreshed = record.copy(expiresAt = clock.instant().plus(ttl))
         sessions[sessionId] = refreshed
+        return RestSessionRecordResult.Resolved(refreshed)
+    }
+
+    internal fun resolveTarget(sessionId: String?, relativePath: String): RestSessionTargetResult {
+        val refreshed = when (val result = resolveRecord(sessionId)) {
+            is RestSessionRecordResult.Resolved -> result.record
+            is RestSessionRecordResult.NotFound -> return RestSessionTargetResult.NotFound(result.message)
+        }
         val requested = refreshed.pathPrefix.resolve(relativePath).normalizeAbsolute()
         if (!requested.startsWith(refreshed.pathPrefix)) {
             return RestSessionTargetResult.Forbidden("Path is outside the session prefix")

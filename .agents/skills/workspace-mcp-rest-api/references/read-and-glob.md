@@ -11,11 +11,11 @@ X-Ghostflyby-Workspace-Session-Id: <sessionId>
 ## File Read Route
 
 ```text
-GET /api/v1/files/{relativePath...}
+GET /api/v1/files/{path...}
 ```
 
-The path is relative to the session `pathPrefix`. Use explicit boolean query
-values:
+The path can be relative to the session `pathPrefix` or a URL-encoded full VFS
+URL. Use explicit boolean query values:
 
 - `meta=true`
 - `content=true`
