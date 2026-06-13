@@ -42,6 +42,8 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 - For unfamiliar code, use a workflow: glob with `limit=N`, then `meta=true` or `structure=true`, then `content=true`
   only for files that still need full text. After `structure=true`, use the returned line numbers with
   `startLine=N&endLine=M` or `aroundLine=N&radius=M` for targeted reads of specific declarations.
+  Use `/navigation/{rootId}/{path}` with `*** Goto:` / `*** Usages:` / `*** Documentation:` blocks
+  to navigate code structure.
 
 ## Details
 
@@ -54,4 +56,5 @@ common error handling.
   glob queries.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation
 - `references/search.md`: text search via FindModel, context filtering, file glob, occurrence IDs for PATCH follow-up.
+- `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.
   safety.

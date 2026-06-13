@@ -304,3 +304,16 @@ internal fun searchTextUrl(
         },
     )
 }
+internal fun navigationUrl(
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+): String {
+    return apiUrl(
+        Api.Project.NavigationPath(
+            parent = Api.Project(projectKey),
+            rootId = rootId,
+            relativePath = relativePath.toResourcePathSegments(),
+        ),
+    )
+}

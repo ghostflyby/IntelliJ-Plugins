@@ -59,7 +59,7 @@ private data class NavDocumentation(
 
 // -- Parser --
 
-private val NAV_OP = Regex("""^\*\*\* (Goto|Usages|Documentation)""")
+private val NAV_OP = Regex("""^\*\*\* (Goto|Usages|Documentation):""")
 
 private enum class NavOp { Goto, Usages, Documentation }
 
