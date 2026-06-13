@@ -1,6 +1,6 @@
 ---
 name: workspace-mcp-rest-api
-description: Use when calling, testing, debugging, documenting, or generating client requests for the WorkspaceMcpTools REST API exposed by the IntelliJ plugin at /api/v1. Covers endpoint discovery, curl examples, content negotiation, headers, project/root/file/glob/read/write/patch routes, and safe AI usage rules.
+description: Use when calling, testing, debugging, documenting, or generating client requests for the WorkspaceMcpTools REST API exposed by the IntelliJ plugin at /api/v1. Covers endpoint discovery, session headers, curl examples, content negotiation, file/glob/read/write/patch routes, and safe AI usage rules.
 ---
 
 # WorkspaceMcpTools REST API
@@ -29,31 +29,30 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
   exploration.
 - Use explicit boolean query values. Write `?meta=true`, `?content=true`, `?exists=true`, `?structure=true`, and
   `?force=true`; do not rely on bare presence-only flags such as `?meta`.
-- Discover project and root identifiers before file operations. Start with `/server/info`, `/projects`, then
-  `/projects/{projectKey}/roots`.
-- Prefer the narrowest suitable root for the task. A plugin or source-root scope keeps glob and patch targets smaller
-  than the repository root.
+- Create a session before file operations with `POST /sessions` and a `pathPrefix`, then send
+  `X-Ghostflyby-Workspace-Session-Id` on every `/files`, `/glob`, `/search/text`, and `/navigation` request.
+- Prefer the narrowest suitable `pathPrefix` for the task. A plugin or source directory keeps glob and patch targets
+  smaller than the repository root.
 - For writes and patches, treat `force=true` as an explicit override for protected text paths such as ignored files. Do
   not add it by default.
-- URL-encode path segments and query values. `rootId`, `projectKey`, VFS URLs, and relative paths can contain characters
-  that need escaping.
+- URL-encode path segments and query values. Relative paths and query values can contain characters that need escaping.
 - Read-only exploration should use `GET`; do not use `PUT`, `POST`, `PATCH`, or `DELETE` unless the user clearly asked
   for mutation.
 - For unfamiliar code, use a workflow: glob with `limit=N`, then `meta=true` or `structure=true`, then `content=true`
   only for files that still need full text. After `structure=true`, use the returned line numbers with
   `startLine=N&endLine=M` or `aroundLine=N&radius=M` for targeted reads of specific declarations.
-  Use `/navigation/{rootId}/{path}` with `*** Goto:` / `*** Usages:` / `*** Documentation:` blocks
+  Use `/navigation/{path}` with `*** Goto:` / `*** Usages:` / `*** Documentation:` blocks
   to navigate code structure.
 
 ## Details
 
 Load only the reference needed for the task:
 
-`references/negotiation-and-discovery.md`: base URL, headers, content negotiation, server info, projects, roots, and
+`references/negotiation-and-discovery.md`: base URL, session creation, headers, content negotiation, server info, and
 common error handling.
 
-- `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, VFS reads, compound responses, and
-  glob queries.
+- `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, compound responses, and glob
+  queries.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation
 - `references/search.md`: text search via FindModel, context filtering, file glob, occurrence IDs for PATCH follow-up.
 - `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.

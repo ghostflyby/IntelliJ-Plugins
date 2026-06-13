@@ -21,9 +21,9 @@ internal class RestResourceUrlTest {
     }
 
     @Test
-    fun `file resource URL keeps nested root scoped path shape`() {
+    fun `file resource URL keeps short session scoped path shape`() {
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt",
+            "/api/v1/files/src/Main.kt",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt"),
         )
     }
@@ -31,11 +31,11 @@ internal class RestResourceUrlTest {
     @Test
     fun `file resource URL encodes explicit boolean query parameters`() {
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt?meta=true",
+            "/api/v1/files/src/Main.kt?meta=true",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt", meta = true),
         )
         Assertions.assertEquals(
-            "/api/v1/projects/project-key/files/workspace-0/src/Main.kt?force=false",
+            "/api/v1/files/src/Main.kt?force=false",
             rootPathUrl("project-key", "workspace-0", "src/Main.kt", force = false),
         )
     }
@@ -43,12 +43,12 @@ internal class RestResourceUrlTest {
     @Test
     fun `glob resource URL preserves repeated glob query parameters`() {
         val url = globPathUrl("project-key", "workspace-0", "glob", glob = listOf("**/*.kt", "**/*.kts"))
-        Assertions.assertEquals("/api/v1/projects/project-key/glob/workspace-0/glob", Url(url).encodedPath)
+        Assertions.assertEquals("/api/v1/glob/glob", Url(url).encodedPath)
         Assertions.assertEquals(listOf("**/*.kt", "**/*.kts"), Url(url).parameters.getAll("glob"))
     }
 
     @Test
-    fun `session resource URLs keep short path prefix shape`() {
+    fun `session resource URLs keep header scoped short path shape`() {
         Assertions.assertEquals(
             "/api/v1/sessions",
             apiUrl(Api.Sessions()),
@@ -58,37 +58,37 @@ internal class RestResourceUrlTest {
             apiUrl(Api.Sessions.Id(sessionId = "session-id")),
         )
         Assertions.assertEquals(
-            "/api/v1/session/files/src/Main.kt",
+            "/api/v1/files/src/Main.kt",
             apiUrl(
-                Api.Session.FilesEntry.File(
-                    parent = Api.Session.FilesEntry(),
+                Api.FilesEntry.File(
+                    parent = Api.FilesEntry(),
                     relativePath = listOf("src", "Main.kt"),
                 ),
             ),
         )
 
         val globUrl = apiUrl(
-            Api.Session.GlobEntry.Glob(
-                parent = Api.Session.GlobEntry(glob = listOf("**/*.kt")),
+            Api.GlobEntry.Glob(
+                parent = Api.GlobEntry(glob = listOf("**/*.kt")),
                 relativePath = listOf("src"),
             ),
             Parameters.build { append("glob", "**/*.kt") },
         )
-        Assertions.assertEquals("/api/v1/session/glob/src", Url(globUrl).encodedPath)
+        Assertions.assertEquals("/api/v1/glob/src", Url(globUrl).encodedPath)
         Assertions.assertEquals(listOf("**/*.kt"), Url(globUrl).parameters.getAll("glob"))
 
         val searchUrl = apiUrl(
-            Api.Session.SearchTextEntry.SearchText(
-                parent = Api.Session.SearchTextEntry(query = "hello"),
+            Api.SearchTextEntry.SearchText(
+                parent = Api.SearchTextEntry(query = "hello"),
                 relativePath = listOf("src"),
             ),
             Parameters.build { append("query", "hello") },
         )
-        Assertions.assertEquals("/api/v1/session/search/text/src", Url(searchUrl).encodedPath)
+        Assertions.assertEquals("/api/v1/search/text/src", Url(searchUrl).encodedPath)
         Assertions.assertEquals("hello", Url(searchUrl).parameters["query"])
         Assertions.assertEquals(
-            "/api/v1/session/navigation/src/Main.kt",
-            apiUrl(Api.Session.NavigationPath(relativePath = listOf("src", "Main.kt"))),
+            "/api/v1/navigation/src/Main.kt",
+            apiUrl(Api.NavigationPath(relativePath = listOf("src", "Main.kt"))),
         )
     }
 }

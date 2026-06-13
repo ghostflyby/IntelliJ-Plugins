@@ -12,7 +12,6 @@ import dev.ghostflyby.mcp.filecontent.FileContentKind
 import dev.ghostflyby.mcp.filecontent.readGlobResult
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -46,8 +45,9 @@ internal object GlobResultSerializer : KSerializer<GlobResult> {
 
 internal fun Route.globRoutes() {
     val resolver: WorkspaceProjectResolver = service()
+    val sessions: RestSessionService = service()
 
-    get<Api.Project.GlobEntry.Glob> { resource ->
+    get<Api.GlobEntry.Glob> { resource ->
         val patterns = resource.parent.glob
         if (patterns.isEmpty()) {
             call.respond(
@@ -56,48 +56,34 @@ internal fun Route.globRoutes() {
             )
             return@get
         }
-        respondGlob(call, resolver, resource.parent, resource.relativePath.toRoutePath(), patterns)
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@get
+        respondGlob(call, target, resource.parent.limit, patterns)
     }
 }
 
 internal suspend fun respondGlob(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    entry: Api.Project.GlobEntry,
-    relativePath: String,
+    target: RestSessionRouteTarget,
+    limit: Int,
     patterns: List<String>,
 ) {
-    val projectKey = entry.parent.projectKey
-    val rootId = entry.rootId
-    when (val resolved = resolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            val target = rootRouteTarget(resolved.project, rootId, relativePath)
-            if (target == null) {
-                call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
-                return
-            }
-            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            val policy = access.policy
-            if (access.file == null) {
-                call.respond(HttpStatusCode.NotFound, RestError("File not found"))
-                return
-            }
-            if (!policy.canRead(FileContentKind.GLOB)) {
-                call.respond(HttpStatusCode.Forbidden, RestError(policy.reason))
-                return
-            }
-            val paths = try {
-                readGlobResult(access.file, patterns, resolved.project)
-            } catch (error: ContentReadException) {
-                call.respond(HttpStatusCode.BadRequest, RestError(error.message.orEmpty()))
-                return
-            }
-            val limited = if (entry.limit > 0) paths.take(entry.limit) else paths
-            call.respond(GlobResult(limited))
-        }
-
-        is WorkspaceProjectResolution.Unresolved -> {
-            call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
-        }
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
+    val policy = access.policy
+    if (access.file == null) {
+        call.respond(HttpStatusCode.NotFound, RestError("File not found"))
+        return
     }
+    if (!policy.canRead(FileContentKind.GLOB)) {
+        call.respond(HttpStatusCode.Forbidden, RestError(policy.reason))
+        return
+    }
+    val paths = try {
+        readGlobResult(access.file, patterns, target.project)
+    } catch (error: ContentReadException) {
+        call.respond(HttpStatusCode.BadRequest, RestError(error.message.orEmpty()))
+        return
+    }
+    val limited = if (limit > 0) paths.take(limit) else paths
+    call.respond(GlobResult(limited))
 }

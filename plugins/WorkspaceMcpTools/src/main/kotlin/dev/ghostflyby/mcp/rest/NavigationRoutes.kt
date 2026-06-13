@@ -8,13 +8,11 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.request.*
@@ -104,22 +102,21 @@ private fun splitNavigationSections(body: String): List<NavSection> {
 
 internal fun Route.navigationRoutes() {
     val resolver: WorkspaceProjectResolver = service()
+    val sessions: RestSessionService = service()
 
-    post<Api.Project.NavigationPath> { resource: Api.Project.NavigationPath ->
-        handleProjectNavigation(
+    post<Api.NavigationPath> { resource: Api.NavigationPath ->
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@post
+        handleSessionNavigation(
             call,
-            resolver,
-            resource.parent.projectKey,
-            resource.relativePath.toRoutePath(),
+            target,
         )
     }
 }
 
-internal suspend fun handleProjectNavigation(
+internal suspend fun handleSessionNavigation(
     call: io.ktor.server.application.ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    relativePath: String,
+    target: RestSessionRouteTarget,
 ) {
     val body = call.receiveText()
     val sections = splitNavigationSections(body)
@@ -127,31 +124,23 @@ internal suspend fun handleProjectNavigation(
         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No valid navigation sections"))
         return
     }
-    when (val resolved = resolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            val project = resolved.project
-            val gotos = mutableListOf<NavGoto>()
-            val usages = mutableListOf<NavUsages>()
-            val docs = mutableListOf<NavDocumentation>()
-            val failed = mutableListOf<String>()
-            sections.forEach { section ->
-                try {
-                    val range = resolveSelection(project, section.oldLine, section.newLine, relativePath)
-                    when (section.op) {
-                        NavOp.Goto -> gotos += executeGoto(relativePath, range)
-                        NavOp.Usages -> usages += executeUsages(relativePath, range)
-                        NavOp.Documentation -> docs += executeDocumentation(relativePath, range)
-                    }
-                } catch (e: Exception) {
-                    failed += "$relativePath: ${e.message}"
-                }
+    val gotos = mutableListOf<NavGoto>()
+    val usages = mutableListOf<NavUsages>()
+    val docs = mutableListOf<NavDocumentation>()
+    val failed = mutableListOf<String>()
+    sections.forEach { section ->
+        try {
+            val range = resolveSelection(target, section.oldLine, section.newLine)
+            when (section.op) {
+                NavOp.Goto -> gotos += executeGoto(target.relativePath, range)
+                NavOp.Usages -> usages += executeUsages(target.relativePath, range)
+                NavOp.Documentation -> docs += executeDocumentation(target.relativePath, range)
             }
-            call.respond(NavigationResponse(gotos, usages, docs, failed))
+        } catch (e: Exception) {
+            failed += "${target.relativePath}: ${e.message}"
         }
-
-        is WorkspaceProjectResolution.Unresolved ->
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
     }
+    call.respond(NavigationResponse(gotos, usages, docs, failed))
 }
 
 // -- Selection resolution --
@@ -163,15 +152,16 @@ private data class SelectionRange(
 )
 
 private suspend fun resolveSelection(
-    project: Project,
+    target: RestSessionRouteTarget,
     oldLine: String,
     newLine: String,
-    filePath: String,
 ): SelectionRange {
     return readAction {
+        val filePath = target.relativePath
         val vf = com.intellij.openapi.vfs.VirtualFileManager.getInstance()
-            .findFileByNioPath(Path.of(requireNotNull(project.basePath), filePath))
+            .findFileByNioPath(Path.of(target.root.base.path).resolve(filePath))
             ?: throw NoSuchElementException("File not found: $filePath")
+        val project = target.project
         val psiFile = PsiManager.getInstance(project).findFile(vf)
             ?: throw NoSuchElementException("No PSI file for: $filePath")
         val doc = FileDocumentManager.getInstance().getDocument(vf)

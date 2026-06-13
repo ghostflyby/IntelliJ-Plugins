@@ -52,9 +52,10 @@ internal class SearchTextRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(searchTextUrl(key, rootId, "src", query = "hello")) {
+            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -71,9 +72,10 @@ internal class SearchTextRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(searchTextUrl(key, rootId, query = "")) {
+            val response = sessionClient.get(searchTextUrl(key, rootId, query = "")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -88,9 +90,10 @@ internal class SearchTextRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(searchTextUrl(key, rootId, "src", query = "world", fileFilter = "*.kt")) {
+            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "world", fileFilter = "*.kt")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -107,9 +110,10 @@ internal class SearchTextRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(searchTextUrl(key, rootId, "src", query = "class", limit = 1)) {
+            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "class", limit = 1)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -126,9 +130,10 @@ internal class SearchTextRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(searchTextUrl(key, rootId, "src", query = "hello")) {
+            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)

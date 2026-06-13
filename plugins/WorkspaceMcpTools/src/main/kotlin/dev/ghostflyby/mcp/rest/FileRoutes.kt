@@ -44,22 +44,7 @@ private data class FileContentResponse(
 // -- Route registrations --
 internal fun Route.fileRoutes() {
     val resolver: WorkspaceProjectResolver = service()
-    get<Api.Vfs> { resource ->
-        val rawVfsUrl = resource.rawVfsUrl.toRoutePath()
-        val file = resolveFileByRawUrlOrNull(rawVfsUrl)
-        val project = if (file != null && resource.structure)
-            projectForRawVfsUrl(rawVfsUrl, resolver) else null
-        respondFileContent(
-            call,
-            file,
-            resource.meta,
-            resource.content,
-            resource.exists,
-            resource.structure,
-            project,
-            rangeQuery = resource,
-        )
-    }
+    val sessions: RestSessionService = service()
 
     get<Api.Project.Root> { resource ->
         val projectKey = resource.parent.projectKey
@@ -85,65 +70,42 @@ internal fun Route.fileRoutes() {
         }
     }
 
-    get<Api.Project.FilesEntry.File> { resource ->
-        respondProjectRootFile(
-            call,
-            resolver,
-            resource.parent,
-            resource.relativePath.toRoutePath(),
-            resource.parent.meta,
-            resource.parent.content,
-            resource.parent.exists,
-            resource.parent.structure,
+    get<Api.FilesEntry.File> { resource ->
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@get
+        respondSessionFile(
+            call = call,
+            target = target,
+            meta = resource.parent.meta,
+            content = resource.parent.content,
+            exists = resource.parent.exists,
+            structure = resource.parent.structure,
             rangeQuery = resource.parent,
         )
     }
 }
 
-internal suspend fun respondProjectRootFile(
+internal suspend fun respondSessionFile(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    root: Api.Project.FilesEntry,
-    relativePath: String = "",
+    target: RestSessionRouteTarget,
     meta: Boolean = false,
     content: Boolean = false,
     exists: Boolean = false,
     structure: Boolean = false,
     rangeQuery: FileQuery? = null,
 ) {
-    val projectKey = root.parent.projectKey
-    when (val resolved = resolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            val target = rootRouteTarget(resolved.project, root.rootId, relativePath)
-            if (target == null) {
-                call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
-                return
-            }
-            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            respondFileContent(
-                call,
-                access.file,
-                meta,
-                content,
-                exists,
-                structure,
-                resolved.project,
-                access.policy,
-                rangeQuery,
-            )
-        }
-
-        is WorkspaceProjectResolution.Unresolved -> {
-            call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
-        }
-    }
-}
-
-private suspend fun projectForRawVfsUrl(
-    rawVfsUrl: String, resolver: WorkspaceProjectResolver,
-): Project? = when (val r = resolver.resolve(rawVfsUrl = rawVfsUrl)) {
-    is WorkspaceProjectResolution.Resolved -> r.project
-    is WorkspaceProjectResolution.Unresolved -> null
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
+    respondFileContent(
+        call,
+        access.file,
+        meta,
+        content,
+        exists,
+        structure,
+        target.project,
+        access.policy,
+        rangeQuery,
+    )
 }
 
 // -- Response dispatch --

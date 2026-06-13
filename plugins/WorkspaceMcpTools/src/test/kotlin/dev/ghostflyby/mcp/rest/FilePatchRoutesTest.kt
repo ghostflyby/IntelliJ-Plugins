@@ -51,6 +51,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Update File: plain.txt
@@ -58,13 +59,13 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(patch)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
             Assertions.assertEquals("hello patched", projectPathFixture.get().resolve("plain.txt").readText().trim())
         }
@@ -79,16 +80,17 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Add File: patch-new.txt
 +created via patch
 *** End Patch"""
             // Create the parent dir first, then PATCH
-            val resp = client.patch(client.rootPathUrl(key, json, "patch-new.txt")) { setBody(patch) }
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "patch-new.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get(client.rootPathUrl(key, json, "patch-new.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "patch-new.txt"))
             Assertions.assertEquals("created via patch", getResp.bodyAsText().trim())
         }
     }
@@ -102,6 +104,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
             val patch = """*** Begin Patch
@@ -110,10 +113,10 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello root patched
 *** End Patch"""
-            val resp = client.patch(rootPathUrl(key, rootId, "plain.txt")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl(key, rootId, "plain.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get(rootPathUrl(key, rootId, "plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl(key, rootId, "plain.txt"))
             Assertions.assertEquals("hello root patched", getResp.bodyAsText().trim())
         }
     }
@@ -127,6 +130,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Update File: other-file.txt
@@ -134,7 +138,7 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(patch)
             }
@@ -142,7 +146,7 @@ internal class FilePatchRoutesTest {
             val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
             Assertions.assertTrue(failed == null || failed.isEmpty())
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
         }
     }
@@ -158,6 +162,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
 --- a/plain.txt
@@ -165,13 +170,13 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
         }
     }
@@ -185,6 +190,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/other-file.txt b/other-file.txt
 --- a/other-file.txt
@@ -192,7 +198,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 accept(ContentType.Application.Json)
                 setBody(diff)
             }
@@ -200,7 +206,7 @@ internal class FilePatchRoutesTest {
             val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
             Assertions.assertTrue(failed == null || failed.isEmpty())
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
         }
     }
@@ -214,6 +220,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
 --- a/plain.txt
@@ -221,7 +228,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody(diff)
             }
@@ -238,8 +245,9 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody("*** Begin Patch")
             }
@@ -256,6 +264,7 @@ internal class FilePatchRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/newfile.txt b/newfile.txt
 new file mode 100644
@@ -263,7 +272,7 @@ new file mode 100644
 +++ b/newfile.txt
 @@ -0,0 +1 @@
 +created by git patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "newfile.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "newfile.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
@@ -279,6 +288,7 @@ new file mode 100644
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
 deleted file mode 100644
@@ -286,12 +296,12 @@ deleted file mode 100644
 +++ /dev/null
 @@ -1 +0,0 @@
 -hello sample"""
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -304,6 +314,7 @@ deleted file mode 100644
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Update File: foo.xml
@@ -313,7 +324,7 @@ deleted file mode 100644
 *** Add File: newfile.txt
 +created under directory
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("foo.xml"))
@@ -329,6 +340,7 @@ deleted file mode 100644
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Update File: foo.xml
@@ -336,12 +348,12 @@ deleted file mode 100644
 -<foo/>
 +<root><child/></root>
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val foo = client.get(client.rootPathUrl(key, json, "src/foo.xml"))
+            val foo = sessionClient.get(sessionClient.rootPathUrl(key, json, "src/foo.xml"))
             Assertions.assertEquals("<root><child/></root>", foo.bodyAsText().trim())
-            val bar = client.get(client.rootPathUrl(key, json, "src/bar.xml"))
+            val bar = sessionClient.get(sessionClient.rootPathUrl(key, json, "src/bar.xml"))
             Assertions.assertEquals("<bar/>", bar.bodyAsText().trim())
         }
     }
@@ -355,6 +367,7 @@ deleted file mode 100644
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
 *** Update File: nonexistent.xml
@@ -362,7 +375,7 @@ deleted file mode 100644
  -nothing
 +something
 *** End Patch"""
-            val resp = client.patch(client.rootPathUrl(key, json, "src")) { setBody(patch) }
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("failed"))
@@ -378,8 +391,9 @@ deleted file mode 100644
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val resp = client.patch(client.rootPathUrl(key, json, "plain.txt")) {
+            val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 setBody("this is not a patch")
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)

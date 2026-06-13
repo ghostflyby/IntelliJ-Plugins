@@ -48,14 +48,15 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.post(client.rootPathUrl(key, json, "new.txt")) {
+            val response = sessionClient.post(sessionClient.rootPathUrl(key, json, "new.txt")) {
                 setBody("fresh content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
 
             // Verify file exists via GET
-            val getResp = client.get(client.rootPathUrl(key, json, "new.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "new.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, getResp.status)
             Assertions.assertEquals("fresh content", getResp.bodyAsText().trim())
         }
@@ -70,8 +71,9 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.post(client.rootPathUrl(key, json, "newdir")) {
+            val response = sessionClient.post(sessionClient.rootPathUrl(key, json, "newdir")) {
                 setBody("")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -87,9 +89,10 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             // plain.txt exists from blueprint
-            val response = client.post(client.rootPathUrl(key, json, "plain.txt")) {
+            val response = sessionClient.post(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 setBody("overwrite attempt")
             }
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
@@ -107,8 +110,9 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.put(client.rootPathUrl(key, json, "put-created.txt")) {
+            val response = sessionClient.put(sessionClient.rootPathUrl(key, json, "put-created.txt")) {
                 setBody("put content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -124,13 +128,14 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.put(client.rootPathUrl(key, json, "plain.txt")) {
+            val response = sessionClient.put(sessionClient.rootPathUrl(key, json, "plain.txt")) {
                 setBody("replaced content")
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals("replaced content", getResp.bodyAsText().trim())
         }
     }
@@ -144,23 +149,24 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val put = client.put(rootPathUrl(key, rootId, "plain.txt")) {
+            val put = sessionClient.put(rootPathUrl(key, rootId, "plain.txt")) {
                 setBody("root replaced")
             }
             Assertions.assertEquals(HttpStatusCode.OK, put.status)
             Assertions.assertEquals(
                 "root replaced",
-                client.get(rootPathUrl(key, rootId, "plain.txt")).bodyAsText().trim(),
+                sessionClient.get(rootPathUrl(key, rootId, "plain.txt")).bodyAsText().trim(),
             )
 
-            val post = client.post(rootPathUrl(key, rootId, "root-created.txt")) {
+            val post = sessionClient.post(rootPathUrl(key, rootId, "root-created.txt")) {
                 setBody("root created")
             }
             Assertions.assertEquals(HttpStatusCode.Created, post.status)
 
-            val delete = client.delete(rootPathUrl(key, rootId, "root-created.txt"))
+            val delete = sessionClient.delete(rootPathUrl(key, rootId, "root-created.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, delete.status)
         }
     }
@@ -176,12 +182,13 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.delete(client.rootPathUrl(key, json, "plain.txt"))
+            val response = sessionClient.delete(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("true", response.bodyAsText())
 
-            val getResp = client.get(client.rootPathUrl(key, json, "plain.txt"))
+            val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -195,8 +202,9 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.delete(client.rootPathUrl(key, json, "doesnotexist.txt"))
+            val response = sessionClient.delete(sessionClient.rootPathUrl(key, json, "doesnotexist.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -210,8 +218,9 @@ internal class FileWriteRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.delete(client.rootPathUrl(key, json, "src"))
+            val response = sessionClient.delete(sessionClient.rootPathUrl(key, json, "src"))
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
         }
     }

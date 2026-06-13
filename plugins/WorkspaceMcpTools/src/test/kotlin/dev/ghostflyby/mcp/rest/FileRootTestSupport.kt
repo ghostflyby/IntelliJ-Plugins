@@ -1,6 +1,7 @@
 package dev.ghostflyby.mcp.rest
 
 import io.ktor.client.*
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -21,6 +22,28 @@ internal fun HttpResponse.responseContentType(): ContentType? {
 
 internal suspend fun HttpClient.firstWorkspaceRootId(projectKey: String, json: Json): String {
     return workspaceRootId(projectKey, json, index = 0)
+}
+
+internal suspend fun HttpClient.createRestSessionId(pathPrefix: String, json: Json): String {
+    val response = post(apiUrl(Api.Sessions())) {
+        contentType(ContentType.Application.Json)
+        accept(ContentType.Application.Json)
+        setBody("""{"pathPrefix": "$pathPrefix"}""")
+    }
+    return json.parseToJsonElement(response.bodyAsText())
+        .jsonObject["sessionId"]
+        ?.jsonPrimitive
+        ?.content
+        ?: error("missing REST session id")
+}
+
+internal suspend fun HttpClient.withRestSession(pathPrefix: String, json: Json): HttpClient {
+    val sessionId = createRestSessionId(pathPrefix, json)
+    return config {
+        defaultRequest {
+            header(RestSessionHeader, sessionId)
+        }
+    }
 }
 
 internal suspend fun HttpClient.workspaceRootId(projectKey: String, json: Json, index: Int): String {
@@ -190,8 +213,8 @@ internal fun rootPathUrl(
     radius: Int? = null,
 ): String {
     return apiUrl(
-        Api.Project.FilesEntry.File(
-            parent = fileEntry(projectKey, rootId),
+        Api.FilesEntry.File(
+            parent = fileEntry(),
             relativePath = relativePath.toResourcePathSegments(),
         ),
         queryParameters(meta, content, exists, structure, force, startLine, endLine, maxLines, aroundLine, radius),
@@ -206,10 +229,8 @@ internal fun globPathUrl(
     limit: Int = 0,
 ): String {
     return apiUrl(
-        Api.Project.GlobEntry.Glob(
-            parent = Api.Project.GlobEntry(
-                parent = Api.Project(projectKey),
-                rootId = rootId,
+        Api.GlobEntry.Glob(
+            parent = Api.GlobEntry(
                 limit = limit,
                 glob = glob,
             ),
@@ -228,15 +249,7 @@ internal inline fun <reified T : Any> apiUrl(resource: T, query: Parameters = Pa
     return builder.build().fullPath
 }
 
-private fun fileEntry(
-    projectKey: String,
-    rootId: String,
-): Api.Project.FilesEntry {
-    return Api.Project.FilesEntry(
-        parent = Api.Project(projectKey),
-        rootId = rootId,
-    )
-}
+private fun fileEntry(): Api.FilesEntry = Api.FilesEntry()
 
 private fun queryParameters(
     meta: Boolean?,
@@ -279,10 +292,8 @@ internal fun searchTextUrl(
     limit: Int = 100,
 ): String {
     return apiUrl(
-        Api.Project.SearchTextEntry.SearchText(
-            parent = Api.Project.SearchTextEntry(
-                parent = Api.Project(projectKey),
-                rootId = rootId,
+        Api.SearchTextEntry.SearchText(
+            parent = Api.SearchTextEntry(
                 query = query,
                 regex = regex,
                 caseSensitive = caseSensitive,
@@ -310,9 +321,7 @@ internal fun navigationUrl(
     relativePath: String,
 ): String {
     return apiUrl(
-        Api.Project.NavigationPath(
-            parent = Api.Project(projectKey),
-            rootId = rootId,
+        Api.NavigationPath(
             relativePath = relativePath.toResourcePathSegments(),
         ),
     )

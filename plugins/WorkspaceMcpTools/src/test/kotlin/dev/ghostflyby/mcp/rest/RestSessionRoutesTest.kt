@@ -70,8 +70,8 @@ internal class RestSessionRoutesTest {
             Assertions.assertNotNull(parsed["sessionId"]?.jsonPrimitive?.content)
             Assertions.assertEquals(projectPathFixture.get().toString(), parsed["pathPrefix"]?.jsonPrimitive?.content)
             Assertions.assertEquals(project.name, parsed["project"]?.jsonObject?.get("name")?.jsonPrimitive?.content)
-            Assertions.assertNotNull(parsed["project"]?.jsonObject?.get("projectKey")?.jsonPrimitive?.content)
-            Assertions.assertNotNull(parsed["exposedRoot"]?.jsonObject?.get("rootId")?.jsonPrimitive?.content)
+            Assertions.assertFalse(parsed["project"]?.jsonObject?.containsKey("projectKey") == true)
+            Assertions.assertFalse(parsed["exposedRoot"]?.jsonObject?.containsKey("rootId") == true)
         }
     }
 
@@ -85,8 +85,8 @@ internal class RestSessionRoutesTest {
             routing { restApi() }
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
-            val response = client.get("/api/v1/session/files/plain.txt") {
-                header("X-Session-Id", sessionId)
+            val response = client.get("/api/v1/files/plain.txt") {
+                header(RestSessionHeader, sessionId)
             }
 
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -104,8 +104,8 @@ internal class RestSessionRoutesTest {
             routing { restApi() }
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
-            val response = client.get("/api/v1/session/glob/glob?glob=**/*.kt") {
-                header("X-Session-Id", sessionId)
+            val response = client.get("/api/v1/glob/glob?glob=**/*.kt") {
+                header(RestSessionHeader, sessionId)
                 accept(ContentType.Application.Json)
             }
 
@@ -125,15 +125,76 @@ internal class RestSessionRoutesTest {
             routing { restApi() }
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
-            val inside = client.get("/api/v1/session/files/RootFile.txt") {
-                header("X-Session-Id", sessionId)
+            val inside = client.get("/api/v1/files/RootFile.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals(HttpStatusCode.OK, inside.status)
 
-            val outside = client.get("/api/v1/session/files/%2E%2E/plain.txt") {
-                header("X-Session-Id", sessionId)
+            val outside = client.get("/api/v1/files/%2E%2E/plain.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, outside.status)
+        }
+    }
+
+    @Test
+    fun `file route requires valid vendor session header`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val missing = client.get("/api/v1/files/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
+
+            val invalid = client.get("/api/v1/files/plain.txt") {
+                header(RestSessionHeader, "s_missing")
+            }
+            Assertions.assertEquals(HttpStatusCode.NotFound, invalid.status)
+        }
+    }
+
+    @Test
+    fun `deleted session no longer authorizes file routes`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val deleted = client.delete("/api/v1/sessions/$sessionId")
+            Assertions.assertEquals(HttpStatusCode.OK, deleted.status)
+
+            val response = client.get("/api/v1/files/plain.txt") {
+                header(RestSessionHeader, sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
+        }
+    }
+
+    @Test
+    fun `legacy session and raw vfs file routes are not registered`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val sessionPrefix = client.get("/api/v1/session/files/plain.txt") {
+                header(RestSessionHeader, sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.NotFound, sessionPrefix.status)
+
+            val rawVfs = client.get("/api/v1/vfs/file:///tmp/plain.txt") {
+                header(RestSessionHeader, sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.NotFound, rawVfs.status)
         }
     }
 
@@ -147,28 +208,28 @@ internal class RestSessionRoutesTest {
             routing { restApi() }
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
-            val created = client.post("/api/v1/session/files/session-created.txt") {
-                header("X-Session-Id", sessionId)
+            val created = client.post("/api/v1/files/session-created.txt") {
+                header(RestSessionHeader, sessionId)
                 setBody("created through session")
             }
             Assertions.assertEquals(HttpStatusCode.Created, created.status)
 
-            val replaced = client.put("/api/v1/session/files/session-created.txt") {
-                header("X-Session-Id", sessionId)
+            val replaced = client.put("/api/v1/files/session-created.txt") {
+                header(RestSessionHeader, sessionId)
                 setBody("replaced through session")
             }
             Assertions.assertEquals(HttpStatusCode.OK, replaced.status)
-            val read = client.get("/api/v1/session/files/session-created.txt") {
-                header("X-Session-Id", sessionId)
+            val read = client.get("/api/v1/files/session-created.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals("replaced through session", read.bodyAsText().trim())
 
-            val deleted = client.delete("/api/v1/session/files/session-created.txt") {
-                header("X-Session-Id", sessionId)
+            val deleted = client.delete("/api/v1/files/session-created.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals(HttpStatusCode.OK, deleted.status)
-            val missing = client.get("/api/v1/session/files/session-created.txt") {
-                header("X-Session-Id", sessionId)
+            val missing = client.get("/api/v1/files/session-created.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
         }
@@ -190,15 +251,15 @@ internal class RestSessionRoutesTest {
 -hello sample
 +hello session patched
 *** End Patch"""
-            val response = client.patch("/api/v1/session/files/plain.txt") {
-                header("X-Session-Id", sessionId)
+            val response = client.patch("/api/v1/files/plain.txt") {
+                header(RestSessionHeader, sessionId)
                 accept(ContentType.Application.Json)
                 setBody(patch)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
-            val read = client.get("/api/v1/session/files/plain.txt") {
-                header("X-Session-Id", sessionId)
+            val read = client.get("/api/v1/files/plain.txt") {
+                header(RestSessionHeader, sessionId)
             }
             Assertions.assertEquals("hello session patched", read.bodyAsText().trim())
         }
@@ -214,8 +275,8 @@ internal class RestSessionRoutesTest {
             routing { restApi() }
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
-            val response = client.get("/api/v1/session/search/text/glob?query=RootFile&limit=10") {
-                header("X-Session-Id", sessionId)
+            val response = client.get("/api/v1/search/text/glob?query=RootFile&limit=10") {
+                header(RestSessionHeader, sessionId)
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -239,8 +300,8 @@ internal class RestSessionRoutesTest {
 - class RootFile
 + XXXXXXXXXXXXXX
 """
-            val response = client.post("/api/v1/session/navigation/glob/RootFile.kt") {
-                header("X-Session-Id", sessionId)
+            val response = client.post("/api/v1/navigation/glob/RootFile.kt") {
+                header(RestSessionHeader, sessionId)
                 contentType(ContentType.parse("text/x-patch"))
                 accept(ContentType.Application.Json)
                 setBody(body)

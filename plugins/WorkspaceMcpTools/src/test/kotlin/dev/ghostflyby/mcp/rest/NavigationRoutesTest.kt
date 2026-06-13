@@ -48,6 +48,7 @@ internal class NavigationRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Goto:
@@ -55,7 +56,7 @@ internal class NavigationRoutesTest {
 - class Alpha { fun hello() { println("hello world") } }
 + XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 """
-            val response = client.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -72,6 +73,7 @@ internal class NavigationRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Usages:
@@ -79,7 +81,7 @@ internal class NavigationRoutesTest {
 -    fun hello() { println("hello world") }
 +    XXXXXXXXXX
 """
-            val response = client.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -96,6 +98,7 @@ internal class NavigationRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Documentation:
@@ -103,7 +106,7 @@ internal class NavigationRoutesTest {
 - class Alpha { fun hello() { println("hello world") } }
 + XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     """
-            val response = client.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -120,9 +123,10 @@ internal class NavigationRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody("")
                 accept(ContentType.Application.Json)

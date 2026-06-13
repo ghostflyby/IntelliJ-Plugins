@@ -83,8 +83,9 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
+            val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
         }
@@ -99,9 +100,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = true)) {
+                sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = true)) {
                     accept(ContentType.Application.Json)
                 }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -128,9 +130,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = true))
+                sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = true))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
 
@@ -150,9 +153,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = false))
+                sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", meta = false))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
         }
@@ -167,9 +171,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", exists = true))
+                sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt", exists = true))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("true", response.bodyAsText())
         }
@@ -184,9 +189,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "missing.txt", exists = true))
+                sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "missing.txt", exists = true))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("false", response.bodyAsText())
         }
@@ -201,8 +207,9 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "nonexistent.txt"))
+            val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "nonexistent.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -216,12 +223,13 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
+            val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
 
-            val missing = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "not-found.txt"))
+            val missing = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "not-found.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
         }
     }
@@ -233,7 +241,7 @@ internal class RestFileTest {
     }
 
     @Test
-    fun `old file URL without root id no longer resolves project file`() {
+    fun `old project file URL no longer resolves project file`() {
         project
         val key = workspaceProjectKey(project)
 
@@ -244,20 +252,21 @@ internal class RestFileTest {
 
             val response = client.get("/api/v1/projects/$key/files/plain.txt")
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
+            val oldRootPath = client.get("/api/v1/projects/$key/files/workspace-0/plain.txt")
+            Assertions.assertEquals(HttpStatusCode.NotFound, oldRootPath.status)
         }
     }
 
     @Test
-    fun `unknown root id returns 404`() {
+    fun `missing session header returns 404`() {
         project
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
 
-            val response = client.get("/api/v1/projects/$key/files/not-a-root/plain.txt")
+            val response = client.get("/api/v1/files/plain.txt")
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -274,9 +283,8 @@ internal class RestFileTest {
 
             val secondRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())
                 ?: error("second root missing")
-            val secondRootId = client.workspaceRootIdByUrl(key, json, secondRoot.url)
-            val projectRootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(rootPathUrl(key, secondRootId, "second.txt", meta = true)) {
+            val secondRootClient = client.withRestSession(secondRootPathFixture.get().toString(), json)
+            val response = secondRootClient.get(rootPathUrl(key, "ignored", "second.txt", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -284,7 +292,8 @@ internal class RestFileTest {
             val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
 
-            val wrongRoot = client.get(rootPathUrl(key, projectRootId, "second.txt"))
+            val projectRootClient = client.withRestSession(projectPathFixture.get().toString(), json)
+            val wrongRoot = projectRootClient.get(rootPathUrl(key, "ignored", "second.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, wrongRoot.status)
         }
     }
@@ -298,10 +307,11 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(
-                    client.rootPathUrlByRootUrl(
+                sessionClient.get(
+                    sessionClient.rootPathUrlByRootUrl(
                         key,
                         json,
                         projectRootUrl(),
@@ -331,10 +341,11 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
-                client.get(
-                    client.rootPathUrlByRootUrl(
+                sessionClient.get(
+                    sessionClient.rootPathUrlByRootUrl(
                         key,
                         json,
                         projectRootUrl(),
@@ -362,9 +373,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val jsonResponse = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
+            val jsonResponse = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
             ) {
                 accept(ContentType.Application.Json)
             }
@@ -374,8 +386,8 @@ internal class RestFileTest {
             Assertions.assertTrue(elements.isNotEmpty())
             Assertions.assertTrue(elements.hasElementWithLineRange(), jsonResponse.bodyAsText())
 
-            val markdown = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
+            val markdown = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "glob/RootFile.kt", structure = true),
             )
             Assertions.assertEquals(HttpStatusCode.OK, markdown.status)
             Assertions.assertTrue(Regex("""\[\d+-\d+]""").containsMatchIn(markdown.bodyAsText()), markdown.bodyAsText())
@@ -391,20 +403,21 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val byEnd = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 2, endLine = 4),
+            val byEnd = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 2, endLine = 4),
             )
             Assertions.assertEquals(HttpStatusCode.OK, byEnd.status)
             Assertions.assertEquals("two\nthree\nfour", byEnd.bodyAsText())
 
-            val byMax = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 3, maxLines = 2),
+            val byMax = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 3, maxLines = 2),
             )
             Assertions.assertEquals("three\nfour", byMax.bodyAsText())
 
-            val around = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", aroundLine = 3, radius = 1),
+            val around = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", aroundLine = 3, radius = 1),
             )
             Assertions.assertEquals("two\nthree\nfour", around.bodyAsText())
         }
@@ -419,9 +432,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = client.get(
-                client.rootPathUrlByRootUrl(
+            val response = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(
                     key,
                     json,
                     projectRootUrl(),
@@ -452,9 +466,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val exists = client.get(
-                client.rootPathUrlByRootUrl(
+            val exists = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(
                     key,
                     json,
                     projectRootUrl(),
@@ -471,8 +486,8 @@ internal class RestFileTest {
             Assertions.assertEquals("true", existsBody["exists"]?.jsonPrimitive?.content)
             Assertions.assertEquals("one\ntwo", existsBody["content"]?.jsonPrimitive?.content)
 
-            val structure = client.get(
-                client.rootPathUrlByRootUrl(
+            val structure = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(
                     key,
                     json,
                     projectRootUrl(),
@@ -504,9 +519,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val invalidCombination = client.get(
-                client.rootPathUrlByRootUrl(
+            val invalidCombination = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(
                     key,
                     json,
                     projectRootUrl(),
@@ -518,18 +534,18 @@ internal class RestFileTest {
             )
             Assertions.assertEquals(HttpStatusCode.BadRequest, invalidCombination.status)
 
-            val invalidValue = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 0, endLine = 1),
+            val invalidValue = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "range.txt", startLine = 0, endLine = 1),
             )
             Assertions.assertEquals(HttpStatusCode.BadRequest, invalidValue.status)
 
-            val directory = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src", startLine = 1, endLine = 1),
+            val directory = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src", startLine = 1, endLine = 1),
             )
             Assertions.assertEquals(HttpStatusCode.BadRequest, directory.status)
 
-            val binary = client.get(
-                client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "binary.bin", startLine = 1, endLine = 1),
+            val binary = sessionClient.get(
+                sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "binary.bin", startLine = 1, endLine = 1),
             )
             Assertions.assertEquals(HttpStatusCode.BadRequest, binary.status)
         }
@@ -544,9 +560,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("*.kt"))) {
+            val response = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("*.kt"))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -567,9 +584,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt")))
+            val response = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt")))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
 
@@ -587,9 +605,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(
+            val response = sessionClient.get(
                 globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt", "**/*.kts")),
             ) {
                 accept(ContentType.Application.Json)
@@ -611,12 +630,13 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val fileTarget = client.get(globPathUrl(key, rootId, "plain.txt", glob = listOf("*.kt")))
+            val fileTarget = sessionClient.get(globPathUrl(key, rootId, "plain.txt", glob = listOf("*.kt")))
             Assertions.assertEquals(HttpStatusCode.BadRequest, fileTarget.status)
 
-            val invalid = client.get(globPathUrl(key, rootId, "glob", glob = listOf("**foo")))
+            val invalid = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("**foo")))
             Assertions.assertEquals(HttpStatusCode.BadRequest, invalid.status)
         }
     }
@@ -630,9 +650,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("*.txt"))) {
+            val response = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("*.txt"))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -651,9 +672,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt")))
+            val response = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.kt")))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val lines = response.bodyAsText().lines().filter { it.isNotBlank() }
@@ -675,9 +697,10 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.workspaceRootIdByUrl(key, json, projectRootUrl())
-            val response = client.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.*")))
+            val response = sessionClient.get(globPathUrl(key, rootId, "glob", glob = listOf("**/*.*")))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
             val lines = response.bodyAsText().lines().filter { it.isNotBlank() }
@@ -698,13 +721,14 @@ internal class RestFileTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val defaultResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src"))
+            val defaultResponse = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src"))
             Assertions.assertEquals(HttpStatusCode.OK, defaultResponse.status)
             Assertions.assertEquals(TestMarkdownContentType, defaultResponse.responseContentType())
             Assertions.assertTrue(defaultResponse.bodyAsText().lines().any { it.isNotBlank() })
 
-            val jsonResponse = client.get(client.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")) {
+            val jsonResponse = sessionClient.get(sessionClient.rootPathUrlByRootUrl(key, json, projectRootUrl(), "src")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, jsonResponse.status)

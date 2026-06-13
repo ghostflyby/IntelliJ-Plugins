@@ -8,7 +8,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.filecontent.*
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -21,73 +20,43 @@ import io.ktor.server.routing.Route
 
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
-    vfsWriteRoutes()
-    projectWriteRoutes(resolver)
-}
-
-// ── VFS ─────────────────────────────────────────────────────
-private fun Route.vfsWriteRoutes() {
-    put<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, body ->
-            if (file != null) {
-                file.setBinaryContent(body); WriteResult.Replaced(file)
-            } else WriteResult.NotFound
-        }
-    }
-    post<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, _ ->
-            if (file != null) WriteResult.Conflict else WriteResult.NotFound
-        }
-    }
-    delete<Api.Vfs> { resource: Api.Vfs ->
-        vfsExec(call, resource.rawVfsUrl.toRoutePath()) { file, _ -> deleteFileResult(file) }
-    }
-}
-
-// ── Project ─────────────────────────────────────────────────
-private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
-    put<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        handleProjectPut(
+    val sessions: RestSessionService = service()
+    put<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@put
+        handleSessionPut(
             call,
-            resolver,
-            resource.projectKey,
-            resource.parent.rootId,
-            resource.relativePath.toRoutePath(),
+            target,
             resource.parent.force,
         )
     }
-    post<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        handleProjectPost(
+    post<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@post
+        handleSessionPost(
             call,
-            resolver,
-            resource.projectKey,
-            resource.parent.rootId,
-            resource.relativePath.toRoutePath(),
+            target,
             resource.parent.force,
         )
     }
-    delete<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        handleProjectDelete(
+    delete<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@delete
+        handleSessionDelete(
             call,
-            resolver,
-            resource.projectKey,
-            resource.rootId,
-            resource.relativePath.toRoutePath(),
+            target,
             resource.parent.force,
         )
     }
 }
 
 // ── Dispatchers ─────────────────────────────────────────────
-internal suspend fun handleProjectPut(
+internal suspend fun handleSessionPut(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    rootId: String,
-    relativePath: String,
+    target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, project, body, force ->
+    projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
         val file = access.file
@@ -100,15 +69,12 @@ internal suspend fun handleProjectPut(
     }
 }
 
-internal suspend fun handleProjectPost(
+internal suspend fun handleSessionPost(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    rootId: String,
-    relativePath: String,
+    target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, project, body, force ->
+    projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
         val file = access.file
@@ -121,15 +87,12 @@ internal suspend fun handleProjectPost(
     }
 }
 
-internal suspend fun handleProjectDelete(
+internal suspend fun handleSessionDelete(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    rootId: String,
-    relativePath: String,
+    target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, _, _, force ->
+    projectExec(call, target, force) { access, _, _, force ->
         val file = access.file ?: return@projectExec WriteResult.NotFound
         if (!file.isDirectory && file.fileType.isBinary) {
             return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
@@ -139,36 +102,15 @@ internal suspend fun handleProjectDelete(
     }
 }
 
-private suspend fun vfsExec(
-    call: ApplicationCall,
-    rawVfsUrl: String,
-    op: suspend (VirtualFile?, ByteArray) -> WriteResult,
-) {
-    val file = resolveFileByRawUrlOrNull(rawVfsUrl)
-    val body = call.receiveText().toByteArray(Charsets.UTF_8)
-    respondResult(call, op(file, body))
-}
-
 private suspend fun projectExec(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    projectKey: String,
-    rootId: String,
-    relativePath: String,
+    target: RestSessionRouteTarget,
     force: Boolean,
     op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
-    when (val resolved = resolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            val target = call.rootRouteTargetOrNotFound(resolved.project, rootId, relativePath) ?: return
-            val access = resolveProjectFileAccess(resolved.project, target.root, target.relativePath)
-            val body = call.receiveText()
-            respondResult(call, op(access, resolved.project, body, force), force)
-        }
-
-        is WorkspaceProjectResolution.Unresolved ->
-            call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
-    }
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
+    val body = call.receiveText()
+    respondResult(call, op(access, target.project, body, force), force)
 }
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {

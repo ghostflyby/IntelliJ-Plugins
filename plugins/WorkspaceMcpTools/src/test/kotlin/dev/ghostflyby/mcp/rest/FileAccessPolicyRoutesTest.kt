@@ -79,19 +79,20 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val meta = client.get(client.rootPathUrl(key, json, "ignored.generated", meta = true)) {
+            val meta = sessionClient.get(sessionClient.rootPathUrl(key, json, "ignored.generated", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
 
-            val content = client.get(client.rootPathUrl(key, json, "ignored.generated"))
+            val content = sessionClient.get(sessionClient.rootPathUrl(key, json, "ignored.generated"))
             Assertions.assertEquals(HttpStatusCode.OK, content.status)
             Assertions.assertEquals("ignored", content.bodyAsText().trim())
 
-            val structure = client.get(client.rootPathUrl(key, json, "ignored.generated", structure = true))
+            val structure = sessionClient.get(sessionClient.rootPathUrl(key, json, "ignored.generated", structure = true))
             Assertions.assertEquals(HttpStatusCode.OK, structure.status)
         }
     }
@@ -104,13 +105,14 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val denied = client.put(client.rootPathUrl(key, json, "ignored.generated")) {
+            val denied = sessionClient.put(sessionClient.rootPathUrl(key, json, "ignored.generated")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.OK, denied.status)
 
-            val readBack = client.get(client.rootPathUrl(key, json, "ignored.generated"))
+            val readBack = sessionClient.get(sessionClient.rootPathUrl(key, json, "ignored.generated"))
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())
         }
     }
@@ -123,23 +125,24 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val meta = client.get(client.rootPathUrl(key, json, "binary.bin", meta = true)) {
+            val meta = sessionClient.get(sessionClient.rootPathUrl(key, json, "binary.bin", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_BINARY", parsed["classification"]?.jsonPrimitive?.content)
 
-            val put = client.put(client.rootPathUrl(key, json, "binary.bin")) { setBody("nope") }
+            val put = sessionClient.put(sessionClient.rootPathUrl(key, json, "binary.bin")) { setBody("nope") }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, put.status)
 
-            val patch = client.patch(client.rootPathUrl(key, json, "binary.bin")) {
+            val patch = sessionClient.patch(sessionClient.rootPathUrl(key, json, "binary.bin")) {
                 setBody("*** Begin Patch\n*** End Patch")
             }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, patch.status)
 
-            val delete = client.delete(client.rootPathUrl(key, json, "binary.bin"))
+            val delete = sessionClient.delete(sessionClient.rootPathUrl(key, json, "binary.bin"))
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, delete.status)
         }
     }
@@ -152,22 +155,23 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val get = client.get(client.rootPathUrl(key, json, "excluded/hidden.kt"))
+            val get = sessionClient.get(sessionClient.rootPathUrl(key, json, "excluded/hidden.kt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, get.status)
 
-            val put = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt")) {
+            val put = sessionClient.put(sessionClient.rootPathUrl(key, json, "excluded/hidden.kt")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, put.status)
 
-            val explicitFalse = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt", force = false)) {
+            val explicitFalse = sessionClient.put(sessionClient.rootPathUrl(key, json, "excluded/hidden.kt", force = false)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitFalse.status)
             Assertions.assertTrue(explicitFalse.bodyAsText().contains("\"force\":\"false\""))
 
-            val explicitTrue = client.put(client.rootPathUrl(key, json, "excluded/hidden.kt", force = true)) {
+            val explicitTrue = sessionClient.put(sessionClient.rootPathUrl(key, json, "excluded/hidden.kt", force = true)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitTrue.status)
@@ -183,9 +187,10 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val response = client.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"))) {
+            val response = sessionClient.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"))) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -204,9 +209,10 @@ internal class FileAccessPolicyRoutesTest {
             application { installWorkspaceRestContentNegotiation() }
             install(Resources)
             routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val rootId = client.firstWorkspaceRootId(key, json)
-            val limited = client.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"), limit = 2)) {
+            val limited = sessionClient.get(globPathUrl(key, rootId, "", glob = listOf("**/*.kt"), limit = 2)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, limited.status)

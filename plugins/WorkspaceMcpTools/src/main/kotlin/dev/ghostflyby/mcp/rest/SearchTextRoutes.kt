@@ -20,7 +20,7 @@ import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
+import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -58,73 +58,82 @@ private data class SearchTextResponse(
     val hits: List<SearchTextHit> = emptyList(),
 )
 
+internal data class SearchTextOptions(
+    val query: String,
+    val regex: Boolean = false,
+    val caseSensitive: Boolean = true,
+    val wholeWord: Boolean = false,
+    val context: List<String> = listOf("string", "comment", "other"),
+    val fileFilter: String? = null,
+    val limit: Int = 100,
+)
+
 // -- Route registration --
 
 internal fun Route.searchTextRoutes() {
     val resolver: WorkspaceProjectResolver = service()
+    val sessions: RestSessionService = service()
 
-    get<Api.Project.SearchTextEntry.SearchText> { resource ->
+    get<Api.SearchTextEntry.SearchText> { resource ->
         val entry = resource.parent
         val query = entry.query
         if (query.isBlank()) {
             call.respond(HttpStatusCode.BadRequest, RestError("query must not be blank."))
             return@get
         }
-        respondSearchText(call, resolver, entry, resource.relativePath.toRoutePath())
+        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+            ?: return@get
+        respondSearchText(
+            call,
+            target,
+            SearchTextOptions(
+                query = entry.query,
+                regex = entry.regex,
+                caseSensitive = entry.caseSensitive,
+                wholeWord = entry.wholeWord,
+                context = entry.context,
+                fileFilter = entry.fileFilter,
+                limit = entry.limit,
+            ),
+        )
     }
 }
 
 internal suspend fun respondSearchText(
     call: ApplicationCall,
-    resolver: WorkspaceProjectResolver,
-    entry: Api.Project.SearchTextEntry,
-    relativePath: String,
+    target: RestSessionRouteTarget,
+    entry: SearchTextOptions,
 ) {
-    val projectKey = entry.parent.projectKey
-    val rootId = entry.rootId
-    when (val resolved = resolver.resolve(projectKey = projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> {
-            val target = rootRouteTarget(resolved.project, rootId, relativePath)
-            if (target == null) {
-                call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
-                return
-            }
-            val rootDir = target.root.base
-            if (!rootDir.isDirectory) {
-                call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory: ${rootDir.path}"))
-                return
-            }
-            val contextEnum = mapContext(entry.context)
-            if (contextEnum == null) {
-                call.respond(
-                    HttpStatusCode.BadRequest,
-                    RestError("context '${entry.context.joinToString(",")}' is not supported."),
-                )
-                return
-            }
-            val scope = GlobalSearchScopesCore.directoryScope(resolved.project, rootDir, true)
-            val findModel = buildSearchFindModel(entry, contextEnum)
-            findModel.customScope = scope
-            val hits = executeSearch(resolved.project, findModel, entry.limit)
-            call.respond(
-                SearchTextResponse(
-                    query = entry.query,
-                    regex = entry.regex,
-                    caseSensitive = entry.caseSensitive,
-                    wholeWord = entry.wholeWord,
-                    context = entry.context,
-                    fileFilter = entry.fileFilter,
-                    limit = entry.limit,
-                    truncated = hits.size >= entry.limit,
-                    hits = hits,
-                ),
-            )
-        }
-
-        is WorkspaceProjectResolution.Unresolved -> {
-            call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
-        }
+    val rootDir = resolveProjectFileAccess(target.project, target.root, target.relativePath).file
+    if (rootDir?.isDirectory != true) {
+        call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory"))
+        return
     }
+    val contextEnum = mapContext(entry.context)
+    if (contextEnum == null) {
+        call.respond(
+            HttpStatusCode.BadRequest,
+            RestError("context '${entry.context.joinToString(",")}' is not supported."),
+        )
+        return
+    }
+    val scope = GlobalSearchScopesCore.directoryScope(target.project, rootDir, true)
+    val findModel = buildSearchFindModel(entry, contextEnum)
+    findModel.customScope = scope
+    val hits = executeSearch(target.project, findModel, entry.limit)
+    call.respond(
+        SearchTextResponse(
+            query = entry.query,
+            regex = entry.regex,
+            caseSensitive = entry.caseSensitive,
+            wholeWord = entry.wholeWord,
+            context = entry.context,
+            fileFilter = entry.fileFilter,
+            limit = entry.limit,
+            truncated = hits.size >= entry.limit,
+            hits = hits,
+        ),
+    )
 }
 
 // -- Context mapping --
@@ -145,7 +154,7 @@ private fun mapContext(context: List<String>): FindModel.SearchContext? {
 // -- FindModel --
 
 private fun buildSearchFindModel(
-    entry: Api.Project.SearchTextEntry,
+    entry: SearchTextOptions,
     context: FindModel.SearchContext,
 ): FindModel {
     return FindModel().apply {

@@ -13,10 +13,6 @@ public interface ProjectProvider {
     public val projectKey: String
 }
 
-public interface RootProvider {
-    public val rootId: String
-}
-
 public interface FileQuery {
     public val meta: Boolean
     public val content: Boolean
@@ -51,68 +47,66 @@ public object Api {
         )
     }
 
-    public object Session {
+    @Serializable
+    @Resource("/files")
+    public class FilesEntry(
+        public override val meta: Boolean = false,
+        public override val content: Boolean = false,
+        public override val exists: Boolean = false,
+        public override val structure: Boolean = false,
+        public override val force: Boolean = false,
+        public override val startLine: Int? = null,
+        public override val endLine: Int? = null,
+        public override val maxLines: Int? = null,
+        public override val aroundLine: Int? = null,
+        public override val radius: Int? = null,
+    ) : FileQuery {
         @Serializable
-        @Resource("/session/files")
-        public class FilesEntry(
-            public override val meta: Boolean = false,
-            public override val content: Boolean = false,
-            public override val exists: Boolean = false,
-            public override val structure: Boolean = false,
-            public override val force: Boolean = false,
-            public override val startLine: Int? = null,
-            public override val endLine: Int? = null,
-            public override val maxLines: Int? = null,
-            public override val aroundLine: Int? = null,
-            public override val radius: Int? = null,
-        ) : FileQuery {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class File(
-                public val parent: FilesEntry,
-                public val relativePath: List<String> = emptyList(),
-            )
-        }
-
-        @Serializable
-        @Resource("/session/glob")
-        public class GlobEntry(
-            public val limit: Int = 0,
-            public val glob: List<String> = emptyList(),
-        ) {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class Glob(
-                public val parent: GlobEntry,
-                public val relativePath: List<String> = emptyList(),
-            )
-        }
-
-        @Serializable
-        @Resource("/session/search/text")
-        public class SearchTextEntry(
-            public val query: String = "",
-            public val regex: Boolean = false,
-            public val caseSensitive: Boolean = true,
-            public val wholeWord: Boolean = false,
-            public val context: List<String> = listOf("string", "comment", "other"),
-            public val fileFilter: String? = null,
-            public val limit: Int = 100,
-        ) {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class SearchText(
-                public val parent: SearchTextEntry,
-                public val relativePath: List<String> = emptyList(),
-            )
-        }
-
-        @Serializable
-        @Resource("/session/navigation/{relativePath...}")
-        public class NavigationPath(
+        @Resource("/{relativePath...}")
+        public class File(
+            public val parent: FilesEntry,
             public val relativePath: List<String> = emptyList(),
         )
     }
+
+    @Serializable
+    @Resource("/glob")
+    public class GlobEntry(
+        public val limit: Int = 0,
+        public val glob: List<String> = emptyList(),
+    ) {
+        @Serializable
+        @Resource("/{relativePath...}")
+        public class Glob(
+            public val parent: GlobEntry,
+            public val relativePath: List<String> = emptyList(),
+        )
+    }
+
+    @Serializable
+    @Resource("/search/text")
+    public class SearchTextEntry(
+        public val query: String = "",
+        public val regex: Boolean = false,
+        public val caseSensitive: Boolean = true,
+        public val wholeWord: Boolean = false,
+        public val context: List<String> = listOf("string", "comment", "other"),
+        public val fileFilter: String? = null,
+        public val limit: Int = 100,
+    ) {
+        @Serializable
+        @Resource("/{relativePath...}")
+        public class SearchText(
+            public val parent: SearchTextEntry,
+            public val relativePath: List<String> = emptyList(),
+        )
+    }
+
+    @Serializable
+    @Resource("/navigation/{relativePath...}")
+    public class NavigationPath(
+        public val relativePath: List<String> = emptyList(),
+    )
 
     @Serializable
     @Resource("/projects/{projectKey}")
@@ -129,91 +123,7 @@ public object Api {
         @Resource("/roots/{rootId}")
         public class Root(
             public val parent: Project,
-            public override val rootId: String,
-        ) : ProjectProvider by parent, RootProvider
-
-        @Serializable
-        @Resource("/files/{rootId}")
-        public class FilesEntry(
-            public val parent: Project,
-            public override val rootId: String,
-            public override val meta: Boolean = false,
-            public override val content: Boolean = false,
-            public override val exists: Boolean = false,
-            public override val structure: Boolean = false,
-            public override val force: Boolean = false,
-            public override val startLine: Int? = null,
-            public override val endLine: Int? = null,
-            public override val maxLines: Int? = null,
-            public override val aroundLine: Int? = null,
-            public override val radius: Int? = null,
-        ) : ProjectProvider by parent, RootProvider, FileQuery {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class File(
-                public val parent: FilesEntry,
-                public val relativePath: List<String> = emptyList(),
-            ) : ProjectProvider by parent, RootProvider by parent
-        }
-
-        @Serializable
-        @Resource("/glob/{rootId}")
-        public class GlobEntry(
-            public val parent: Project,
-            public override val rootId: String,
-            public val limit: Int = 0,
-            public val glob: List<String> = emptyList(),
-        ) : ProjectProvider by parent, RootProvider {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class Glob(
-                public val parent: GlobEntry,
-                public val relativePath: List<String> = emptyList(),
-            ) : ProjectProvider by parent, RootProvider by parent
-        }
-
-        @Serializable
-        @Resource("/search/text/{rootId}")
-        public class SearchTextEntry(
-            public val parent: Project,
-            public override val rootId: String,
-            public val query: String = "",
-            public val regex: Boolean = false,
-            public val caseSensitive: Boolean = true,
-            public val wholeWord: Boolean = false,
-            public val context: List<String> = listOf("string", "comment", "other"),
-            public val fileFilter: String? = null,
-            public val limit: Int = 100,
-        ) : ProjectProvider by parent, RootProvider {
-            @Serializable
-            @Resource("/{relativePath...}")
-            public class SearchText(
-                public val parent: SearchTextEntry,
-                public val relativePath: List<String> = emptyList(),
-            ) : ProjectProvider by parent, RootProvider by parent
-        }
-        @Serializable
-        @Resource("/navigation/{rootId}/{relativePath...}")
-        public class NavigationPath(
-            public val parent: Project,
-            public override val rootId: String,
-            public val relativePath: List<String> = emptyList(),
-        ) : ProjectProvider by parent, RootProvider
+            public val rootId: String,
+        ) : ProjectProvider by parent
     }
-
-    @Serializable
-    @Resource("/vfs/{rawVfsUrl...}")
-    public class Vfs(
-        public val rawVfsUrl: List<String> = emptyList(),
-        public override val meta: Boolean = false,
-        public override val content: Boolean = false,
-        public override val exists: Boolean = false,
-        public override val structure: Boolean = false,
-        public override val force: Boolean = false,
-        public override val startLine: Int? = null,
-        public override val endLine: Int? = null,
-        public override val maxLines: Int? = null,
-        public override val aroundLine: Int? = null,
-        public override val radius: Int? = null,
-    ) : FileQuery
 }

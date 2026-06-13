@@ -89,7 +89,7 @@ internal class RestSessionService {
 
     internal fun resolveTarget(sessionId: String?, relativePath: String): RestSessionTargetResult {
         if (sessionId.isNullOrBlank()) {
-            return RestSessionTargetResult.NotFound("Missing X-Session-Id header")
+            return RestSessionTargetResult.NotFound("Missing $RestSessionHeader header")
         }
         val record = sessions[sessionId]
             ?: return RestSessionTargetResult.NotFound("Session not found")

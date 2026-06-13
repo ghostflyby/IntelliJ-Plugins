@@ -8,90 +8,64 @@ Default:
 BASE=http://127.0.0.1:63341/api/v1
 ```
 
-The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
+The port can be overridden when the IDE starts with
+`-Ddev.ghostflyby.mcp.workspace.port=<port>`.
 
 ## Headers And Content Negotiation
 
 Examples use `curl`, but any HTTP client can call the API.
 
-Almost always inspect response headers together with the body. Status and `Content-Type` are part of the API result
-because many endpoints negotiate Markdown/plain/JSON output.
-
-Supported negotiated response types:
-
-- `text/markdown`
-- `text/x-markdown`
-- `text/plain`
-- `application/json`
+Almost always inspect response headers together with the body. Status and
+`Content-Type` are part of the API result because many endpoints negotiate
+Markdown/plain/JSON output.
 
 For normal agent or human exploration, omit `Accept`:
 
 ```bash
 curl -i "$BASE/server/info"
-curl -i "$BASE/projects"
-```
-
-`Accept: */*`, `text/plain`, `text/markdown`, and `text/x-markdown` are also valid, but usually not needed:
-
-```bash
-curl -i -H 'Accept: */*' "$BASE/server/info"
-curl -i -H 'Accept: text/markdown' "$BASE/server/info"
-curl -i -H 'Accept: text/plain' "$BASE/projects/missing"
 ```
 
 Use JSON only when a structured consumer needs it:
 
 ```bash
 curl -i -H 'Accept: application/json' "$BASE/projects"
-curl -sS -H 'Accept: application/json' "$BASE/projects" | jq
 ```
 
-JSON responses return the payload directly, not a wrapper. JSON is good for machines, but escaping and nested structure
-make it less ideal for direct agent reading than the default Markdown/plain responses.
+Supported negotiated response types include `text/markdown`, `text/x-markdown`,
+`text/plain`, and `application/json`.
 
-Use `-sS -D -` if you need header capture together with the body:
+## Session Setup
+
+File operations require a session. Create one for the narrowest useful path
+prefix:
 
 ```bash
-curl -sS -D - "$BASE/server/info"
-curl -sS -D - -H 'Accept: application/json' "$BASE/projects"
+SESSION_ID=$(curl -sS -X POST "$BASE/sessions" \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json' \
+  -d '{"pathPrefix": "/Users/ghostflyby/repos/learn/IntelliJ-Plugins"}' \
+  | jq -r .sessionId)
 ```
 
-## Discovery Flow
+Then pass the vendor-scoped session header on every file operation:
 
-1. Server information:
+```bash
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
+  "$BASE/files/README.md?meta=true"
+```
+
+## Diagnostic Discovery
+
+These endpoints remain useful for diagnostics and project metadata, but they are
+not file path locators:
 
 ```bash
 curl -i "$BASE/server/info"
-curl -i -H 'Accept: application/json' "$BASE/server/info"
-```
-
-Response includes `instanceKey` and `version`.
-
-2. Open projects:
-
-```bash
 curl -i "$BASE/projects"
-curl -i -H 'Accept: application/json' "$BASE/projects"
-```
-
-Each project entry includes `projectKey`, `name`, and `basePath`.
-
-3. Project detail:
-
-```bash
 curl -i "$BASE/projects/$PROJECT_KEY"
-curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY"
-```
-
-4. Project roots:
-
-```bash
 curl -i "$BASE/projects/$PROJECT_KEY/roots"
-curl -i -H 'Accept: application/json' "$BASE/projects/$PROJECT_KEY/roots"
+curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID"
 ```
-
-Root entries include `id`, display information, access flags, and URL. Use the root `id` as `ROOT_ID`. Prefer the
-narrowest suitable root for the task, such as a plugin root or source root, before falling back to the repository root.
 
 ## Error Handling
 
@@ -99,22 +73,21 @@ Prefer reading both headers and body:
 
 ```bash
 curl -i "$BASE/projects/missing"
-curl -i -H 'Accept: text/plain' "$BASE/projects/missing"
-curl -i -H 'Accept: application/json' "$BASE/projects/missing"
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" "$BASE/files/missing.txt"
 ```
 
 Typical errors include:
 
-- `400 Bad Request` for malformed glob or patch input
-- `403 Forbidden` for policy failures
-- `404 Not Found` for unresolved project, root, file, or hidden/excluded targets
-- `409 Conflict` for create conflicts and non-empty directory delete
+- `400 Bad Request` for malformed glob, range, search, or patch input
+- `403 Forbidden` for policy failures or paths outside the session prefix
+- `404 Not Found` for missing sessions, files, roots, or hidden/excluded targets
+- `409 Conflict` for ambiguous session creation, create conflicts, and non-empty directory delete
 - `415 Unsupported Media Type` for unsupported binary mutations
 
-## Discovery Checklist
+## Checklist
 
 1. Set `BASE`.
-2. Use `curl -i` or equivalent header capture.
-3. Discover `projectKey`.
-4. Discover `ROOT_ID`, preferring the narrowest suitable root.
+2. Create `SESSION_ID` with `POST /sessions`.
+3. Use `curl -i` or equivalent header capture.
+4. Send `X-Ghostflyby-Workspace-Session-Id` for file operations.
 5. Omit `Accept` unless you need JSON or a specific negotiated format.
