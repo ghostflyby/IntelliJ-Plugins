@@ -53,11 +53,11 @@ internal fun Route.fileRoutes() {
                 val target = rootRouteTarget(resolved.project, resource.rootId)
                 if (target != null) {
                     call.respond(
-                        mapOf(
-                            "id" to resource.rootId,
-                            "displayName" to target.root.displayName,
-                            "kind" to "${target.root.kind}".lowercase(),
-                            "url" to target.root.base.url,
+                        RootDetailResponse(
+                            id = resource.rootId,
+                            displayName = target.root.displayName,
+                            kind = "${target.root.kind}".lowercase(),
+                            url = target.root.base.url,
                         ),
                     )
                 } else {
@@ -96,6 +96,14 @@ internal fun Route.fileRoutes() {
         }
     }
 }
+
+@Serializable
+private data class RootDetailResponse(
+    val id: String,
+    val displayName: String,
+    val kind: String,
+    val url: String,
+)
 
 internal suspend fun respondSessionFile(
     call: ApplicationCall,

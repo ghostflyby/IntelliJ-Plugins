@@ -29,6 +29,12 @@ curl -i -X PUT \
   "$BASE/files/src/Demo.kt"
 ```
 
+Example body:
+
+```text
+uri: file:///workspace/src/Demo.kt
+```
+
 Use `POST` to create only when absent. Empty body creates a directory:
 
 ```bash
@@ -44,12 +50,24 @@ curl -i -X POST \
   "$BASE/files/new-directory"
 ```
 
+Example body:
+
+```text
+uri: file:///workspace/new-directory
+```
+
 Use `DELETE` for files or empty directories:
 
 ```bash
 curl -i -X DELETE \
   -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/notes/today.txt"
+```
+
+Example body:
+
+```text
+true
 ```
 
 ## Force
@@ -65,6 +83,13 @@ curl -i -X PUT \
 ```
 
 `force=false` is explicit false and must not bypass policy.
+
+Example policy failure body:
+
+```text
+Ignored text file requires force=true for writes
+force: false
+```
 
 ## Patch Route
 
@@ -86,6 +111,13 @@ curl -i -X PATCH \
   "$BASE/files/src/Main.kt"
 ```
 
+Example body:
+
+```text
+applied:
+- update src/Main.kt
+```
+
 Git patch format is auto-detected from `diff --git` or `--- `, or explicitly
 selected with `text/x-patch`:
 
@@ -99,6 +131,14 @@ curl -i -X PATCH \
 
 Patch rejects binary targets and respects write policy. Use `force=true` only
 for intentional policy override.
+
+Example partial failure body:
+
+```text
+applied: none
+failed:
+- src/Main.kt: Patch does not apply
+```
 
 ## Edit Session Workflow
 

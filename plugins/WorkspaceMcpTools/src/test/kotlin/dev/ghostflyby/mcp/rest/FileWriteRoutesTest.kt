@@ -54,6 +54,8 @@ internal class FileWriteRoutesTest {
                 setBody("fresh content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            Assertions.assertTrue(response.bodyAsText().startsWith("uri: file://"), response.bodyAsText())
 
             // Verify file exists via GET
             val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "new.txt"))

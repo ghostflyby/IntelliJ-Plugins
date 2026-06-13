@@ -34,6 +34,22 @@ curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/search/text/src/main?query=fun\\s+\\w+\\(&regex=true&context=other"
 ```
 
-Use `Accept: application/json` for structured hits with `filePath`,
-`lineNumber`, `column`, `lineText`, `matchedText`, `startOffset`, `endOffset`,
-and `occurrenceId`.
+Example body:
+
+```markdown
+---
+query: ApplicationCall
+regex: false
+caseSensitive: true
+wholeWord: false
+fileFilter: **/*.kt
+limit: 50
+truncated: false
+hitCount: 1
+---
+## Hits
+plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/FileRoutes.kt:73:14
+  get<Api.FilesEntry.File> { resource ->
+  match: Api.FilesEntry.File
+  occurrenceId: 7f3a0d8c21a4b912
+```

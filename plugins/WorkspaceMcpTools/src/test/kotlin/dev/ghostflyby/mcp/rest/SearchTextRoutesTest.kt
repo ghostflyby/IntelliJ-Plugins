@@ -65,6 +65,27 @@ internal class SearchTextRoutesTest {
     }
 
     @Test
+    fun `search defaults to markdown hit list`() {
+        val key = workspaceProjectKey(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val rootId = client.firstWorkspaceRootId(key, json)
+            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello"))
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            val body = response.bodyAsText()
+            Assertions.assertTrue(body.contains("## Hits"), body)
+            Assertions.assertTrue(body.contains("occurrenceId:"), body)
+            Assertions.assertTrue(body.contains("src/Alpha.kt:1:"), body)
+        }
+    }
+
+    @Test
     fun `search without query returns 400`() {
         val key = workspaceProjectKey(project)
 

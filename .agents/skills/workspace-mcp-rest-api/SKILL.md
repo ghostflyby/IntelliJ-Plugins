@@ -21,12 +21,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 - Examples use `curl`, but any HTTP client is supported.
 - Almost always inspect response headers together with the body. At minimum check HTTP status, `Content-Type`,
   redirects/errors, and negotiated format. With `curl`, prefer `-i` during exploration.
-- Usually omit `Accept`, or use `Accept: */*`. The default response is optimized for agent and human reading and aligns
-  with the Markdown/plain family.
-- Use `Accept: application/json` for structured consumers such as scripts, typed clients, `jq`, and tests. JSON escaping
-  is not the best direct reading format for agents.
-- Explicit `text/plain`, `text/markdown`, and `text/x-markdown` are supported, but usually unnecessary during
-  exploration.
+- The default response is optimized for agent and human reading and aligns with the Markdown/plain family.
 - Use explicit boolean query values. Write `?meta=true`, `?content=true`, `?exists=true`, `?structure=true`, and
   `?force=true`; do not rely on bare presence-only flags such as `?meta`.
 - Create a session before file operations with `POST /sessions` and a `pathPrefix`, then send
@@ -48,7 +43,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 
 Load only the reference needed for the task:
 
-`references/negotiation-and-discovery.md`: base URL, session creation, headers, content negotiation, server info, and
+`references/negotiation-and-discovery.md`: base URL, session creation, headers, response negotiation, server info, and
 common error handling.
 
 - `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, compound responses, and glob

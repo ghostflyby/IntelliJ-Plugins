@@ -169,13 +169,13 @@ internal class FileAccessPolicyRoutesTest {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitFalse.status)
-            Assertions.assertTrue(explicitFalse.bodyAsText().contains("\"force\":\"false\""))
+            Assertions.assertTrue(explicitFalse.bodyAsText().contains("force: false"))
 
             val explicitTrue = sessionClient.put(sessionClient.rootPathUrl(key, json, "excluded/hidden.kt", force = true)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitTrue.status)
-            Assertions.assertTrue(explicitTrue.bodyAsText().contains("\"force\":\"true\""))
+            Assertions.assertTrue(explicitTrue.bodyAsText().contains("force: true"))
         }
     }
 

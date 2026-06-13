@@ -35,6 +35,14 @@ curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/src/Main.kt?content=true"
 ```
 
+Text content returns the file body directly:
+
+```kotlin
+package demo
+
+fun main() = println("hello")
+```
+
 Binary content-only reads return direct bytes with the detected media type.
 
 ## Metadata
@@ -42,10 +50,21 @@ Binary content-only reads return direct bytes with the detected media type.
 ```bash
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/src/Main.kt?meta=true"
+```
 
-curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
-  -H 'Accept: application/json' \
-  "$BASE/files/src/Main.kt?meta=true"
+Example body:
+
+```markdown
+---
+name: Main.kt
+url: file:///workspace/src/Main.kt
+path: /workspace/src/Main.kt
+isDirectory: false
+fileType: Kotlin
+isBinary: false
+classification: WORKSPACE_TEXT
+reason: Workspace text file
+---
 ```
 
 ## Existence
@@ -57,6 +76,12 @@ curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
 
 `exists=true` returns direct `text/plain` `true` or `false`.
 
+Example body:
+
+```text
+true
+```
+
 ## Structure
 
 Use `structure=true` as a lightweight file overview before reading a large file.
@@ -65,6 +90,14 @@ Returned declarations include `startLine` and `endLine` when available.
 ```bash
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/src/Main.kt?structure=true"
+```
+
+Example body:
+
+```markdown
+## Structure
+MainKt (file) [1-8]
+	main (fun) [3-5]
 ```
 
 ## Range And Peek Reads
@@ -85,18 +118,41 @@ curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
 Line numbers are 1-based. Invalid range combinations return `400 Bad Request`.
 Ranged content reads are text-file only.
 
+Example body:
+
+```kotlin
+fun selectedFunction() {
+    println("only this range")
+}
+```
+
 ## Compound Reads
 
 ```bash
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/files/src/Main.kt?meta=true&content=true&structure=true&exists=true"
-curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
-  -H 'Accept: application/json' \
-  "$BASE/files/src/Main.kt?meta=true&content=true"
 ```
 
 Compound responses can include `content`, `contentFormat`, `meta`, `exists`,
 and `structure`.
+
+Example body:
+
+````markdown
+---
+meta:
+  name: Main.kt
+  classification: WORKSPACE_TEXT
+exists: true
+---
+
+```kotlin
+fun main() = println("hello")
+```
+
+## Structure
+main (fun) [1-1]
+````
 
 ## Glob Route
 
@@ -117,8 +173,16 @@ curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
   "$BASE/glob/src?glob=**/*Test.kt"
 ```
 
-Default Markdown/plain fallback renders a prefix block. JSON returns a list of
-relative paths.
+Default Markdown/plain fallback renders a prefix block.
+
+Example body:
+
+```text
+@
+RootFile.kt
+@ nested/
+NestedFile.kt
+```
 
 ## Exploration Workflow
 

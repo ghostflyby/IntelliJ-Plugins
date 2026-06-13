@@ -89,6 +89,8 @@ internal class FilePatchRoutesTest {
             // Create the parent dir first, then PATCH
             val resp = sessionClient.patch(sessionClient.rootPathUrl(key, json, "patch-new.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            Assertions.assertEquals(TestMarkdownContentType, resp.responseContentType())
+            Assertions.assertTrue(resp.bodyAsText().contains("- add patch-new.txt"), resp.bodyAsText())
 
             val getResp = sessionClient.get(sessionClient.rootPathUrl(key, json, "patch-new.txt"))
             Assertions.assertEquals("created via patch", getResp.bodyAsText().trim())
@@ -252,6 +254,8 @@ internal class FilePatchRoutesTest {
                 setBody("*** Begin Patch")
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)
+            Assertions.assertEquals(TestMarkdownContentType, resp.responseContentType())
+            Assertions.assertTrue(resp.bodyAsText().contains("ERROR: Unrecognized patch format"), resp.bodyAsText())
         }
     }
 

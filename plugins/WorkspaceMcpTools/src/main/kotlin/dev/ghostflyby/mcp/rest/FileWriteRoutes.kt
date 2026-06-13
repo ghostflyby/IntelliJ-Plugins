@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.filecontent.*
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -16,6 +17,7 @@ import io.ktor.server.resources.post
 import io.ktor.server.resources.put
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
+import kotlinx.serialization.Serializable
 
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -59,7 +61,7 @@ private suspend fun ApplicationCall.resolveWritableFileRouteTarget(
         is RestFileRouteTarget.VirtualFileReadOnly -> {
             respond(
                 HttpStatusCode.Forbidden,
-                mapOf("error" to "VFS URL writes are allowed only for files in the session project workspace"),
+                RestError("VFS URL writes are allowed only for files in the session project workspace"),
             )
             null
         }
@@ -133,19 +135,40 @@ private suspend fun projectExec(
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {
-        is WriteResult.Created -> call.respond(HttpStatusCode.Created, mapOf("uri" to result.file.url))
-        is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, mapOf("uri" to result.dir.url))
-        is WriteResult.Replaced -> call.respond(HttpStatusCode.OK, mapOf("uri" to result.file.url))
+        is WriteResult.Created -> call.respond(HttpStatusCode.Created, WriteResponse(uri = result.file.url))
+        is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, WriteResponse(uri = result.dir.url))
+        is WriteResult.Replaced -> call.respond(HttpStatusCode.OK, WriteResponse(uri = result.file.url))
         is WriteResult.Deleted -> call.respondText("true", ContentType.Text.Plain)
-        is WriteResult.Conflict -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "Resource already exists"))
-        is WriteResult.NotFound -> call.respond(HttpStatusCode.NotFound, mapOf("error" to "Resource not found"))
-        is WriteResult.NotEmpty -> call.respond(HttpStatusCode.Conflict, mapOf("error" to "Directory not empty"))
-        is WriteResult.Forbidden -> call.respond(
-            HttpStatusCode.Forbidden,
-            mapOf("error" to result.reason, "force" to "$force"),
+        is WriteResult.Conflict -> call.respond(
+            HttpStatusCode.Conflict,
+            WriteResponse(error = "Resource already exists"),
         )
 
-        is WriteResult.Unsupported -> call.respond(HttpStatusCode.UnsupportedMediaType, mapOf("error" to result.reason))
+        is WriteResult.NotFound -> call.respond(HttpStatusCode.NotFound, WriteResponse(error = "Resource not found"))
+        is WriteResult.NotEmpty -> call.respond(HttpStatusCode.Conflict, WriteResponse(error = "Directory not empty"))
+        is WriteResult.Forbidden -> call.respond(
+            HttpStatusCode.Forbidden,
+            WriteResponse(error = result.reason, force = "$force"),
+        )
+
+        is WriteResult.Unsupported -> call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            WriteResponse(error = result.reason),
+        )
+    }
+}
+
+@Serializable
+private data class WriteResponse(
+    val uri: String? = null,
+    val error: String? = null,
+    val force: String? = null,
+) : TextBody {
+    override fun renderTextBody(): String = when {
+        error != null && force != null -> "$error\nforce: $force\n"
+        error != null -> "$error\n"
+        uri != null -> "uri: $uri\n"
+        else -> ""
     }
 }
 

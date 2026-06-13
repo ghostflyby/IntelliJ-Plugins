@@ -21,6 +21,7 @@ import com.intellij.util.Processor
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -56,7 +57,31 @@ private data class SearchTextResponse(
     val limit: Int = 100,
     val truncated: Boolean = false,
     val hits: List<SearchTextHit> = emptyList(),
-)
+) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        appendLine("---")
+        appendLine("query: $query")
+        appendLine("regex: $regex")
+        appendLine("caseSensitive: $caseSensitive")
+        appendLine("wholeWord: $wholeWord")
+        fileFilter?.let { appendLine("fileFilter: $it") }
+        appendLine("limit: $limit")
+        appendLine("truncated: $truncated")
+        appendLine("hitCount: ${hits.size}")
+        appendLine("---")
+        if (hits.isEmpty()) {
+            appendLine("No matches")
+            return@buildString
+        }
+        appendLine("## Hits")
+        hits.forEach { hit ->
+            appendLine("${hit.filePath}:${hit.lineNumber}:${hit.column}")
+            appendLine("  ${hit.lineText}")
+            appendLine("  match: ${hit.matchedText}")
+            appendLine("  occurrenceId: ${hit.occurrenceId}")
+        }
+    }
+}
 
 internal data class SearchTextOptions(
     val query: String,

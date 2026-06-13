@@ -59,9 +59,10 @@ internal class NavigationRoutesTest {
             val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
-                accept(ContentType.Application.Json)
             }
             Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            Assertions.assertTrue(response.bodyAsText().contains("goto: src/Alpha.kt"), response.bodyAsText())
         }
     }
 

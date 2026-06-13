@@ -13,6 +13,7 @@ import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.patch.*
+import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.ApplicationCall
@@ -27,7 +28,28 @@ private data class PatchResponse(
     val applied: List<Map<String, String>>,
     val failed: List<String> = emptyList(),
     val error: String? = null,
-)
+) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        error?.let {
+            appendLine("ERROR: $it")
+            return@buildString
+        }
+        if (applied.isNotEmpty()) {
+            appendLine("applied:")
+            applied.forEach { item ->
+                val path = item["path"].orEmpty()
+                val operation = item["operation"].orEmpty()
+                appendLine("- $operation $path".trimEnd())
+            }
+        } else {
+            appendLine("applied: none")
+        }
+        if (failed.isNotEmpty()) {
+            appendLine("failed:")
+            failed.forEach { appendLine("- $it") }
+        }
+    }
+}
 
 // ── Format detection ───────────────────────────────────────
 

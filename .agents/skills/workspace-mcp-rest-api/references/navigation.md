@@ -43,4 +43,14 @@ curl -i -X POST \
 EOF
 ```
 
-Use `Accept: application/json` for structured output with `{applied, failed}`.
+Example body:
+
+```text
+goto: src/App.kt
+  → file:///workspace/src/UserRepository.kt:42:9
+usages: src/App.kt
+  → file:///workspace/src/App.kt:18:18
+documentation: src/App.kt
+  name: findById
+  Finds a user by id.
+```

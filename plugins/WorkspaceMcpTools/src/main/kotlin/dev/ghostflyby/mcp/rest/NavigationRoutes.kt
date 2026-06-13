@@ -136,7 +136,7 @@ internal suspend fun handleSessionNavigation(
     val body = call.receiveText()
     val sections = splitNavigationSections(body)
     if (sections.isEmpty()) {
-        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No valid navigation sections"))
+        call.respond(HttpStatusCode.BadRequest, RestError("No valid navigation sections"))
         return
     }
     val gotos = mutableListOf<NavGoto>()
