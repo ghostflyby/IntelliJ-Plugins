@@ -6,6 +6,8 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
@@ -46,12 +48,28 @@ internal class RestSessionRoutesTest {
 
     @BeforeEach
     fun refresh() {
+        val nestedRootPath = projectPathFixture.get().resolve("nested-session-root")
+        nestedRootPath.createDirectories()
+        nestedRootPath.resolve("NestedRootFile.kt").writeText("class NestedRootFile")
         val globDir = projectPathFixture.get().resolve("glob")
         globDir.resolve("nested").createDirectories()
         globDir.resolve("RootFile.kt").writeText("class RootFile")
         globDir.resolve("RootFile.txt").writeText("plain")
         globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
         externalPathFixture.get().resolve("external.txt").writeText("external")
+        val nestedRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(nestedRootPath)
+            ?: error("nested root missing")
+        ApplicationManager.getApplication().runWriteAction {
+            val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
+            var committed = false
+            try {
+                model.addContentEntry(nestedRoot).addSourceFolder(nestedRoot, false)
+                model.commit()
+                committed = true
+            } finally {
+                if (!committed) model.dispose()
+            }
+        }
         contentRootFixture.get().virtualFile.refresh(false, true)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(projectPathFixture.get())?.refresh(false, true)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(externalPathFixture.get())?.refresh(false, true)
@@ -76,6 +94,25 @@ internal class RestSessionRoutesTest {
             Assertions.assertEquals(project.name, parsed["project"]?.jsonObject?.get("name")?.jsonPrimitive?.content)
             Assertions.assertFalse(parsed["project"]?.jsonObject?.containsKey("projectKey") == true)
             Assertions.assertFalse(parsed["exposedRoot"]?.jsonObject?.containsKey("rootId") == true)
+        }
+    }
+
+    @Test
+    fun `session creation chooses nested root without same project ambiguity`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val nestedRoot = projectPathFixture.get().resolve("nested-session-root").toString()
+            val response = client.createSession(nestedRoot)
+            Assertions.assertEquals(HttpStatusCode.Created, response.status)
+
+            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            Assertions.assertEquals(nestedRoot, parsed["pathPrefix"]?.jsonPrimitive?.content)
+            Assertions.assertEquals(nestedRoot, parsed["exposedRoot"]?.jsonObject?.get("path")?.jsonPrimitive?.content)
         }
     }
 

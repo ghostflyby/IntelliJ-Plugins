@@ -54,7 +54,7 @@ internal fun HttpClient.rootPathUrl(
     aroundLine: Int? = null,
     radius: Int? = null,
 ): String {
-    return rootPathUrl(
+    return dev.ghostflyby.mcp.rest.rootPathUrl(
         relativePath,
         meta,
         content,

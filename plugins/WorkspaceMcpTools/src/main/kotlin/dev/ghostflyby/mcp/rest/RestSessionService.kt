@@ -59,6 +59,10 @@ internal class RestSessionService {
     private val random = SecureRandom()
     private val ttl: Duration = Duration.ofMinutes(10)
     private val clock: Clock = Clock.systemUTC()
+    private val rootMatchComparator = compareByDescending<RootMatch> { it.relationRank }
+        .thenByDescending { it.depthScore }
+        .thenBy { it.root.base.path }
+        .thenBy { it.projectKey }
 
     internal suspend fun create(pathPrefix: String, projectProvider: WorkspaceProjectProvider): RestSessionCreateResult {
         val normalizedPrefix = normalizeExistingPath(pathPrefix)
@@ -66,10 +70,13 @@ internal class RestSessionService {
         val matches = projectProvider.openProjects()
             .filterNot { it.isDisposed }
             .flatMap { project -> matchingRoots(project, normalizedPrefix) }
-            .sortedWith(compareByDescending<RootMatch> { it.score }.thenBy { it.projectKey })
-        val best = matches.firstOrNull()
+        val bestByProject = matches
+            .sortedWith(rootMatchComparator)
+            .distinctBy { it.projectKey }
+            .sortedWith(rootMatchComparator)
+        val best = bestByProject.firstOrNull()
             ?: return RestSessionCreateResult.Failed("No open IntelliJ project owns path prefix: $pathPrefix")
-        val ambiguous = matches.drop(1).firstOrNull { it.score == best.score }
+        val ambiguous = bestByProject.drop(1).firstOrNull { it.hasSameRankAs(best) }
         if (ambiguous != null) {
             return RestSessionCreateResult.Ambiguous(
                 "Path prefix is ambiguous between '${best.projectKey}' and '${ambiguous.projectKey}'",
@@ -138,7 +145,8 @@ internal class RestSessionService {
                 project = project,
                 projectKey = projectKey,
                 root = root,
-                score = if (ownsPrefix) rootPath.nameCount else prefix.nameCount,
+                relationRank = if (ownsPrefix) 1 else 0,
+                depthScore = if (ownsPrefix) rootPath.nameCount else -rootPath.nameCount,
             )
         }
     }
@@ -161,8 +169,12 @@ internal class RestSessionService {
         val project: Project,
         val projectKey: String,
         val root: ExposedRoot,
-        val score: Int,
-    )
+        val relationRank: Int,
+        val depthScore: Int,
+    ) {
+        fun hasSameRankAs(other: RootMatch): Boolean =
+            relationRank == other.relationRank && depthScore == other.depthScore
+    }
 }
 
 private fun Path.normalizeAbsolute(): Path = toAbsolutePath().normalize()
