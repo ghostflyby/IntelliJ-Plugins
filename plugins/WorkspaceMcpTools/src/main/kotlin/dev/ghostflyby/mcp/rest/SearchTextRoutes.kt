@@ -74,7 +74,7 @@ internal fun Route.searchTextRoutes() {
     }
 }
 
-private suspend fun respondSearchText(
+internal suspend fun respondSearchText(
     call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
     entry: Api.Project.SearchTextEntry,

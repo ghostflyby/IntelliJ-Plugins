@@ -106,40 +106,51 @@ internal fun Route.navigationRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
     post<Api.Project.NavigationPath> { resource: Api.Project.NavigationPath ->
-        val body = call.receiveText()
-        val sections = splitNavigationSections(body)
-        if (sections.isEmpty()) {
-            call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No valid navigation sections"))
-            return@post
-        }
-        val projectKey = resource.parent.projectKey
-        when (val resolved = resolver.resolve(projectKey = projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                val project = resolved.project
-                val gotos = mutableListOf<NavGoto>()
-                val usages = mutableListOf<NavUsages>()
-                val docs = mutableListOf<NavDocumentation>()
-                val failed = mutableListOf<String>()
-                val filePath = resource.relativePath.toRoutePath()
-                sections.forEach { section ->
-                    try {
-                val filePath = resource.relativePath.toRoutePath()
-                val range = resolveSelection(project, section.oldLine, section.newLine, filePath)
-                        when (section.op) {
-                            NavOp.Goto -> gotos += executeGoto(filePath, range)
-                            NavOp.Usages -> usages += executeUsages(filePath, range)
-                            NavOp.Documentation -> docs += executeDocumentation(filePath, range)
-                        }
-                    } catch (e: Exception) {
-                        failed += "$filePath: ${e.message}"
-                    }
-                }
-                call.respond(NavigationResponse(gotos, usages, docs, failed))
-            }
+        handleProjectNavigation(
+            call,
+            resolver,
+            resource.parent.projectKey,
+            resource.relativePath.toRoutePath(),
+        )
+    }
+}
 
-            is WorkspaceProjectResolution.Unresolved ->
-                call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
+internal suspend fun handleProjectNavigation(
+    call: io.ktor.server.application.ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    relativePath: String,
+) {
+    val body = call.receiveText()
+    val sections = splitNavigationSections(body)
+    if (sections.isEmpty()) {
+        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "No valid navigation sections"))
+        return
+    }
+    when (val resolved = resolver.resolve(projectKey = projectKey)) {
+        is WorkspaceProjectResolution.Resolved -> {
+            val project = resolved.project
+            val gotos = mutableListOf<NavGoto>()
+            val usages = mutableListOf<NavUsages>()
+            val docs = mutableListOf<NavDocumentation>()
+            val failed = mutableListOf<String>()
+            sections.forEach { section ->
+                try {
+                    val range = resolveSelection(project, section.oldLine, section.newLine, relativePath)
+                    when (section.op) {
+                        NavOp.Goto -> gotos += executeGoto(relativePath, range)
+                        NavOp.Usages -> usages += executeUsages(relativePath, range)
+                        NavOp.Documentation -> docs += executeDocumentation(relativePath, range)
+                    }
+                } catch (e: Exception) {
+                    failed += "$relativePath: ${e.message}"
+                }
+            }
+            call.respond(NavigationResponse(gotos, usages, docs, failed))
         }
+
+        is WorkspaceProjectResolution.Unresolved ->
+            call.respond(HttpStatusCode.NotFound, mapOf("error" to resolved.message))
     }
 }
 

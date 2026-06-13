@@ -76,5 +76,19 @@ internal class RestResourceUrlTest {
         )
         Assertions.assertEquals("/api/v1/session/glob/src", Url(globUrl).encodedPath)
         Assertions.assertEquals(listOf("**/*.kt"), Url(globUrl).parameters.getAll("glob"))
+
+        val searchUrl = apiUrl(
+            Api.Session.SearchTextEntry.SearchText(
+                parent = Api.Session.SearchTextEntry(query = "hello"),
+                relativePath = listOf("src"),
+            ),
+            Parameters.build { append("query", "hello") },
+        )
+        Assertions.assertEquals("/api/v1/session/search/text/src", Url(searchUrl).encodedPath)
+        Assertions.assertEquals("hello", Url(searchUrl).parameters["query"])
+        Assertions.assertEquals(
+            "/api/v1/session/navigation/src/Main.kt",
+            apiUrl(Api.Session.NavigationPath(relativePath = listOf("src", "Main.kt"))),
+        )
     }
 }

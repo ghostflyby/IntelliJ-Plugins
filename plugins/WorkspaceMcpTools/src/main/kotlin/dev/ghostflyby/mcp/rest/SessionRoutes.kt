@@ -13,7 +13,9 @@ import io.ktor.server.application.*
 import io.ktor.server.request.*
 import io.ktor.server.resources.*
 import io.ktor.server.resources.delete
+import io.ktor.server.resources.patch
 import io.ktor.server.resources.post
+import io.ktor.server.resources.put
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
@@ -95,6 +97,58 @@ internal fun Route.sessionRoutes() {
         )
     }
 
+    put<Api.Session.FilesEntry.File> { resource ->
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@put
+        handleProjectPut(
+            call = call,
+            resolver = resolver,
+            projectKey = target.record.projectKey,
+            rootId = target.record.rootId,
+            relativePath = target.relativePathUnderRoot,
+            force = resource.parent.force,
+        )
+    }
+
+    post<Api.Session.FilesEntry.File> { resource ->
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@post
+        handleProjectPost(
+            call = call,
+            resolver = resolver,
+            projectKey = target.record.projectKey,
+            rootId = target.record.rootId,
+            relativePath = target.relativePathUnderRoot,
+            force = resource.parent.force,
+        )
+    }
+
+    delete<Api.Session.FilesEntry.File> { resource ->
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@delete
+        handleProjectDelete(
+            call = call,
+            resolver = resolver,
+            projectKey = target.record.projectKey,
+            rootId = target.record.rootId,
+            relativePath = target.relativePathUnderRoot,
+            force = resource.parent.force,
+        )
+    }
+
+    patch<Api.Session.FilesEntry.File> { resource ->
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@patch
+        handleProjectPatch(
+            call = call,
+            resolver = resolver,
+            projectKey = target.record.projectKey,
+            rootId = target.record.rootId,
+            relativePath = target.relativePathUnderRoot,
+            force = resource.parent.force,
+        )
+    }
+
     get<Api.Session.GlobEntry.Glob> { resource ->
         val patterns = resource.parent.glob
         if (patterns.isEmpty()) {
@@ -110,6 +164,43 @@ internal fun Route.sessionRoutes() {
             glob = patterns,
         )
         respondGlob(call, resolver, entry, target.relativePathUnderRoot, patterns)
+    }
+
+    get<Api.Session.SearchTextEntry.SearchText> { resource ->
+        val entry = resource.parent
+        if (entry.query.isBlank()) {
+            call.respond(HttpStatusCode.BadRequest, RestError("query must not be blank."))
+            return@get
+        }
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@get
+        respondSearchText(
+            call = call,
+            resolver = resolver,
+            entry = Api.Project.SearchTextEntry(
+                parent = Api.Project(target.record.projectKey),
+                rootId = target.record.rootId,
+                query = entry.query,
+                regex = entry.regex,
+                caseSensitive = entry.caseSensitive,
+                wholeWord = entry.wholeWord,
+                context = entry.context,
+                fileFilter = entry.fileFilter,
+                limit = entry.limit,
+            ),
+            relativePath = target.relativePathUnderRoot,
+        )
+    }
+
+    post<Api.Session.NavigationPath> { resource ->
+        val target = call.resolveSessionTarget(sessions, resource.relativePath.toRoutePath())
+            ?: return@post
+        handleProjectNavigation(
+            call = call,
+            resolver = resolver,
+            projectKey = target.record.projectKey,
+            relativePath = target.relativePathUnderRoot,
+        )
     }
 }
 

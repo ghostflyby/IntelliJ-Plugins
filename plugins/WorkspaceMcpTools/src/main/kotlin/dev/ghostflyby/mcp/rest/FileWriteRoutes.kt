@@ -47,68 +47,98 @@ private fun Route.vfsWriteRoutes() {
 // ── Project ─────────────────────────────────────────────────
 private fun Route.projectWriteRoutes(resolver: WorkspaceProjectResolver) {
     put<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        val force = resource.parent.force
-        projectExec(
+        handleProjectPut(
             call,
             resolver,
             resource.projectKey,
             resource.parent.rootId,
             resource.relativePath.toRoutePath(),
-            force,
-        ) { access, project, body, force ->
-            if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
-            writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
-            val file = access.file
-            if (file != null) {
-                setTextWithPolicy(file, project, body, access.policy, force)
-                WriteResult.Replaced(file)
-            } else {
-                WriteResult.Created(createAndWriteFile(project, access, body))
-            }
-        }
+            resource.parent.force,
+        )
     }
     post<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        val force = resource.parent.force
-        projectExec(
+        handleProjectPost(
             call,
             resolver,
             resource.projectKey,
             resource.parent.rootId,
             resource.relativePath.toRoutePath(),
-            force,
-        ) { access, project, body, force ->
-            if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
-            writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
-            val file = access.file
-            if (file != null) return@projectExec WriteResult.Conflict
-            if (body.isEmpty()) {
-                val dir = createDir(access) ?: return@projectExec WriteResult.Conflict
-                return@projectExec WriteResult.DirCreated(dir)
-            }
-            WriteResult.Created(createAndWriteFile(project, access, body))
-        }
+            resource.parent.force,
+        )
     }
     delete<Api.Project.FilesEntry.File> { resource: Api.Project.FilesEntry.File ->
-        val force = resource.parent.force
-        projectExec(
+        handleProjectDelete(
             call,
             resolver,
             resource.projectKey,
             resource.rootId,
             resource.relativePath.toRoutePath(),
-            force,
-        ) { access, _, _, force ->
-            val file = access.file ?: return@projectExec WriteResult.NotFound
-            if (!file.isDirectory && file.fileType.isBinary) {
-                return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
-            }
-            writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
-            deleteFileResult(file)
-        }
+            resource.parent.force,
+        )
     }
 }
 
 // ── Dispatchers ─────────────────────────────────────────────
+internal suspend fun handleProjectPut(
+    call: ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+    force: Boolean,
+) {
+    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, project, body, force ->
+        if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
+        writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
+        val file = access.file
+        if (file != null) {
+            setTextWithPolicy(file, project, body, access.policy, force)
+            WriteResult.Replaced(file)
+        } else {
+            WriteResult.Created(createAndWriteFile(project, access, body))
+        }
+    }
+}
+
+internal suspend fun handleProjectPost(
+    call: ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+    force: Boolean,
+) {
+    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, project, body, force ->
+        if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
+        writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
+        val file = access.file
+        if (file != null) return@projectExec WriteResult.Conflict
+        if (body.isEmpty()) {
+            val dir = createDir(access) ?: return@projectExec WriteResult.Conflict
+            return@projectExec WriteResult.DirCreated(dir)
+        }
+        WriteResult.Created(createAndWriteFile(project, access, body))
+    }
+}
+
+internal suspend fun handleProjectDelete(
+    call: ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+    force: Boolean,
+) {
+    projectExec(call, resolver, projectKey, rootId, relativePath, force) { access, _, _, force ->
+        val file = access.file ?: return@projectExec WriteResult.NotFound
+        if (!file.isDirectory && file.fileType.isBinary) {
+            return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
+        }
+        writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
+        deleteFileResult(file)
+    }
+}
+
 private suspend fun vfsExec(
     call: ApplicationCall,
     rawVfsUrl: String,

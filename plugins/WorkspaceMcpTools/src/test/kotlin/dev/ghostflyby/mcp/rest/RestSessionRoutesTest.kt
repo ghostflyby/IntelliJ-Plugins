@@ -137,6 +137,118 @@ internal class RestSessionRoutesTest {
         }
     }
 
+    @Test
+    fun `session file write routes create replace and delete relative paths`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val created = client.post("/api/v1/session/files/session-created.txt") {
+                header("X-Session-Id", sessionId)
+                setBody("created through session")
+            }
+            Assertions.assertEquals(HttpStatusCode.Created, created.status)
+
+            val replaced = client.put("/api/v1/session/files/session-created.txt") {
+                header("X-Session-Id", sessionId)
+                setBody("replaced through session")
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, replaced.status)
+            val read = client.get("/api/v1/session/files/session-created.txt") {
+                header("X-Session-Id", sessionId)
+            }
+            Assertions.assertEquals("replaced through session", read.bodyAsText().trim())
+
+            val deleted = client.delete("/api/v1/session/files/session-created.txt") {
+                header("X-Session-Id", sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, deleted.status)
+            val missing = client.get("/api/v1/session/files/session-created.txt") {
+                header("X-Session-Id", sessionId)
+            }
+            Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
+        }
+    }
+
+    @Test
+    fun `session patch route updates relative file target`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val patch = """*** Begin Patch
+*** Update File: plain.txt
+@@
+-hello sample
++hello session patched
+*** End Patch"""
+            val response = client.patch("/api/v1/session/files/plain.txt") {
+                header("X-Session-Id", sessionId)
+                accept(ContentType.Application.Json)
+                setBody(patch)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+
+            val read = client.get("/api/v1/session/files/plain.txt") {
+                header("X-Session-Id", sessionId)
+            }
+            Assertions.assertEquals("hello session patched", read.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `session search text route searches under relative path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val response = client.get("/api/v1/session/search/text/glob?query=RootFile&limit=10") {
+                header("X-Session-Id", sessionId)
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val hits = json.parseToJsonElement(response.bodyAsText()).jsonObject["hits"]!!.jsonArray
+            Assertions.assertTrue(hits.isNotEmpty(), response.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `session navigation route executes against relative path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().toString())
+            val body = """*** Goto:
+@@
+- class RootFile
++ XXXXXXXXXXXXXX
+"""
+            val response = client.post("/api/v1/session/navigation/glob/RootFile.kt") {
+                header("X-Session-Id", sessionId)
+                contentType(ContentType.parse("text/x-patch"))
+                accept(ContentType.Application.Json)
+                setBody(body)
+            }
+            Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+        }
+    }
+
     private suspend fun io.ktor.client.HttpClient.createSession(pathPrefix: String): HttpResponse {
         return post("/api/v1/sessions") {
             contentType(ContentType.Application.Json)

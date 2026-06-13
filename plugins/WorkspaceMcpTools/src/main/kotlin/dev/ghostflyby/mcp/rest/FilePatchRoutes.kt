@@ -59,49 +59,64 @@ internal fun Route.filePatchRoutes() {
     val resolver: WorkspaceProjectResolver = service()
 
     patch<Api.Project.FilesEntry.File> { resource ->
-        val projectKey = resource.projectKey
-        when (val resolved = resolver.resolve(projectKey = projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                val project = resolved.project
-                val relativePath = resource.relativePath.toRoutePath()
-                val target = call.rootRouteTargetOrNotFound(project, resource.rootId, relativePath)
-                    ?: return@patch
-                val access = resolveProjectFileAccess(project, target.root, target.relativePath)
-                val force = resource.parent.force
-                if (access.targetIsBinary) {
-                    call.respond(
-                        HttpStatusCode.UnsupportedMediaType,
-                        PatchResponse(applied = emptyList(), error = "Binary patches are not supported"),
-                    )
-                    return@patch
-                }
-                if (access.file?.isDirectory != true && !access.policy.canWrite(FileContentKind.PATCH, force)) {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        PatchResponse(applied = emptyList(), error = access.policy.reason),
-                    )
-                    return@patch
-                }
-                val targetFile = access.file
-                val isDir = targetFile?.isDirectory == true
-                val body = call.receiveText()
-                when (val format = detectFormat(body, call.request.contentType())) {
-                    is PatchFormat.Unknown -> call.respond(
-                        HttpStatusCode.BadRequest,
-                        PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
-                    )
+        handleProjectPatch(
+            call,
+            resolver,
+            resource.projectKey,
+            resource.rootId,
+            resource.relativePath.toRoutePath(),
+            resource.parent.force,
+        )
+    }
+}
 
-                    is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.sections, call)
-                    is PatchFormat.Git -> applyGit(project, access, isDir, force, format.patches, call)
-                }
-            }
-
-            is WorkspaceProjectResolution.Unresolved ->
+internal suspend fun handleProjectPatch(
+    call: io.ktor.server.application.ApplicationCall,
+    resolver: WorkspaceProjectResolver,
+    projectKey: String,
+    rootId: String,
+    relativePath: String,
+    force: Boolean,
+) {
+    when (val resolved = resolver.resolve(projectKey = projectKey)) {
+        is WorkspaceProjectResolution.Resolved -> {
+            val project = resolved.project
+            val target = call.rootRouteTargetOrNotFound(project, rootId, relativePath)
+                ?: return
+            val access = resolveProjectFileAccess(project, target.root, target.relativePath)
+            if (access.targetIsBinary) {
                 call.respond(
-                    HttpStatusCode.BadRequest,
-                    PatchResponse(applied = emptyList(), failed = listOf(resolved.message)),
+                    HttpStatusCode.UnsupportedMediaType,
+                    PatchResponse(applied = emptyList(), error = "Binary patches are not supported"),
                 )
+                return
+            }
+            if (access.file?.isDirectory != true && !access.policy.canWrite(FileContentKind.PATCH, force)) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    PatchResponse(applied = emptyList(), error = access.policy.reason),
+                )
+                return
+            }
+            val targetFile = access.file
+            val isDir = targetFile?.isDirectory == true
+            val body = call.receiveText()
+            when (val format = detectFormat(body, call.request.contentType())) {
+                is PatchFormat.Unknown -> call.respond(
+                    HttpStatusCode.BadRequest,
+                    PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
+                )
+
+                is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.sections, call)
+                is PatchFormat.Git -> applyGit(project, access, isDir, force, format.patches, call)
+            }
         }
+
+        is WorkspaceProjectResolution.Unresolved ->
+            call.respond(
+                HttpStatusCode.BadRequest,
+                PatchResponse(applied = emptyList(), failed = listOf(resolved.message)),
+            )
     }
 }
 

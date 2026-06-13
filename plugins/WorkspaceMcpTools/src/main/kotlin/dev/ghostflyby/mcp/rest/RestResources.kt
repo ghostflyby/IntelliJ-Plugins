@@ -87,6 +87,31 @@ public object Api {
                 public val relativePath: List<String> = emptyList(),
             )
         }
+
+        @Serializable
+        @Resource("/session/search/text")
+        public class SearchTextEntry(
+            public val query: String = "",
+            public val regex: Boolean = false,
+            public val caseSensitive: Boolean = true,
+            public val wholeWord: Boolean = false,
+            public val context: List<String> = listOf("string", "comment", "other"),
+            public val fileFilter: String? = null,
+            public val limit: Int = 100,
+        ) {
+            @Serializable
+            @Resource("/{relativePath...}")
+            public class SearchText(
+                public val parent: SearchTextEntry,
+                public val relativePath: List<String> = emptyList(),
+            )
+        }
+
+        @Serializable
+        @Resource("/session/navigation/{relativePath...}")
+        public class NavigationPath(
+            public val relativePath: List<String> = emptyList(),
+        )
     }
 
     @Serializable
