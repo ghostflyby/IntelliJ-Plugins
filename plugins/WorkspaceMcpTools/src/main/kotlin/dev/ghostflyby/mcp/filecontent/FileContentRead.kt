@@ -72,7 +72,7 @@ private val documentCache = object : LinkedHashMap<String, Document>(64, 0.75f, 
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Document>): Boolean = size > 64
 }
 
-private fun getOrCreateDocument(file: VirtualFile): Document? {
+internal fun getOrCreateDocument(file: VirtualFile): Document? {
     val url = file.url
     synchronized(documentCache) { documentCache[url] }?.let { return it }
     val doc = FileDocumentManager.getInstance().getDocument(file) ?: return null
@@ -242,7 +242,7 @@ internal suspend fun readStructureResult(
     project: Project,
     file: VirtualFile,
 ): FileStructure {
-    val document = readAction { FileDocumentManager.getInstance().getDocument(file) }
+    val document = readAction { getOrCreateDocument(file) }
         ?: return FileStructure(emptyList())
     val elements = readAction {
         val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList<StructureElement>()

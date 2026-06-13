@@ -5,12 +5,13 @@ Load `negotiation-and-discovery.md` first if `BASE` or `SESSION_ID` are not know
 ## Route
 
 ```text
-POST /api/v1/navigation/{relativePath...}
+POST /api/v1/navigation/{path...}
 X-Ghostflyby-Workspace-Session-Id: <sessionId>
 Content-Type: text/x-patch
 ```
 
-The tailcard path locates the source file relative to the session `pathPrefix`.
+The tailcard path locates the source file. It can be relative to the session
+`pathPrefix` or a URL-encoded full VFS URL.
 The body uses the same `@@` hunk format as `/files` PATCH to select a text
 target.
 

@@ -120,6 +120,28 @@ internal class RestSessionRoutesTest {
     }
 
     @Test
+    fun `session glob reads full vfs url outside session path prefix`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val globUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob"))
+            val response = client.get("/api/v1/glob/$globUrl?glob=**/*.kt") {
+                header(RestSessionHeader, sessionId)
+                accept(ContentType.Application.Json)
+            }
+
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val paths = json.parseToJsonElement(response.bodyAsText()).jsonArray.map { it.jsonPrimitive.content }
+            Assertions.assertEquals(listOf("RootFile.kt", "nested/NestedFile.kt"), paths)
+        }
+    }
+
+    @Test
     fun `session rejects paths outside path prefix`() {
         project
 
@@ -347,6 +369,27 @@ internal class RestSessionRoutesTest {
     }
 
     @Test
+    fun `session search text route accepts project vfs url path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val globUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob"))
+            val response = client.get("/api/v1/search/text/$globUrl?query=RootFile&limit=10") {
+                header(RestSessionHeader, sessionId)
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val hits = json.parseToJsonElement(response.bodyAsText()).jsonObject["hits"]!!.jsonArray
+            Assertions.assertTrue(hits.isNotEmpty(), response.bodyAsText())
+        }
+    }
+
+    @Test
     fun `session navigation route executes against relative path`() {
         project
 
@@ -362,6 +405,32 @@ internal class RestSessionRoutesTest {
 + XXXXXXXXXXXXXX
 """
             val response = client.post("/api/v1/navigation/glob/RootFile.kt") {
+                header(RestSessionHeader, sessionId)
+                contentType(ContentType.parse("text/x-patch"))
+                accept(ContentType.Application.Json)
+                setBody(body)
+            }
+            Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `session navigation route accepts project vfs url path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val rootFileUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob/RootFile.kt"))
+            val body = """*** Goto:
+@@
+- class RootFile
++ XXXXXXXXXXXXXX
+"""
+            val response = client.post("/api/v1/navigation/$rootFileUrl") {
                 header(RestSessionHeader, sessionId)
                 contentType(ContentType.parse("text/x-patch"))
                 accept(ContentType.Application.Json)

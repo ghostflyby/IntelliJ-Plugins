@@ -7,11 +7,15 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.*
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiNamedElement
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
+import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -20,7 +24,6 @@ import io.ktor.server.resources.post
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
-import java.nio.file.Path
 
 @Serializable
 private data class NavTarget(
@@ -105,7 +108,19 @@ internal fun Route.navigationRoutes() {
     val sessions: RestSessionService = service()
 
     post<Api.NavigationPath> { resource: Api.NavigationPath ->
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target =
+            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+                is RestFileRouteTarget.ProjectFile -> resolved.target
+                is RestFileRouteTarget.VirtualFileReadOnly -> {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        RestError("Navigation requires a file in the session project workspace"),
+                    )
+                    null
+                }
+
+                null -> null
+            }
             ?: return@post
         handleSessionNavigation(
             call,
@@ -156,15 +171,15 @@ private suspend fun resolveSelection(
     oldLine: String,
     newLine: String,
 ): SelectionRange {
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
     return readAction {
         val filePath = target.relativePath
-        val vf = com.intellij.openapi.vfs.VirtualFileManager.getInstance()
-            .findFileByNioPath(Path.of(target.root.base.path).resolve(filePath))
+        val vf = access.file
             ?: throw NoSuchElementException("File not found: $filePath")
         val project = target.project
         val psiFile = PsiManager.getInstance(project).findFile(vf)
             ?: throw NoSuchElementException("No PSI file for: $filePath")
-        val doc = FileDocumentManager.getInstance().getDocument(vf)
+        val doc = getOrCreateDocument(vf)
             ?: throw NoSuchElementException("No document for: $filePath")
         val oldIdx = doc.immutableCharSequence.indexOf(oldLine)
         if (oldIdx < 0) throw NoSuchElementException("Old line not found in document")
@@ -187,7 +202,7 @@ private suspend fun executeGoto(
 
     val project = range.psiFile.project
     // path 1: GotoDeclarationHandler
-        val gotoDoc = PsiDocumentManager.getInstance(project).getDocument(range.psiFile)
+        val gotoDoc = range.psiFile.virtualFile?.let(::getOrCreateDocument)
         if (gotoDoc != null) {
             try {
                 val editor = ImaginaryEditor(project, gotoDoc)
@@ -288,7 +303,7 @@ private fun toNavTarget(usage: UsageInfo): NavTarget? {
 }
 
 private fun toNavTarget(file: VirtualFile, offset: Int): NavTarget? {
-    val doc = FileDocumentManager.getInstance().getDocument(file) ?: return null
+    val doc = getOrCreateDocument(file) ?: return null
     val safeOffset = offset.coerceIn(0, doc.textLength)
     val line = doc.getLineNumber(safeOffset) + 1
     val lineStart = doc.getLineStartOffset(line - 1)

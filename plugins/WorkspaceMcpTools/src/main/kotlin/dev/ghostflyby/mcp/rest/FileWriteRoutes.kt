@@ -3,7 +3,6 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
@@ -186,7 +185,7 @@ private suspend fun createAndWriteFile(project: Project, access: ProjectFileAcce
     val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
     val vf = edtWriteAction {
         val vf = parent.createChildData(Any(), targetName)
-        val doc = FileDocumentManager.getInstance().getDocument(vf)
+        val doc = getOrCreateDocument(vf)
         if (doc != null) {
             doc.setText(text)
             val mgr = PsiDocumentManager.getInstance(project)
@@ -222,12 +221,7 @@ private suspend fun setTextWithPolicy(
     force: Boolean,
 ) {
     edtWriteAction {
-        val fileDocumentManager = FileDocumentManager.getInstance()
-        val doc = if (policy.classification == FileContentClassification.IGNORED_TEXT && force) {
-            fileDocumentManager.getCachedDocument(file)
-        } else {
-            fileDocumentManager.getDocument(file)
-        }
+        val doc = getOrCreateDocument(file)
         if (doc != null) {
             doc.setText(text)
             val mgr = PsiDocumentManager.getInstance(project)

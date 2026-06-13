@@ -76,10 +76,10 @@ public object Api {
         public val glob: List<String> = emptyList(),
     ) {
         @Serializable
-        @Resource("/{relativePath...}")
+        @Resource("/{path...}")
         public class Glob(
             public val parent: GlobEntry,
-            public val relativePath: List<String> = emptyList(),
+            public val path: List<String> = emptyList(),
         )
     }
 
@@ -95,17 +95,17 @@ public object Api {
         public val limit: Int = 100,
     ) {
         @Serializable
-        @Resource("/{relativePath...}")
+        @Resource("/{path...}")
         public class SearchText(
             public val parent: SearchTextEntry,
-            public val relativePath: List<String> = emptyList(),
+            public val path: List<String> = emptyList(),
         )
     }
 
     @Serializable
-    @Resource("/navigation/{relativePath...}")
+    @Resource("/navigation/{path...}")
     public class NavigationPath(
-        public val relativePath: List<String> = emptyList(),
+        public val path: List<String> = emptyList(),
     )
 
     @Serializable

@@ -10,7 +10,6 @@ import com.intellij.find.FindModel
 import com.intellij.find.impl.FindInProjectUtil
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.util.TextRange
 import com.intellij.platform.ide.progress.withBackgroundProgress
@@ -20,6 +19,7 @@ import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
@@ -81,7 +81,19 @@ internal fun Route.searchTextRoutes() {
             call.respond(HttpStatusCode.BadRequest, RestError("query must not be blank."))
             return@get
         }
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target =
+            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+                is RestFileRouteTarget.ProjectFile -> resolved.target
+                is RestFileRouteTarget.VirtualFileReadOnly -> {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        RestError("Text search requires a directory in the session project workspace"),
+                    )
+                    null
+                }
+
+                null -> null
+            }
             ?: return@get
         respondSearchText(
             call,
@@ -220,7 +232,7 @@ private suspend fun toSearchTextHit(
     val file = usage.virtualFile ?: return null
     val navigationRange = usage.navigationRange ?: return null
     val snapshot = readAction {
-        val document = FileDocumentManager.getInstance().getDocument(file) ?: return@readAction null
+        val document = getOrCreateDocument(file) ?: return@readAction null
 
         if (navigationRange.startOffset < 0 || navigationRange.endOffset < navigationRange.startOffset) return@readAction null
         if (navigationRange.endOffset > document.textLength) return@readAction null

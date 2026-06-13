@@ -6,13 +6,13 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchHunk
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.editor.Document
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
@@ -47,7 +47,7 @@ internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPat
         val parentPath = target.nioPath.parent ?: throw WorkspaceResourceException("no parent")
         val parent = VfsUtil.createDirectories(parentPath.toString())
         val file = parent.createChildData("patch", target.nioPath.fileName.toString())
-        val doc = FileDocumentManager.getInstance().getDocument(file) ?: throw WorkspaceResourceException("no doc")
+        val doc = getOrCreateDocument(file) ?: throw WorkspaceResourceException("no doc")
         doc.setText(text)
         commitDocument(project, doc)
     }
@@ -65,7 +65,7 @@ internal suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<
     val vfs = service<VirtualFileManager>()
     val file = vfs.findFileByUrl(target.url) ?: throw WorkspaceResourceException("not found")
     if (file.isDirectory) throw WorkspaceResourceException("is dir")
-    val doc = FileDocumentManager.getInstance().getDocument(file) ?: throw WorkspaceResourceException("no doc")
+    val doc = getOrCreateDocument(file) ?: throw WorkspaceResourceException("no doc")
     file to doc
 }
 

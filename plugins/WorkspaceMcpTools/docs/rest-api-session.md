@@ -61,9 +61,8 @@ X-Ghostflyby-Workspace-Session-Id: s_8f4d0f8f2d6f4e0aa0d3c7e3c1a2b9c0
 
 ## File Routes
 
-File routes use `{path...}` so callers can pass a relative path or a
-URL-encoded full VFS URL. Other agent-facing routes remain relative to the
-session path prefix:
+Agent-facing file operation routes use `{path...}` so callers can pass a
+relative path or a URL-encoded full VFS URL:
 
 | Operation | Route |
 |-----------|-------|
@@ -72,9 +71,9 @@ session path prefix:
 | Create only, or create directory with empty body | `POST /api/v1/files/{path...}` |
 | Delete file or empty directory | `DELETE /api/v1/files/{path...}` |
 | Apply Codex or Git patch | `PATCH /api/v1/files/{path...}` |
-| Glob under a directory | `GET /api/v1/glob/{relativePath...}?glob=PATTERN` |
-| Text search under a directory | `GET /api/v1/search/text/{relativePath...}?query=TEXT` |
-| Goto/usages/documentation | `POST /api/v1/navigation/{relativePath...}` |
+| Glob under a directory | `GET /api/v1/glob/{path...}?glob=PATTERN` |
+| Text search under a directory | `GET /api/v1/search/text/{path...}?query=TEXT` |
+| Goto/usages/documentation | `POST /api/v1/navigation/{path...}` |
 
 Project metadata routes remain available for diagnostics:
 

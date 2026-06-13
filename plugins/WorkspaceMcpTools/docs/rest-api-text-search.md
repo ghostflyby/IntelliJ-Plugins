@@ -3,13 +3,13 @@
 ## Route
 
 ```text
-GET /api/v1/search/text/{relativePath...}
+GET /api/v1/search/text/{path...}
 X-Ghostflyby-Workspace-Session-Id: <sessionId>
 ```
 
 The session binds the request to a path prefix. The optional tailcard path
-selects the search root directory relative to that prefix. An empty tailcard
-searches the session prefix itself.
+selects the search root directory. It can be relative to the session prefix or a
+URL-encoded full VFS URL.
 
 ## Query Parameters
 

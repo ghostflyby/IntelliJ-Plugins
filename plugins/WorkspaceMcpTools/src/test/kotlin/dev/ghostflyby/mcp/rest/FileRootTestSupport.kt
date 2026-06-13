@@ -234,7 +234,7 @@ internal fun globPathUrl(
                 limit = limit,
                 glob = glob,
             ),
-            relativePath = relativePath.toResourcePathSegments(),
+            path = relativePath.toResourcePathSegments(),
         ),
         Parameters.build {
             glob.forEach { append("glob", it) }
@@ -302,7 +302,7 @@ internal fun searchTextUrl(
                 fileFilter = fileFilter,
                 limit = limit,
             ),
-            relativePath = relativePath.toResourcePathSegments(),
+            path = relativePath.toResourcePathSegments(),
         ),
         Parameters.build {
             append("query", query)
@@ -322,7 +322,7 @@ internal fun navigationUrl(
 ): String {
     return apiUrl(
         Api.NavigationPath(
-            relativePath = relativePath.toResourcePathSegments(),
+            path = relativePath.toResourcePathSegments(),
         ),
     )
 }

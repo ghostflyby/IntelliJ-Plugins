@@ -3,13 +3,13 @@
 ## Route
 
 ```text
-POST /api/v1/navigation/{relativePath...}
+POST /api/v1/navigation/{path...}
 X-Ghostflyby-Workspace-Session-Id: <sessionId>
 Content-Type: text/x-patch
 ```
 
 The session binds the request to a path prefix. The tailcard path locates the
-source file relative to that prefix.
+source file and can be relative to that prefix or a URL-encoded full VFS URL.
 
 ## Operations
 

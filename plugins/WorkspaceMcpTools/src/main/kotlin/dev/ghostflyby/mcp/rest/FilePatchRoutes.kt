@@ -2,15 +2,20 @@ package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
-import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mcp.filecontent.*
+import dev.ghostflyby.mcp.filecontent.FileContentKind
+import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
+import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.*
 import io.ktor.server.resources.patch
 import io.ktor.server.response.*
@@ -84,7 +89,7 @@ internal fun Route.filePatchRoutes() {
 }
 
 internal suspend fun handleSessionPatch(
-    call: io.ktor.server.application.ApplicationCall,
+    call: ApplicationCall,
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
@@ -121,11 +126,11 @@ internal suspend fun handleSessionPatch(
 // ── Codex branch ──────────────────────────────────────────
 
 private suspend fun applyCodex(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     routeAccess: ProjectFileAccess,
     isDir: Boolean,
     force: Boolean,
-    sections: List<CodexFileSection>, call: io.ktor.server.application.ApplicationCall,
+    sections: List<CodexFileSection>, call: ApplicationCall,
 ) {
     if (sections.isEmpty()) {
         call.respond(HttpStatusCode.BadRequest, PatchResponse(applied = emptyList(), error = "No patch sections"))
@@ -150,7 +155,7 @@ private suspend fun applyCodex(
                 }
 
                 CodexFileOperation.UPDATE -> {
-                    applyFileUpdate(project, target, section.rawLines, access.policy, force)
+                    applyFileUpdate(project, target, section.rawLines)
                 }
             }
             applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
@@ -164,10 +169,10 @@ private suspend fun applyCodex(
 // ── Git branch ────────────────────────────────────────────
 
 private suspend fun applyGit(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     routeAccess: ProjectFileAccess,
     isDir: Boolean, force: Boolean,
-    patches: List<TextFilePatch>, call: io.ktor.server.application.ApplicationCall,
+    patches: List<TextFilePatch>, call: ApplicationCall,
 ) {
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
@@ -181,7 +186,7 @@ private suspend fun applyGit(
             when {
                 p.isNewFile -> createPatchedFile(project, target, p.singleHunkPatchText)
                 p.isDeletedFile -> deletePatchedFile(target, p.hunks)
-                else -> applyFileUpdate(project, target, gitHunksToRawLines(p), access.policy, force)
+                else -> applyFileUpdate(project, target, gitHunksToRawLines(p))
             }
             val op = when {
                 p.isNewFile -> "add"; p.isDeletedFile -> "delete"; else -> "update"
@@ -195,7 +200,7 @@ private suspend fun applyGit(
 }
 
 private suspend fun resolvePatchSectionAccess(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     routeAccess: ProjectFileAccess,
     fileRelPath: String,
 ): ProjectFileAccess {
@@ -239,9 +244,9 @@ private fun gitHunksToRawLines(patch: TextFilePatch): List<String> {
                 "+${hunk.startLineAfter + 1},${hunk.endLineAfter - hunk.startLineAfter} @@"
         for (pl in hunk.lines) {
             lines += when (pl.type) {
-                com.intellij.openapi.diff.impl.patch.PatchLine.Type.ADD -> "+${pl.text}"
-                com.intellij.openapi.diff.impl.patch.PatchLine.Type.REMOVE -> "-${pl.text}"
-                com.intellij.openapi.diff.impl.patch.PatchLine.Type.CONTEXT -> " ${pl.text}"
+                PatchLine.Type.ADD -> "+${pl.text}"
+                PatchLine.Type.REMOVE -> "-${pl.text}"
+                PatchLine.Type.CONTEXT -> " ${pl.text}"
             }
         }
     }
@@ -251,21 +256,14 @@ private fun gitHunksToRawLines(patch: TextFilePatch): List<String> {
 // ── Shared EDT-safe update ─────────────────────────────────
 
 private suspend fun applyFileUpdate(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     target: ProjectPatchPath,
     rawLines: List<String>,
-    policy: FileAccessPolicy,
-    force: Boolean = false,
 ) {
     edtWriteAction {
         val vf = VirtualFileManager.getInstance().findFileByUrl(target.url)
             ?: error("File not found: ${target.relativePath}")
-        val fileDocumentManager = FileDocumentManager.getInstance()
-        val doc = if (policy.classification == FileContentClassification.IGNORED_TEXT && force) {
-            fileDocumentManager.getCachedDocument(vf)
-        } else {
-            fileDocumentManager.getDocument(vf)
-        }
+        val doc = getOrCreateDocument(vf)
         val baseText = doc?.immutableCharSequence ?: String(vf.contentsToByteArray(), vf.charset)
         val hunks = parseCodexRawHunks(rawLines, baseText)
             ?: error("No valid hunks")
@@ -277,7 +275,7 @@ private suspend fun applyFileUpdate(
             val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
             mgr.doPostponedOperationsAndUnblockDocument(doc)
             mgr.commitDocument(doc)
-            fileDocumentManager.saveDocument(doc)
+            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(doc)
         } else {
             vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
         }

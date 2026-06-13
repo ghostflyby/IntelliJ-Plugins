@@ -7,6 +7,8 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.ContentReadException
 import dev.ghostflyby.mcp.filecontent.FileContentKind
 import dev.ghostflyby.mcp.filecontent.readGlobResult
@@ -56,13 +58,31 @@ internal fun Route.globRoutes() {
             )
             return@get
         }
-        val target = call.resolveSessionRouteTarget(sessions, resolver, resource.relativePath.toRoutePath())
+        val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@get
         respondGlob(call, target, resource.parent.limit, patterns)
     }
 }
 
 internal suspend fun respondGlob(
+    call: ApplicationCall,
+    target: RestFileRouteTarget,
+    limit: Int,
+    patterns: List<String>,
+) {
+    when (target) {
+        is RestFileRouteTarget.ProjectFile -> respondProjectGlob(call, target.target, limit, patterns)
+        is RestFileRouteTarget.VirtualFileReadOnly -> respondGlobFile(
+            call,
+            target.file,
+            project = null,
+            limit,
+            patterns,
+        )
+    }
+}
+
+private suspend fun respondProjectGlob(
     call: ApplicationCall,
     target: RestSessionRouteTarget,
     limit: Int,
@@ -78,8 +98,18 @@ internal suspend fun respondGlob(
         call.respond(HttpStatusCode.Forbidden, RestError(policy.reason))
         return
     }
+    respondGlobFile(call, access.file, target.project, limit, patterns)
+}
+
+private suspend fun respondGlobFile(
+    call: ApplicationCall,
+    file: VirtualFile,
+    project: Project?,
+    limit: Int,
+    patterns: List<String>,
+) {
     val paths = try {
-        readGlobResult(access.file, patterns, target.project)
+        readGlobResult(file, patterns, project)
     } catch (error: ContentReadException) {
         call.respond(HttpStatusCode.BadRequest, RestError(error.message.orEmpty()))
         return

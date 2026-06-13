@@ -70,7 +70,7 @@ internal class RestResourceUrlTest {
         val globUrl = apiUrl(
             Api.GlobEntry.Glob(
                 parent = Api.GlobEntry(glob = listOf("**/*.kt")),
-                relativePath = listOf("src"),
+                path = listOf("src"),
             ),
             Parameters.build { append("glob", "**/*.kt") },
         )
@@ -80,7 +80,7 @@ internal class RestResourceUrlTest {
         val searchUrl = apiUrl(
             Api.SearchTextEntry.SearchText(
                 parent = Api.SearchTextEntry(query = "hello"),
-                relativePath = listOf("src"),
+                path = listOf("src"),
             ),
             Parameters.build { append("query", "hello") },
         )
@@ -88,7 +88,7 @@ internal class RestResourceUrlTest {
         Assertions.assertEquals("hello", Url(searchUrl).parameters["query"])
         Assertions.assertEquals(
             "/api/v1/navigation/src/Main.kt",
-            apiUrl(Api.NavigationPath(relativePath = listOf("src", "Main.kt"))),
+            apiUrl(Api.NavigationPath(path = listOf("src", "Main.kt"))),
         )
     }
 }

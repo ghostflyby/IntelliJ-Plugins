@@ -101,11 +101,12 @@ and `structure`.
 ## Glob Route
 
 ```text
-GET /api/v1/glob/{relativePath...}?glob=PATTERN&limit=N
+GET /api/v1/glob/{path...}?glob=PATTERN&limit=N
 ```
 
 At least one `glob` query value is required. Multiple patterns are allowed and
-merged.
+merged. The path can be relative to the session `pathPrefix` or a URL-encoded
+full VFS URL.
 
 ```bash
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \

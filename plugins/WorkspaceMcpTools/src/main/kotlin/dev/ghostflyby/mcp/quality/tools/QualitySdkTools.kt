@@ -17,7 +17,6 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.editor.Document
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.checkCanceled
 import com.intellij.openapi.project.Project
@@ -37,6 +36,7 @@ import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.batchTry
 import dev.ghostflyby.mcp.common.relativizePathOrNull
 import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.scope.*
 import dev.ghostflyby.mcp.sdk.project
 import dev.ghostflyby.mcp.server.route.McpCallContext
@@ -341,7 +341,7 @@ private suspend fun resolveWritablePsiFile(
     if (readAction { psiFile.fileType.isBinary }) {
         throw WorkspaceResourceException("Binary files are not supported: ${file.url}")
     }
-    val document = readAction { FileDocumentManager.getInstance().getDocument(file) }
+    val document = readAction { getOrCreateDocument(file) }
         ?: throw WorkspaceResourceException("No text document available for URL: ${file.url}")
     if (!document.isWritable) {
         throw WorkspaceResourceException("Document is not writable: ${file.url}")
@@ -450,9 +450,7 @@ private suspend fun analyzeProblemsInFile(
     val psiFile = readAction { PsiManager.getInstance(project).findFile(file) }
         ?: return emptyList()
     if (readAction { psiFile.fileType.isBinary }) return emptyList()
-    val document = readAction {
-        FileDocumentManager.getInstance().getDocument(file)
-    } ?: return emptyList()
+    val document = readAction { getOrCreateDocument(file) } ?: return emptyList()
 
     val minSeverity = if (errorsOnly) HighlightSeverity.ERROR else HighlightSeverity.WEAK_WARNING
     val profile = resolveInspectionProfile(project, null)

@@ -25,6 +25,7 @@ import dev.ghostflyby.mcp.Bundle
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.common.reportActivity
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.scope.*
 import dev.ghostflyby.mcp.sdk.project
 import dev.ghostflyby.mcp.server.route.McpCallContext
@@ -418,7 +419,7 @@ internal class ScopeTextSearchTools {
             val psiDocumentManager = PsiDocumentManager.getInstance(project)
             val modifiedDocuments = linkedSetOf<com.intellij.openapi.editor.Document>()
             groupedByFile.forEach { (file, occurrences) ->
-                val document = fileDocumentManager.getDocument(file)
+                val document = getOrCreateDocument(file)
                     ?: throw WorkspaceResourceException("No text document available for file '${file.url}'.")
                 if (!file.isWritable || !document.isWritable) {
                     throw WorkspaceResourceException("File is not writable: ${file.url}")
@@ -652,7 +653,7 @@ private suspend fun toRawOccurrence(
     val file = usage.virtualFile ?: return null
     val navigationRange = usage.navigationRange ?: return null
     val snapshot = readAction {
-        val document = FileDocumentManager.getInstance().getDocument(file) ?: return@readAction null
+        val document = getOrCreateDocument(file) ?: return@readAction null
         if (navigationRange.startOffset < 0 || navigationRange.endOffset < navigationRange.startOffset) {
             return@readAction null
         }
@@ -748,7 +749,7 @@ private suspend fun computeReplacementTexts(
     occurrences.forEach { occurrence ->
         val dto = occurrence.dto
         val replacementText = readAction {
-            val document = FileDocumentManager.getInstance().getDocument(occurrence.file)
+            val document = getOrCreateDocument(occurrence.file)
                 ?: throw WorkspaceResourceException("No text document available for file '${dto.fileUrl}'.")
             val currentMatched = ensureOccurrenceStillMatches(document, dto)
             try {
