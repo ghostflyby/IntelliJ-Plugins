@@ -13,33 +13,6 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDocumentManager
 import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
-import java.nio.file.InvalidPathException
-import java.nio.file.Path
-
-internal fun resolveProjectPatchPath(project: Project, path: String): ProjectPatchPath {
-    val basePath = project.basePath ?: throw WorkspaceResourceException("...")
-    val base = try {
-        Path.of(basePath).toAbsolutePath().normalize()
-    } catch (e: InvalidPathException) {
-        throw WorkspaceResourceException("...")
-    }
-    val rawPath = filePathFromPatchTarget(path)
-    val target = try {
-        val parsed = Path.of(rawPath)
-        if (parsed.isAbsolute) parsed.normalize() else base.resolve(parsed).normalize()
-    } catch (e: InvalidPathException) {
-        throw WorkspaceResourceException("...")
-    }
-    if (!target.startsWith(base)) throw WorkspaceResourceException("...")
-    val rel = base.relativize(target).toString().replace('\\', '/')
-    return ProjectPatchPath(relativePath = rel, nioPath = target, url = "file://$target")
-}
-
-internal fun filePathFromPatchTarget(path: String): String {
-    if (!path.contains("://")) return path
-    if (!path.startsWith("file://")) throw WorkspaceResourceException("...")
-    return path.removePrefix("file://")
-}
 
 internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPath, text: String) {
     edtWriteAction {
@@ -55,7 +28,7 @@ internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPat
 
 internal suspend fun deletePatchedFile(target: ProjectPatchPath, hunks: List<PatchHunk>) {
     val (file, document) = resolveTextDocumentForTool(target)
-    ensureFileWritable(file, target)
+    ensureFileWritable(file)
     if (hunks.isNotEmpty()) GenericPatchApplier.apply(document.immutableCharSequence, hunks)
         ?: throw WorkspaceResourceException("...")
     edtWriteAction { file.delete(Any()) }
@@ -69,11 +42,7 @@ internal suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<
     file to doc
 }
 
-internal suspend fun ensureToolWritable(target: ProjectPatchPath, document: Document) {
-    if (!readAction { document.isWritable }) throw WorkspaceResourceException("not writable")
-}
-
-internal suspend fun ensureFileWritable(file: VirtualFile, target: ProjectPatchPath) {
+internal suspend fun ensureFileWritable(file: VirtualFile) {
     if (!readAction { file.isWritable }) throw WorkspaceResourceException("not writable")
 }
 

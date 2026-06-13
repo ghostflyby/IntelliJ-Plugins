@@ -24,7 +24,7 @@ internal class RestResourceUrlTest {
     fun `file resource URL keeps short session scoped path shape`() {
         Assertions.assertEquals(
             "/api/v1/files/src/Main.kt",
-            rootPathUrl("project-key", "workspace-0", "src/Main.kt"),
+            rootPathUrl("src/Main.kt"),
         )
     }
 
@@ -32,17 +32,17 @@ internal class RestResourceUrlTest {
     fun `file resource URL encodes explicit boolean query parameters`() {
         Assertions.assertEquals(
             "/api/v1/files/src/Main.kt?meta=true",
-            rootPathUrl("project-key", "workspace-0", "src/Main.kt", meta = true),
+            rootPathUrl("src/Main.kt", meta = true),
         )
         Assertions.assertEquals(
             "/api/v1/files/src/Main.kt?force=false",
-            rootPathUrl("project-key", "workspace-0", "src/Main.kt", force = false),
+            rootPathUrl("src/Main.kt", force = false),
         )
     }
 
     @Test
     fun `glob resource URL preserves repeated glob query parameters`() {
-        val url = globPathUrl("project-key", "workspace-0", "glob", glob = listOf("**/*.kt", "**/*.kts"))
+        val url = globPathUrl("glob", glob = listOf("**/*.kt", "**/*.kts"))
         Assertions.assertEquals("/api/v1/glob/glob", Url(url).encodedPath)
         Assertions.assertEquals(listOf("**/*.kt", "**/*.kts"), Url(url).parameters.getAll("glob"))
     }

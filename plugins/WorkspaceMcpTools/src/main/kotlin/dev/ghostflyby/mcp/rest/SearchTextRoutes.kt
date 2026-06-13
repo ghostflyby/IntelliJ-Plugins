@@ -273,7 +273,6 @@ private suspend fun toSearchTextHit(
     } ?: return null
     var lineText = snapshot.lineText
     if (lineText.length > MAX_LINE_LENGTH) {
-        val matchStart = navigationRange.startOffset - (lineText.length - snapshot.lineText.length + lineText.indexOf(snapshot.matchedText))
         // Simple: trim from both ends
         val maxLen = MAX_LINE_LENGTH
         lineText = lineText.substring(0, maxLen - 3) + "..."

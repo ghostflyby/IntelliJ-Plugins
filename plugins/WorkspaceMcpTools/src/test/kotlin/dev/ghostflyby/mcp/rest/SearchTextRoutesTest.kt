@@ -3,7 +3,6 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -46,7 +45,6 @@ internal class SearchTextRoutesTest {
 
     @Test
     fun `basic plain search returns hits`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -54,8 +52,7 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello")) {
+            val response = sessionClient.get(searchTextUrl("src", query = "hello")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -66,7 +63,6 @@ internal class SearchTextRoutesTest {
 
     @Test
     fun `search defaults to markdown hit list`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -74,8 +70,7 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello"))
+            val response = sessionClient.get(searchTextUrl("src", query = "hello"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             val body = response.bodyAsText()
@@ -87,7 +82,6 @@ internal class SearchTextRoutesTest {
 
     @Test
     fun `search without query returns 400`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -95,8 +89,7 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, query = "")) {
+            val response = sessionClient.get(searchTextUrl(query = "")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, response.status)
@@ -105,7 +98,6 @@ internal class SearchTextRoutesTest {
 
     @Test
     fun `search with file filter respects glob`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -113,19 +105,16 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "world", fileFilter = "*.kt")) {
+            val response = sessionClient.get(searchTextUrl("src", query = "world", fileFilter = "*.kt")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
-            val hits = json.parseToJsonElement(response.bodyAsText()).jsonObject["hits"]!!.jsonArray
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
         }
     }
 
     @Test
     fun `search limit caps hits`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -133,8 +122,7 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "class", limit = 1)) {
+            val response = sessionClient.get(searchTextUrl("src", query = "class", limit = 1)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -145,7 +133,6 @@ internal class SearchTextRoutesTest {
 
     @Test
     fun `hit includes occurrenceId and offsets`() {
-        val key = workspaceProjectKey(project)
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -153,8 +140,7 @@ internal class SearchTextRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.get(searchTextUrl(key, rootId, "src", query = "hello")) {
+            val response = sessionClient.get(searchTextUrl("src", query = "hello")) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -167,7 +153,7 @@ internal class SearchTextRoutesTest {
     }
     @Test
     fun `search text URL includes query params`() {
-        val url = searchTextUrl("proj", "root-0", "src", query = "hello", limit = 25)
+        val url = searchTextUrl("src", query = "hello", limit = 25)
         Assertions.assertTrue(url.contains("query=hello"), url)
         Assertions.assertTrue(url.contains("limit=25"), url)
     }

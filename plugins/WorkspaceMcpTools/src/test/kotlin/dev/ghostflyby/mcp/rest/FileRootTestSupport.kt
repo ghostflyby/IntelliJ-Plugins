@@ -8,7 +8,6 @@ import io.ktor.http.*
 import io.ktor.resources.*
 import io.ktor.resources.serialization.*
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -18,10 +17,6 @@ private val TestResourcesFormat: ResourcesFormat = ResourcesFormat()
 
 internal fun HttpResponse.responseContentType(): ContentType? {
     return headers[HttpHeaders.ContentType]?.let(ContentType::parse)
-}
-
-internal suspend fun HttpClient.firstWorkspaceRootId(projectKey: String, json: Json): String {
-    return workspaceRootId(projectKey, json, index = 0)
 }
 
 internal suspend fun HttpClient.createRestSessionId(pathPrefix: String, json: Json): String {
@@ -46,39 +41,7 @@ internal suspend fun HttpClient.withRestSession(pathPrefix: String, json: Json):
     }
 }
 
-internal suspend fun HttpClient.workspaceRootId(projectKey: String, json: Json, index: Int): String {
-    val roots = get(apiUrl(Api.Project.Roots(Api.Project(projectKey)))) {
-        accept(ContentType.Application.Json)
-    }
-    return json.parseToJsonElement(roots.bodyAsText())
-        .jsonArray
-        .getOrNull(index)
-        ?.jsonObject
-        ?.get("id")
-        ?.jsonPrimitive
-        ?.content
-        ?: error("missing workspace root id at index $index")
-}
-
-internal suspend fun HttpClient.workspaceRootIdByUrl(projectKey: String, json: Json, rootUrl: String): String {
-    val roots = get(apiUrl(Api.Project.Roots(Api.Project(projectKey)))) {
-        accept(ContentType.Application.Json)
-    }
-    return json.parseToJsonElement(roots.bodyAsText())
-        .jsonArray
-        .firstOrNull { root ->
-            root.jsonObject["url"]?.jsonPrimitive?.content == rootUrl
-        }
-        ?.jsonObject
-        ?.get("id")
-        ?.jsonPrimitive
-        ?.content
-        ?: error("missing workspace root id for $rootUrl")
-}
-
-internal suspend fun HttpClient.rootPathUrl(
-    projectKey: String,
-    json: Json,
+internal fun HttpClient.rootPathUrl(
     relativePath: String,
     meta: Boolean? = null,
     content: Boolean? = null,
@@ -91,10 +54,7 @@ internal suspend fun HttpClient.rootPathUrl(
     aroundLine: Int? = null,
     radius: Int? = null,
 ): String {
-    val rootId = firstWorkspaceRootId(projectKey, json)
     return rootPathUrl(
-        projectKey,
-        rootId,
         relativePath,
         meta,
         content,
@@ -109,10 +69,7 @@ internal suspend fun HttpClient.rootPathUrl(
     )
 }
 
-internal suspend fun HttpClient.rootPathUrl(
-    projectKey: String,
-    json: Json,
-    rootIndex: Int,
+internal fun HttpClient.rootPathUrlByRootUrl(
     relativePath: String,
     meta: Boolean? = null,
     content: Boolean? = null,
@@ -125,44 +82,7 @@ internal suspend fun HttpClient.rootPathUrl(
     aroundLine: Int? = null,
     radius: Int? = null,
 ): String {
-    val rootId = workspaceRootId(projectKey, json, rootIndex)
     return rootPathUrl(
-        projectKey,
-        rootId,
-        relativePath,
-        meta,
-        content,
-        exists,
-        structure,
-        force,
-        startLine,
-        endLine,
-        maxLines,
-        aroundLine,
-        radius,
-    )
-}
-
-internal suspend fun HttpClient.rootPathUrlByRootUrl(
-    projectKey: String,
-    json: Json,
-    rootUrl: String,
-    relativePath: String,
-    meta: Boolean? = null,
-    content: Boolean? = null,
-    exists: Boolean? = null,
-    structure: Boolean? = null,
-    force: Boolean? = null,
-    startLine: Int? = null,
-    endLine: Int? = null,
-    maxLines: Int? = null,
-    aroundLine: Int? = null,
-    radius: Int? = null,
-): String {
-    val rootId = workspaceRootIdByUrl(projectKey, json, rootUrl)
-    return rootPathUrl(
-        projectKey,
-        rootId,
         relativePath,
         meta,
         content,
@@ -198,8 +118,6 @@ internal fun rootUrl(
 }
 
 internal fun rootPathUrl(
-    projectKey: String,
-    rootId: String,
     relativePath: String,
     meta: Boolean? = null,
     content: Boolean? = null,
@@ -222,8 +140,6 @@ internal fun rootPathUrl(
 }
 
 internal fun globPathUrl(
-    projectKey: String,
-    rootId: String,
     relativePath: String,
     glob: List<String> = emptyList(),
     limit: Int = 0,
@@ -280,8 +196,6 @@ private fun queryParameters(
 private fun String.toResourcePathSegments(): List<String> = split('/').filter { it.isNotEmpty() }
 
 internal fun searchTextUrl(
-    projectKey: String,
-    rootId: String,
     relativePath: String = "",
     query: String = "",
     regex: Boolean = false,
@@ -316,8 +230,6 @@ internal fun searchTextUrl(
     )
 }
 internal fun navigationUrl(
-    projectKey: String,
-    rootId: String,
     relativePath: String,
 ): String {
     return apiUrl(

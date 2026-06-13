@@ -30,6 +30,7 @@ import com.intellij.psi.search.FileTypeIndex
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import kotlinx.serialization.Serializable
 
@@ -72,6 +73,7 @@ private val documentCache = object : LinkedHashMap<String, Document>(64, 0.75f, 
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Document>): Boolean = size > 64
 }
 
+@RequiresReadLock
 internal fun getOrCreateDocument(file: VirtualFile): Document? {
     val url = file.url
     synchronized(documentCache) { documentCache[url] }?.let { return it }

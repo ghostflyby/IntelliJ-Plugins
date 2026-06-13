@@ -3,7 +3,6 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -42,7 +41,7 @@ internal class NavigationRoutesTest {
 
     @Test
     fun `goto finds definition`() {
-        val key = workspaceProjectKey(project)
+
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -50,13 +49,12 @@ internal class NavigationRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Goto:
 @@
 - class Alpha { fun hello() { println("hello world") } }
 + XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 """
-            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
             }
@@ -68,7 +66,7 @@ internal class NavigationRoutesTest {
 
     @Test
     fun `usages finds references`() {
-        val key = workspaceProjectKey(project)
+
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -76,13 +74,12 @@ internal class NavigationRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Usages:
 @@
 -    fun hello() { println("hello world") }
 +    XXXXXXXXXX
 """
-            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -93,7 +90,7 @@ internal class NavigationRoutesTest {
 
     @Test
     fun `documentation returns element info`() {
-        val key = workspaceProjectKey(project)
+
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -101,13 +98,12 @@ internal class NavigationRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
             val body = """*** Documentation:
 @@
 - class Alpha { fun hello() { println("hello world") } }
 + XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
     """
-            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -118,7 +114,7 @@ internal class NavigationRoutesTest {
 
     @Test
     fun `empty body returns 400`() {
-        val key = workspaceProjectKey(project)
+
 
         testApplication {
             application { installWorkspaceRestContentNegotiation() }
@@ -126,8 +122,7 @@ internal class NavigationRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val rootId = client.firstWorkspaceRootId(key, json)
-            val response = sessionClient.post(navigationUrl(key, rootId, "src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody("")
                 accept(ContentType.Application.Json)

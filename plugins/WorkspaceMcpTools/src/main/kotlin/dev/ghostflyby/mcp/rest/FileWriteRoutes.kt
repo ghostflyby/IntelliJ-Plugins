@@ -81,7 +81,7 @@ internal suspend fun handleSessionPut(
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
         val file = access.file
         if (file != null) {
-            setTextWithPolicy(file, project, body, access.policy, force)
+            setTextWithPolicy(file, project, body)
             WriteResult.Replaced(file)
         } else {
             WriteResult.Created(createAndWriteFile(project, access, body))
@@ -240,8 +240,6 @@ private suspend fun setTextWithPolicy(
     file: VirtualFile,
     project: Project,
     text: String,
-    policy: FileAccessPolicy,
-    force: Boolean,
 ) {
     edtWriteAction {
         val doc = getOrCreateDocument(file)

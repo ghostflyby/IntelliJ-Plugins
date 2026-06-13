@@ -44,14 +44,14 @@ internal class WorkspaceGlobPattern private constructor(
                 }
 
                 Token.Question -> {
-                    for (textIndex in 0 until text.length) {
+                    for (textIndex in text.indices) {
                         if (dp[tokenIndex][textIndex]) dp[tokenIndex + 1][textIndex + 1] = true
                     }
                 }
 
                 is Token.Literal -> {
-                    for (textIndex in 0 until text.length) {
-                        if (dp[tokenIndex][textIndex] && text[textIndex] == token.value) {
+                    for ((textIndex, element) in text.withIndex()) {
+                        if (dp[tokenIndex][textIndex] && element == token.value) {
                             dp[tokenIndex + 1][textIndex + 1] = true
                         }
                     }
@@ -83,7 +83,7 @@ internal class WorkspaceGlobPattern private constructor(
             val segments = parts.map { parseSegment(it, rawPattern) }
             return WorkspaceGlobPattern(
                 segments = segments,
-                literalFileName = literalFileName(parts, segments),
+                literalFileName = literalFileName(segments),
                 extension = extension(parts, segments),
                 recursive = segments.any { it.singleOrNull() == Token.GlobStar },
             )
@@ -114,7 +114,7 @@ internal class WorkspaceGlobPattern private constructor(
             return tokens
         }
 
-        private fun literalFileName(parts: List<String>, segments: List<List<Token>>): String? {
+        private fun literalFileName(segments: List<List<Token>>): String? {
             val lastSegment = segments.lastOrNull() ?: return null
             if (lastSegment.any { it !is Token.Literal }) return null
             return literalText(lastSegment)

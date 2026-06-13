@@ -20,11 +20,11 @@ The body selects the operation via prefix:
 @@ hunk
 ```
 
-| Prefix | Action | Result |
-|--------|--------|--------|
-| `*** Goto:` | Go to declaration/definition | Single target `{fileUrl, lineNumber, column}` |
-| `*** Usages:` | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag |
-| `*** Documentation:` | Read element documentation | Element name + documentation text |
+| Prefix               | Action                                           | Result                                        |
+|----------------------|--------------------------------------------------|-----------------------------------------------|
+| `*** Goto:`          | Go to declaration/definition                     | Single target `{fileUrl, lineNumber, column}` |
+| `*** Usages:`        | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag        |
+| `*** Documentation:` | Read element documentation                       | Element name + documentation text             |
 
 ## Selection via Diff
 

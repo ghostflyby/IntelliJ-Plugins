@@ -254,67 +254,8 @@ internal data class ScopeTextOccurrenceDto(
 )
 
 @Serializable
-internal data class ScopeTextSearchResultDto(
-    val scopeDisplayName: String,
-    val scopeShape: ScopeShape,
-    val mode: ScopeTextQueryMode,
-    val query: String,
-    val caseSensitive: Boolean,
-    val wholeWordsOnly: Boolean,
-    val searchContext: ScopeTextSearchContextDto,
-    val fileMask: String? = null,
-    val occurrences: List<ScopeTextOccurrenceDto>,
-    val probablyHasMoreMatchingEntries: Boolean = false,
-    val timedOut: Boolean = false,
-    val canceled: Boolean = false,
-    val diagnostics: List<String> = emptyList(),
-)
-
-@Serializable
-internal data class ScopeTextReplaceRequestDto(
-    val search: ScopeTextSearchRequestDto,
-    val replaceWith: String,
-    val preserveCase: Boolean = false,
-    val occurrenceIds: List<String> = emptyList(),
-    val failOnMissingOccurrenceIds: Boolean = true,
-    val saveAfterWrite: Boolean = true,
-    val maxReplaceCount: Int = 10000,
-)
-
-@Serializable
 internal data class ScopeTextReplacementPreviewEntryDto(
     val occurrence: ScopeTextOccurrenceDto,
     val replacementText: String,
 )
 
-@Serializable
-internal data class ScopeTextReplacePreviewResultDto(
-    val scopeDisplayName: String,
-    val scopeShape: ScopeShape,
-    val query: String,
-    val mode: ScopeTextQueryMode,
-    val replaceWith: String,
-    val selectedEntries: List<ScopeTextReplacementPreviewEntryDto>,
-    val missingOccurrenceIds: List<String> = emptyList(),
-    val probablyHasMoreMatchingEntries: Boolean = false,
-    val timedOut: Boolean = false,
-    val canceled: Boolean = false,
-    val diagnostics: List<String> = emptyList(),
-)
-
-@Serializable
-internal data class ScopeTextReplaceApplyResultDto(
-    val scopeDisplayName: String,
-    val scopeShape: ScopeShape,
-    val query: String,
-    val mode: ScopeTextQueryMode,
-    val replaceWith: String,
-    val requestedOccurrenceCount: Int,
-    val replacedOccurrenceCount: Int,
-    val replacedFileCount: Int,
-    val replacedOccurrenceIds: List<String>,
-    val missingOccurrenceIds: List<String> = emptyList(),
-    val timedOut: Boolean = false,
-    val canceled: Boolean = false,
-    val diagnostics: List<String> = emptyList(),
-)
