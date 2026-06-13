@@ -6,6 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.util.concurrency.annotations.RequiresWriteLock
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
@@ -81,7 +82,7 @@ internal suspend fun handleSessionPut(
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
         val file = access.file
         if (file != null) {
-            setTextWithPolicy(file, project, body)
+            edtWriteAction { setTextWithPolicy(file, project, body) }
             WriteResult.Replaced(file)
         } else {
             WriteResult.Created(createAndWriteFile(project, access, body))
@@ -208,15 +209,7 @@ private suspend fun createAndWriteFile(project: Project, access: ProjectFileAcce
     val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
     val vf = edtWriteAction {
         val vf = parent.createChildData(Any(), targetName)
-        val doc = getOrCreateDocument(vf)
-        if (doc != null) {
-            doc.setText(text)
-            val mgr = PsiDocumentManager.getInstance(project)
-            mgr.doPostponedOperationsAndUnblockDocument(doc)
-            mgr.commitDocument(doc)
-        } else {
-            vf.setBinaryContent(text.toByteArray(Charsets.UTF_8))
-        }
+        setTextWithPolicy(vf, project, text)
         vf
     }
     return vf
@@ -236,20 +229,19 @@ private suspend fun deleteFileResult(file: VirtualFile?): WriteResult {
     return WriteResult.Deleted
 }
 
-private suspend fun setTextWithPolicy(
+@RequiresWriteLock
+private fun setTextWithPolicy(
     file: VirtualFile,
     project: Project,
     text: String,
 ) {
-    edtWriteAction {
-        val doc = getOrCreateDocument(file)
-        if (doc != null) {
-            doc.setText(text)
-            val mgr = PsiDocumentManager.getInstance(project)
-            mgr.doPostponedOperationsAndUnblockDocument(doc)
-            mgr.commitDocument(doc)
-        } else {
-            file.setBinaryContent(text.toByteArray(Charsets.UTF_8))
-        }
+    val doc = getOrCreateDocument(file)
+    if (doc != null) {
+        doc.setText(text)
+        val mgr = PsiDocumentManager.getInstance(project)
+        mgr.doPostponedOperationsAndUnblockDocument(doc)
+        mgr.commitDocument(doc)
+    } else {
+        file.setBinaryContent(text.toByteArray(Charsets.UTF_8))
     }
 }
