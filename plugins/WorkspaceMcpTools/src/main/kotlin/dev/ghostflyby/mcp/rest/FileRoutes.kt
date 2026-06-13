@@ -100,7 +100,7 @@ internal fun Route.fileRoutes() {
     }
 }
 
-private suspend fun respondProjectRootFile(
+internal suspend fun respondProjectRootFile(
     call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
     root: Api.Project.FilesEntry,

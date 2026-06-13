@@ -15,6 +15,7 @@ internal fun Route.restApi() {
     route("/api/v1") {
         serverInfoRoutes()
         projectRoutes()
+        sessionRoutes()
         globRoutes()
         fileRoutes()
         searchTextRoutes()

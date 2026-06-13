@@ -41,6 +41,55 @@ public object Api {
     public class Projects
 
     @Serializable
+    @Resource("/sessions")
+    public class Sessions {
+        @Serializable
+        @Resource("/{sessionId}")
+        public class Id(
+            public val parent: Sessions = Sessions(),
+            public val sessionId: String,
+        )
+    }
+
+    public object Session {
+        @Serializable
+        @Resource("/session/files")
+        public class FilesEntry(
+            public override val meta: Boolean = false,
+            public override val content: Boolean = false,
+            public override val exists: Boolean = false,
+            public override val structure: Boolean = false,
+            public override val force: Boolean = false,
+            public override val startLine: Int? = null,
+            public override val endLine: Int? = null,
+            public override val maxLines: Int? = null,
+            public override val aroundLine: Int? = null,
+            public override val radius: Int? = null,
+        ) : FileQuery {
+            @Serializable
+            @Resource("/{relativePath...}")
+            public class File(
+                public val parent: FilesEntry,
+                public val relativePath: List<String> = emptyList(),
+            )
+        }
+
+        @Serializable
+        @Resource("/session/glob")
+        public class GlobEntry(
+            public val limit: Int = 0,
+            public val glob: List<String> = emptyList(),
+        ) {
+            @Serializable
+            @Resource("/{relativePath...}")
+            public class Glob(
+                public val parent: GlobEntry,
+                public val relativePath: List<String> = emptyList(),
+            )
+        }
+    }
+
+    @Serializable
     @Resource("/projects/{projectKey}")
     public class Project(
         public override val projectKey: String,

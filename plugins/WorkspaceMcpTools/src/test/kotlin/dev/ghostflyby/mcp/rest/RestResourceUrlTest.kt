@@ -46,4 +46,35 @@ internal class RestResourceUrlTest {
         Assertions.assertEquals("/api/v1/projects/project-key/glob/workspace-0/glob", Url(url).encodedPath)
         Assertions.assertEquals(listOf("**/*.kt", "**/*.kts"), Url(url).parameters.getAll("glob"))
     }
+
+    @Test
+    fun `session resource URLs keep short path prefix shape`() {
+        Assertions.assertEquals(
+            "/api/v1/sessions",
+            apiUrl(Api.Sessions()),
+        )
+        Assertions.assertEquals(
+            "/api/v1/sessions/session-id",
+            apiUrl(Api.Sessions.Id(sessionId = "session-id")),
+        )
+        Assertions.assertEquals(
+            "/api/v1/session/files/src/Main.kt",
+            apiUrl(
+                Api.Session.FilesEntry.File(
+                    parent = Api.Session.FilesEntry(),
+                    relativePath = listOf("src", "Main.kt"),
+                ),
+            ),
+        )
+
+        val globUrl = apiUrl(
+            Api.Session.GlobEntry.Glob(
+                parent = Api.Session.GlobEntry(glob = listOf("**/*.kt")),
+                relativePath = listOf("src"),
+            ),
+            Parameters.build { append("glob", "**/*.kt") },
+        )
+        Assertions.assertEquals("/api/v1/session/glob/src", Url(globUrl).encodedPath)
+        Assertions.assertEquals(listOf("**/*.kt"), Url(globUrl).parameters.getAll("glob"))
+    }
 }

@@ -60,7 +60,7 @@ internal fun Route.globRoutes() {
     }
 }
 
-private suspend fun respondGlob(
+internal suspend fun respondGlob(
     call: ApplicationCall,
     resolver: WorkspaceProjectResolver,
     entry: Api.Project.GlobEntry,
