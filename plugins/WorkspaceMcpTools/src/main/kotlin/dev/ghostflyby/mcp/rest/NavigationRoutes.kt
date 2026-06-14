@@ -28,6 +28,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 private data class NavTarget(
     val fileUrl: String,
+    val encodedFileUrl: String,
     val lineNumber: Int,
     val column: Int,
 )
@@ -227,7 +228,15 @@ private suspend fun executeGoto(
         toNavTarget(resolved)?.let { results += it }
 
         val unique = results.distinctBy { "${it.fileUrl}:${it.lineNumber}:${it.column}" }
-        NavGoto(path = filePath, result = unique.firstOrNull() ?: NavTarget(filePath, 1, 1))
+        NavGoto(
+            path = filePath,
+            result = unique.firstOrNull() ?: NavTarget(
+                fileUrl = filePath,
+                encodedFileUrl = encodeRoutePathSegment(filePath),
+                lineNumber = 1,
+                column = 1,
+            ),
+        )
     }
 }
 
@@ -308,7 +317,8 @@ private fun toNavTarget(file: VirtualFile, offset: Int): NavTarget? {
     val line = doc.getLineNumber(safeOffset) + 1
     val lineStart = doc.getLineStartOffset(line - 1)
     val column = offset - lineStart + 1
-    return NavTarget(file.url, line, column)
+    val fileUrl = file.url
+    return NavTarget(fileUrl, encodeRoutePathSegment(fileUrl), line, column)
 }
 
 @Serializable

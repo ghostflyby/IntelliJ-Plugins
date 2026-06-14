@@ -58,6 +58,7 @@ internal fun Route.fileRoutes() {
                             displayName = target.root.displayName,
                             kind = "${target.root.kind}".lowercase(),
                             url = target.root.base.url,
+                            encodedUrl = encodeRoutePathSegment(target.root.base.url),
                         ),
                     )
                 } else {
@@ -103,6 +104,7 @@ private data class RootDetailResponse(
     val displayName: String,
     val kind: String,
     val url: String,
+    val encodedUrl: String,
 )
 
 internal suspend fun respondSessionFile(

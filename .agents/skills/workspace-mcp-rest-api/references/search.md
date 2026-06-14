@@ -100,6 +100,8 @@ timedOut: false
 | RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | Kotlin | 0 |
 ```
 
+Structured file search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
+
 ## Symbol Search Route
 
 ```text
@@ -146,3 +148,5 @@ timedOut: false
 | --- | --- | --- | ---: | --- |
 | RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
+
+Structured symbol search items include both raw `fileUrl` and route-ready `encodedFileUrl`.

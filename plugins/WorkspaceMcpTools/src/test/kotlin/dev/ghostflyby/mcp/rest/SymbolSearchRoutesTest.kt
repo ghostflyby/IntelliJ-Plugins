@@ -5,6 +5,7 @@ import com.intellij.navigation.ItemPresentation
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -122,6 +123,8 @@ internal class SymbolSearchRoutesTest {
             )
             Assertions.assertEquals("AlphaSymbol", item["name"]!!.jsonPrimitive.content)
             Assertions.assertEquals("symbol", item["kind"]!!.jsonPrimitive.content)
+            val fileUrl = item["fileUrl"]!!.jsonPrimitive.content
+            Assertions.assertEquals(encodeRoutePathSegment(fileUrl), item["encodedFileUrl"]!!.jsonPrimitive.content)
             Assertions.assertTrue(item["filePath"]!!.jsonPrimitive.content.endsWith("src/sample/AlphaSymbol.kt"))
             Assertions.assertTrue(item["line"]!!.jsonPrimitive.int >= 1)
             Assertions.assertTrue(item["column"]!!.jsonPrimitive.int >= 1)
@@ -219,7 +222,8 @@ internal class SymbolSearchRoutesTest {
         contributorDisposable?.let(Disposer::dispose)
         val disposable = Disposer.newDisposable("SymbolSearchRoutesTest.fixtureSymbolContributor")
         contributorDisposable = disposable
-        ChooseByNameContributor.SYMBOL_EP_NAME.point.registerExtension(
+        @Suppress("CAST_NEVER_SUCCEEDS")
+        (ChooseByNameContributor.SYMBOL_EP_NAME as ExtensionPointName<ChooseByNameContributor>).point.registerExtension(
             FixtureSymbolContributor(
                 root = root,
                 symbols = mapOf(

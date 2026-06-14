@@ -17,6 +17,9 @@ GET /api/v1/files/{path...}
 The path can be relative to the session `pathPrefix` or a URL-encoded full VFS
 URL. Use explicit boolean query values:
 
+When an API response includes an encoded VFS URL field such as `encodedUrl`, use
+that value as a single `{path...}` segment for follow-up `/files` requests.
+
 - `meta=true`
 - `content=true`
 - `exists=true`
@@ -58,6 +61,7 @@ Example body:
 ---
 name: Main.kt
 url: file:///workspace/src/Main.kt
+encodedUrl: file%3A%2F%2F%2Fworkspace%2Fsrc%2FMain.kt
 path: /workspace/src/Main.kt
 isDirectory: false
 fileType: Kotlin

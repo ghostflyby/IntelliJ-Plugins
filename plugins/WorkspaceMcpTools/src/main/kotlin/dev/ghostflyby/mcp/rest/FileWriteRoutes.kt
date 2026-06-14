@@ -136,9 +136,9 @@ private suspend fun projectExec(
 
 private suspend fun respondResult(call: ApplicationCall, result: WriteResult, force: Boolean = false) {
     when (result) {
-        is WriteResult.Created -> call.respond(HttpStatusCode.Created, WriteResponse(uri = result.file.url))
-        is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, WriteResponse(uri = result.dir.url))
-        is WriteResult.Replaced -> call.respond(HttpStatusCode.OK, WriteResponse(uri = result.file.url))
+        is WriteResult.Created -> call.respond(HttpStatusCode.Created, writeResponse(result.file.url))
+        is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, writeResponse(result.dir.url))
+        is WriteResult.Replaced -> call.respond(HttpStatusCode.OK, writeResponse(result.file.url))
         is WriteResult.Deleted -> call.respondText("true", ContentType.Text.Plain)
         is WriteResult.Conflict -> call.respond(
             HttpStatusCode.Conflict,
@@ -159,16 +159,22 @@ private suspend fun respondResult(call: ApplicationCall, result: WriteResult, fo
     }
 }
 
+private fun writeResponse(uri: String): WriteResponse = WriteResponse(
+    uri = uri,
+    encodedUri = encodeRoutePathSegment(uri),
+)
+
 @Serializable
 private data class WriteResponse(
     val uri: String? = null,
+    val encodedUri: String? = null,
     val error: String? = null,
     val force: String? = null,
 ) : TextBody {
     override fun renderTextBody(): String = when {
         error != null && force != null -> "$error\nforce: $force\n"
         error != null -> "$error\n"
-        uri != null -> "uri: $uri\n"
+        uri != null -> "uri: $uri\nencodedUri: $encodedUri\n"
         else -> ""
     }
 }

@@ -31,6 +31,8 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
   smaller than the repository root.
 - For writes and patches, treat `force=true` as an explicit override for protected text paths such as ignored files. Do
   not add it by default.
+- `/files` PATCH accepts the OpenAI Responses API `apply_patch` format when the body starts with `*** `. Load
+  `references/apply-patch-format.md` only when the exact format is unknown or a patch fails because of formatting.
 - URL-encode path segments and query values. Relative paths and query values can contain characters that need escaping.
 - Read-only exploration should use `GET`; do not use `PUT`, `POST`, `PATCH`, or `DELETE` unless the user clearly asked
   for mutation.
@@ -50,6 +52,8 @@ common error handling.
 - `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, compound responses, and glob
   queries.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation
+- `references/apply-patch-format.md`: OpenAI Responses API `apply_patch` body format for `/files` PATCH. Load only
+  when the exact format is unknown or a patch fails because of formatting.
 - `references/search.md`: text search via FindModel, file and symbol search via IDE indexes, context filtering, file
   glob, occurrence IDs for PATCH follow-up.
 - `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.

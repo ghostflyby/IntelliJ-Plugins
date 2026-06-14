@@ -7,6 +7,7 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.serialization.Serializable
+import java.net.URLEncoder
 
 internal enum class ExposedRootKind {
     WORKSPACE,
@@ -25,6 +26,7 @@ internal data class ExposedRootDto(
     val readable: Boolean,
     val writable: Boolean,
     val url: String,
+    val encodedUrl: String,
 )
 
 internal data class ExposedRoot(
@@ -39,11 +41,15 @@ internal data class ExposedRoot(
         id = id,
         displayName = displayName,
         url = base.url,
+        encodedUrl = encodeRoutePathSegment(base.url),
         kind = kind.name.lowercase(),
         readable = readable,
         writable = writable,
     )
 }
+
+private fun encodeRoutePathSegment(value: String): String =
+    URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
 internal suspend fun exposedWorkspaceRoots(project: Project): List<ExposedRoot> = readAction {
     val contentRoots = ProjectRootManager.getInstance(project).contentRoots.toList()

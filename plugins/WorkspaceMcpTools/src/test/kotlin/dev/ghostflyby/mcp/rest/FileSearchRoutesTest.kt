@@ -3,6 +3,7 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.navigation.ChooseByNameContributor
 import com.intellij.navigation.NavigationItem
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -118,6 +119,8 @@ internal class FileSearchRoutesTest {
                 response.bodyAsText(),
             )
             val alpha = items.first { it.jsonObject["name"]!!.jsonPrimitive.content == "AlphaFile.kt" }.jsonObject
+            val fileUrl = alpha["fileUrl"]!!.jsonPrimitive.content
+            Assertions.assertEquals(encodeRoutePathSegment(fileUrl), alpha["encodedFileUrl"]!!.jsonPrimitive.content)
             Assertions.assertTrue(alpha["filePath"]!!.jsonPrimitive.content.endsWith("src/in/AlphaFile.kt"))
             Assertions.assertEquals("AlphaFile.kt", alpha["relativePath"]!!.jsonPrimitive.content)
             Assertions.assertEquals(1, alpha["line"]!!.jsonPrimitive.int)
@@ -169,7 +172,8 @@ internal class FileSearchRoutesTest {
         contributorDisposable?.let(Disposer::dispose)
         val disposable = Disposer.newDisposable("FileSearchRoutesTest.fixtureFileContributor")
         contributorDisposable = disposable
-        ChooseByNameContributor.FILE_EP_NAME.point.registerExtension(
+        @Suppress("CAST_NEVER_SUCCEEDS")
+        (ChooseByNameContributor.FILE_EP_NAME as ExtensionPointName<ChooseByNameContributor>).point.registerExtension(
             FixtureFileContributor(
                 root = root,
                 entries = mapOf(

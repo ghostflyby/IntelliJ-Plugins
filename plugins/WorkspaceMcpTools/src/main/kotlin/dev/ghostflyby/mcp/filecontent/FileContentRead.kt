@@ -33,6 +33,7 @@ import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import kotlinx.serialization.Serializable
+import java.net.URLEncoder
 
 internal fun validateProjectRelativePath(relativePath: String) {
     require(relativePath.isNotBlank()) { "relativePath must not be blank." }
@@ -157,6 +158,7 @@ internal sealed interface FileLineRange {
 internal data class FileMeta(
     val name: String,
     val url: String,
+    val encodedUrl: String,
     val path: String,
     val isDirectory: Boolean,
     val length: Long,
@@ -185,6 +187,7 @@ internal suspend fun readMetaResult(
         FileMeta(
             name = file.name,
             url = file.url,
+            encodedUrl = encodeRoutePathSegment(file.url),
             path = file.path,
             isDirectory = file.isDirectory,
             length = file.length,
@@ -205,6 +208,9 @@ internal suspend fun readMetaResult(
         )
     }
 }
+
+private fun encodeRoutePathSegment(value: String): String =
+    URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
 // -- structure read --
 

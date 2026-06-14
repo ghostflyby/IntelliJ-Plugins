@@ -22,7 +22,7 @@ The body selects the operation via prefix:
 
 | Prefix               | Action                                           | Result                                        |
 |----------------------|--------------------------------------------------|-----------------------------------------------|
-| `*** Goto:`          | Go to declaration/definition                     | Single target `{fileUrl, lineNumber, column}` |
+| `*** Goto:`          | Go to declaration/definition                     | Single target `{fileUrl, encodedFileUrl, lineNumber, column}` |
 | `*** Usages:`        | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag        |
 | `*** Documentation:` | Read element documentation                       | Element name + documentation text             |
 
@@ -57,4 +57,6 @@ EOF
 
 Default Markdown format renders results as text with
 `goto:`/`usages:`/`documentation:` headers and `fileUrl:line:column` targets.
-Use `Accept: application/json` for structured output with `{applied, failed}`.
+Structured targets include both raw `fileUrl` and route-ready `encodedFileUrl`.
+Use `encodedFileUrl` as a single `{path...}` segment for follow-up `/files`
+requests against a full VFS URL.

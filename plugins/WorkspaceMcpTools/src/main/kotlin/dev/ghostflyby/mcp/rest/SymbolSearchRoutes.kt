@@ -49,6 +49,7 @@ private data class SymbolSearchItem(
     val name: String,
     val qualifiedName: String? = null,
     val fileUrl: String,
+    val encodedFileUrl: String,
     val filePath: String,
     val line: Int,
     val column: Int,
@@ -193,7 +194,7 @@ private suspend fun executeSymbolSearch(
 ): SymbolSearchResponse {
     val modelDisposable = Disposer.newDisposable("RestSymbolSearchRoutes.search")
     val diagnostics = mutableListOf<String>()
-    var timedOut = false
+    var timedOut: Boolean
     var collection = RawCollectionResult(candidates = emptyList(), observedCount = 0, completed = true)
 
     try {
@@ -469,11 +470,13 @@ private suspend fun convertCandidate(
             .getOrNull()
             ?.takeIf { it.isNotBlank() }
 
+        val fileUrl = virtualFile.url
         CandidateConversionResult(
             item = SymbolSearchItem(
                 name = name,
                 qualifiedName = qualifiedName,
-                fileUrl = virtualFile.url,
+                fileUrl = fileUrl,
+                encodedFileUrl = encodeRoutePathSegment(fileUrl),
                 filePath = relativizePathOrOriginal(project.basePath, virtualFile.path),
                 line = line,
                 column = column,

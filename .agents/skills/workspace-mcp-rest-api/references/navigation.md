@@ -10,10 +10,14 @@ X-Ghostflyby-Workspace-Session-Id: <sessionId>
 Content-Type: text/x-patch
 ```
 
+Structured JSON targets include both raw `fileUrl` and route-ready `encodedFileUrl`.
+Use `encodedFileUrl` as a single `{path...}` segment when reading a full VFS URL.
+
 The tailcard path locates the source file. It can be relative to the session
 `pathPrefix` or a URL-encoded full VFS URL.
-The body uses the same `@@` hunk format as `/files` PATCH to select a text
-target.
+The body uses the same hunk selection style as the OpenAI Responses API
+`apply_patch` format to select a text target. Load `apply-patch-format.md` only
+when the exact hunk format is unknown or a request fails because of formatting.
 
 ## Operations
 
@@ -24,7 +28,7 @@ target.
 
 | Prefix | Action | Result |
 |--------|--------|--------|
-| `*** Goto:` | Go to declaration/definition | Single target `{fileUrl, lineNumber, column}` |
+| `*** Goto:` | Go to declaration/definition | Single target `{fileUrl, encodedFileUrl, lineNumber, column}` |
 | `*** Usages:` | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag |
 | `*** Documentation:` | Read element documentation | Element name + documentation text |
 

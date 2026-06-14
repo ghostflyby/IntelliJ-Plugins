@@ -50,6 +50,7 @@ private const val DefaultFileSearchTimeoutMillis: Int = 20_000
 private data class FileSearchItem(
     val name: String,
     val fileUrl: String,
+    val encodedFileUrl: String,
     val filePath: String,
     val relativePath: String,
     val line: Int,
@@ -199,7 +200,7 @@ private suspend fun executeFileSearch(
     options: FileSearchOptions,
 ): FileSearchResponse {
     val diagnostics = mutableListOf<String>()
-    var timedOut = false
+    var timedOut: Boolean
     var collection = FileRawCollectionResult(candidates = emptyList(), observedCount = 0, completed = true)
     val model = GotoFileModel(project)
     val viewModel = FileSearchChooseByNameViewModel(
@@ -402,10 +403,12 @@ private suspend fun convertFileCandidate(
             ?: return@readAction FileCandidateConversionResult(skipReason = FileSkipReason.UNSUPPORTED_ITEM)
         val path = virtualFile.path
         val relativePath = relativizePathOrOriginal(root.pathPrefix.toString(), path)
+        val fileUrl = virtualFile.url
         FileCandidateConversionResult(
             item = FileSearchItem(
                 name = virtualFile.name,
-                fileUrl = virtualFile.url,
+                fileUrl = fileUrl,
+                encodedFileUrl = encodeRoutePathSegment(fileUrl),
                 filePath = relativizePathOrOriginal(project.basePath, path),
                 relativePath = relativePath,
                 line = 1,

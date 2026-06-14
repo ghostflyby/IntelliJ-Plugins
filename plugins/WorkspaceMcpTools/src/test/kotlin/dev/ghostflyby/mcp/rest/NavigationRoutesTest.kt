@@ -9,6 +9,9 @@ import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -57,10 +60,17 @@ internal class NavigationRoutesTest {
             val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
+                accept(ContentType.Application.Json)
             }
             Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
-            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
-            Assertions.assertTrue(response.bodyAsText().contains("goto: src/Alpha.kt"), response.bodyAsText())
+            val target = json.parseToJsonElement(response.bodyAsText())
+                .jsonObject["applied"]!!
+                .jsonArray
+                .first()
+                .jsonObject["result"]!!
+                .jsonObject
+            val fileUrl = target["fileUrl"]!!.jsonPrimitive.content
+            Assertions.assertEquals(encodeRoutePathSegment(fileUrl), target["encodedFileUrl"]!!.jsonPrimitive.content)
         }
     }
 

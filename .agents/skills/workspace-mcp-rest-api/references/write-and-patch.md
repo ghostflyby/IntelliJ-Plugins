@@ -33,6 +33,7 @@ Example body:
 
 ```text
 uri: file:///workspace/src/Demo.kt
+encodedUri: file%3A%2F%2F%2Fworkspace%2Fsrc%2FDemo.kt
 ```
 
 Use `POST` to create only when absent. Empty body creates a directory:
@@ -54,6 +55,7 @@ Example body:
 
 ```text
 uri: file:///workspace/new-directory
+encodedUri: file%3A%2F%2F%2Fworkspace%2Fnew-directory
 ```
 
 Use `DELETE` for files or empty directories:
@@ -101,7 +103,9 @@ The target may be a file or directory. If the target is a file, patch body paths
 are ignored or normalized and all hunks apply to the URL target file. If the
 target is a directory, patch section paths are resolved under that directory.
 
-Codex patch format is auto-detected when the body starts with `*** `:
+The OpenAI Responses API `apply_patch` format is auto-detected when the body
+starts with `*** `. Load `apply-patch-format.md` only when the exact format is
+unknown or a patch fails because of formatting.
 
 ```bash
 curl -i -X PATCH \

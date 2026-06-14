@@ -55,5 +55,6 @@ timedOut: false
 ```
 
 Structured responses contain the same route-local DTO fields: `name`,
-`qualifiedName`, `fileUrl`, `filePath`, `line`, `column`, `kind`, `language`,
-and `score`.
+`qualifiedName`, `fileUrl`, `encodedFileUrl`, `filePath`, `line`, `column`,
+`kind`, `language`, and `score`. Use `encodedFileUrl` as a single `{path...}`
+segment for follow-up `/files` requests against a full VFS URL.
