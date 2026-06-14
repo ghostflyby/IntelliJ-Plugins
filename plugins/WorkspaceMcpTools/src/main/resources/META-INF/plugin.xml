@@ -17,11 +17,8 @@
     </extensionPoints>
 
     <extensions defaultExtensionNs="dev.ghostflyby.mcp.workspace">
-        <workspaceFeature implementation="dev.ghostflyby.mcp.filecontent.FileContentFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorFeature"/>
         <workspaceFeature implementation="dev.ghostflyby.mcp.quality.QualityFeature"/>
-        <workspaceFeature implementation="dev.ghostflyby.mcp.scope.search.ScopeFileSearchFeature"/>
-        <workspaceFeature implementation="dev.ghostflyby.mcp.scope.symbol.ScopeSymbolSearchFeature"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
