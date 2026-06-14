@@ -203,6 +203,56 @@ public final class dev/ghostflyby/mcp/rest/Api$Projects$Companion {
 	public final fun serializer ()Lkotlinx/serialization/KSerializer;
 }
 
+public final class dev/ghostflyby/mcp/rest/Api$SearchFilesEntry {
+	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$SearchFilesEntry$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getLimit ()I
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getTimeoutMillis ()I
+}
+
+public final synthetic class dev/ghostflyby/mcp/rest/Api$SearchFilesEntry$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Ldev/ghostflyby/mcp/rest/Api$SearchFilesEntry$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ldev/ghostflyby/mcp/rest/Api$SearchFilesEntry;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/rest/Api$SearchFilesEntry;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$SearchFilesEntry$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry {
+	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/lang/String;ZLjava/lang/String;II)V
+	public synthetic fun <init> (Ljava/lang/String;ZLjava/lang/String;IIILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getKind ()Ljava/lang/String;
+	public final fun getLibraries ()Z
+	public final fun getLimit ()I
+	public final fun getQuery ()Ljava/lang/String;
+	public final fun getTimeoutMillis ()I
+}
+
+public final synthetic class dev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry$$serializer : kotlinx/serialization/internal/GeneratedSerializer {
+	public static final field INSTANCE Ldev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry$$serializer;
+	public final fun childSerializers ()[Lkotlinx/serialization/KSerializer;
+	public final fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ldev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry;
+	public synthetic fun deserialize (Lkotlinx/serialization/encoding/Decoder;)Ljava/lang/Object;
+	public final fun getDescriptor ()Lkotlinx/serialization/descriptors/SerialDescriptor;
+	public final fun serialize (Lkotlinx/serialization/encoding/Encoder;Ldev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry;)V
+	public synthetic fun serialize (Lkotlinx/serialization/encoding/Encoder;Ljava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mcp/rest/Api$SearchSymbolsEntry$Companion {
+	public final fun serializer ()Lkotlinx/serialization/KSerializer;
+}
+
 public final class dev/ghostflyby/mcp/rest/Api$SearchTextEntry {
 	public static final field Companion Ldev/ghostflyby/mcp/rest/Api$SearchTextEntry$Companion;
 	public fun <init> ()V
