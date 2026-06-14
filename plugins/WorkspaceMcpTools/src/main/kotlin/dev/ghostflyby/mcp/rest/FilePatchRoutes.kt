@@ -1,0 +1,305 @@
+package dev.ghostflyby.mcp.rest
+
+import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.components.service
+import com.intellij.openapi.diff.impl.patch.PatchLine
+import com.intellij.openapi.diff.impl.patch.PatchReader
+import com.intellij.openapi.diff.impl.patch.TextFilePatch
+import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFileManager
+import dev.ghostflyby.mcp.filecontent.FileContentKind
+import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
+import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
+import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
+import dev.ghostflyby.mcp.patch.*
+import dev.ghostflyby.mcp.rest.markdown.TextBody
+import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
+import io.ktor.http.*
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.request.*
+import io.ktor.server.resources.patch
+import io.ktor.server.response.*
+import io.ktor.server.routing.Route
+import kotlinx.serialization.Serializable
+
+@Serializable
+private data class PatchResponse(
+    val applied: List<Map<String, String>>,
+    val failed: List<String> = emptyList(),
+    val error: String? = null,
+) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        error?.let {
+            appendLine("ERROR: $it")
+            return@buildString
+        }
+        if (applied.isNotEmpty()) {
+            appendLine("applied:")
+            applied.forEach { item ->
+                val path = item["path"].orEmpty()
+                val operation = item["operation"].orEmpty()
+                appendLine("- $operation $path".trimEnd())
+            }
+        } else {
+            appendLine("applied: none")
+        }
+        if (failed.isNotEmpty()) {
+            appendLine("failed:")
+            failed.forEach { appendLine("- $it") }
+        }
+    }
+}
+
+// ── Format detection ───────────────────────────────────────
+
+private sealed interface PatchFormat {
+    data class Codex(val sections: List<CodexFileSection>) : PatchFormat
+    data class Git(val patches: List<TextFilePatch>) : PatchFormat
+    data object Unknown : PatchFormat
+}
+
+private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
+    // Explicit text/x-patch → git patch only
+    if (ct?.match(ContentType("text", "x-patch")) == true) {
+        val patches = runCatching { PatchReader(body).readTextPatches() }.getOrDefault(emptyList())
+        if (patches.isEmpty()) return PatchFormat.Unknown
+        return PatchFormat.Git(patches)
+    }
+    // Auto-detect by first line
+    val first = body.substringBefore('\n').trim()
+    return when {
+        first.startsWith("*** ") -> PatchFormat.Codex(splitCodexByFile(body))
+        first.startsWith("diff --git") || first.startsWith("--- ") -> {
+            val patches = runCatching { PatchReader(body).readTextPatches() }.getOrDefault(emptyList())
+            if (patches.isEmpty()) PatchFormat.Unknown else PatchFormat.Git(patches)
+        }
+
+        else -> PatchFormat.Unknown
+    }
+}
+
+// ── Route ──────────────────────────────────────────────────
+
+internal fun Route.filePatchRoutes() {
+    val resolver: WorkspaceProjectResolver = service()
+    val sessions: RestSessionService = service()
+
+    patch<Api.FilesEntry.File> { resource ->
+        val target = when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+            is RestFileRouteTarget.ProjectFile -> resolved.target
+            is RestFileRouteTarget.VirtualFileReadOnly -> {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    PatchResponse(
+                        applied = emptyList(),
+                        error = "VFS URL patches are allowed only for files in the session project workspace",
+                    ),
+                )
+                null
+            }
+
+            null -> null
+        }
+            ?: return@patch
+        handleSessionPatch(
+            call,
+            target,
+            resource.parent.force,
+        )
+    }
+}
+
+internal suspend fun handleSessionPatch(
+    call: ApplicationCall,
+    target: RestSessionRouteTarget,
+    force: Boolean,
+) {
+    val project = target.project
+    val access = resolveProjectFileAccess(project, target.root, target.relativePath)
+    if (access.targetIsBinary) {
+        call.respond(
+            HttpStatusCode.UnsupportedMediaType,
+            PatchResponse(applied = emptyList(), error = "Binary patches are not supported"),
+        )
+        return
+    }
+    if (access.file?.isDirectory != true && !access.policy.canWrite(FileContentKind.PATCH, force)) {
+        call.respond(
+            HttpStatusCode.Forbidden,
+            PatchResponse(applied = emptyList(), error = access.policy.reason),
+        )
+        return
+    }
+    val targetFile = access.file
+    val isDir = targetFile?.isDirectory == true
+    val body = call.receiveText()
+    when (val format = detectFormat(body, call.request.contentType())) {
+        is PatchFormat.Unknown -> call.respond(
+            HttpStatusCode.BadRequest,
+            PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
+        )
+
+        is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.sections, call)
+        is PatchFormat.Git -> applyGit(project, access, isDir, force, format.patches, call)
+    }
+}
+
+// ── Codex branch ──────────────────────────────────────────
+
+private suspend fun applyCodex(
+    project: Project,
+    routeAccess: ProjectFileAccess,
+    isDir: Boolean,
+    force: Boolean,
+    sections: List<CodexFileSection>, call: ApplicationCall,
+) {
+    if (sections.isEmpty()) {
+        call.respond(HttpStatusCode.BadRequest, PatchResponse(applied = emptyList(), error = "No patch sections"))
+        return
+    }
+    val applied = mutableListOf<Map<String, String>>()
+    val failed = mutableListOf<String>()
+    for (section in sections) {
+        try {
+            val fileRelPath =
+                if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else routeAccess.relativePath
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
+            ensurePatchAllowed(access, force)
+            val target = patchPathFor(access)
+            when (section.operation) {
+                CodexFileOperation.ADD -> {
+                    createPatchedFile(project, target, parseCodexAddContent(section.rawLines))
+                }
+
+                CodexFileOperation.DELETE -> {
+                    deletePatchedFile(target, emptyList())
+                }
+
+                CodexFileOperation.UPDATE -> {
+                    applyFileUpdate(project, target, section.rawLines)
+                }
+            }
+            applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
+        } catch (e: Exception) {
+            failed += "${section.filePath}: ${e.message ?: "unknown"}"
+        }
+    }
+    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+}
+
+// ── Git branch ────────────────────────────────────────────
+
+private suspend fun applyGit(
+    project: Project,
+    routeAccess: ProjectFileAccess,
+    isDir: Boolean, force: Boolean,
+    patches: List<TextFilePatch>, call: ApplicationCall,
+) {
+    val applied = mutableListOf<Map<String, String>>()
+    val failed = mutableListOf<String>()
+    for (p in patches) {
+        val path = p.afterName ?: p.beforeName ?: continue
+        try {
+            val fileRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, path) else routeAccess.relativePath
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
+            ensurePatchAllowed(access, force)
+            val target = patchPathFor(access)
+            when {
+                p.isNewFile -> createPatchedFile(project, target, p.singleHunkPatchText)
+                p.isDeletedFile -> deletePatchedFile(target, p.hunks)
+                else -> applyFileUpdate(project, target, gitHunksToRawLines(p))
+            }
+            val op = when {
+                p.isNewFile -> "add"; p.isDeletedFile -> "delete"; else -> "update"
+            }
+            applied += mapOf("path" to fileRelPath, "operation" to op)
+        } catch (e: Exception) {
+            failed += "$path: ${e.message ?: "unknown"}"
+        }
+    }
+    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+}
+
+private suspend fun resolvePatchSectionAccess(
+    project: Project,
+    routeAccess: ProjectFileAccess,
+    fileRelPath: String,
+): ProjectFileAccess {
+    return resolveProjectFileAccess(project, routeAccess.root, fileRelPath)
+}
+
+private fun joinRelativePath(base: String, child: String): String =
+    if (base.isBlank()) child else "$base/$child"
+
+private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
+    if (!access.policy.canWrite(FileContentKind.PATCH, force)) {
+        throw IllegalArgumentException(access.policy.reason)
+    }
+    if (access.targetIsBinary) {
+        throw IllegalArgumentException("Binary patches are not supported")
+    }
+}
+
+private fun patchPathFor(access: ProjectFileAccess): ProjectPatchPath {
+    val file = access.file
+    if (file != null) {
+        return ProjectPatchPath(
+            relativePath = access.relativePath,
+            nioPath = java.nio.file.Path.of(file.path),
+            url = file.url,
+        )
+    }
+    val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
+    val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
+    return ProjectPatchPath(
+        relativePath = access.relativePath,
+        nioPath = java.nio.file.Path.of(parent.path).resolve(targetName),
+        url = "${parent.url}/$targetName",
+    )
+}
+
+private fun gitHunksToRawLines(patch: TextFilePatch): List<String> {
+    val lines = mutableListOf<String>()
+    for (hunk in patch.hunks) {
+        lines += "@@ -${hunk.startLineBefore + 1},${hunk.endLineBefore - hunk.startLineBefore} " +
+                "+${hunk.startLineAfter + 1},${hunk.endLineAfter - hunk.startLineAfter} @@"
+        for (pl in hunk.lines) {
+            lines += when (pl.type) {
+                PatchLine.Type.ADD -> "+${pl.text}"
+                PatchLine.Type.REMOVE -> "-${pl.text}"
+                PatchLine.Type.CONTEXT -> " ${pl.text}"
+            }
+        }
+    }
+    return lines
+}
+
+// ── Shared EDT-safe update ─────────────────────────────────
+
+private suspend fun applyFileUpdate(
+    project: Project,
+    target: ProjectPatchPath,
+    rawLines: List<String>,
+) {
+    edtWriteAction {
+        val vf = VirtualFileManager.getInstance().findFileByUrl(target.url)
+            ?: error("File not found: ${target.relativePath}")
+        val doc = getOrCreateDocument(vf)
+        val baseText = doc?.immutableCharSequence ?: String(vf.contentsToByteArray(), vf.charset)
+        val hunks = parseCodexRawHunks(rawLines, baseText)
+            ?: error("No valid hunks")
+        val applied = GenericPatchApplier.apply(baseText, hunks)
+            ?: error("Patch does not apply for ${target.relativePath}")
+        if (doc != null) {
+            if (!doc.isWritable) error("Not writable: ${target.relativePath}")
+            doc.setText(applied.patchedText)
+            val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
+            mgr.doPostponedOperationsAndUnblockDocument(doc)
+            mgr.commitDocument(doc)
+            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(doc)
+        } else {
+            vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
+        }
+    }
+}

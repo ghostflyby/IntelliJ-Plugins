@@ -3,6 +3,33 @@
 <!-- Plugin description -->
 MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symbol Navigation integrations.
 
+SDK transport:
+
+- The official Kotlin SDK server is hosted once per IDE application, not once per project, so MCP clients can configure a
+  single localhost endpoint.
+- The default Streamable HTTP endpoint is `http://127.0.0.1:63341/mcp`. Override the port with
+  `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
+- Project-specific behavior is resolved inside the server from open IDE projects and, for later tool routing, MCP roots
+  or explicit request parameters.
+- The server declares resource subscription and list-change support. Open editor/document changes and VFS changes send
+  `notifications/resources/updated` to subscribed MCP sessions, while project/editor/root list changes refresh
+  `resources/list`.
+
+Workspace resource URI contract:
+
+- All workspace resources use the unified scheme `ij-workspace://{instanceKey}/projects/{projectKey}/{kind}/{tail}`:
+  - `files/{relativePath}` - project-relative file path; ignores unsaved editor content.
+  - `documents/{relativePath}` - project-relative editor document snapshot; includes unsaved text.
+  - `vfs/{rawIntellijVfsUrl}` - raw VFS URL within a project scope; persisted content only.
+  - `document-vfs/{rawIntellijVfsUrl}` - raw VFS editor document within a project scope; includes unsaved text.
+- `instanceKey` is a stable identifier for the IDE instance (product code lowercase + port, e.g. `iu-63341`).
+- `projectKey` is a stable slug derived from project name and basePath (e.g. `my-project-a1b2`).
+- Listable resources include `server/info`, `projects`, and `projects/{projectKey}` for metadata discovery.
+- Directory/stat/API-signature/document-metadata resources are returned as `application/json`; text reads return a
+  text MIME type when the file type is known, otherwise `text/plain`.
+- `resources/list` should stay small and list only stable entry points plus active workspace/editor roots. Large project
+  file inventories should be reached through resource templates, not full resource enumeration.
+
 VFS tools:
 
 - `vfs_get_url_from_local_path`
@@ -50,12 +77,11 @@ Document tools:
 - `document_is_line_modified`
 - `document_is_writable`
 - `document_get_modification_stamp`
-- `document_insert_string`
-- `document_delete_string`
-- `document_replace_string`
-- `document_set_text`
+- `document_apply_git_patch`
+- `document_apply_codex_patch`
 
-These methods are designed to map directly to `com.intellij.openapi.editor.Document` APIs.
+Patch apply tools only operate on files under the current project directory. They return both
+successful file paths and per-file failures when a multi-file patch partially applies.
 
 Navigation tools:
 
@@ -133,3 +159,30 @@ SearchScope tools:
 For text modes, input is matched as ordered keywords (whitespace-split by default): every keyword must exist and appear in the same order.
 `NAME` mode prefers `FilenameIndex` when scope resolves to `GLOBAL`; non-global scopes use traversal with `scope.contains(file)` filtering.
 <!-- Plugin description end -->
+
+## Core/Feature Architecture
+
+The SDK server (`WorkspaceMcpSdkServerService`) delegates resource listing, template registration, and tool
+registration to feature modules implementing `WorkspaceMcpFeature`:
+
+- **Core** (`dev.ghostflyby.mcp.core`): server/info, projects, projects/{projectKey} metadata resources.
+- **VFS Resources** (`dev.ghostflyby.mcp.vfs.resources`): project-scoped `files/{relativePath}` and `vfs/{rawVfsUrl}`
+  templates, plus per-project listable resources for base dirs, content/source roots, and open files.
+- **Document Resources** (`dev.ghostflyby.mcp.document.resources`): project-scoped `documents/{relativePath}` and
+  `document-vfs/{rawVfsUrl}` templates, plus listable open document snapshots.
+
+Tool handlers use `WorkspaceMcpRequestRunner` for centralized project resolution and error mapping.
+
+### SDK Tools
+
+The `dev.ghostflyby.mcp.sdk.tools` package provides the canonical migration pattern for Kotlin MCP SDK tools:
+and structured error mapping.
+
+Proof-of-migration:
+
+- `vfs_refresh` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url`, `async`, `recursive`, and
+  project hints; runs through the request runner; and returns structured error results.
+- `vfs_exists` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url` and project hints; routes
+  relative paths through the request runner; and returns deterministic JSON text results.
+
+Old annotation-based toolsets remain in place and are registered via `plugin.xml` as before.

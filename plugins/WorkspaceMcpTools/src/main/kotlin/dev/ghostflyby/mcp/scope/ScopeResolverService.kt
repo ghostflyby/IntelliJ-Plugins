@@ -2,27 +2,10 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.scope
 
-import com.intellij.mcpserver.mcpFail
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -36,6 +19,7 @@ import com.intellij.psi.search.scope.packageSet.NamedScope
 import com.intellij.psi.search.scope.packageSet.NamedScopesHolder
 import com.intellij.psi.search.scope.packageSet.PackageSetFactory
 import com.intellij.psi.search.scope.packageSet.ParsingException
+import dev.ghostflyby.mcp.common.WorkspaceResourceException
 import dev.ghostflyby.mcp.common.findFileByUrlWithRefresh
 
 @Service(Service.Level.PROJECT)
@@ -91,7 +75,7 @@ internal class ScopeResolverService {
         allowUiInteractiveScopes: Boolean,
     ): ResolvedScope {
         if (descriptor.version !in 1..2) {
-            mcpFail("Unsupported scope descriptor version ${descriptor.version}.")
+            throw WorkspaceResourceException("Unsupported scope descriptor version ${descriptor.version}.")
         }
         val request = ScopeResolveRequestDto(
             atoms = descriptor.atoms,
@@ -108,12 +92,12 @@ internal class ScopeResolverService {
         request: ScopeResolveRequestDto,
     ): ResolvedScope {
         if (request.tokens.isEmpty()) {
-            mcpFail("Scope program tokens must not be empty.")
+            throw WorkspaceResourceException("Scope program tokens must not be empty.")
         }
         val atomById = linkedMapOf<String, ScopeAtomDto>()
         for (atom in request.atoms) {
             if (atom.atomId in atomById) {
-                mcpFail("Duplicate atomId '${atom.atomId}' in request.")
+                throw WorkspaceResourceException("Duplicate atomId '${atom.atomId}' in request.")
             }
             atomById[atom.atomId] = atom
         }
@@ -123,16 +107,21 @@ internal class ScopeResolverService {
         for ((index, token) in request.tokens.withIndex()) {
             when (token.op) {
                 ScopeProgramOp.PUSH_ATOM -> {
-                    val atomId = token.atomId ?: mcpFail("Token[$index] PUSH_ATOM requires atomId.")
-                    val atom = atomById[atomId] ?: mcpFail("Token[$index] references unknown atomId '$atomId'.")
+                    val atomId =
+                        token.atomId ?: throw WorkspaceResourceException("Token[$index] PUSH_ATOM requires atomId.")
+                    val atom = atomById[atomId]
+                        ?: throw WorkspaceResourceException("Token[$index] references unknown atomId '$atomId'.")
                     val scope = runCatching {
                         resolveAtom(project, atom, request.allowUiInteractiveScopes)
                     }.getOrElse { error ->
                         val message = error.message ?: "Failed to resolve atom '$atomId'."
                         val nonStrictFallbackMode = atom.onResolveFailure ?: request.nonStrictDefaultFailureMode
                         when {
-                            request.strict -> mcpFail(message)
-                            nonStrictFallbackMode == ScopeAtomFailureMode.FAIL -> mcpFail(message)
+                            request.strict -> throw WorkspaceResourceException(message)
+                            nonStrictFallbackMode == ScopeAtomFailureMode.FAIL -> throw WorkspaceResourceException(
+                                message,
+                            )
+
                             nonStrictFallbackMode == ScopeAtomFailureMode.SKIP -> {
                                 diagnostics += "$message Fallback mode=SKIP."
                                 null
@@ -182,7 +171,7 @@ internal class ScopeResolverService {
 
                         !is GlobalSearchScope -> {
                             if (request.strict || request.nonStrictDefaultFailureMode == ScopeAtomFailureMode.FAIL) {
-                                mcpFail("Token[$index] NOT requires a GlobalSearchScope operand.")
+                                throw WorkspaceResourceException("Token[$index] NOT requires a GlobalSearchScope operand.")
                             }
                             diagnostics += "Token[$index] NOT operand is not global scope; replaced with EMPTY scope."
                             stack += StackScope(GlobalSearchScope.EMPTY_SCOPE)
@@ -197,11 +186,11 @@ internal class ScopeResolverService {
         }
 
         if (stack.size != 1) {
-            mcpFail("Scope program is invalid: final stack size must be 1, but was ${stack.size}.")
+            throw WorkspaceResourceException("Scope program is invalid: final stack size must be 1, but was ${stack.size}.")
         }
-        val resolved = stack.single().scope ?: mcpFail(
+        val resolved = stack.single().scope ?: throw WorkspaceResourceException(
             "Scope program resolved to empty expression after fallback processing. " +
-                "Provide at least one resolvable atom or use EMPTY_SCOPE fallback.",
+                    "Provide at least one resolvable atom or use EMPTY_SCOPE fallback.",
         )
         return ResolvedScope(
             scope = resolved,
@@ -260,18 +249,21 @@ internal class ScopeResolverService {
         return when (atom.kind) {
             ScopeAtomKind.STANDARD -> {
                 val standardScopeId = atom.standardScopeId
-                    ?: mcpFail("Atom '${atom.atomId}' kind STANDARD requires standardScopeId.")
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind STANDARD requires standardScopeId.")
                 atom.copy(scopeRefId = ScopeCatalogService.standardRefId(standardScopeId))
             }
 
             ScopeAtomKind.MODULE -> {
-                val moduleName = atom.moduleName ?: mcpFail("Atom '${atom.atomId}' kind MODULE requires moduleName.")
-                val flavor = atom.moduleFlavor ?: mcpFail("Atom '${atom.atomId}' kind MODULE requires moduleFlavor.")
+                val moduleName = atom.moduleName
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleName.")
+                val flavor = atom.moduleFlavor
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind MODULE requires moduleFlavor.")
                 atom.copy(scopeRefId = ScopeCatalogService.moduleRefId(moduleName, flavor))
             }
 
             ScopeAtomKind.NAMED_SCOPE -> {
-                val scopeName = atom.namedScopeName ?: mcpFail("Atom '${atom.atomId}' kind NAMED_SCOPE requires namedScopeName.")
+                val scopeName = atom.namedScopeName
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind NAMED_SCOPE requires namedScopeName.")
                 if (!atom.namedScopeHolderId.isNullOrBlank()) {
                     atom.copy(scopeRefId = ScopeCatalogService.namedRefId(atom.namedScopeHolderId, scopeName))
                 } else {
@@ -307,11 +299,13 @@ internal class ScopeResolverService {
             }
 
             ScopeAtomKind.PATTERN -> {
-                val rawPattern = atom.patternText ?: mcpFail("Atom '${atom.atomId}' kind PATTERN requires patternText.")
+                val rawPattern = atom.patternText
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind PATTERN requires patternText.")
                 val normalizedPattern = runCatching {
                     readAction { PackageSetFactory.getInstance().compile(rawPattern).text }
                 }.getOrElse { error ->
-                    val message = (error as? ParsingException)?.message ?: error.message ?: "Invalid pattern in atom '${atom.atomId}'."
+                    val message = (error as? ParsingException)?.message ?: error.message
+                    ?: "Invalid pattern in atom '${atom.atomId}'."
                     failOrDiagnose(strict, diagnostics, message)
                     rawPattern
                 }
@@ -322,14 +316,15 @@ internal class ScopeResolverService {
             }
 
             ScopeAtomKind.DIRECTORY -> {
-                val directoryUrl = atom.directoryUrl ?: mcpFail("Atom '${atom.atomId}' kind DIRECTORY requires directoryUrl.")
+                val directoryUrl = atom.directoryUrl
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind DIRECTORY requires directoryUrl.")
                 atom.copy(scopeRefId = atom.scopeRefId ?: "directory:$directoryUrl")
             }
 
             ScopeAtomKind.FILES -> {
                 val normalizedUrls = atom.fileUrls.distinct().sorted()
                 if (normalizedUrls.isEmpty()) {
-                    mcpFail("Atom '${atom.atomId}' kind FILES requires non-empty fileUrls.")
+                    throw WorkspaceResourceException("Atom '${atom.atomId}' kind FILES requires non-empty fileUrls.")
                 }
                 atom.copy(
                     fileUrls = normalizedUrls,
@@ -344,7 +339,7 @@ internal class ScopeResolverService {
 
             ScopeAtomKind.PROVIDER_SCOPE -> {
                 if (atom.scopeRefId.isNullOrBlank()) {
-                    mcpFail("Atom '${atom.atomId}' kind PROVIDER_SCOPE requires scopeRefId.")
+                    throw WorkspaceResourceException("Atom '${atom.atomId}' kind PROVIDER_SCOPE requires scopeRefId.")
                 }
                 atom
             }
@@ -366,19 +361,20 @@ internal class ScopeResolverService {
                 return resolvedByRef
             }
             if (!isSelfResolvedKind(atom.kind)) {
-                mcpFail("Unknown scopeRefId '${atom.scopeRefId}'.")
+                throw WorkspaceResourceException("Unknown scopeRefId '${atom.scopeRefId}'.")
             }
         }
 
         return when (atom.kind) {
             ScopeAtomKind.STANDARD -> {
                 val standardScopeId = atom.standardScopeId
-                    ?: mcpFail("Atom '${atom.atomId}' kind STANDARD requires standardScopeId.")
+                    ?: throw WorkspaceResourceException("Atom '${atom.atomId}' kind STANDARD requires standardScopeId.")
                 ScopeCatalogService.getInstance(project).findStandardScope(
                     project = project,
                     standardScopeId = standardScopeId,
                     allowUiInteractiveScopes = allowUiInteractiveScopes,
-                ) ?: mcpFail("Standard scope '$standardScopeId' cannot be resolved in this context.")
+                )
+                    ?: throw WorkspaceResourceException("Standard scope '$standardScopeId' cannot be resolved in this context.")
             }
 
             ScopeAtomKind.MODULE -> resolveModuleAtom(project, atom)
@@ -387,39 +383,44 @@ internal class ScopeResolverService {
             ScopeAtomKind.DIRECTORY -> resolveDirectoryAtom(project, atom)
             ScopeAtomKind.FILES -> resolveFilesAtom(project, atom)
             ScopeAtomKind.PROVIDER_SCOPE -> {
-                mcpFail("Atom '${atom.atomId}' kind PROVIDER_SCOPE requires scopeRefId.")
+                throw WorkspaceResourceException("Atom '${atom.atomId}' kind PROVIDER_SCOPE requires scopeRefId.")
             }
         }
     }
 
     private suspend fun resolveModuleAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val moduleName = atom.moduleName ?: mcpFail("Atom '${atom.atomId}' requires moduleName.")
-        val flavor = atom.moduleFlavor ?: mcpFail("Atom '${atom.atomId}' requires moduleFlavor.")
+        val moduleName =
+            atom.moduleName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleName.")
+        val flavor =
+            atom.moduleFlavor ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires moduleFlavor.")
         val module = readAction { ModuleManager.getInstance(project).findModuleByName(moduleName) }
-            ?: mcpFail("Module '$moduleName' not found.")
+            ?: throw WorkspaceResourceException("Module '$moduleName' not found.")
         return readAction { flavor.scopeFor(module) }
     }
 
     private suspend fun resolveNamedScopeAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val scopeName = atom.namedScopeName ?: mcpFail("Atom '${atom.atomId}' requires namedScopeName.")
+        val scopeName =
+            atom.namedScopeName ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires namedScopeName.")
         val holderId = atom.namedScopeHolderId
         val namedScope = readAction {
             if (holderId.isNullOrBlank()) {
                 NamedScopesHolder.getScope(project, scopeName)
             } else {
-                val holder = NamedScopesHolder.getAllNamedScopeHolders(project).firstOrNull { it.javaClass.name == holderId }
+                val holder =
+                    NamedScopesHolder.getAllNamedScopeHolders(project).firstOrNull { it.javaClass.name == holderId }
                 holder?.getScope(scopeName)
             }
-        } ?: mcpFail("Named scope '$scopeName' not found.")
+        } ?: throw WorkspaceResourceException("Named scope '$scopeName' not found.")
 
         if (namedScope.value == null) {
-            mcpFail("Named scope '$scopeName' has null PackageSet and cannot be resolved.")
+            throw WorkspaceResourceException("Named scope '$scopeName' has null PackageSet and cannot be resolved.")
         }
         return readAction { GlobalSearchScopesCore.filterScope(project, namedScope) }
     }
 
     private suspend fun resolvePatternAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val patternText = atom.patternText ?: mcpFail("Atom '${atom.atomId}' requires patternText.")
+        val patternText =
+            atom.patternText ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires patternText.")
         val packageSet = readAction {
             PackageSetFactory.getInstance().compile(patternText)
         }
@@ -428,11 +429,12 @@ internal class ScopeResolverService {
     }
 
     private suspend fun resolveDirectoryAtom(project: Project, atom: ScopeAtomDto): SearchScope {
-        val directoryUrl = atom.directoryUrl ?: mcpFail("Atom '${atom.atomId}' requires directoryUrl.")
+        val directoryUrl =
+            atom.directoryUrl ?: throw WorkspaceResourceException("Atom '${atom.atomId}' requires directoryUrl.")
         val directory = findFileByUrlWithRefresh(directoryUrl)
-            ?: mcpFail("Directory URL '$directoryUrl' not found.")
+            ?: throw WorkspaceResourceException("Directory URL '$directoryUrl' not found.")
         if (!directory.isDirectory) {
-            mcpFail("URL '$directoryUrl' is not a directory.")
+            throw WorkspaceResourceException("URL '$directoryUrl' is not a directory.")
         }
         return readAction {
             GlobalSearchScopesCore.directoryScope(project, directory, atom.directoryWithSubdirectories)
@@ -441,10 +443,10 @@ internal class ScopeResolverService {
 
     private suspend fun resolveFilesAtom(project: Project, atom: ScopeAtomDto): SearchScope {
         if (atom.fileUrls.isEmpty()) {
-            mcpFail("Atom '${atom.atomId}' kind FILES requires non-empty fileUrls.")
+            throw WorkspaceResourceException("Atom '${atom.atomId}' kind FILES requires non-empty fileUrls.")
         }
         val files = atom.fileUrls.map { url ->
-            findFileByUrlWithRefresh(url) ?: mcpFail("File URL '$url' not found.")
+            findFileByUrlWithRefresh(url) ?: throw WorkspaceResourceException("File URL '$url' not found.")
         }
         return readAction { GlobalSearchScope.filesScope(project, files) }
     }
@@ -456,7 +458,7 @@ internal class ScopeResolverService {
         expected: Int,
     ) {
         if (stack.size < expected) {
-            mcpFail("Token[$tokenIndex] $op requires $expected stack items, but stack size is ${stack.size}.")
+            throw WorkspaceResourceException("Token[$tokenIndex] $op requires $expected stack items, but stack size is ${stack.size}.")
         }
     }
 
@@ -470,7 +472,7 @@ internal class ScopeResolverService {
             is GlobalSearchScope if right is LocalSearchScope -> left.intersectWith(right)
             is LocalSearchScope if right is GlobalSearchScope -> right.intersectWith(left)
             is LocalSearchScope if right is LocalSearchScope -> left.intersectWith(right)
-            else -> mcpFail(
+            else -> throw WorkspaceResourceException(
                 "Token[$tokenIndex] AND is unsupported for scope types " +
                         "'${left.javaClass.name}' and '${right.javaClass.name}'.",
             )
@@ -487,7 +489,7 @@ internal class ScopeResolverService {
             is GlobalSearchScope if right is LocalSearchScope -> left.union(right)
             is LocalSearchScope if right is GlobalSearchScope -> right.union(left)
             is LocalSearchScope if right is LocalSearchScope -> left.union(right)
-            else -> mcpFail(
+            else -> throw WorkspaceResourceException(
                 "Token[$tokenIndex] OR is unsupported for scope types " +
                         "'${left.javaClass.name}' and '${right.javaClass.name}'.",
             )
@@ -496,13 +498,13 @@ internal class ScopeResolverService {
 
     private fun isSelfResolvedKind(kind: ScopeAtomKind): Boolean {
         return kind == ScopeAtomKind.PATTERN ||
-            kind == ScopeAtomKind.DIRECTORY ||
-            kind == ScopeAtomKind.FILES
+                kind == ScopeAtomKind.DIRECTORY ||
+                kind == ScopeAtomKind.FILES
     }
 
     private fun failOrDiagnose(strict: Boolean, diagnostics: MutableList<String>, message: String) {
         if (strict) {
-            mcpFail(message)
+            throw WorkspaceResourceException(message)
         }
         diagnostics += message
     }

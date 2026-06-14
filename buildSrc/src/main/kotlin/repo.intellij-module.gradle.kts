@@ -2,62 +2,29 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
-import org.gradle.api.artifacts.ResolutionStrategy
-import org.gradle.api.tasks.testing.Test
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
-import org.gradle.kotlin.dsl.*
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
-    java // Java support
-    alias(libs.plugins.kotlin) // Kotlin support
-    alias(libs.plugins.intellij.module) // IntelliJ Platform Gradle Plugin
-    alias(libs.plugins.kover) // Gradle Kover Plugin}
+    id("repo.module")
+    alias(libs.plugins.intellij.module)
+    alias(libs.plugins.kover)
 }
 
-
-val buildLogic = extensions.create<BuildLogicSettings>("buildLogic")
-
-group = providers.gradleProperty("pluginGroup").get()
-
+@OptIn(ExperimentalAbiValidation::class)
 kotlin {
-    jvmToolchain(21)
-    compilerOptions {
-        jvmTarget = JvmTarget.fromTarget("21")
-        jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
-    }
-    explicitApi()
-    @OptIn(ExperimentalAbiValidation::class)
     abiValidation {
         enabled = true
     }
 }
 
 repositories {
-    mavenCentral()
     intellijPlatform { defaultRepositories() }
 }
+
+val buildLogic = extensions.create<BuildLogicSettings>("buildLogic")
 
 afterEvaluate {
     dependencies.intellijPlatform {
@@ -74,34 +41,10 @@ afterEvaluate {
 }
 
 dependencies {
-
-    // Keep test dependencies locally versioned via version catalog
     testImplementation(libs.junit)
     testImplementation(libs.opentest4j)
     intellijPlatform {
+        testFramework(TestFrameworkType.JUnit5)
         testFramework(TestFrameworkType.Platform)
     }
-
-}
-configurations.all {
-    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
-}
-
-kover { reports { total { xml { onCheck = true } } } }
-
-tasks {
-    withType<Test> {
-        testLogging {
-            exceptionFormat = TestExceptionFormat.FULL
-            events("failed", "skipped")
-        }
-    }
-    processResources {
-        from(rootProject.file("LICENSE"))
-    }
-
-    check {
-        finalizedBy(checkLegacyAbi)
-    }
-
 }

@@ -240,9 +240,9 @@ internal class ScopeCatalogService {
 
     private fun isUnstableScope(serializationId: String?): Boolean {
         return serializationId == CURRENT_FILE_SCOPE_ID ||
-            serializationId == OPEN_FILES_SCOPE_ID ||
-            serializationId == RECENTLY_CHANGED_FILES_SCOPE_ID ||
-            serializationId == RECENTLY_VIEWED_FILES_SCOPE_ID
+                serializationId == OPEN_FILES_SCOPE_ID ||
+                serializationId == RECENTLY_CHANGED_FILES_SCOPE_ID ||
+                serializationId == RECENTLY_VIEWED_FILES_SCOPE_ID
     }
 
     private fun directStandardScope(project: Project, standardScopeId: String): SearchScope? {
@@ -315,7 +315,7 @@ internal class ScopeCatalogService {
 
         if (!foundCompatibleMethod) {
             diagnostics += "Provider '$providerId' has no compatible scope method. " +
-                "Expected getGeneralSearchScopes(Project, DataContext) or getSearchScopes(Project, DataContext)."
+                    "Expected getGeneralSearchScopes(Project, DataContext) or getSearchScopes(Project, DataContext)."
         }
 
         return ProviderScopeCollectionResult(

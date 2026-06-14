@@ -18,3 +18,11 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore"
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"

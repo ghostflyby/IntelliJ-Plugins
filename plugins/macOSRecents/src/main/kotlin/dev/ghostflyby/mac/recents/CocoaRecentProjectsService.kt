@@ -29,7 +29,6 @@ import java.net.URI
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -57,13 +56,15 @@ internal class CocoaRecentProjectsSyncService(
 internal class CocoaRecentProjectsCoordinator(
     private val coroutineScope: CoroutineScope,
     private val documentsBridge: CocoaRecentDocumentsBridge,
-    private val debounce: Duration = DEFAULT_DEBOUNCE_MILLIS,
+    private val debounceMillis: Long = DEFAULT_DEBOUNCE_MILLIS,
+    private val startupProjectLookupDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val timeSource: TimeSource = TimeSource.Monotonic,
     private val onFailure: (Throwable) -> Unit = {},
 ) {
     private val stateLock = Any()
     private val pendingStartupProjects = LinkedHashMap<String, String>()
     private var pendingRecentPaths: List<String>? = null
-    private var scheduledSyncDeadline: TimeMark = TimeSource.Monotonic.markNow()
+    private var scheduledSyncDeadline: TimeMark = timeSource.markNow()
     private var workerJob: Job? = null
     private var syncedUris: List<URI> = emptyList()
     private var hasSynced: Boolean = false
@@ -82,7 +83,7 @@ internal class CocoaRecentProjectsCoordinator(
                 pendingStartupProjects[projectKey] = projectPath
             }
             recentProjectKeys.forEach(pendingStartupProjects::remove)
-            scheduledSyncDeadline = TimeSource.Monotonic.markNow() + debounce
+            scheduledSyncDeadline = timeSource.markNow() + debounceMillis.milliseconds
             if (workerJob?.isActive != true) {
                 workerJob = coroutineScope.launch {
                     processPendingRequests()
@@ -147,7 +148,7 @@ internal class CocoaRecentProjectsCoordinator(
     }
 
     private suspend fun syncPendingRequest(request: PendingSyncRequest) {
-        val startupProjectsToRemove = withContext(Dispatchers.IO) {
+        val startupProjectsToRemove = withContext(startupProjectLookupDispatcher) {
             findStartupProjectsToRemove(
                 recentPaths = request.recentPaths,
                 startupProjects = request.startupProjects,
@@ -182,8 +183,8 @@ internal class CocoaRecentProjectsCoordinator(
                         ),
                     )
                 } else {
-                    val elapsed = scheduledSyncDeadline.elapsedNow()
-                    WorkerStep.Delay(-elapsed + 1.milliseconds - 1.nanoseconds)
+                    val remaining = -scheduledSyncDeadline.elapsedNow()
+                    WorkerStep.Delay(remaining)
                 }
             }
         }
@@ -206,9 +207,9 @@ internal class CocoaRecentProjectsCoordinator(
     )
 
     private sealed interface WorkerStep {
-        data class Delay(
+       data class Delay(
             val delay: Duration,
-        ) : WorkerStep
+       ) : WorkerStep
 
         data class Sync(
             val request: PendingSyncRequest,
@@ -218,7 +219,7 @@ internal class CocoaRecentProjectsCoordinator(
     }
 
     private companion object {
-        private val DEFAULT_DEBOUNCE_MILLIS = 250.milliseconds
-        private val LOG = Logger.getInstance(CocoaRecentProjectsCoordinator::class.java)
-    }
+        private const val DEFAULT_DEBOUNCE_MILLIS = 250L
+       private val LOG = Logger.getInstance(CocoaRecentProjectsCoordinator::class.java)
+   }
 }
