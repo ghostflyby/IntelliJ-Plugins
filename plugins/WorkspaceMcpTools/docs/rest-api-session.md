@@ -64,16 +64,17 @@ X-Ghostflyby-Workspace-Session-Id: s_8f4d0f8f2d6f4e0aa0d3c7e3c1a2b9c0
 Agent-facing file operation routes use `{path...}` so callers can pass a
 relative path or a URL-encoded full VFS URL:
 
-| Operation | Route |
-|-----------|-------|
-| Read file, directory, metadata, structure, existence | `GET /api/v1/files/{path...}` |
-| Create or replace text | `PUT /api/v1/files/{path...}` |
-| Create only, or create directory with empty body | `POST /api/v1/files/{path...}` |
-| Delete file or empty directory | `DELETE /api/v1/files/{path...}` |
-| Apply Codex or Git patch | `PATCH /api/v1/files/{path...}` |
-| Glob under a directory | `GET /api/v1/glob/{path...}?glob=PATTERN` |
-| Text search under a directory | `GET /api/v1/search/text/{path...}?query=TEXT` |
-| Goto/usages/documentation | `POST /api/v1/navigation/{path...}` |
+| Operation                                            | Route                                          |
+|------------------------------------------------------|------------------------------------------------|
+| Read file, directory, metadata, structure, existence | `GET /api/v1/files/{path...}`                  |
+| Create or replace text                               | `PUT /api/v1/files/{path...}`                  |
+| Create only, or create directory with empty body     | `POST /api/v1/files/{path...}`                 |
+| Delete file or empty directory                       | `DELETE /api/v1/files/{path...}`               |
+| Apply Codex or Git patch                             | `PATCH /api/v1/files/{path...}`                |
+| Glob under a directory                               | `GET /api/v1/glob/{path...}?glob=PATTERN`      |
+| Text search under a directory                        | `GET /api/v1/search/text/{path...}?query=TEXT` |
+| Symbol search in the session project                 | `GET /api/v1/search/symbols?query=NAME`        |
+| Goto/usages/documentation                            | `POST /api/v1/navigation/{path...}`            |
 
 Project metadata routes remain available for diagnostics:
 

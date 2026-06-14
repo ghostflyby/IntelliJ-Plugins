@@ -103,6 +103,16 @@ public object Api {
     }
 
     @Serializable
+    @Resource("/search/symbols")
+    public class SearchSymbolsEntry(
+        public val query: String = "",
+        public val libraries: Boolean = false,
+        public val kind: String? = null,
+        public val limit: Int = 50,
+        public val timeoutMillis: Int = 20_000,
+    )
+
+    @Serializable
     @Resource("/navigation/{path...}")
     public class NavigationPath(
         public val path: List<String> = emptyList(),

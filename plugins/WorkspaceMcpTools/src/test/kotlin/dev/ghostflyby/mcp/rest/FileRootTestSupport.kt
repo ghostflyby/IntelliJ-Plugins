@@ -229,6 +229,32 @@ internal fun searchTextUrl(
         },
     )
 }
+
+internal fun searchSymbolsUrl(
+    query: String = "",
+    libraries: Boolean = false,
+    kind: String? = null,
+    limit: Int = 50,
+    timeoutMillis: Int = 20_000,
+): String {
+    return apiUrl(
+        Api.SearchSymbolsEntry(
+            query = query,
+            libraries = libraries,
+            kind = kind,
+            limit = limit,
+            timeoutMillis = timeoutMillis,
+        ),
+        Parameters.build {
+            append("query", query)
+            append("libraries", libraries.toString())
+            kind?.let { append("kind", it) }
+            append("limit", limit.toString())
+            append("timeoutMillis", timeoutMillis.toString())
+        },
+    )
+}
+
 internal fun navigationUrl(
     relativePath: String,
 ): String {
