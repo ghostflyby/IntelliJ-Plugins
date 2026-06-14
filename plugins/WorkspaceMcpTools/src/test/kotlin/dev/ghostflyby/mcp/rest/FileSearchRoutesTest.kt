@@ -159,7 +159,7 @@ internal class FileSearchRoutesTest {
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             val body = response.bodyAsText()
             Assertions.assertTrue(body.contains("## Files"), body)
-            Assertions.assertTrue(body.contains("| name | path | fileType | score |"), body)
+            Assertions.assertTrue(body.contains("| name | path | encodedFileUrl | fileType | score |"), body)
             Assertions.assertTrue(body.contains("AlphaFile.kt"), body)
         }
     }

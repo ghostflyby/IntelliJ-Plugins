@@ -91,12 +91,18 @@ private data class SymbolSearchResponse(
             return@buildString
         }
         appendLine("## Symbols")
-        appendLine("| name | kind | path | line | qualifiedName |")
-        appendLine("| --- | --- | --- | ---: | --- |")
+        appendLine("| name | kind | path | encodedFileUrl | line | qualifiedName |")
+        appendLine("| --- | --- | --- | --- | ---: | --- |")
         items.forEach { item ->
+            val fileReference = markdownFileReference(
+                filePath = item.filePath,
+                fileUrl = item.fileUrl,
+                encodedFileUrl = item.encodedFileUrl,
+            )
             appendLine(
                 "| ${markdownCell(item.name)} | ${markdownCell(item.kind)} | " +
-                        "${markdownCell(item.filePath)} | ${item.line} | ${markdownCell(item.qualifiedName.orEmpty())} |",
+                        "${markdownCell(fileReference.path)} | ${markdownCell(fileReference.encodedFileUrl)} | " +
+                        "${item.line} | ${markdownCell(item.qualifiedName.orEmpty())} |",
             )
         }
         if (diagnostics.isNotEmpty()) {

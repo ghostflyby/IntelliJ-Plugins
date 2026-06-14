@@ -95,12 +95,14 @@ truncated: false
 timedOut: false
 ---
 ## Files
-| name | path | fileType | score |
-| --- | --- | --- | ---: |
-| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | Kotlin | 0 |
+| name | path | encodedFileUrl | fileType | score |
+| --- | --- | --- | --- | ---: |
+| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | Kotlin | 0 |
 ```
 
 Structured file search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
+Markdown rows show compact relative paths for project files. External or JAR VFS rows show the full `fileUrl` and
+`encodedFileUrl` for direct `/files/{path...}` follow-up.
 
 ## Symbol Search Route
 
@@ -144,9 +146,11 @@ truncated: false
 timedOut: false
 ---
 ## Symbols
-| name | kind | path | line | qualifiedName |
-| --- | --- | --- | ---: | --- |
-| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
+| name | kind | path | encodedFileUrl | line | qualifiedName |
+| --- | --- | --- | --- | ---: | --- |
+| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 
 Structured symbol search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
+Markdown rows show compact relative paths for project files. External or JAR VFS rows show the full `fileUrl` and
+`encodedFileUrl` for direct `/files/{path...}` follow-up.

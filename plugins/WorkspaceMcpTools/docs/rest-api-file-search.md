@@ -46,11 +46,12 @@ truncated: false
 timedOut: false
 ---
 ## Files
-| name | path | fileType | score |
-| --- | --- | --- | ---: |
-| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | Kotlin | 0 |
+| name | path | encodedFileUrl | fileType | score |
+| --- | --- | --- | --- | ---: |
+| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | Kotlin | 0 |
 ```
 
 Structured responses contain the same route-local DTO fields: `name`, `fileUrl`, `encodedFileUrl`, `filePath`,
 `relativePath`, `line`, `column`, `fileType`, and `score`. Use `encodedFileUrl` as a single `{path...}` segment for
-follow-up `/files` requests against a full VFS URL.
+follow-up `/files` requests against a full VFS URL. Markdown rows show compact relative paths for project files;
+external or JAR VFS rows show the full `fileUrl` and `encodedFileUrl`.

@@ -49,12 +49,14 @@ truncated: false
 timedOut: false
 ---
 ## Symbols
-| name | kind | path | line | qualifiedName |
-| --- | --- | --- | ---: | --- |
-| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
+| name | kind | path | encodedFileUrl | line | qualifiedName |
+| --- | --- | --- | --- | ---: | --- |
+| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 
 Structured responses contain the same route-local DTO fields: `name`,
 `qualifiedName`, `fileUrl`, `encodedFileUrl`, `filePath`, `line`, `column`,
 `kind`, `language`, and `score`. Use `encodedFileUrl` as a single `{path...}`
-segment for follow-up `/files` requests against a full VFS URL.
+segment for follow-up `/files` requests against a full VFS URL. Markdown rows
+show compact relative paths for project files; external or JAR VFS rows show the
+full `fileUrl` and `encodedFileUrl`.

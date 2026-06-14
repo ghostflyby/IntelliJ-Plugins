@@ -202,9 +202,23 @@ internal class SymbolSearchRoutesTest {
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             val body = response.bodyAsText()
             Assertions.assertTrue(body.contains("## Symbols"), body)
-            Assertions.assertTrue(body.contains("| name | kind | path | line | qualifiedName |"), body)
+            Assertions.assertTrue(body.contains("| name | kind | path | encodedFileUrl | line | qualifiedName |"), body)
             Assertions.assertTrue(body.contains("AlphaSymbol"), body)
         }
+    }
+
+    @Test
+    fun `symbol search markdown file reference uses full encoded URL for external VFS paths`() {
+        val fileUrl = "jar:///Users/test/.gradle/caches/modules-2/files-2.1/lib.jar!/pkg/Foo.class"
+        val encodedFileUrl = encodeRoutePathSegment(fileUrl)
+        val reference = markdownFileReference(
+            filePath = "/Users/test/.gradle/caches/modules-2/files-2.1/lib.jar!/pkg/Foo.class",
+            fileUrl = fileUrl,
+            encodedFileUrl = encodedFileUrl,
+        )
+
+        Assertions.assertEquals(fileUrl, reference.path)
+        Assertions.assertEquals(encodedFileUrl, reference.encodedFileUrl)
     }
 
     private suspend fun firstItem(response: HttpResponse): JsonObject {

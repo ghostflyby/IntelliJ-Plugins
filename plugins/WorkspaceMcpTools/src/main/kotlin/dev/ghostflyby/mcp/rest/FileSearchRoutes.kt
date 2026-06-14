@@ -87,11 +87,17 @@ private data class FileSearchResponse(
             return@buildString
         }
         appendLine("## Files")
-        appendLine("| name | path | fileType | score |")
-        appendLine("| --- | --- | --- | ---: |")
+        appendLine("| name | path | encodedFileUrl | fileType | score |")
+        appendLine("| --- | --- | --- | --- | ---: |")
         items.forEach { item ->
+            val fileReference = markdownFileReference(
+                filePath = item.filePath,
+                fileUrl = item.fileUrl,
+                encodedFileUrl = item.encodedFileUrl,
+            )
             appendLine(
-                "| ${markdownCell(item.name)} | ${markdownCell(item.filePath)} | " +
+                "| ${markdownCell(item.name)} | ${markdownCell(fileReference.path)} | " +
+                        "${markdownCell(fileReference.encodedFileUrl)} | " +
                     "${markdownCell(item.fileType)} | ${item.score ?: ""} |",
             )
         }
