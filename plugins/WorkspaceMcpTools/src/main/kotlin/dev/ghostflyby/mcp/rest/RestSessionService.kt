@@ -57,7 +57,7 @@ internal sealed class RestSessionRecordResult {
 internal class RestSessionService {
     private val sessions = ConcurrentHashMap<String, RestSessionRecord>()
     private val random = SecureRandom()
-    private val ttl: Duration = Duration.ofMinutes(10)
+    private val ttl: Duration = Duration.ofMinutes(30)
     private val clock: Clock = Clock.systemUTC()
     private val rootMatchComparator = compareByDescending<RootMatch> { it.relationRank }
         .thenByDescending { it.depthScore }

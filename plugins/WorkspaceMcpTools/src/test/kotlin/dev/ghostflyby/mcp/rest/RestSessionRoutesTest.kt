@@ -7,6 +7,7 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.IndexingTestUtil
@@ -17,6 +18,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.server.resources.*
 import io.ktor.server.testing.*
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -26,6 +28,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.net.URLEncoder
 import java.nio.file.Path
+import java.time.Duration
+import java.time.Instant
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
@@ -99,6 +103,37 @@ internal class RestSessionRoutesTest {
             Assertions.assertEquals(project.name, parsed["project"]?.jsonObject?.get("name")?.jsonPrimitive?.content)
             Assertions.assertFalse(parsed["project"]?.jsonObject?.containsKey("projectKey") == true)
             Assertions.assertFalse(parsed["exposedRoot"]?.jsonObject?.containsKey("rootId") == true)
+        }
+    }
+
+    @Test
+    fun `session access refreshes expiration deadline`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val response = client.createSession(projectPathFixture.get().toString())
+            Assertions.assertEquals(HttpStatusCode.Created, response.status)
+            val parsed = json.parseToJsonElement(response.bodyAsText()).jsonObject
+            val sessionId = parsed["sessionId"]?.jsonPrimitive?.content ?: error("missing session id")
+            val initialExpiresAt =
+                Instant.parse(parsed["expiresAt"]?.jsonPrimitive?.content ?: error("missing expiresAt"))
+
+            delay(5)
+            val sessions = ApplicationManager.getApplication().service<RestSessionService>()
+            val refreshed = sessions.resolveRecord(sessionId) as RestSessionRecordResult.Resolved
+
+            Assertions.assertTrue(
+                refreshed.record.expiresAt.isAfter(initialExpiresAt),
+                "expected ${refreshed.record.expiresAt} to be after $initialExpiresAt",
+            )
+            Assertions.assertTrue(
+                Duration.between(Instant.now(), refreshed.record.expiresAt) >= Duration.ofMinutes(29),
+                "expected refreshed session to expire about 30 minutes after access",
+            )
         }
     }
 

@@ -74,6 +74,10 @@ internal fun Route.fileRoutes() {
     get<Api.FilesEntry.File> { resource ->
         val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
             ?: return@get
+        if (resource.parent.problems) {
+            respondFileProblems(call, target, resource.parent)
+            return@get
+        }
         when (target) {
             is RestFileRouteTarget.ProjectFile -> respondSessionFile(
                 call = call,

@@ -165,7 +165,27 @@ internal inline fun <reified T : Any> apiUrl(resource: T, query: Parameters = Pa
     return builder.build().fullPath
 }
 
-private fun fileEntry(): Api.FilesEntry = Api.FilesEntry()
+private fun fileEntry(): Api.FilesEntry = Api.FilesEntry(
+    meta = false,
+    content = false,
+    exists = false,
+    structure = false,
+    force = false,
+    problems = false,
+    problemFix = false,
+    minSeverity = "WARNING",
+    name = emptyList(),
+    inspection = emptyList(),
+    fixable = false,
+    groupBy = emptyList(),
+    limit = 200,
+    timeoutMillis = 20_000,
+    startLine = null,
+    endLine = null,
+    maxLines = null,
+    aroundLine = null,
+    radius = null,
+)
 
 private fun queryParameters(
     meta: Boolean?,

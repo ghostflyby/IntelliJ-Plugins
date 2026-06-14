@@ -374,6 +374,72 @@ deleted file mode 100644
     }
 
     @Test
+    fun `PATCH supports workspace reformat operation`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Reformat File: foo.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertTrue(body.contains("- reformat src/foo.xml"), body)
+        }
+    }
+
+    @Test
+    fun `PATCH reports cleanup as public API unsupported`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Cleanup: foo.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertTrue(body.contains("failed"), body)
+            Assertions.assertTrue(body.contains("internal/ex inspection APIs"), body)
+        }
+    }
+
+    @Test
+    fun `PATCH problemFix query reports unsupported public API`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val resp = sessionClient.patch("${sessionClient.rootPathUrl("plain.txt")}?problemFix=true") {
+                setBody(
+                    """*** Begin Patch
+*** Fix Problem
+@@
+-hello sample
++XXXXXXXXXXXX
+*** End Patch""",
+                )
+            }
+            Assertions.assertEquals(HttpStatusCode.Conflict, resp.status)
+            Assertions.assertTrue(resp.bodyAsText().contains("Problem fixes are not supported"), resp.bodyAsText())
+        }
+    }
+
+    @Test
     fun `PATCH on directory rejects section with bad hunk`() {
         project
 

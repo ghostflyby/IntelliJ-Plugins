@@ -245,6 +245,56 @@ internal class RestFileTest {
     }
 
     @Test
+    fun `file problems reports syntax errors as markdown`() {
+        project
+        val broken = projectPathFixture.get().resolve("broken.xml")
+        broken.writeText("<root>")
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(broken)?.refresh(false, false)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val response =
+                sessionClient.get("${sessionClient.rootPathUrl("broken.xml")}?problems=true&minSeverity=ERROR")
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            val body = response.bodyAsText()
+            Assertions.assertTrue(body.contains("## Problems"), body)
+            Assertions.assertTrue(body.contains("SyntaxError"), body)
+            Assertions.assertTrue(body.contains("public-API limited"), body)
+        }
+    }
+
+    @Test
+    fun `inspection route accepts inspect file operations`() {
+        project
+        val broken = projectPathFixture.get().resolve("inspection-broken.xml")
+        broken.writeText("<root>")
+        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(broken)?.refresh(false, false)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val body = """*** Begin Patch
+*** Inspect File: inspection-broken.xml
+*** End Patch"""
+            val response = sessionClient.post("/api/v1/inspections/.?minSeverity=ERROR") {
+                setBody(body)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val text = response.bodyAsText()
+            Assertions.assertTrue(text.contains("SyntaxError"), text)
+            Assertions.assertTrue(text.contains("inspection-broken.xml"), text)
+        }
+    }
+
+    @Test
     fun `second workspace root file is classified by its containing root`() {
         project
 

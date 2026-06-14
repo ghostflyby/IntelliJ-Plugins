@@ -144,6 +144,34 @@ failed:
 - src/Main.kt: Patch does not apply
 ```
 
+## Format And Problem Operations
+
+`PATCH /api/v1/files/{path...}` also accepts patch-like workspace operations.
+These are not OpenAI `apply_patch` file edit sections; use them only for IDE
+format/problem actions.
+
+```patch
+*** Begin Patch
+*** Optimize Imports: src/A.kt
+*** Reformat File: src/A.kt
+*** Cleanup: src/B.kt
+*** End Patch
+```
+
+Example response:
+
+```text
+applied:
+- optimize-imports src/A.kt
+- reformat src/A.kt
+failed:
+- src/B.kt: Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.
+```
+
+Problem fixes use `problemFix=true`, but public-only v1 returns `409 Conflict`
+because IntelliJ does not expose complete problem quick-fix discovery/invocation
+without internal/ex APIs.
+
 ## Edit Session Workflow
 
 1. Read the file or files with `GET ...?content=true`.

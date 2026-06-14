@@ -21,7 +21,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 
 - Create a session before file operations with `POST /sessions` and a `pathPrefix`, then send
   `X-Ghostflyby-Workspace-Session-Id` on every `/files`, `/glob`, `/search/text`, `/search/files`,
-  `/search/symbols`, and `/navigation` request.
+  `/search/symbols`, `/inspections`, and `/navigation` request.
 - Prefer the narrowest suitable `pathPrefix` for the task. A plugin, module, or source directory keeps search,
   navigation, and patch targets small.
 - The default response is Markdown/plain optimized for agent reading. Use JSON only when structured parsing is needed.
@@ -77,6 +77,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 
 7. Verify after every meaningful edit.
     - Re-read changed files or targeted ranges to confirm IDE-visible state.
+    - Use `problems=true` or `/inspections/{path...}` when syntax/problem feedback is needed.
     - Re-run relevant search/navigation checks when references should have changed.
     - Run targeted tests or build tasks appropriate to the change. If tests cannot run, report why.
     - If an edit should remove a symbol or call pattern, use text search and/or usages to confirm no unintended
@@ -120,6 +121,13 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 2. Use returned `encodedFileUrl` for follow-up `/files/{path...}` reads.
 3. Treat library and SDK files as read-only context unless the user explicitly asks for diagnostics about them.
 
+### Check Problems and Format
+
+1. Read problems with `/files/{path}?problems=true&minSeverity=ERROR`.
+2. Run multi-file problem checks with `/inspections/{path}` and `*** Inspect File:` operations.
+3. Run deterministic cleanup with `/files` PATCH operations such as `*** Optimize Imports:` and `*** Reformat File:`.
+4. Treat `Cleanup` and `problemFix=true` unsupported responses as public API limitations unless a newer public API is confirmed.
+
 ## Reference Files
 
 Load only the reference needed for the current step:
@@ -132,5 +140,7 @@ Load only the reference needed for the current step:
   glob, occurrence IDs for PATCH follow-up.
 - `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation.
+- `references/inspection-and-format.md`: `problems=true`, `/inspections`, format/import workspace operations,
+  and public-only quick-fix/cleanup limits.
 - `references/apply-patch-format.md`: OpenAI Responses API `apply_patch` body format for `/files` PATCH. Load only
   when the exact format is unknown or a patch fails because of formatting.

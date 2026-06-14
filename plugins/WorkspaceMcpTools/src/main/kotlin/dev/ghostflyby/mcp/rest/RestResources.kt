@@ -19,6 +19,15 @@ public interface FileQuery {
     public val exists: Boolean
     public val structure: Boolean
     public val force: Boolean
+    public val problems: Boolean
+    public val problemFix: Boolean
+    public val minSeverity: String
+    public val name: List<String>
+    public val inspection: List<String>
+    public val fixable: Boolean
+    public val groupBy: List<String>
+    public val limit: Int
+    public val timeoutMillis: Int
     public val startLine: Int?
     public val endLine: Int?
     public val maxLines: Int?
@@ -55,6 +64,15 @@ public object Api {
         public override val exists: Boolean = false,
         public override val structure: Boolean = false,
         public override val force: Boolean = false,
+        public override val problems: Boolean = false,
+        public override val problemFix: Boolean = false,
+        public override val minSeverity: String = "WARNING",
+        public override val name: List<String> = emptyList(),
+        public override val inspection: List<String> = emptyList(),
+        public override val fixable: Boolean = false,
+        public override val groupBy: List<String> = emptyList(),
+        public override val limit: Int = 200,
+        public override val timeoutMillis: Int = 20_000,
         public override val startLine: Int? = null,
         public override val endLine: Int? = null,
         public override val maxLines: Int? = null,
@@ -119,6 +137,25 @@ public object Api {
         public val limit: Int = 50,
         public val timeoutMillis: Int = 20_000,
     )
+
+    @Serializable
+    @Resource("/inspections")
+    public class InspectionsEntry(
+        public val minSeverity: String = "WARNING",
+        public val name: List<String> = emptyList(),
+        public val inspection: List<String> = emptyList(),
+        public val fixable: Boolean = false,
+        public val groupBy: List<String> = emptyList(),
+        public val limit: Int = 200,
+        public val timeoutMillis: Int = 20_000,
+    ) {
+        @Serializable
+        @Resource("/{path...}")
+        public class Path(
+            public val parent: InspectionsEntry,
+            public val path: List<String> = emptyList(),
+        )
+    }
 
     @Serializable
     @Resource("/navigation/{path...}")

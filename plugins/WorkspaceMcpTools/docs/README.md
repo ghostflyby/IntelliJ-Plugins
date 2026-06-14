@@ -4,6 +4,7 @@
 - `design/SearchScopeDesign.md`（核心 scope 解析与消费链路已落地）
 - `design/SymbolSearchStubDesign.md`（scope symbol search 主链路已落地）
 - `design/CodeQualityToolsetDesign.md`（质量工具主链路已落地）
+- `rest-api-inspection-format.md`（REST inspection/format public-only v1 已落地）
 - `first-call/ToolsetFirstCallOptimizationNotes.md`（记录项均已落地）
 
 ## 未实现/部分实现文档（含待办建议）

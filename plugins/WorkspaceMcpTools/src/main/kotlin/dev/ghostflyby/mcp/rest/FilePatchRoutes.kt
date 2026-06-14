@@ -1,13 +1,20 @@
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.codeInsight.actions.OptimizeImportsProcessor
+import com.intellij.codeInsight.actions.ReformatCodeProcessor
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
 import dev.ghostflyby.mcp.filecontent.FileContentKind
 import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
@@ -21,6 +28,8 @@ import io.ktor.server.request.*
 import io.ktor.server.resources.patch
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -54,7 +63,7 @@ private data class PatchResponse(
 // ── Format detection ───────────────────────────────────────
 
 private sealed interface PatchFormat {
-    data class Codex(val sections: List<CodexFileSection>) : PatchFormat
+    data class Codex(val body: String, val sections: List<CodexFileSection>) : PatchFormat
     data class Git(val patches: List<TextFilePatch>) : PatchFormat
     data object Unknown : PatchFormat
 }
@@ -69,7 +78,7 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
     // Auto-detect by first line
     val first = body.substringBefore('\n').trim()
     return when {
-        first.startsWith("*** ") -> PatchFormat.Codex(splitCodexByFile(body))
+        first.startsWith("*** ") -> PatchFormat.Codex(body, splitCodexByFile(body))
         first.startsWith("diff --git") || first.startsWith("--- ") -> {
             val patches = runCatching { PatchReader(body).readTextPatches() }.getOrDefault(emptyList())
             if (patches.isEmpty()) PatchFormat.Unknown else PatchFormat.Git(patches)
@@ -106,6 +115,7 @@ internal fun Route.filePatchRoutes() {
             call,
             target,
             resource.parent.force,
+            resource.parent.problemFix,
         )
     }
 }
@@ -114,9 +124,20 @@ internal suspend fun handleSessionPatch(
     call: ApplicationCall,
     target: RestSessionRouteTarget,
     force: Boolean,
+    problemFix: Boolean = false,
 ) {
     val project = target.project
     val access = resolveProjectFileAccess(project, target.root, target.relativePath)
+    if (problemFix) {
+        call.respond(
+            HttpStatusCode.Conflict,
+            PatchResponse(
+                applied = emptyList(),
+                error = "Problem fixes are not supported without IntelliJ public APIs for problem quick-fix discovery.",
+            ),
+        )
+        return
+    }
     if (access.targetIsBinary) {
         call.respond(
             HttpStatusCode.UnsupportedMediaType,
@@ -140,7 +161,7 @@ internal suspend fun handleSessionPatch(
             PatchResponse(applied = emptyList(), error = "Unrecognized patch format"),
         )
 
-        is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.sections, call)
+        is PatchFormat.Codex -> applyCodex(project, access, isDir, force, format.body, format.sections, call)
         is PatchFormat.Git -> applyGit(project, access, isDir, force, format.patches, call)
     }
 }
@@ -152,8 +173,14 @@ private suspend fun applyCodex(
     routeAccess: ProjectFileAccess,
     isDir: Boolean,
     force: Boolean,
+    body: String,
     sections: List<CodexFileSection>, call: ApplicationCall,
 ) {
+    val workspaceOperations = parseWorkspaceOperations(body)
+    if (workspaceOperations.isNotEmpty()) {
+        applyWorkspaceOperations(project, routeAccess, isDir, force, workspaceOperations, call)
+        return
+    }
     if (sections.isEmpty()) {
         call.respond(HttpStatusCode.BadRequest, PatchResponse(applied = emptyList(), error = "No patch sections"))
         return
@@ -196,6 +223,99 @@ private suspend fun applyCodex(
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+}
+
+private enum class WorkspaceOperationKind(val wireName: String, val resultName: String) {
+    OPTIMIZE_IMPORTS("Optimize Imports", "optimize-imports"),
+    REFORMAT_FILE("Reformat File", "reformat"),
+    CLEANUP("Cleanup", "cleanup"),
+    FIX_PROBLEM("Fix Problem", "fix-problem"),
+}
+
+private data class WorkspaceOperation(
+    val kind: WorkspaceOperationKind,
+    val filePath: String?,
+)
+
+private val WORKSPACE_OPERATION = Regex("""^\*\*\* (Optimize Imports|Reformat File|Cleanup|Fix Problem)(?:: (.+))?$""")
+
+private fun parseWorkspaceOperations(body: String): List<WorkspaceOperation> {
+    return body.lineSequence().mapNotNull { rawLine ->
+        val match = WORKSPACE_OPERATION.find(rawLine.trim()) ?: return@mapNotNull null
+        val kind = WorkspaceOperationKind.entries.first { it.wireName == match.groupValues[1] }
+        WorkspaceOperation(kind, match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() })
+    }.toList()
+}
+
+private suspend fun applyWorkspaceOperations(
+    project: Project,
+    routeAccess: ProjectFileAccess,
+    isDir: Boolean,
+    force: Boolean,
+    operations: List<WorkspaceOperation>,
+    call: ApplicationCall,
+) {
+    val applied = mutableListOf<Map<String, String>>()
+    val failed = mutableListOf<String>()
+    for (operation in operations) {
+        val pathForError = operation.filePath ?: routeAccess.relativePath.ifBlank { "." }
+        try {
+            val fileRelPath = operation.filePath?.let { opPath ->
+                if (isDir) joinRelativePath(routeAccess.relativePath, opPath) else opPath
+            } ?: routeAccess.relativePath.ifBlank {
+                error("${operation.kind.wireName} requires a file path when PATCH target is the session root")
+            }
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
+            ensurePatchAllowed(access, force)
+            val file = access.file ?: error("File not found: $fileRelPath")
+            val psiFile = resolveWritablePsiFile(project, file)
+            when (operation.kind) {
+                WorkspaceOperationKind.OPTIMIZE_IMPORTS -> runCodeProcessor(project, file, psiFile) {
+                    OptimizeImportsProcessor(project, psiFile).run()
+                }
+
+                WorkspaceOperationKind.REFORMAT_FILE -> runCodeProcessor(project, file, psiFile) {
+                    ReformatCodeProcessor(psiFile, false).run()
+                }
+
+                WorkspaceOperationKind.CLEANUP -> error(
+                    "Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.",
+                )
+
+                WorkspaceOperationKind.FIX_PROBLEM -> error(
+                    "Problem fixes are not supported without IntelliJ public APIs for problem quick-fix discovery.",
+                )
+            }
+            applied += mapOf("path" to fileRelPath, "operation" to operation.kind.resultName)
+        } catch (e: Exception) {
+            failed += "$pathForError: ${e.message ?: "unknown"}"
+        }
+    }
+    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+}
+
+private suspend fun resolveWritablePsiFile(project: Project, file: com.intellij.openapi.vfs.VirtualFile): PsiFile {
+    if (file.isDirectory) error("Workspace operation target must be a file: ${file.path}")
+    return readAction { PsiManager.getInstance(project).findFile(file) }
+        ?: error("PSI file not found: ${file.path}")
+}
+
+private suspend fun runCodeProcessor(
+    project: Project,
+    file: com.intellij.openapi.vfs.VirtualFile,
+    psiFile: PsiFile,
+    block: () -> Unit,
+) {
+    withContext(Dispatchers.EDT) {
+        block()
+        val document = getOrCreateDocument(file)
+        if (document != null) {
+            val manager = com.intellij.psi.PsiDocumentManager.getInstance(project)
+            manager.doPostponedOperationsAndUnblockDocument(document)
+            manager.commitDocument(document)
+            FileDocumentManager.getInstance().saveDocument(document)
+        }
+    }
 }
 
 // ── Git branch ────────────────────────────────────────────
@@ -307,7 +427,7 @@ private suspend fun applyFileUpdate(
             val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
             mgr.doPostponedOperationsAndUnblockDocument(doc)
             mgr.commitDocument(doc)
-            com.intellij.openapi.fileEditor.FileDocumentManager.getInstance().saveDocument(doc)
+            FileDocumentManager.getInstance().saveDocument(doc)
         } else {
             vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
         }

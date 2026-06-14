@@ -24,6 +24,7 @@ that value as a single `{path...}` segment for follow-up `/files` requests.
 - `content=true`
 - `exists=true`
 - `structure=true`
+- `problems=true`
 
 Do not rely on bare query flags such as `?meta`.
 
@@ -102,6 +103,33 @@ Example body:
 ## Structure
 MainKt (file) [1-8]
 	main (fun) [3-5]
+```
+
+## Problems
+
+Use `problems=true` for a Markdown problem report. The public-only v1 reports
+PSI syntax errors and IDE file problem state; full inspection descriptors and
+quick-fix lists are intentionally not exposed through internal/ex APIs.
+
+```bash
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
+  "$BASE/files/src/Broken.xml?problems=true&minSeverity=ERROR"
+```
+
+Example body:
+
+```markdown
+---
+path: "src/Broken.xml"
+minSeverity: "ERROR"
+count: 1
+truncated: false
+timedOut: false
+---
+## Problems
+| severity | file | line | inspection | message | fixes |
+| --- | --- | ---: | --- | --- | --- |
+| ERROR | src/Broken.xml | 1 | SyntaxError | Element root is not closed |  |
 ```
 
 ## Range And Peek Reads
