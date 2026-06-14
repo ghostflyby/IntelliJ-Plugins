@@ -255,6 +255,25 @@ internal fun searchSymbolsUrl(
     )
 }
 
+internal fun searchFilesUrl(
+    query: String = "",
+    limit: Int = 50,
+    timeoutMillis: Int = 20_000,
+): String {
+    return apiUrl(
+        Api.SearchFilesEntry(
+            query = query,
+            limit = limit,
+            timeoutMillis = timeoutMillis,
+        ),
+        Parameters.build {
+            append("query", query)
+            append("limit", limit.toString())
+            append("timeoutMillis", timeoutMillis.toString())
+        },
+    )
+}
+
 internal fun navigationUrl(
     relativePath: String,
 ): String {

@@ -19,6 +19,7 @@ internal fun Route.restApi() {
         globRoutes()
         fileRoutes()
         searchTextRoutes()
+        searchFileRoutes()
         searchSymbolRoutes()
         navigationRoutes()
         fileWriteRoutes()

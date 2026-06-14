@@ -25,8 +25,8 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 - Use explicit boolean query values. Write `?meta=true`, `?content=true`, `?exists=true`, `?structure=true`, and
   `?force=true`; do not rely on bare presence-only flags such as `?meta`.
 - Create a session before file operations with `POST /sessions` and a `pathPrefix`, then send
-  `X-Ghostflyby-Workspace-Session-Id` on every `/files`, `/glob`, `/search/text`, `/search/symbols`, and
-  `/navigation` request.
+  `X-Ghostflyby-Workspace-Session-Id` on every `/files`, `/glob`, `/search/text`, `/search/files`,
+  `/search/symbols`, and `/navigation` request.
 - Prefer the narrowest suitable `pathPrefix` for the task. A plugin or source directory keeps glob and patch targets
   smaller than the repository root.
 - For writes and patches, treat `force=true` as an explicit override for protected text paths such as ignored files. Do
@@ -50,7 +50,7 @@ common error handling.
 - `references/read-and-glob.md`: file reads, metadata/content/exists/structure flags, compound responses, and glob
   queries.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation
-- `references/search.md`: text search via FindModel, symbol search via IDE indexes, context filtering, file glob,
-  occurrence IDs for PATCH follow-up.
+- `references/search.md`: text search via FindModel, file and symbol search via IDE indexes, context filtering, file
+  glob, occurrence IDs for PATCH follow-up.
 - `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.
   safety.

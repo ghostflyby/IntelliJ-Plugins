@@ -54,6 +54,52 @@ plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/FileRoutes.kt:
   occurrenceId: 7f3a0d8c21a4b912
 ```
 
+## File Search Route
+
+```text
+GET /api/v1/search/files
+X-Ghostflyby-Workspace-Session-Id: <sessionId>
+```
+
+File search uses the current session `pathPrefix` as its search root and IntelliJ's Goto File indexes for fuzzy
+matching. It returns files only; directories are omitted.
+
+## File Query Parameters
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `query` | string | required | File name pattern. |
+| `limit` | integer | `50` | Maximum files to return, capped at `200`. |
+| `timeoutMillis` | integer | `20000` | Search timeout in milliseconds. |
+
+Examples:
+
+```bash
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
+  "$BASE/search/files?query=RestSessionService&limit=20"
+
+curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \
+  "$BASE/search/files?query=restsession"
+```
+
+Example body:
+
+```markdown
+---
+query: "RestSessionService"
+pathPrefix: "/Users/ghostflyby/repos/learn/IntelliJ-Plugins/plugins/WorkspaceMcpTools"
+limit: 20
+timeoutMillis: 20000
+count: 1
+truncated: false
+timedOut: false
+---
+## Files
+| name | path | fileType | score |
+| --- | --- | --- | ---: |
+| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt | Kotlin | 0 |
+```
+
 ## Symbol Search Route
 
 ```text

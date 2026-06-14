@@ -73,6 +73,7 @@ relative path or a URL-encoded full VFS URL:
 | Apply Codex or Git patch                             | `PATCH /api/v1/files/{path...}`                |
 | Glob under a directory                               | `GET /api/v1/glob/{path...}?glob=PATTERN`      |
 | Text search under a directory                        | `GET /api/v1/search/text/{path...}?query=TEXT` |
+| File search under the session prefix                 | `GET /api/v1/search/files?query=NAME`          |
 | Symbol search in the session project                 | `GET /api/v1/search/symbols?query=NAME`        |
 | Goto/usages/documentation                            | `POST /api/v1/navigation/{path...}`            |
 
