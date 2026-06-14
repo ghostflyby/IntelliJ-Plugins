@@ -11,7 +11,10 @@ import com.intellij.find.impl.FindInProjectUtil
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.coroutineToIndicator
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.usageView.UsageInfo
@@ -110,11 +113,22 @@ internal fun Route.searchTextRoutes() {
             when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
                 is RestFileRouteTarget.ProjectFile -> resolved.target
                 is RestFileRouteTarget.VirtualFileReadOnly -> {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        RestError("Text search requires a directory in the session project workspace"),
+                    respondSearchText(
+                        call,
+                        resolved.project,
+                        resolved.file,
+                        SearchTextOptions(
+                            query = entry.query,
+                            regex = entry.regex,
+                            caseSensitive = entry.caseSensitive,
+                            wholeWord = entry.wholeWord,
+                            context = entry.context,
+                            fileFilter = entry.fileFilter,
+                            limit = entry.limit,
+                        ),
+                        requireIndexedSearchRoot = true,
                     )
-                    null
+                    return@get
                 }
 
                 null -> null
@@ -146,6 +160,27 @@ internal suspend fun respondSearchText(
         call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory"))
         return
     }
+    respondSearchText(call, target.project, rootDir, entry)
+}
+
+private suspend fun respondSearchText(
+    call: ApplicationCall,
+    project: Project,
+    rootDir: VirtualFile,
+    entry: SearchTextOptions,
+    requireIndexedSearchRoot: Boolean = false,
+) {
+    if (!rootDir.isDirectory) {
+        call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory"))
+        return
+    }
+    if (requireIndexedSearchRoot && !isIndexedSearchRoot(project, rootDir)) {
+        call.respond(
+            HttpStatusCode.Forbidden,
+            RestError("Text search requires project content or indexed dependency/SDK files"),
+        )
+        return
+    }
     val contextEnum = mapContext(entry.context)
     if (contextEnum == null) {
         call.respond(
@@ -154,10 +189,10 @@ internal suspend fun respondSearchText(
         )
         return
     }
-    val scope = GlobalSearchScopesCore.directoryScope(target.project, rootDir, true)
+    val scope = GlobalSearchScopesCore.directoryScope(project, rootDir, true)
     val findModel = buildSearchFindModel(entry, contextEnum)
     findModel.customScope = scope
-    val hits = executeSearch(target.project, findModel, entry.limit)
+    val hits = executeSearch(project, findModel, entry.limit)
     call.respond(
         SearchTextResponse(
             query = entry.query,
@@ -171,6 +206,13 @@ internal suspend fun respondSearchText(
             hits = hits,
         ),
     )
+}
+
+private suspend fun isIndexedSearchRoot(project: Project, rootDir: VirtualFile): Boolean {
+    return readAction {
+        val index = ProjectFileIndex.getInstance(project)
+        index.isInContent(rootDir) || index.isInLibraryClasses(rootDir) || index.isInLibrarySource(rootDir)
+    }
 }
 
 // -- Context mapping --
@@ -210,7 +252,7 @@ private fun buildSearchFindModel(
 // -- Search execution --
 
 private suspend fun executeSearch(
-    project: com.intellij.openapi.project.Project,
+    project: Project,
     findModel: FindModel,
     limit: Int,
 ): List<SearchTextHit> {
@@ -256,21 +298,40 @@ private suspend fun toSearchTextHit(
 
     val file = usage.virtualFile ?: return null
     val navigationRange = usage.navigationRange ?: return null
-    val snapshot = readAction {
-        val document = getOrCreateDocument(file) ?: return@readAction null
+    val startOffset = navigationRange.startOffset
+    val endOffset = navigationRange.endOffset
+    val snapshot = readAction { toSearchTextHitSnapshot(file, startOffset, endOffset) } ?: return null
+    return toSearchTextHit(projectBasePath, file, startOffset, endOffset, snapshot)
+}
 
-        if (navigationRange.startOffset < 0 || navigationRange.endOffset < navigationRange.startOffset) return@readAction null
-        if (navigationRange.endOffset > document.textLength) return@readAction null
+private fun toSearchTextHitSnapshot(
+    file: VirtualFile,
+    startOffset: Int,
+    endOffset: Int,
+): HitSnapshot? {
+    val document = getOrCreateDocument(file) ?: return null
 
-        val lineIndex = document.getLineNumber(navigationRange.startOffset)
-        val lineStart = document.getLineStartOffset(lineIndex)
-        val lineEnd = document.getLineEndOffset(lineIndex)
-        val column = navigationRange.startOffset - lineStart + 1
-        val lineText = document.getText(TextRange(lineStart, lineEnd))
-        val matchedText = document.getText(TextRange(navigationRange.startOffset, navigationRange.endOffset))
+    if (startOffset !in 0..endOffset) return null
+    if (endOffset > document.textLength) return null
 
-        HitSnapshot(lineIndex, lineText, matchedText, column)
-    } ?: return null
+    val lineIndex = document.getLineNumber(startOffset)
+    val lineStart = document.getLineStartOffset(lineIndex)
+    val lineEnd = document.getLineEndOffset(lineIndex)
+    return HitSnapshot(
+        lineIndex = lineIndex,
+        lineText = document.getText(TextRange(lineStart, lineEnd)),
+        matchedText = document.getText(TextRange(startOffset, endOffset)),
+        column = startOffset - lineStart + 1,
+    )
+}
+
+private fun toSearchTextHit(
+    projectBasePath: String?,
+    file: VirtualFile,
+    startOffset: Int,
+    endOffset: Int,
+    snapshot: HitSnapshot,
+): SearchTextHit {
     var lineText = snapshot.lineText
     if (lineText.length > MAX_LINE_LENGTH) {
         // Simple: trim from both ends
@@ -280,7 +341,7 @@ private suspend fun toSearchTextHit(
 
     val filePath = relativizePathOrOriginal(projectBasePath, file.path)
     val occurrenceId = sha256ShortHash(
-        listOf(file.url, navigationRange.startOffset.toString(), navigationRange.endOffset.toString()).joinToString("|"),
+        listOf(file.url, startOffset.toString(), endOffset.toString()).joinToString("|"),
     )
 
     return SearchTextHit(
@@ -289,8 +350,8 @@ private suspend fun toSearchTextHit(
         column = snapshot.column,
         lineText = lineText,
         matchedText = snapshot.matchedText,
-        startOffset = navigationRange.startOffset,
-        endOffset = navigationRange.endOffset,
+        startOffset = startOffset,
+        endOffset = endOffset,
         occurrenceId = occurrenceId,
     )
 }

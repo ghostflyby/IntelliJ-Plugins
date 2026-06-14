@@ -61,7 +61,7 @@ internal data class RestSessionRouteTarget(
 
 internal sealed class RestFileRouteTarget {
     data class ProjectFile(val target: RestSessionRouteTarget) : RestFileRouteTarget()
-    data class VirtualFileReadOnly(val file: VirtualFile) : RestFileRouteTarget()
+    data class VirtualFileReadOnly(val project: Project, val file: VirtualFile) : RestFileRouteTarget()
 }
 
 internal fun Route.sessionRoutes() {
@@ -112,7 +112,7 @@ internal suspend fun ApplicationCall.resolveFileRouteTarget(
     }
     return sessionProject.sessionProjectTargetFor(file, record)
         ?.let(RestFileRouteTarget::ProjectFile)
-        ?: RestFileRouteTarget.VirtualFileReadOnly(file)
+        ?: RestFileRouteTarget.VirtualFileReadOnly(sessionProject, file)
 }
 
 internal suspend fun ApplicationCall.resolveSessionRouteTarget(

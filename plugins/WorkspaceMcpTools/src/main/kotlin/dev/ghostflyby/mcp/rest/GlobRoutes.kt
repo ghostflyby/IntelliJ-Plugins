@@ -75,7 +75,7 @@ internal suspend fun respondGlob(
         is RestFileRouteTarget.VirtualFileReadOnly -> respondGlobFile(
             call,
             target.file,
-            project = null,
+            project = target.project,
             limit,
             patterns,
         )

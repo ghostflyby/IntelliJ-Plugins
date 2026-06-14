@@ -87,6 +87,7 @@ internal fun Route.fileRoutes() {
 
             is RestFileRouteTarget.VirtualFileReadOnly -> respondVirtualFile(
                 call = call,
+                project = target.project,
                 file = target.file,
                 meta = resource.parent.meta,
                 content = resource.parent.content,
@@ -132,6 +133,7 @@ internal suspend fun respondSessionFile(
 
 internal suspend fun respondVirtualFile(
     call: ApplicationCall,
+    project: Project,
     file: VirtualFile,
     meta: Boolean = false,
     content: Boolean = false,
@@ -146,7 +148,7 @@ internal suspend fun respondVirtualFile(
         content,
         exists,
         structure,
-        project = null,
+        project = project,
         policy = fileMetaPolicyFallback(file),
         rangeQuery = rangeQuery,
     )

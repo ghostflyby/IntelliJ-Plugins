@@ -7,6 +7,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
@@ -113,11 +114,13 @@ internal fun Route.navigationRoutes() {
             when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
                 is RestFileRouteTarget.ProjectFile -> resolved.target
                 is RestFileRouteTarget.VirtualFileReadOnly -> {
-                    call.respond(
-                        HttpStatusCode.Forbidden,
-                        RestError("Navigation requires a file in the session project workspace"),
+                    handleNavigation(
+                        call = call,
+                        project = resolved.project,
+                        file = resolved.file,
+                        filePath = resolved.file.url,
                     )
-                    null
+                    return@post
                 }
 
                 null -> null
@@ -134,6 +137,21 @@ internal suspend fun handleSessionNavigation(
     call: io.ktor.server.application.ApplicationCall,
     target: RestSessionRouteTarget,
 ) {
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
+    val file = access.file
+    if (file == null) {
+        call.respond(HttpStatusCode.NotFound, RestError("File not found: ${target.relativePath}"))
+        return
+    }
+    handleNavigation(call, target.project, file, target.relativePath)
+}
+
+private suspend fun handleNavigation(
+    call: io.ktor.server.application.ApplicationCall,
+    project: Project,
+    file: VirtualFile,
+    filePath: String,
+) {
     val body = call.receiveText()
     val sections = splitNavigationSections(body)
     if (sections.isEmpty()) {
@@ -146,14 +164,14 @@ internal suspend fun handleSessionNavigation(
     val failed = mutableListOf<String>()
     sections.forEach { section ->
         try {
-            val range = resolveSelection(target, section.oldLine, section.newLine)
+            val range = resolveSelection(project, file, filePath, section.oldLine, section.newLine)
             when (section.op) {
-                NavOp.Goto -> gotos += executeGoto(target.relativePath, range)
-                NavOp.Usages -> usages += executeUsages(target.relativePath, range)
-                NavOp.Documentation -> docs += executeDocumentation(target.relativePath, range)
+                NavOp.Goto -> gotos += executeGoto(filePath, range)
+                NavOp.Usages -> usages += executeUsages(filePath, range)
+                NavOp.Documentation -> docs += executeDocumentation(filePath, range)
             }
         } catch (e: Exception) {
-            failed += "${target.relativePath}: ${e.message}"
+            failed += "$filePath: ${e.message}"
         }
     }
     call.respond(NavigationResponse(gotos, usages, docs, failed))
@@ -168,19 +186,16 @@ private data class SelectionRange(
 )
 
 private suspend fun resolveSelection(
-    target: RestSessionRouteTarget,
+    project: Project,
+    file: VirtualFile,
+    filePath: String,
     oldLine: String,
     newLine: String,
 ): SelectionRange {
-    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
     return readAction {
-        val filePath = target.relativePath
-        val vf = access.file
-            ?: throw NoSuchElementException("File not found: $filePath")
-        val project = target.project
-        val psiFile = PsiManager.getInstance(project).findFile(vf)
+        val psiFile = PsiManager.getInstance(project).findFile(file)
             ?: throw NoSuchElementException("No PSI file for: $filePath")
-        val doc = getOrCreateDocument(vf)
+        val doc = getOrCreateDocument(file)
             ?: throw NoSuchElementException("No document for: $filePath")
         val oldIdx = doc.immutableCharSequence.indexOf(oldLine)
         if (oldIdx < 0) throw NoSuchElementException("Old line not found in document")

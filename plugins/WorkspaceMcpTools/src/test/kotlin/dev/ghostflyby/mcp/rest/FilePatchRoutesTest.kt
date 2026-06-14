@@ -349,6 +349,31 @@ deleted file mode 100644
     }
 
     @Test
+    fun `PATCH supports standard move section`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Update File: bar.xml
+*** Move to: moved-bar.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+
+            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved-bar.xml"))
+            Assertions.assertEquals("<bar/>", moved.bodyAsText().trim())
+
+            val old = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
+        }
+    }
+
+    @Test
     fun `PATCH on directory rejects section with bad hunk`() {
         project
 

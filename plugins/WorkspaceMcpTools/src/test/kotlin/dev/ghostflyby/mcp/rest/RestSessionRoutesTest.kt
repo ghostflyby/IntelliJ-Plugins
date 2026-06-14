@@ -57,6 +57,11 @@ internal class RestSessionRoutesTest {
         globDir.resolve("RootFile.txt").writeText("plain")
         globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
         externalPathFixture.get().resolve("external.txt").writeText("external")
+        externalPathFixture.get().resolve("External.kt")
+            .writeText("""class External { fun ping() = "external needle" }""")
+        externalPathFixture.get().resolve("nested").createDirectories()
+        externalPathFixture.get().resolve("nested/ExternalSearch.kt")
+            .writeText("""class ExternalSearch { val marker = "external needle" }""")
         val nestedRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(nestedRootPath)
             ?: error("nested root missing")
         ApplicationManager.getApplication().runWriteAction {
@@ -217,6 +222,27 @@ internal class RestSessionRoutesTest {
 
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals("hello sample", response.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `file route reads structure for full vfs url outside project`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val externalUrl = encodedVfsUrl(externalPathFixture.get().resolve("External.kt"))
+            val response = client.get("/api/v1/files/$externalUrl?structure=true") {
+                header(RestSessionHeader, sessionId)
+                accept(ContentType.Application.Json)
+            }
+
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            Assertions.assertTrue(response.bodyAsText().contains("External"), response.bodyAsText())
         }
     }
 
@@ -427,6 +453,29 @@ internal class RestSessionRoutesTest {
     }
 
     @Test
+    fun `session search text route rejects non indexed vfs url path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val externalUrl = encodedVfsUrl(externalPathFixture.get())
+            val response = client.get("/api/v1/search/text/$externalUrl?query=ExternalSearch&limit=10") {
+                header(RestSessionHeader, sessionId)
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, response.status)
+            Assertions.assertTrue(
+                response.bodyAsText().contains("indexed dependency/SDK files"),
+                response.bodyAsText(),
+            )
+        }
+    }
+
+    @Test
     fun `session navigation route executes against relative path`() {
         project
 
@@ -468,6 +517,32 @@ internal class RestSessionRoutesTest {
 + XXXXXXXXXXXXXX
 """
             val response = client.post("/api/v1/navigation/$rootFileUrl") {
+                header(RestSessionHeader, sessionId)
+                contentType(ContentType.parse("text/x-patch"))
+                accept(ContentType.Application.Json)
+                setBody(body)
+            }
+            Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `session navigation route accepts non project vfs url path`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+
+            val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
+            val externalUrl = encodedVfsUrl(externalPathFixture.get().resolve("External.kt"))
+            val body = """*** Goto:
+@@
+- class External { fun ping() = "external needle" }
++ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+"""
+            val response = client.post("/api/v1/navigation/$externalUrl") {
                 header(RestSessionHeader, sessionId)
                 contentType(ContentType.parse("text/x-patch"))
                 accept(ContentType.Application.Json)

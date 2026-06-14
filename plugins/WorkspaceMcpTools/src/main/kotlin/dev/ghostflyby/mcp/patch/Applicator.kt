@@ -34,6 +34,20 @@ internal suspend fun deletePatchedFile(target: ProjectPatchPath, hunks: List<Pat
     edtWriteAction { file.delete(Any()) }
 }
 
+internal suspend fun movePatchedFile(from: ProjectPatchPath, to: ProjectPatchPath) {
+    edtWriteAction {
+        val vfs = service<VirtualFileManager>()
+        val file = vfs.findFileByUrl(from.url) ?: throw WorkspaceResourceException("not found")
+        if (!file.isWritable) throw WorkspaceResourceException("not writable")
+        if (vfs.findFileByUrl(to.url) != null) throw WorkspaceResourceException("target exists")
+        val parentPath = to.nioPath.parent ?: throw WorkspaceResourceException("no parent")
+        val parent = VfsUtil.createDirectories(parentPath.toString())
+        val targetName = to.nioPath.fileName.toString()
+        if (file.parent != parent) file.move("patch", parent)
+        if (file.name != targetName) file.rename("patch", targetName)
+    }
+}
+
 internal suspend fun resolveTextDocumentForTool(target: ProjectPatchPath): Pair<VirtualFile, Document> = readAction {
     val vfs = service<VirtualFileManager>()
     val file = vfs.findFileByUrl(target.url) ?: throw WorkspaceResourceException("not found")

@@ -212,7 +212,12 @@ private fun policyFor(
 
         FileContentClassification.DEPENDENCY_OR_SDK -> FileAccessPolicy(
             classification = classification,
-            readableKinds = setOf(FileContentKind.CONTENT, FileContentKind.META, FileContentKind.BYTES),
+            readableKinds = setOf(
+                FileContentKind.CONTENT,
+                FileContentKind.META,
+                FileContentKind.STRUCTURE,
+                FileContentKind.BYTES,
+            ),
             writableKinds = emptySet(),
             requiresForceForWrite = false,
             reason = "Dependency and SDK files are read-only",

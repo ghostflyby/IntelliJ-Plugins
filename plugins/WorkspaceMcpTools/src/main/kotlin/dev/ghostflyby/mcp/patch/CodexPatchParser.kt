@@ -20,9 +20,11 @@ internal data class CodexFileSection(
     val operation: CodexFileOperation,
     val filePath: String,
     val rawLines: List<String>,
+    val moveTo: String? = null,
 )
 
 private val CODEX_FILE = Regex("""^\*\*\* (Update|Add|Delete) File: (.+)$""")
+private val CODEX_MOVE_TO = Regex("""^\*\*\* Move to: (.+)$""")
 private val HUNK_NUMBERED = Regex("""^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))?(?: @@.*)?$""")
 
 internal fun splitCodexByFile(patch: String): List<CodexFileSection> {
@@ -34,7 +36,7 @@ internal fun splitCodexByFile(patch: String): List<CodexFileSection> {
     for (i in lines.indices) {
         CODEX_FILE.find(lines[i])?.let { m ->
             if (currentFile != null && sectionStart < i) {
-                result += CodexFileSection(currentOperation!!, currentFile, lines.subList(sectionStart, i))
+                result += codexFileSection(currentOperation!!, currentFile, lines.subList(sectionStart, i))
             }
             currentOperation = when (m.groupValues[1]) {
                 "Add" -> CodexFileOperation.ADD
@@ -46,9 +48,27 @@ internal fun splitCodexByFile(patch: String): List<CodexFileSection> {
         }
     }
     if (currentFile != null && sectionStart < lines.size) {
-        result += CodexFileSection(currentOperation!!, currentFile, lines.subList(sectionStart, lines.size))
+        result += codexFileSection(currentOperation!!, currentFile, lines.subList(sectionStart, lines.size))
     }
     return result
+}
+
+private fun codexFileSection(
+    operation: CodexFileOperation,
+    filePath: String,
+    rawLines: List<String>,
+): CodexFileSection {
+    var moveTo: String? = null
+    val filtered = rawLines.filterNot { line ->
+        val match = CODEX_MOVE_TO.find(line)
+        if (match != null) {
+            moveTo = match.groupValues[1]
+            true
+        } else {
+            false
+        }
+    }
+    return CodexFileSection(operation, filePath, filtered, moveTo)
 }
 
 internal fun parseCodexAddContent(rawLines: List<String>): String {

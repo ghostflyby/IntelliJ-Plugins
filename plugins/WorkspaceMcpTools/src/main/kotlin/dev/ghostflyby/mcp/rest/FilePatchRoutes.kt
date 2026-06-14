@@ -177,7 +177,17 @@ private suspend fun applyCodex(
                 }
 
                 CodexFileOperation.UPDATE -> {
-                    applyFileUpdate(project, target, section.rawLines)
+                    if (section.rawLines.any { it.startsWith("@@") }) {
+                        applyFileUpdate(project, target, section.rawLines)
+                    } else if (section.moveTo == null) {
+                        error("No valid hunks")
+                    }
+                    section.moveTo?.let { moveTo ->
+                        val moveRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, moveTo) else moveTo
+                        val moveAccess = resolvePatchSectionAccess(project, routeAccess, moveRelPath)
+                        ensurePatchAllowed(moveAccess, force)
+                        movePatchedFile(target, patchPathFor(moveAccess))
+                    }
                 }
             }
             applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
