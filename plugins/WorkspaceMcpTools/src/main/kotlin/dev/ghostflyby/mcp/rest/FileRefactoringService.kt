@@ -3,7 +3,7 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.application.smartReadAction
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
@@ -65,14 +65,14 @@ internal suspend fun deleteFileWithRefactoring(
         PsiManager.getInstance(project).findFile(file)
     } ?: error("PSI file not found: $filePath")
 
-    val refactoring = smartReadAction(project) {
+    val refactoring = runEdtReadAction(project) {
         RefactoringFactory.getInstance(project).createSafeDelete(arrayOf(psiFile)).apply {
             setInteractive(null)
             isPreviewUsages = false
         }
     }
 
-    val usages = smartReadAction(project) {
+    val usages = runSmartRead(project) {
         refactoring.findUsages()
     }
     val references = readAction {
@@ -86,7 +86,7 @@ internal suspend fun deleteFileWithRefactoring(
 
     withContext(Dispatchers.EDT) {
         val refUsages = Ref(usages)
-        val canProceed = smartReadAction(project) {
+        val canProceed = runEdtReadAction(project) {
             refactoring.preprocessUsages(refUsages)
         }
         if (!canProceed) {
@@ -150,7 +150,7 @@ private suspend fun runMoveRefactoring(
             ?: error("PSI directory not found: ${targetParent.path}")
         file to directory
     }
-    val processor = smartReadAction(project) {
+    val processor = runEdtReadAction(project) {
         RestMoveFilesOrDirectoriesProcessor(
             project,
             arrayOf<PsiElement>(psiFile),
@@ -162,12 +162,12 @@ private suspend fun runMoveRefactoring(
             @Suppress("UsePropertyAccessSyntax") setPreviewUsages(false)
         }
     }
-    val usages = smartReadAction(project) {
+    val usages = runSmartRead(project) {
         runCatching { processor.findUsagesForRest() }
             .getOrElse { error(it.message ?: "Move usage search failed") }
     }
     val refUsages = Ref(usages)
-    val canProceed = smartReadAction(project) {
+    val canProceed = runEdtReadAction(project) {
         processor.preprocessUsagesForRest(refUsages)
     }
     if (!canProceed) {
@@ -187,18 +187,18 @@ private suspend fun runRenameRefactoring(
         PsiManager.getInstance(project).findFile(sourceFile)
             ?: error("PSI file not found: ${sourceFile.path}")
     }
-    val refactoring = smartReadAction(project) {
+    val refactoring = runEdtReadAction(project) {
         RefactoringFactory.getInstance(project).createRename(psiFile, targetName, true, true).apply {
             setInteractive(null)
             isPreviewUsages = false
         }
     }
-    val usages = smartReadAction(project) {
+    val usages = runSmartRead(project) {
         refactoring.findUsages()
     }
     withContext(Dispatchers.EDT) {
         val refUsages = Ref(usages)
-        val canProceed = smartReadAction(project) {
+        val canProceed = runEdtReadAction(project) {
             refactoring.preprocessUsages(refUsages)
         }
         if (!canProceed) {
@@ -231,10 +231,31 @@ private class RestMoveFilesOrDirectoriesProcessor(
 }
 
 private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit) {
+    withContext(Dispatchers.EDT) {
+        if (DumbService.isDumb(project)) {
+            error("Refactoring is unavailable while indexes are updating")
+        }
+        block()
+    }
+}
+
+private suspend fun <T> runEdtReadAction(project: Project, block: () -> T): T {
+    return withContext(Dispatchers.EDT) {
+        if (DumbService.isDumb(project)) {
+            error("Refactoring is unavailable while indexes are updating")
+        }
+        readAction { block() }
+    }
+}
+
+private suspend fun <T> runSmartRead(project: Project, block: () -> T): T {
     if (DumbService.isDumb(project)) {
         error("Refactoring is unavailable while indexes are updating")
     }
-    edtWriteAction(block)
+    return readAction {
+        ProgressManager.checkCanceled()
+        block()
+    }
 }
 
 private fun UsageInfo.toFileRefactoringReference(projectBasePath: String?): FileRefactoringReference? {
