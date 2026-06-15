@@ -2,6 +2,9 @@ package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.command.CommandProcessor
+import com.intellij.openapi.command.CommandProcessorEx
+import com.intellij.openapi.command.UndoConfirmationPolicy
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -78,6 +81,9 @@ internal suspend fun handleSessionPut(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(target.project, "REST PUT", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -89,6 +95,9 @@ internal suspend fun handleSessionPut(
             WriteResult.Created(createAndWriteFile(project, access, body))
         }
     }
+    } finally {
+        cmd.finishCommand(token!!, null)
+    }
 }
 
 internal suspend fun handleSessionPost(
@@ -96,6 +105,9 @@ internal suspend fun handleSessionPost(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(target.project, "REST POST", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -107,6 +119,9 @@ internal suspend fun handleSessionPost(
         }
         WriteResult.Created(createAndWriteFile(project, access, body))
     }
+    } finally {
+        cmd.finishCommand(token!!, null)
+    }
 }
 
 internal suspend fun handleSessionDelete(
@@ -114,6 +129,9 @@ internal suspend fun handleSessionDelete(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(target.project, "REST DELETE", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     projectExec(call, target, force) { access, project, _, force ->
         val file = access.file ?: return@projectExec WriteResult.NotFound
         if (!file.isDirectory && file.fileType.isBinary) {
@@ -137,6 +155,9 @@ internal suspend fun handleSessionDelete(
                 else WriteResult.RefactoringFailed(access.relativePath, e.message ?: "Delete refactoring failed")
             },
         )
+    }
+    } finally {
+        cmd.finishCommand(token!!, null)
     }
 }
 

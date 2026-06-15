@@ -6,6 +6,9 @@ import com.intellij.codeInsight.actions.ReformatCodeProcessor
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.command.CommandProcessor
+import com.intellij.openapi.command.CommandProcessorEx
+import com.intellij.openapi.command.UndoConfirmationPolicy
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
@@ -193,6 +196,9 @@ private suspend fun applyCodex(
     body: String,
     sections: List<CodexFileSection>, call: ApplicationCall,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(project, "REST PATCH", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     if (sections.isEmpty()) {
         val workspaceOperations = parseWorkspaceOperations(body)
         if (workspaceOperations.isNotEmpty()) {
@@ -247,6 +253,9 @@ private suspend fun applyCodex(
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
+    } finally {
+        cmd.finishCommand(token!!, null)
+    }
 }
 
 private enum class WorkspaceOperationKind(val wireName: String, val resultName: String) {
@@ -291,6 +300,9 @@ private suspend fun applyWorkspaceOperations(
     operations: List<WorkspaceOperation>,
     call: ApplicationCall,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(project, "REST PATCH", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
     val targets = linkedMapOf<String, WorkspaceOperationTarget>()
@@ -353,6 +365,9 @@ private suspend fun applyWorkspaceOperations(
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+    } finally {
+        cmd.finishCommand(token!!, null)
+    }
 }
 
 private suspend fun resolveWritablePsiFile(project: Project, file: VirtualFile): PsiFile {
@@ -386,6 +401,9 @@ private suspend fun applyGit(
     isDir: Boolean, force: Boolean,
     patches: List<TextFilePatch>, call: ApplicationCall,
 ) {
+    val cmd = CommandProcessor.getInstance() as CommandProcessorEx
+    val token = cmd.startCommand(project, "REST PATCH", null, UndoConfirmationPolicy.DO_NOT_REQUEST_CONFIRMATION)
+    try {
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
     val references = mutableListOf<FileRefactoringReference>()
@@ -417,6 +435,9 @@ private suspend fun applyGit(
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
+    } finally {
+        cmd.finishCommand(token!!, null)
+    }
 }
 
 private suspend fun deletePatchTargetWithRefactoring(

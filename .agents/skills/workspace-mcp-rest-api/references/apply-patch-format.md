@@ -52,6 +52,8 @@ Delete a file:
 | `-`    | Remove this line.            |
 | `+`    | Add this line.               |
 
+Every hunk body line must start with `+`, `-`, or a space.
+
 For added files, every content line, including blank lines, starts with `+`.
 
 ## Rules
