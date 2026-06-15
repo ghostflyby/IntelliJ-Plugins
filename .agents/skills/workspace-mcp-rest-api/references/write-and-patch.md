@@ -183,9 +183,8 @@ applied:
 - cleanup src/B.kt
 ```
 
-Problem fixes use `problemFix=true`, but public-only v1 returns `409 Conflict`
-because IntelliJ does not expose complete problem quick-fix discovery/invocation
-without internal/ex APIs.
+Problem fixes use `problemFix=true`. If the requested fix cannot be selected or
+applied, the route returns `409 Conflict` without modifying the file.
 
 ## Edit Session Workflow
 

@@ -264,7 +264,7 @@ internal class RestFileTest {
             val body = response.bodyAsText()
             Assertions.assertTrue(body.contains("## Problems"), body)
             Assertions.assertTrue(body.contains("SyntaxError"), body)
-            Assertions.assertTrue(body.contains("public-API limited"), body)
+            Assertions.assertFalse(body.contains("## Diagnostics"), body)
         }
     }
 

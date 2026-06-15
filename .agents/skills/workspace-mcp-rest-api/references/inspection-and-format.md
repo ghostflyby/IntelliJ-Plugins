@@ -39,8 +39,6 @@ timedOut: false
 | severity | file | line | inspection | message | fixes |
 | --- | --- | ---: | --- | --- | --- |
 | ERROR | src/Broken.xml | 1 | SyntaxError | Element root is not closed |  |
-## Diagnostics
-- Problem details are public-API limited: syntax errors come from PSI; file problem state comes from WolfTheProblemSolver. Full inspection quick fixes are not exposed without internal/ex APIs.
 ```
 
 ## Inspection Request
@@ -112,5 +110,5 @@ fix: Safe delete
 *** End Patch
 ```
 
-Public-only v1 returns `409 Conflict` because IntelliJ does not expose full
-problem quick-fix discovery/invocation without internal/ex APIs.
+If an automatic fix cannot be selected or applied, the route returns a clear
+conflict response without modifying the file.

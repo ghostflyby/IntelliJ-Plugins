@@ -16,6 +16,7 @@ import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.ide.progress.withBackgroundProgress
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.usageView.UsageInfo
 import com.intellij.usages.FindUsagesProcessPresentation
@@ -154,26 +155,22 @@ internal suspend fun respondSearchText(
     target: RestSessionRouteTarget,
     entry: SearchTextOptions,
 ) {
-    val rootDir = resolveProjectFileAccess(target.project, target.root, target.relativePath).file
-    if (rootDir?.isDirectory != true) {
-        call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory"))
+    val searchRoot = resolveProjectFileAccess(target.project, target.root, target.relativePath).file
+    if (searchRoot == null) {
+        call.respond(HttpStatusCode.NotFound, RestError("Search root not found"))
         return
     }
-    respondSearchText(call, target.project, rootDir, entry)
+    respondSearchText(call, target.project, searchRoot, entry)
 }
 
 private suspend fun respondSearchText(
     call: ApplicationCall,
     project: Project,
-    rootDir: VirtualFile,
+    searchRoot: VirtualFile,
     entry: SearchTextOptions,
     requireIndexedSearchRoot: Boolean = false,
 ) {
-    if (!rootDir.isDirectory) {
-        call.respond(HttpStatusCode.NotFound, RestError("Search root is not a directory"))
-        return
-    }
-    if (requireIndexedSearchRoot && !isIndexedSearchRoot(project, rootDir)) {
+    if (requireIndexedSearchRoot && !isIndexedSearchRoot(project, searchRoot)) {
         call.respond(
             HttpStatusCode.Forbidden,
             RestError("Text search requires project content or indexed dependency/SDK files"),
@@ -188,7 +185,13 @@ private suspend fun respondSearchText(
         )
         return
     }
-    val scope = GlobalSearchScopesCore.directoryScope(project, rootDir, true)
+    val scope = readAction {
+        if (searchRoot.isDirectory) {
+            GlobalSearchScopesCore.directoryScope(project, searchRoot, true)
+        } else {
+            GlobalSearchScope.fileScope(project, searchRoot)
+        }
+    }
     val findModel = buildSearchFindModel(entry, contextEnum)
     findModel.customScope = scope
     val hits = executeSearch(project, findModel, entry.limit)
@@ -207,10 +210,10 @@ private suspend fun respondSearchText(
     )
 }
 
-private suspend fun isIndexedSearchRoot(project: Project, rootDir: VirtualFile): Boolean {
+private suspend fun isIndexedSearchRoot(project: Project, searchRoot: VirtualFile): Boolean {
     return readAction {
         val index = ProjectFileIndex.getInstance(project)
-        index.isInContent(rootDir) || index.isInLibraryClasses(rootDir) || index.isInLibrarySource(rootDir)
+        index.isInContent(searchRoot) || index.isInLibraryClasses(searchRoot) || index.isInLibrarySource(searchRoot)
     }
 }
 

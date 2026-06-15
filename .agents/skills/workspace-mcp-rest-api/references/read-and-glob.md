@@ -107,9 +107,8 @@ MainKt (file) [1-8]
 
 ## Problems
 
-Use `problems=true` for a Markdown problem report. The public-only v1 reports
-PSI syntax errors and IDE file problem state; full inspection descriptors and
-quick-fix lists are intentionally not exposed through internal/ex APIs.
+Use `problems=true` for a Markdown problem report. The response includes IDE-visible
+problem state that can be associated with the requested file or directory.
 
 ```bash
 curl -i -H "X-Ghostflyby-Workspace-Session-Id: $SESSION_ID" \

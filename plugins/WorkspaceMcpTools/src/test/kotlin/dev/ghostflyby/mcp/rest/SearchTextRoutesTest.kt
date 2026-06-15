@@ -114,6 +114,27 @@ internal class SearchTextRoutesTest {
     }
 
     @Test
+    fun `search can use a single file as range`() {
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val response = sessionClient.get(searchTextUrl("src/Ignore.txt", query = "again")) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, response.status)
+            val hits = json.parseToJsonElement(response.bodyAsText()).jsonObject["hits"]!!.jsonArray
+            Assertions.assertEquals(1, hits.size)
+            Assertions.assertTrue(
+                hits[0].jsonObject["filePath"]!!.jsonPrimitive.content.endsWith("src/Ignore.txt"),
+            )
+        }
+    }
+
+    @Test
     fun `search limit caps hits`() {
 
         testApplication {
@@ -151,6 +172,7 @@ internal class SearchTextRoutesTest {
             Assertions.assertEquals(1, hit["lineNumber"]!!.jsonPrimitive.content.toInt())
         }
     }
+
     @Test
     fun `search text URL includes query params`() {
         val url = searchTextUrl("src", query = "hello", limit = 25)

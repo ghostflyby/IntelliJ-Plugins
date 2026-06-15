@@ -9,10 +9,8 @@ import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiNamedElement
+import com.intellij.psi.*
+import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
@@ -89,8 +87,8 @@ private fun splitNavigationSections(body: String): List<NavSection> {
             i++
             while (i < lines.size && !lines[i].startsWith("***")) {
                 val raw = lines[i]
-                if (raw.startsWith("- ")) oldLine = raw.substring(2)
-                if (raw.startsWith("+ ")) newLine = raw.substring(2)
+                if (raw.startsWith("-")) oldLine = raw.substring(1)
+                if (raw.startsWith("+")) newLine = raw.substring(1)
                 i++
             }
             if (oldLine.isNotEmpty() && newLine.isNotEmpty()) {
@@ -125,12 +123,17 @@ internal fun Route.navigationRoutes() {
 
                 null -> null
             }
-            ?: return@post
+                ?: return@post
         handleSessionNavigation(
             call,
             target,
         )
     }
+}
+
+private fun normalizeSelectedLine(documentText: CharSequence, line: String): String {
+    if (documentText.indexOf(line) >= 0) return line
+    return line.removePrefix(" ").takeIf { it != line && documentText.indexOf(it) >= 0 } ?: line
 }
 
 internal suspend fun handleSessionNavigation(
@@ -197,9 +200,11 @@ private suspend fun resolveSelection(
             ?: throw NoSuchElementException("No PSI file for: $filePath")
         val doc = getOrCreateDocument(file)
             ?: throw NoSuchElementException("No document for: $filePath")
-        val oldIdx = doc.immutableCharSequence.indexOf(oldLine)
+        val normalizedOldLine = normalizeSelectedLine(doc.immutableCharSequence, oldLine)
+        val normalizedNewLine = normalizeSelectedLine(doc.immutableCharSequence, newLine)
+        val oldIdx = doc.immutableCharSequence.indexOf(normalizedOldLine)
         if (oldIdx < 0) throw NoSuchElementException("Old line not found in document")
-        val changeStart = oldLine.commonPrefixWith(newLine).length
+        val changeStart = normalizedOldLine.commonPrefixWith(normalizedNewLine).length
         val selStart = oldIdx + changeStart
         val target =
             psiFile.findElementAt(selStart) ?: throw NoSuchElementException("No PSI element at offset $selStart")
@@ -216,8 +221,8 @@ private suspend fun executeGoto(
     return readAction {
         val results = mutableListOf<NavTarget>()
 
-    val project = range.psiFile.project
-    // path 1: GotoDeclarationHandler
+        val project = range.psiFile.project
+        // path 1: GotoDeclarationHandler
         val gotoDoc = range.psiFile.virtualFile?.let(::getOrCreateDocument)
         if (gotoDoc != null) {
             try {
@@ -264,28 +269,39 @@ private suspend fun executeUsages(
     return readAction {
         val ref = range.psiFile.findReferenceAt(range.selectionStart)?.resolve()
         val searchTarget = ref?.navigationElement ?: range.targetElement
-        @Suppress("CAST_NEVER_SUCCEEDS") val handler =
-            (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>).extensionList
-                .firstNotNullOfOrNull { factory ->
-                    if (factory.canFindUsages(searchTarget))
-                        factory.createFindUsagesHandler(
-                            searchTarget,
-                            FindUsagesHandlerFactory.OperationMode.USAGES_WITH_DEFAULT_OPTIONS,
-                        )
-                    else null
-                } ?: return@readAction NavUsages(path = filePath, results = emptyList())
-
-        val options = handler.getFindUsagesOptions(null)
         val usages = mutableListOf<UsageInfo>()
         val maxResults = 100
-        handler.processElementUsages(
-            searchTarget,
-            Processor { usage ->
-                usages += usage
+        ReferencesSearch.search(searchTarget).forEach(
+            Processor { reference ->
+                usages += UsageInfo(reference)
                 usages.size < maxResults
             },
-            options,
         )
+        @Suppress("CAST_NEVER_SUCCEEDS")
+        val handler = (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>)
+            .getExtensionList(range.psiFile.project)
+            .firstNotNullOfOrNull { factory ->
+                if (factory.canFindUsages(searchTarget)) {
+                    factory.createFindUsagesHandler(
+                        searchTarget,
+                        FindUsagesHandlerFactory.OperationMode.USAGES_WITH_DEFAULT_OPTIONS,
+                    )
+                } else {
+                    null
+                }
+            }
+
+        if (handler != null && usages.size < maxResults) {
+            val options = handler.getFindUsagesOptions(null)
+            handler.processElementUsages(
+                searchTarget,
+                Processor { usage ->
+                    usages += usage
+                    usages.size < maxResults
+                },
+                options,
+            )
+        }
         val results = usages.mapNotNull { toNavTarget(it) }
         return@readAction NavUsages(
             path = filePath,
@@ -317,6 +333,13 @@ private suspend fun executeDocumentation(
 private fun toNavTarget(element: PsiElement?): NavTarget? {
     val file = element?.containingFile?.virtualFile ?: return null
     val offset = element.textOffset
+    return toNavTarget(file, offset)
+}
+
+private fun toNavTarget(reference: PsiReference): NavTarget? {
+    val element = reference.element
+    val file = element.containingFile?.virtualFile ?: return null
+    val offset = element.textRange.startOffset + reference.rangeInElement.startOffset
     return toNavTarget(file, offset)
 }
 

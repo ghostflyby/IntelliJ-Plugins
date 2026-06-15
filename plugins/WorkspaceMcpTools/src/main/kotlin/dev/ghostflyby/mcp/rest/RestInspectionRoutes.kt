@@ -163,7 +163,6 @@ private suspend fun respondProblemReport(
     }
     val options = collection.options
     val diagnostics = collection.diagnostics.toMutableList()
-    diagnostics += "Problem details are public-API limited: syntax errors come from PSI; file problem state comes from WolfTheProblemSolver. Full inspection quick fixes are not exposed without internal/ex APIs."
     val problems = mutableListOf<RestProblemItem>()
     var truncated = false
     for (target in collection.targets) {

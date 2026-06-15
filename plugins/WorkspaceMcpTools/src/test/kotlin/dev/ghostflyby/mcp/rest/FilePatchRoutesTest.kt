@@ -364,6 +364,9 @@ deleted file mode 100644
 *** End Patch"""
             val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertFalse(body.contains("Read access is allowed"), body)
+            Assertions.assertFalse(body.contains("failed:"), body)
 
             val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved-bar.xml"))
             Assertions.assertEquals("<bar/>", moved.bodyAsText().trim())

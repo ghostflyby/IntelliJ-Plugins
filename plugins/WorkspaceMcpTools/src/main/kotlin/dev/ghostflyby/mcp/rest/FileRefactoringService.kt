@@ -52,9 +52,10 @@ internal suspend fun deleteFileWithRefactoring(
     relativePath: String,
     force: Boolean,
 ): DeleteRefactoringResult {
-    if (file.isDirectory) {
+    val filePath = readAction { file.path }
+    if (readAction { file.isDirectory }) {
         if (readAction { file.children.isNotEmpty() }) {
-            throw DirectoryNotEmptyException(file.path)
+            throw DirectoryNotEmptyException(filePath)
         }
         edtWriteAction { file.delete("rest-delete") }
         return DeleteRefactoringResult.Deleted(relativePath, emptyList())
@@ -62,11 +63,14 @@ internal suspend fun deleteFileWithRefactoring(
 
     val psiFile = readAction {
         PsiManager.getInstance(project).findFile(file)
-    } ?: error("PSI file not found: ${file.path}")
+    } ?: error("PSI file not found: $filePath")
 
-    val refactoring = RefactoringFactory.getInstance(project).createSafeDelete(arrayOf(psiFile))
-    refactoring.setInteractive(null)
-    refactoring.isPreviewUsages = false
+    val refactoring = runEdtReadAction(project) {
+        RefactoringFactory.getInstance(project).createSafeDelete(arrayOf(psiFile)).apply {
+            setInteractive(null)
+            isPreviewUsages = false
+        }
+    }
 
     val usages = runSmartRead(project) {
         refactoring.findUsages()
@@ -82,7 +86,9 @@ internal suspend fun deleteFileWithRefactoring(
 
     withContext(Dispatchers.EDT) {
         val refUsages = Ref(usages)
-        val canProceed = refactoring.preprocessUsages(refUsages)
+        val canProceed = runEdtReadAction(project) {
+            refactoring.preprocessUsages(refUsages)
+        }
         if (!canProceed) {
             error("Safe delete was cancelled by refactoring conflict preprocessing")
         }
@@ -112,9 +118,10 @@ internal suspend fun moveFileWithRefactoring(
     val originalName = readAction { sourceFile.name }
     val needsMove = readAction { sourceFile.parent != targetParent }
     val needsRename = originalName != targetName
+    val targetParentUrl = readAction { targetParent.url }
 
     if (needsMove) {
-        val intermediateUrl = "${targetParent.url}/$originalName"
+        val intermediateUrl = "$targetParentUrl/$originalName"
         if (needsRename && readAction { vfs.findFileByUrl(intermediateUrl) != null }) {
             error("intermediate target exists: $intermediateUrl")
         }
@@ -123,7 +130,7 @@ internal suspend fun moveFileWithRefactoring(
 
     if (needsRename) {
         val movedFile = readAction {
-            vfs.findFileByUrl(if (needsMove) "${targetParent.url}/$originalName" else from.url)
+            vfs.findFileByUrl(if (needsMove) "$targetParentUrl/$originalName" else from.url)
                 ?: error("moved file not found")
         }
         runRenameRefactoring(project, movedFile, targetName)
@@ -143,8 +150,8 @@ private suspend fun runMoveRefactoring(
             ?: error("PSI directory not found: ${targetParent.path}")
         file to directory
     }
-    runRefactoringProcessor(project) {
-        val processor = RestMoveFilesOrDirectoriesProcessor(
+    val processor = runEdtReadAction(project) {
+        RestMoveFilesOrDirectoriesProcessor(
             project,
             arrayOf<PsiElement>(psiFile),
             psiDirectory,
@@ -154,13 +161,19 @@ private suspend fun runMoveRefactoring(
             prepareSuccessfulSwingThreadCallback = null
             @Suppress("UsePropertyAccessSyntax") setPreviewUsages(false)
         }
-        val usages = runCatching { processor.findUsagesForRest() }
+    }
+    val usages = runSmartRead(project) {
+        runCatching { processor.findUsagesForRest() }
             .getOrElse { error(it.message ?: "Move usage search failed") }
-        val refUsages = Ref(usages)
-        val canProceed = processor.preprocessUsagesForRest(refUsages)
-        if (!canProceed) {
-            error("Move refactoring was cancelled by conflict preprocessing")
-        }
+    }
+    val refUsages = Ref(usages)
+    val canProceed = runEdtReadAction(project) {
+        processor.preprocessUsagesForRest(refUsages)
+    }
+    if (!canProceed) {
+        error("Move refactoring was cancelled by conflict preprocessing")
+    }
+    runRefactoringProcessor(project) {
         processor.executeForRest(refUsages.get())
     }
 }
@@ -174,15 +187,20 @@ private suspend fun runRenameRefactoring(
         PsiManager.getInstance(project).findFile(sourceFile)
             ?: error("PSI file not found: ${sourceFile.path}")
     }
-    val refactoring = RefactoringFactory.getInstance(project).createRename(psiFile, targetName, true, true)
-    refactoring.setInteractive(null)
-    refactoring.isPreviewUsages = false
+    val refactoring = runEdtReadAction(project) {
+        RefactoringFactory.getInstance(project).createRename(psiFile, targetName, true, true).apply {
+            setInteractive(null)
+            isPreviewUsages = false
+        }
+    }
     val usages = runSmartRead(project) {
         refactoring.findUsages()
     }
     withContext(Dispatchers.EDT) {
         val refUsages = Ref(usages)
-        val canProceed = refactoring.preprocessUsages(refUsages)
+        val canProceed = runEdtReadAction(project) {
+            refactoring.preprocessUsages(refUsages)
+        }
         if (!canProceed) {
             error("Rename refactoring was cancelled by conflict preprocessing")
         }
@@ -218,6 +236,15 @@ private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit)
             error("Refactoring is unavailable while indexes are updating")
         }
         block()
+    }
+}
+
+private suspend fun <T> runEdtReadAction(project: Project, block: () -> T): T {
+    return withContext(Dispatchers.EDT) {
+        if (DumbService.isDumb(project)) {
+            error("Refactoring is unavailable while indexes are updating")
+        }
+        readAction { block() }
     }
 }
 

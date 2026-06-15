@@ -36,8 +36,23 @@ internal class NavigationRoutesTest {
         project
         val root = Path.of(requireNotNull(project.basePath))
         val srcDir = Files.createDirectories(root.resolve("src"))
-        srcDir.resolve("Alpha.kt").writeText("class Alpha { fun hello() { println(\"hello world\") } }")
-        srcDir.resolve("Beta.kt").writeText("class Beta : Alpha() { override fun hello() { println(\"beta hello\") } }")
+        srcDir.resolve("Alpha.java").writeText(
+            """
+            public class Alpha {
+                /** Greets from Alpha. */
+                public String greet() { return "hello"; }
+            }
+            """.trimIndent(),
+        )
+        srcDir.resolve("Beta.java").writeText(
+            """
+            public class Beta {
+                public String call(Alpha target) {
+                    return target.greet();
+                }
+            }
+            """.trimIndent(),
+        )
         contentRootFixture.get().virtualFile.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
@@ -54,10 +69,10 @@ internal class NavigationRoutesTest {
 
             val body = """*** Goto:
 @@
-- class Alpha { fun hello() { println("hello world") } }
-+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+-        return target.greet();
++        return target.XXXXX();
 """
-            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Beta.java")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
@@ -71,6 +86,11 @@ internal class NavigationRoutesTest {
                 .jsonObject
             val fileUrl = target["fileUrl"]!!.jsonPrimitive.content
             Assertions.assertEquals(encodeRoutePathSegment(fileUrl), target["encodedFileUrl"]!!.jsonPrimitive.content)
+            Assertions.assertTrue(
+                fileUrl.endsWith("src/Alpha.java") || fileUrl.endsWith("src/Beta.java"),
+                response.bodyAsText(),
+            )
+            Assertions.assertFalse(response.bodyAsText().contains("FAILED"), response.bodyAsText())
         }
     }
 
@@ -86,15 +106,20 @@ internal class NavigationRoutesTest {
 
             val body = """*** Usages:
 @@
--    fun hello() { println("hello world") }
-+    XXXXXXXXXX
+-    public String greet() { return "hello"; }
++    public String XXXXX() { return "hello"; }
 """
-            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.java")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
             }
             Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+            Assertions.assertTrue(
+                json.parseToJsonElement(response.bodyAsText()).jsonObject["appliedUsages"]!!.jsonArray.isNotEmpty(),
+                response.bodyAsText(),
+            )
+            Assertions.assertFalse(response.bodyAsText().contains("FAILED"), response.bodyAsText())
         }
     }
 
@@ -110,15 +135,48 @@ internal class NavigationRoutesTest {
 
             val body = """*** Documentation:
 @@
-- class Alpha { fun hello() { println("hello world") } }
-+ XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+-    public String greet() { return "hello"; }
++    public String XXXXX() { return "hello"; }
     """
-            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.java")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody(body)
                 accept(ContentType.Application.Json)
             }
             Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+            val docs = json.parseToJsonElement(response.bodyAsText())
+                .jsonObject["appliedDocs"]!!
+                .jsonArray
+            Assertions.assertTrue(docs.isNotEmpty(), response.bodyAsText())
+            Assertions.assertFalse(response.bodyAsText().contains("FAILED"), response.bodyAsText())
+        }
+    }
+
+    @Test
+    fun `navigation accepts standard apply patch line prefixes`() {
+
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val body = """*** Documentation:
+@@
+-public class Alpha {
++XXXXXXXXXXXXXXXXXXXX
+"""
+            val response = sessionClient.post(navigationUrl("src/Alpha.java")) {
+                contentType(ContentType.parse("text/x-patch"))
+                setBody(body)
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertTrue(response.status.isSuccess(), response.bodyAsText())
+            Assertions.assertTrue(
+                json.parseToJsonElement(response.bodyAsText()).jsonObject["appliedDocs"]!!.jsonArray.isNotEmpty(),
+                response.bodyAsText(),
+            )
         }
     }
 
@@ -132,7 +190,7 @@ internal class NavigationRoutesTest {
             routing { restApi() }
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.post(navigationUrl("src/Alpha.kt")) {
+            val response = sessionClient.post(navigationUrl("src/Alpha.java")) {
                 contentType(ContentType.parse("text/x-patch"))
                 setBody("")
                 accept(ContentType.Application.Json)

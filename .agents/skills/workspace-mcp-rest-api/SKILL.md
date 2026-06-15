@@ -126,7 +126,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 1. Read problems with `/files/{path}?problems=true&minSeverity=ERROR`.
 2. Run multi-file problem checks with `/inspections/{path}` and `*** Inspect File:` operations.
 3. Run deterministic cleanup with `/files` PATCH operations such as `*** Optimize Imports:` and `*** Reformat File:`.
-4. Treat `problemFix=true` unsupported responses as public API limitations unless a newer public API is confirmed.
+4. Treat `problemFix=true` conflict responses as non-mutating failures unless a concrete fix was applied.
 
 ## Reference Files
 
@@ -141,6 +141,6 @@ Load only the reference needed for the current step:
 - `references/navigation.md`: goto declaration, find usages, documentation lookup via Codex patch hunk selection.
 - `references/write-and-patch.md`: PUT/POST/DELETE/PATCH, force semantics, patch formats, write responses, and mutation.
 - `references/inspection-and-format.md`: `problems=true`, `/inspections`, format/import workspace operations,
-  and public-only quick-fix/cleanup limits.
+  and problem-fix conflict behavior.
 - `references/apply-patch-format.md`: OpenAI Responses API `apply_patch` body format for `/files` PATCH. Load only
   when the exact format is unknown or a patch fails because of formatting.
