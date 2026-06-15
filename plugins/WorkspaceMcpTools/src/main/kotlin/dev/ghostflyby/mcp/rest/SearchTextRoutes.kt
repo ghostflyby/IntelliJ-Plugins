@@ -21,7 +21,6 @@ import com.intellij.usageView.UsageInfo
 import com.intellij.usages.FindUsagesProcessPresentation
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.util.Processor
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
@@ -133,7 +132,7 @@ internal fun Route.searchTextRoutes() {
 
                 null -> null
             }
-            ?: return@get
+                ?: return@get
         respondSearchText(
             call,
             target,

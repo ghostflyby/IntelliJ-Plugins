@@ -26,7 +26,6 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
@@ -98,7 +97,7 @@ private data class FileSearchResponse(
             appendLine(
                 "| ${markdownCell(item.name)} | ${markdownCell(fileReference.path)} | " +
                         "${markdownCell(fileReference.encodedFileUrl)} | " +
-                    "${markdownCell(item.fileType)} | ${item.score ?: ""} |",
+                        "${markdownCell(item.fileType)} | ${item.score ?: ""} |",
             )
         }
         appendDiagnostics(diagnostics)

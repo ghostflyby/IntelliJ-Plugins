@@ -20,16 +20,17 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-package dev.ghostflyby.mcp.common
+package dev.ghostflyby.mcp.rest
 
-import com.intellij.openapi.application.backgroundWriteAction
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.openapi.vfs.VirtualFileManager
+import java.nio.file.Path
 
-internal suspend fun findFileByUrlWithRefresh(url: String): VirtualFile? {
-    val manager = VirtualFileManager.getInstance()
-    val direct = readAction { manager.findFileByUrl(url) }
-    if (direct != null) return direct
-    return backgroundWriteAction { manager.refreshAndFindFileByUrl(url) }
+internal fun relativizePathOrNull(projectBasePath: String?, filePath: String): String? {
+    if (projectBasePath.isNullOrBlank()) return null
+    return runCatching {
+        Path.of(projectBasePath).relativize(Path.of(filePath)).toString().replace('\\', '/')
+    }.getOrNull()
+}
+
+internal fun relativizePathOrOriginal(projectBasePath: String?, filePath: String): String {
+    return relativizePathOrNull(projectBasePath, filePath) ?: filePath
 }

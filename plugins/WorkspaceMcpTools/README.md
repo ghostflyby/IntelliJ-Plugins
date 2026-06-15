@@ -1,188 +1,68 @@
-# Workspace MCP Tools
+# Workspace Agent Bridge
 
 <!-- Plugin description -->
-MCP toolset for IntelliJ workspace operations, including VFS, Document, and Symbol Navigation integrations.
+Workspace Agent Bridge exposes IntelliJ workspace capabilities to local coding agents through a Markdown-first REST API
+and a lightweight MCP SDK endpoint. The REST API is the primary agent-facing surface for file reads, edits, search,
+navigation, inspections, formatting, cleanup, and refactoring-aware file operations.
 
-SDK transport:
+## REST API
 
-- The official Kotlin SDK server is hosted once per IDE application, not once per project, so MCP clients can configure a
-  single localhost endpoint.
-- The default Streamable HTTP endpoint is `http://127.0.0.1:63341/mcp`. Override the port with
-  `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
-- Project-specific behavior is resolved inside the server from open IDE projects and, for later tool routing, MCP roots
-  or explicit request parameters.
-- The server declares resource subscription and list-change support. Open editor/document changes and VFS changes send
-  `notifications/resources/updated` to subscribed MCP sessions, while project/editor/root list changes refresh
-  `resources/list`.
+The REST server is hosted once per IDE application.
 
-Workspace resource URI contract:
+- Base URL: `http://127.0.0.1:63341/api/v1`
+- Override the port with `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
+- Create a workspace session with `POST /sessions` and pass
+  `X-Ghostflyby-Workspace-Session-Id` on workspace requests.
+- Default responses are Markdown/plain text optimized for agents. Use `Accept: application/json` only for structured
+  clients.
 
-- All workspace resources use the unified scheme `ij-workspace://{instanceKey}/projects/{projectKey}/{kind}/{tail}`:
-  - `files/{relativePath}` - project-relative file path; ignores unsaved editor content.
-  - `documents/{relativePath}` - project-relative editor document snapshot; includes unsaved text.
-  - `vfs/{rawIntellijVfsUrl}` - raw VFS URL within a project scope; persisted content only.
-  - `document-vfs/{rawIntellijVfsUrl}` - raw VFS editor document within a project scope; includes unsaved text.
-- `instanceKey` is a stable identifier for the IDE instance (product code lowercase + port, e.g. `iu-63341`).
-- `projectKey` is a stable slug derived from project name and basePath (e.g. `my-project-a1b2`).
-- Listable resources include `server/info`, `projects`, and `projects/{projectKey}` for metadata discovery.
-- Directory/stat/API-signature/document-metadata resources are returned as `application/json`; text reads return a
-  text MIME type when the file type is known, otherwise `text/plain`.
-- `resources/list` should stay small and list only stable entry points plus active workspace/editor roots. Large project
-  file inventories should be reached through resource templates, not full resource enumeration.
+Core routes:
 
-VFS tools:
+| Capability | Route |
+| --- | --- |
+| Project/session discovery | `GET /projects`, `POST /sessions`, `DELETE /sessions/{sessionId}` |
+| File read, metadata, structure, problem view | `GET /files/{path...}` |
+| Create or replace text | `PUT /files/{path...}` |
+| Create only, or create directory with an empty body | `POST /files/{path...}` |
+| Refactoring-aware delete | `DELETE /files/{path...}` |
+| Apply OpenAI `apply_patch`, Git patch, format, cleanup, move, and delete operations | `PATCH /files/{path...}` |
+| Glob and text search | `GET /glob/{path...}`, `GET /search/text/{path...}` |
+| Fuzzy file and symbol search | `GET /search/files`, `GET /search/symbols` |
+| Goto, usages, documentation | `POST /navigation/{path...}` |
+| Inspection refresh/report | `POST /inspections/{path...}` |
 
-- `vfs_get_url_from_local_path`
-- `vfs_get_url_from_local_paths`
-- `vfs_get_local_path_from_url`
-- `vfs_get_local_paths_from_urls`
-- `vfs_refresh`
-- `vfs_exists`
-- `vfs_exists_many`
-- `vfs_file_stat`
-- `vfs_file_stats`
-- `vfs_list_files`
-- `vfs_list_files_many`
-- `vfs_read_file`
-- `vfs_read_files`
-- `vfs_read_file_full`
-- `vfs_read_file_by_char_range`
-- `vfs_read_file_by_line_range`
-- `vfs_read_api_signature`
+Path inputs use session-relative paths or URL-encoded full IntelliJ VFS URLs. Full VFS URLs are accepted for reads;
+write operations remain restricted to project workspace files.
 
-`vfs_read_file` supports multiple read strategies via `mode`:
+`DELETE /files/{path...}` uses IntelliJ safe-delete behavior for files. If references are found, the default response is
+`409 Conflict` with a references table; retry with `force=true` only when deletion is intentional. `PATCH` delete and
+move sections use the same PSI/VFS-aware refactoring path, including IntelliJ move and rename refactoring for
+`*** Move to:`.
 
-- `FULL`: read the whole file
-- `CHAR_RANGE`: read `[startChar, endCharExclusive)`
-- `LINE_RANGE`: read `[startLine, endLineInclusive]` (1-based)
-- optional `clampOutOfBounds=true`: clamp invalid char/line ranges to file bounds instead of failing
+## MCP SDK Endpoint
 
-VFS read tools only return persisted VFS content. If you need unsaved editor content, call `document_*` tools.
-`vfs_list_files` returns an object wrapper with `names`.
+The Streamable HTTP MCP endpoint remains available at `http://127.0.0.1:63341/mcp` for SDK clients. It is hosted once
+per IDE application and resolves project-specific behavior from open IDE projects and request context.
 
-Document tools:
-
-- `document_get_text`
-- `document_get_texts`
-- `document_get_chars_sequence`
-- `document_get_immutable_char_sequence`
-- `document_get_text_range`
-- `document_get_text_ranges`
-- `document_get_text_length`
-- `document_get_line_count`
-- `document_get_line_number`
-- `document_get_line_start_offset`
-- `document_get_line_end_offset`
-- `document_get_line_separator_length`
-- `document_is_line_modified`
-- `document_is_writable`
-- `document_get_modification_stamp`
-- `document_apply_git_patch`
-- `document_apply_codex_patch`
-
-Patch apply tools only operate on files under the current project directory. They return both
-successful file paths and per-file failures when a multi-file patch partially applies.
-
-Navigation tools:
-
-- `navigation_to_reference`
-- `navigation_to_reference_batch`
-- `navigation_get_symbol_info`
-- `navigation_get_symbol_info_by_offset`
-- `navigation_get_symbol_info_auto_position`
-- `navigation_get_symbol_info_quick`
-- `navigation_get_symbol_info_batch`
-- `navigation_to_type_definition`
-- `navigation_to_implementation`
-- `navigation_find_overrides`
-- `navigation_find_inheritors`
-- `navigation_find_references`
-- `navigation_find_references_batch`
-- `navigation_get_callers`
-
-Navigation tools resolve source `(row, column)` to target file URI and target `(row, column)`.  
-Both source and target line/column are 1-based.
-Batch navigation tools return an object wrapper with `items`.
-Best-effort batch tools also return `diagnostics` when fallback behavior is applied.
-
-Some navigation tools are best-effort (notably caller/type/inheritor/override queries) and may produce false negatives
-depending on language PSI shape. You can set `fallbackToReferencesWhenEmpty=true` to auto-fallback to
-`navigation_find_references` semantics inside the same call.
-
-Code Quality tools:
+Current SDK feature registration is intentionally small:
 
 - `quality_get_file_problems`
-- `quality_get_scope_problems`
-- `quality_get_scope_problems_quick`
-- `quality_get_scope_problems_by_severity`
-- `quality_get_scope_problems_by_severity_quick`
 - `quality_reformat_file`
 - `quality_optimize_imports_file`
-- `quality_reformat_scope_files`
-- `quality_optimize_imports_scope_files`
 - `quality_fix_file_quick`
-- `quality_fix_scope_quick`
-- `quality_fix_scope_quick_by_preset`
 - `quality_list_inspection_profiles`
 - `quality_code_cleanup_file`
-- `quality_code_cleanup_scope_files`
+- existing quality scope variants for internal compatibility
 
-These tools wrap IDE-native quality actions: daemon highlighting (problem collection), reformat code,
-and optimize imports. Scope variants resolve scope descriptors first and then process matched project-content files.
+The old standalone `scope_*` MCP tools have been removed. Use the REST search/navigation/file APIs instead of scope
+program descriptors for new agent integrations.
 
-SearchScope tools:
+## Documentation
 
-- `scope_list_catalog`
-- `scope_get_default_descriptor`
-- `scope_resolve_standard_descriptor`
-- `scope_catalog_find_by_intent`
-- `scope_validate_pattern`
-- `scope_resolve_program`
-- `scope_normalize_program_descriptor`
-- `scope_contains_file`
-- `scope_filter_files`
-- `scope_search_files`
-- `scope_search_files_quick`
-- `scope_find_files_by_name_keyword`
-- `scope_find_files_by_path_keyword`
-- `scope_find_source_file_by_class_name`
-- `find_in_directory_using_glob`
-- `scope_search_text_quick`
-- `scope_search_symbols`
-- `scope_search_symbols_quick`
-- `scope_search_symbols_with_stage_progress`
-- `scope_search_symbols_healthcheck`
-
-`scope_contains_file` checks membership of one VFS file URL against a scope descriptor.
-`scope_filter_files` filters multiple VFS file URLs and returns matched/excluded/missing lists.
-`scope_search_files` supports `NAME` / `PATH` / `NAME_OR_PATH` / `GLOB` matching modes, with timeout and cancellable background progress.
-For text modes, input is matched as ordered keywords (whitespace-split by default): every keyword must exist and appear in the same order.
-`NAME` mode prefers `FilenameIndex` when scope resolves to `GLOBAL`; non-global scopes use traversal with `scope.contains(file)` filtering.
+- REST sessions and route overview: `docs/rest-api-session.md`
+- File reads and glob: `.agents/skills/workspace-mcp-rest-api/references/read-and-glob.md`
+- Search routes: `.agents/skills/workspace-mcp-rest-api/references/search.md`
+- Navigation routes: `.agents/skills/workspace-mcp-rest-api/references/navigation.md`
+- Write and patch routes: `.agents/skills/workspace-mcp-rest-api/references/write-and-patch.md`
+- Inspection and format routes: `.agents/skills/workspace-mcp-rest-api/references/inspection-and-format.md`
 <!-- Plugin description end -->
-
-## Core/Feature Architecture
-
-The SDK server (`WorkspaceMcpSdkServerService`) delegates resource listing, template registration, and tool
-registration to feature modules implementing `WorkspaceMcpFeature`:
-
-- **Core** (`dev.ghostflyby.mcp.core`): server/info, projects, projects/{projectKey} metadata resources.
-- **VFS Resources** (`dev.ghostflyby.mcp.vfs.resources`): project-scoped `files/{relativePath}` and `vfs/{rawVfsUrl}`
-  templates, plus per-project listable resources for base dirs, content/source roots, and open files.
-- **Document Resources** (`dev.ghostflyby.mcp.document.resources`): project-scoped `documents/{relativePath}` and
-  `document-vfs/{rawVfsUrl}` templates, plus listable open document snapshots.
-
-Tool handlers use `WorkspaceMcpRequestRunner` for centralized project resolution and error mapping.
-
-### SDK Tools
-
-The `dev.ghostflyby.mcp.sdk.tools` package provides the canonical migration pattern for Kotlin MCP SDK tools:
-and structured error mapping.
-
-Proof-of-migration:
-
-- `vfs_refresh` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url`, `async`, `recursive`, and
-  project hints; runs through the request runner; and returns structured error results.
-- `vfs_exists` (in `dev.ghostflyby.mcp.vfs.tools`) — uses a typed DTO/schema for `url` and project hints; routes
-  relative paths through the request runner; and returns deterministic JSON text results.
-
-Old annotation-based toolsets remain in place and are registered via `plugin.xml` as before.

@@ -19,6 +19,7 @@ import io.ktor.server.resources.put
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
 import kotlinx.serialization.Serializable
+import java.nio.file.DirectoryNotEmptyException
 
 internal fun Route.fileWriteRoutes() {
     val resolver: WorkspaceProjectResolver = service()
@@ -132,7 +133,7 @@ internal suspend fun handleSessionDelete(
                 }
             },
             onFailure = { e ->
-                if (e.message == "Directory not empty") WriteResult.NotEmpty
+                if (e is DirectoryNotEmptyException) WriteResult.NotEmpty
                 else WriteResult.RefactoringFailed(access.relativePath, e.message ?: "Delete refactoring failed")
             },
         )

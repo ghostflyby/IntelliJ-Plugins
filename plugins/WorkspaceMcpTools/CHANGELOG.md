@@ -1,6 +1,6 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# Workspace MCP Tools Changelog
+# Workspace Agent Bridge Changelog
 
 ## [Unreleased]
 
@@ -22,6 +22,8 @@
 - Resource handlers now install `WorkspaceMcpCallContext` and `WorkspaceMcpProjectContext` on the coroutine context before delegating to the workspace resource reader.
 
 ### Removed
+- Removed the standalone legacy `scope_*` MCP tools. New agent integrations should use the REST search, navigation,
+  file, inspection, and patch APIs instead.
 - Removed legacy `ij-workspace-vfs://` and `ij-workspace-document://` URI protocol support.
 - Removed legacy resource template registrations, template matchers, and notification logic.
 

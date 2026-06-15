@@ -15,13 +15,12 @@ import com.intellij.psi.PsiManager
 import com.intellij.refactoring.RefactoringFactory
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesProcessor
 import com.intellij.usageView.UsageInfo
-import dev.ghostflyby.mcp.common.WorkspaceResourceException
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.patch.ProjectPatchPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import java.nio.file.DirectoryNotEmptyException
 
 internal sealed interface DeleteRefactoringResult {
     val references: List<FileRefactoringReference>
@@ -55,7 +54,7 @@ internal suspend fun deleteFileWithRefactoring(
 ): DeleteRefactoringResult {
     if (file.isDirectory) {
         if (readAction { file.children.isNotEmpty() }) {
-            throw WorkspaceResourceException("Directory not empty")
+            throw DirectoryNotEmptyException(file.path)
         }
         edtWriteAction { file.delete("rest-delete") }
         return DeleteRefactoringResult.Deleted(relativePath, emptyList())
@@ -63,7 +62,7 @@ internal suspend fun deleteFileWithRefactoring(
 
     val psiFile = readAction {
         PsiManager.getInstance(project).findFile(file)
-    } ?: throw WorkspaceResourceException("PSI file not found: ${file.path}")
+    } ?: error("PSI file not found: ${file.path}")
 
     val refactoring = RefactoringFactory.getInstance(project).createSafeDelete(arrayOf(psiFile))
     refactoring.setInteractive(null)
@@ -85,7 +84,7 @@ internal suspend fun deleteFileWithRefactoring(
         val refUsages = Ref(usages)
         val canProceed = refactoring.preprocessUsages(refUsages)
         if (!canProceed) {
-            throw WorkspaceResourceException("Safe delete was cancelled by refactoring conflict preprocessing")
+            error("Safe delete was cancelled by refactoring conflict preprocessing")
         }
         refactoring.doRefactoring(refUsages.get())
     }
@@ -99,14 +98,14 @@ internal suspend fun moveFileWithRefactoring(
 ) {
     val vfs = VirtualFileManager.getInstance()
     val sourceFile = readAction {
-        vfs.findFileByUrl(from.url) ?: throw WorkspaceResourceException("not found")
+        vfs.findFileByUrl(from.url) ?: error("not found")
     }
-    if (readAction { sourceFile.isDirectory }) throw WorkspaceResourceException("is dir")
-    if (!readAction { sourceFile.isWritable }) throw WorkspaceResourceException("not writable")
-    if (readAction { vfs.findFileByUrl(to.url) != null }) throw WorkspaceResourceException("target exists")
+    if (readAction { sourceFile.isDirectory }) error("is dir")
+    if (!readAction { sourceFile.isWritable }) error("not writable")
+    if (readAction { vfs.findFileByUrl(to.url) != null }) error("target exists")
 
     val targetParent = edtWriteAction {
-        val parentPath = to.nioPath.parent ?: throw WorkspaceResourceException("no parent")
+        val parentPath = to.nioPath.parent ?: error("no parent")
         VfsUtil.createDirectories(parentPath.toString())
     }
     val targetName = to.nioPath.fileName.toString()
@@ -117,7 +116,7 @@ internal suspend fun moveFileWithRefactoring(
     if (needsMove) {
         val intermediateUrl = "${targetParent.url}/$originalName"
         if (needsRename && readAction { vfs.findFileByUrl(intermediateUrl) != null }) {
-            throw WorkspaceResourceException("intermediate target exists: $intermediateUrl")
+            error("intermediate target exists: $intermediateUrl")
         }
         runMoveRefactoring(project, sourceFile, targetParent)
     }
@@ -125,7 +124,7 @@ internal suspend fun moveFileWithRefactoring(
     if (needsRename) {
         val movedFile = readAction {
             vfs.findFileByUrl(if (needsMove) "${targetParent.url}/$originalName" else from.url)
-                ?: throw WorkspaceResourceException("moved file not found")
+                ?: error("moved file not found")
         }
         runRenameRefactoring(project, movedFile, targetName)
     }
@@ -139,9 +138,9 @@ private suspend fun runMoveRefactoring(
     val (psiFile, psiDirectory) = readAction {
         val psiManager = PsiManager.getInstance(project)
         val file = psiManager.findFile(sourceFile)
-            ?: throw WorkspaceResourceException("PSI file not found: ${sourceFile.path}")
+            ?: error("PSI file not found: ${sourceFile.path}")
         val directory = psiManager.findDirectory(targetParent)
-            ?: throw WorkspaceResourceException("PSI directory not found: ${targetParent.path}")
+            ?: error("PSI directory not found: ${targetParent.path}")
         file to directory
     }
     runRefactoringProcessor(project) {
@@ -156,11 +155,11 @@ private suspend fun runMoveRefactoring(
             @Suppress("UsePropertyAccessSyntax") setPreviewUsages(false)
         }
         val usages = runCatching { processor.findUsagesForRest() }
-            .getOrElse { throw WorkspaceResourceException(it.message ?: "Move usage search failed") }
+            .getOrElse { error(it.message ?: "Move usage search failed") }
         val refUsages = Ref(usages)
         val canProceed = processor.preprocessUsagesForRest(refUsages)
         if (!canProceed) {
-            throw WorkspaceResourceException("Move refactoring was cancelled by conflict preprocessing")
+            error("Move refactoring was cancelled by conflict preprocessing")
         }
         processor.executeForRest(refUsages.get())
     }
@@ -173,7 +172,7 @@ private suspend fun runRenameRefactoring(
 ) {
     val psiFile = readAction {
         PsiManager.getInstance(project).findFile(sourceFile)
-            ?: throw WorkspaceResourceException("PSI file not found: ${sourceFile.path}")
+            ?: error("PSI file not found: ${sourceFile.path}")
     }
     val refactoring = RefactoringFactory.getInstance(project).createRename(psiFile, targetName, true, true)
     refactoring.setInteractive(null)
@@ -185,7 +184,7 @@ private suspend fun runRenameRefactoring(
         val refUsages = Ref(usages)
         val canProceed = refactoring.preprocessUsages(refUsages)
         if (!canProceed) {
-            throw WorkspaceResourceException("Rename refactoring was cancelled by conflict preprocessing")
+            error("Rename refactoring was cancelled by conflict preprocessing")
         }
         refactoring.doRefactoring(refUsages.get())
     }
@@ -216,7 +215,7 @@ private class RestMoveFilesOrDirectoriesProcessor(
 private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit) {
     withContext(Dispatchers.EDT) {
         if (DumbService.isDumb(project)) {
-            throw WorkspaceResourceException("Refactoring is unavailable while indexes are updating")
+            error("Refactoring is unavailable while indexes are updating")
         }
         block()
     }
@@ -224,7 +223,7 @@ private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit)
 
 private suspend fun <T> runSmartRead(project: Project, block: () -> T): T {
     if (DumbService.isDumb(project)) {
-        throw WorkspaceResourceException("Refactoring is unavailable while indexes are updating")
+        error("Refactoring is unavailable while indexes are updating")
     }
     return readAction {
         ProgressManager.checkCanceled()

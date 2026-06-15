@@ -3,7 +3,7 @@
 
 <idea-plugin>
     <id>dev.ghostflyby.mcp.workspace</id>
-    <name>Workspace MCP</name>
+    <name>Workspace Agent Bridge</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
@@ -15,11 +15,6 @@
                         interface="dev.ghostflyby.mcp.server.WorkspaceMcpFeature"
                         dynamic="true"/>
     </extensionPoints>
-
-    <extensions defaultExtensionNs="dev.ghostflyby.mcp.workspace">
-        <workspaceFeature implementation="dev.ghostflyby.mcp.scope.descriptor.ScopeDescriptorFeature"/>
-        <workspaceFeature implementation="dev.ghostflyby.mcp.quality.QualityFeature"/>
-    </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
         <postStartupActivity implementation="dev.ghostflyby.mcp.WorkspaceMcpStartupActivity"/>

@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.patch
 
 import com.intellij.openapi.diff.impl.patch.PatchHunk
 import com.intellij.openapi.diff.impl.patch.PatchLine
-import dev.ghostflyby.mcp.common.WorkspaceResourceException
 
 internal enum class CodexFileOperation {
     ADD,
@@ -76,7 +75,7 @@ internal fun parseCodexAddContent(rawLines: List<String>): String {
     for (line in rawLines) {
         if (line.startsWith("***")) break
         if (!line.startsWith("+")) {
-            throw WorkspaceResourceException("Add file content lines must start with '+'.")
+            throw IllegalArgumentException("Add file content lines must start with '+'.")
         }
         contentLines += line.removePrefix("+")
     }

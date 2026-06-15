@@ -1,8 +1,8 @@
-# WorkspaceMcpTools Docs
+# Workspace Agent Bridge Docs
 
 ## 已实现文档（功能已落地）
-- `design/SearchScopeDesign.md`（核心 scope 解析与消费链路已落地）
-- `design/SymbolSearchStubDesign.md`（scope symbol search 主链路已落地）
+- `design/SearchScopeDesign.md`（历史设计；独立 `scope_*` MCP 工具已移除）
+- `design/SymbolSearchStubDesign.md`（历史设计；REST symbol search 已取代旧 scope symbol search）
 - `design/CodeQualityToolsetDesign.md`（质量工具主链路已落地）
 - `rest-api-inspection-format.md`（REST inspection/format public-only v1 已落地）
 - `first-call/ToolsetFirstCallOptimizationNotes.md`（记录项均已落地）

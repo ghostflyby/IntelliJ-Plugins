@@ -25,7 +25,6 @@ import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.search.ProjectScope
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
-import dev.ghostflyby.mcp.common.relativizePathOrOriginal
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
 import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
