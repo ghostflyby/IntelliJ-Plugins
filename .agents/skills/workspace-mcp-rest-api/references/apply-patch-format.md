@@ -23,6 +23,9 @@ Update a file:
 *** End Patch
 ```
 
+In WorkspaceMcpTools REST, delete sections use IntelliJ safe-delete refactoring:
+referenced files fail without `force=true` and return a references table.
+
 Add a file:
 
 ```patch
@@ -74,6 +77,9 @@ Move or rename while updating:
 +new text
 *** End Patch
 ```
+
+In WorkspaceMcpTools REST, `*** Move to:` uses IntelliJ move refactoring and, when
+the basename changes, rename refactoring.
 
 Mark end-of-file context explicitly when needed:
 

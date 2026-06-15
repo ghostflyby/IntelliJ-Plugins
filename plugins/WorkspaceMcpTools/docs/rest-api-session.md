@@ -69,8 +69,8 @@ relative path or a URL-encoded full VFS URL:
 | Read file, directory, metadata, structure, existence | `GET /api/v1/files/{path...}`                  |
 | Create or replace text                               | `PUT /api/v1/files/{path...}`                  |
 | Create only, or create directory with empty body     | `POST /api/v1/files/{path...}`                 |
-| Delete file or empty directory                       | `DELETE /api/v1/files/{path...}`               |
-| Apply Codex or Git patch                             | `PATCH /api/v1/files/{path...}`                |
+| Safe-delete file or delete empty directory           | `DELETE /api/v1/files/{path...}`               |
+| Apply Codex/Git patch and file refactoring moves     | `PATCH /api/v1/files/{path...}`                |
 | Glob under a directory                               | `GET /api/v1/glob/{path...}?glob=PATTERN`      |
 | Text search under a directory                        | `GET /api/v1/search/text/{path...}?query=TEXT` |
 | File search under the session prefix                 | `GET /api/v1/search/files?query=NAME`          |
@@ -147,6 +147,12 @@ curl -i -X PATCH \
   --data-binary @change.patch \
   "$BASE/files/plugins/WorkspaceMcpTools/docs/rest-api-session.md"
 ```
+
+`DELETE /files/{path...}` uses IntelliJ safe-delete refactoring for files. If
+references are found, the default response is `409 Conflict` with a references
+table; retry with `force=true` only when deleting those references is intended.
+`PATCH /files/{path...}` applies the same behavior for `*** Delete File` sections
+and uses IntelliJ move/rename refactoring for `*** Move to:` sections.
 
 Omitted `Accept` remains the Markdown/plain optimized reading path. Use
 `Accept: application/json` for structured clients.

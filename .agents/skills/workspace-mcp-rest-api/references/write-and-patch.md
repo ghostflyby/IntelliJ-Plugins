@@ -58,7 +58,9 @@ uri: file:///workspace/new-directory
 encodedUri: file%3A%2F%2F%2Fworkspace%2Fnew-directory
 ```
 
-Use `DELETE` for files or empty directories:
+Use `DELETE` for files or empty directories. File deletion uses IntelliJ safe-delete
+refactoring. If code references are found, the response is `409 Conflict` with a
+reference table and the file is not deleted unless `force=true` is present.
 
 ```bash
 curl -i -X DELETE \
@@ -69,7 +71,11 @@ curl -i -X DELETE \
 Example body:
 
 ```text
-true
+---
+path: "notes/today.txt"
+deleted: true
+referenceCount: 0
+---
 ```
 
 ## Force
@@ -135,6 +141,12 @@ curl -i -X PATCH \
 
 Patch rejects binary targets and respects write policy. Use `force=true` only
 for intentional policy override.
+
+`*** Delete File` sections use the same safe-delete behavior as `DELETE`. If
+references are found without `force=true`, that section is listed under `failed`
+and the response includes a `references` table. `*** Move to:` uses IntelliJ move
+refactoring; if the target basename changes, the route performs move then rename
+refactoring so references can be updated by the IDE.
 
 Example partial failure body:
 

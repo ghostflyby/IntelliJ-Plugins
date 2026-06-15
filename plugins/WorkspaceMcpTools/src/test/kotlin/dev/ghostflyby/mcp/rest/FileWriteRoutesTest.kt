@@ -180,7 +180,9 @@ internal class FileWriteRoutesTest {
 
             val response = sessionClient.delete(sessionClient.rootPathUrl("plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
-            Assertions.assertEquals("true", response.bodyAsText())
+            Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
+            Assertions.assertTrue(response.bodyAsText().contains("deleted: true"), response.bodyAsText())
+            Assertions.assertTrue(response.bodyAsText().contains("referenceCount: 0"), response.bodyAsText())
 
             val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)

@@ -13,7 +13,9 @@ import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import dev.ghostflyby.mcp.filecontent.FileContentKind
@@ -37,6 +39,7 @@ import kotlinx.serialization.Serializable
 private data class PatchResponse(
     val applied: List<Map<String, String>>,
     val failed: List<String> = emptyList(),
+    val references: List<FileRefactoringReference> = emptyList(),
     val error: String? = null,
 ) : TextBody {
     override fun renderTextBody(): String = buildString {
@@ -57,6 +60,18 @@ private data class PatchResponse(
         if (failed.isNotEmpty()) {
             appendLine("failed:")
             failed.forEach { appendLine("- $it") }
+        }
+        if (references.isNotEmpty()) {
+            appendLine("references:")
+            appendLine("| path | encodedFileUrl | line | column | usage |")
+            appendLine("| --- | --- | ---: | ---: | --- |")
+            references.forEach { ref ->
+                val fileReference = markdownFileReference(ref.filePath, ref.fileUrl, ref.encodedFileUrl)
+                appendLine(
+                    "| ${markdownCell(fileReference.path)} | ${markdownCell(fileReference.encodedFileUrl)} | " +
+                            "${ref.line} | ${ref.column} | ${markdownCell(ref.usageText)} |",
+                )
+            }
         }
     }
 }
@@ -189,6 +204,7 @@ private suspend fun applyCodex(
     }
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
+    val references = mutableListOf<FileRefactoringReference>()
     for (section in sections) {
         try {
             val fileRelPath =
@@ -202,7 +218,13 @@ private suspend fun applyCodex(
                 }
 
                 CodexFileOperation.DELETE -> {
-                    deletePatchedFile(target, emptyList())
+                    when (val result = deletePatchTargetWithRefactoring(project, target, force, emptyList())) {
+                        is DeleteRefactoringResult.Deleted -> references += result.references
+                        is DeleteRefactoringResult.BlockedByReferences -> {
+                            references += result.references
+                            error("References found; retry with force=true to delete")
+                        }
+                    }
                 }
 
                 CodexFileOperation.UPDATE -> {
@@ -215,7 +237,7 @@ private suspend fun applyCodex(
                         val moveRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, moveTo) else moveTo
                         val moveAccess = resolvePatchSectionAccess(project, routeAccess, moveRelPath)
                         ensurePatchAllowed(moveAccess, force)
-                        movePatchedFile(target, patchPathFor(moveAccess))
+                        moveFileWithRefactoring(project, target, patchPathFor(moveAccess))
                     }
                 }
             }
@@ -224,7 +246,7 @@ private suspend fun applyCodex(
             failed += "${section.filePath}: ${e.message ?: "unknown"}"
         }
     }
-    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
 }
 
 private enum class WorkspaceOperationKind(val wireName: String, val resultName: String) {
@@ -308,15 +330,15 @@ private suspend fun applyWorkspaceOperations(
         for (kind in orderedKinds) {
             try {
                 when (kind) {
-                    WorkspaceOperationKind.OPTIMIZE_IMPORTS -> runCodeProcessor(project, file, psiFile) {
+                    WorkspaceOperationKind.OPTIMIZE_IMPORTS -> runCodeProcessor(project, file) {
                         OptimizeImportsProcessor(project, psiFile).run()
                     }
 
-                    WorkspaceOperationKind.REFORMAT_FILE -> runCodeProcessor(project, file, psiFile) {
+                    WorkspaceOperationKind.REFORMAT_FILE -> runCodeProcessor(project, file) {
                         ReformatCodeProcessor(psiFile, false).run()
                     }
 
-                    WorkspaceOperationKind.CLEANUP -> runCodeProcessor(project, file, psiFile) {
+                    WorkspaceOperationKind.CLEANUP -> runCodeProcessor(project, file) {
                         CodeCleanupCodeProcessor(project, arrayOf(psiFile), null, false).run()
                     }
 
@@ -333,7 +355,7 @@ private suspend fun applyWorkspaceOperations(
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
 }
 
-private suspend fun resolveWritablePsiFile(project: Project, file: com.intellij.openapi.vfs.VirtualFile): PsiFile {
+private suspend fun resolveWritablePsiFile(project: Project, file: VirtualFile): PsiFile {
     if (file.isDirectory) error("Workspace operation target must be a file: ${file.path}")
     return readAction { PsiManager.getInstance(project).findFile(file) }
         ?: error("PSI file not found: ${file.path}")
@@ -341,15 +363,14 @@ private suspend fun resolveWritablePsiFile(project: Project, file: com.intellij.
 
 private suspend fun runCodeProcessor(
     project: Project,
-    file: com.intellij.openapi.vfs.VirtualFile,
-    psiFile: PsiFile,
+    file: VirtualFile,
     block: () -> Unit,
 ) {
     withContext(Dispatchers.EDT) {
         block()
         val document = getOrCreateDocument(file)
         if (document != null) {
-            val manager = com.intellij.psi.PsiDocumentManager.getInstance(project)
+            val manager = PsiDocumentManager.getInstance(project)
             manager.doPostponedOperationsAndUnblockDocument(document)
             manager.commitDocument(document)
             FileDocumentManager.getInstance().saveDocument(document)
@@ -367,6 +388,7 @@ private suspend fun applyGit(
 ) {
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
+    val references = mutableListOf<FileRefactoringReference>()
     for (p in patches) {
         val path = p.afterName ?: p.beforeName ?: continue
         try {
@@ -376,7 +398,14 @@ private suspend fun applyGit(
             val target = patchPathFor(access)
             when {
                 p.isNewFile -> createPatchedFile(project, target, p.singleHunkPatchText)
-                p.isDeletedFile -> deletePatchedFile(target, p.hunks)
+                p.isDeletedFile -> when (val result =
+                    deletePatchTargetWithRefactoring(project, target, force, p.hunks)) {
+                    is DeleteRefactoringResult.Deleted -> references += result.references
+                    is DeleteRefactoringResult.BlockedByReferences -> {
+                        references += result.references
+                        error("References found; retry with force=true to delete")
+                    }
+                }
                 else -> applyFileUpdate(project, target, gitHunksToRawLines(p))
             }
             val op = when {
@@ -387,7 +416,22 @@ private suspend fun applyGit(
             failed += "$path: ${e.message ?: "unknown"}"
         }
     }
-    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))
+    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
+}
+
+private suspend fun deletePatchTargetWithRefactoring(
+    project: Project,
+    target: ProjectPatchPath,
+    force: Boolean,
+    hunks: List<com.intellij.openapi.diff.impl.patch.PatchHunk>,
+): DeleteRefactoringResult {
+    val (file, document) = resolveTextDocumentForTool(target)
+    ensureFileWritable(file)
+    if (hunks.isNotEmpty()) {
+        GenericPatchApplier.apply(document.immutableCharSequence, hunks)
+            ?: throw IllegalArgumentException("Delete patch does not apply for ${target.relativePath}")
+    }
+    return deleteFileWithRefactoring(project, file, target.relativePath, force)
 }
 
 private suspend fun resolvePatchSectionAccess(
@@ -400,6 +444,10 @@ private suspend fun resolvePatchSectionAccess(
 
 private fun joinRelativePath(base: String, child: String): String =
     if (base.isBlank()) child else "$base/$child"
+
+private fun markdownCell(value: String): String {
+    return value.replace("|", "\\|").replace("\n", " ")
+}
 
 private fun ensurePatchAllowed(access: ProjectFileAccess, force: Boolean) {
     if (!access.policy.canWrite(FileContentKind.PATCH, force)) {
@@ -419,8 +467,16 @@ private fun patchPathFor(access: ProjectFileAccess): ProjectPatchPath {
             url = file.url,
         )
     }
-    val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
-    val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
+    val targetName = access.targetName
+    if (access.parent == null || targetName == null) {
+        val targetPath = java.nio.file.Path.of(access.root.base.path).resolve(access.relativePath).normalize()
+        return ProjectPatchPath(
+            relativePath = access.relativePath,
+            nioPath = targetPath,
+            url = com.intellij.openapi.vfs.VfsUtilCore.pathToUrl(targetPath.toString()),
+        )
+    }
+    val parent = access.parent
     return ProjectPatchPath(
         relativePath = access.relativePath,
         nioPath = java.nio.file.Path.of(parent.path).resolve(targetName),
@@ -463,7 +519,7 @@ private suspend fun applyFileUpdate(
         if (doc != null) {
             if (!doc.isWritable) error("Not writable: ${target.relativePath}")
             doc.setText(applied.patchedText)
-            val mgr = com.intellij.psi.PsiDocumentManager.getInstance(project)
+            val mgr = PsiDocumentManager.getInstance(project)
             mgr.doPostponedOperationsAndUnblockDocument(doc)
             mgr.commitDocument(doc)
             FileDocumentManager.getInstance().saveDocument(doc)

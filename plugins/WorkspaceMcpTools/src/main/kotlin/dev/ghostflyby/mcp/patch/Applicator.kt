@@ -3,8 +3,6 @@ package dev.ghostflyby.mcp.patch
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.diff.impl.patch.PatchHunk
-import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VfsUtil
@@ -23,28 +21,6 @@ internal suspend fun createPatchedFile(project: Project, target: ProjectPatchPat
         val doc = getOrCreateDocument(file) ?: throw WorkspaceResourceException("no doc")
         doc.setText(text)
         commitDocument(project, doc)
-    }
-}
-
-internal suspend fun deletePatchedFile(target: ProjectPatchPath, hunks: List<PatchHunk>) {
-    val (file, document) = resolveTextDocumentForTool(target)
-    ensureFileWritable(file)
-    if (hunks.isNotEmpty()) GenericPatchApplier.apply(document.immutableCharSequence, hunks)
-        ?: throw WorkspaceResourceException("...")
-    edtWriteAction { file.delete(Any()) }
-}
-
-internal suspend fun movePatchedFile(from: ProjectPatchPath, to: ProjectPatchPath) {
-    edtWriteAction {
-        val vfs = service<VirtualFileManager>()
-        val file = vfs.findFileByUrl(from.url) ?: throw WorkspaceResourceException("not found")
-        if (!file.isWritable) throw WorkspaceResourceException("not writable")
-        if (vfs.findFileByUrl(to.url) != null) throw WorkspaceResourceException("target exists")
-        val parentPath = to.nioPath.parent ?: throw WorkspaceResourceException("no parent")
-        val parent = VfsUtil.createDirectories(parentPath.toString())
-        val targetName = to.nioPath.fileName.toString()
-        if (file.parent != parent) file.move("patch", parent)
-        if (file.name != targetName) file.rename("patch", targetName)
     }
 }
 

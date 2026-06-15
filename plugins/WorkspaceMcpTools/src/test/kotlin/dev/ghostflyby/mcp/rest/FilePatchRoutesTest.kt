@@ -374,6 +374,32 @@ deleted file mode 100644
     }
 
     @Test
+    fun `PATCH supports move and rename through refactoring`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Update File: bar.xml
+*** Move to: moved/bar-renamed.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            Assertions.assertTrue(resp.bodyAsText().contains("- update src/bar.xml"), resp.bodyAsText())
+
+            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved/bar-renamed.xml"))
+            Assertions.assertEquals("<bar/>", moved.bodyAsText().trim())
+
+            val old = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
+        }
+    }
+
+    @Test
     fun `PATCH supports workspace reformat operation`() {
         project
 

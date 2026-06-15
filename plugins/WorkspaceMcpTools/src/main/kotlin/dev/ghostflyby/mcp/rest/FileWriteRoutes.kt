@@ -113,13 +113,29 @@ internal suspend fun handleSessionDelete(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    projectExec(call, target, force) { access, _, _, force ->
+    projectExec(call, target, force) { access, project, _, force ->
         val file = access.file ?: return@projectExec WriteResult.NotFound
         if (!file.isDirectory && file.fileType.isBinary) {
             return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
         }
         writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
-        deleteFileResult(file)
+        runCatching {
+            deleteFileWithRefactoring(project, file, access.relativePath, force)
+        }.fold(
+            onSuccess = { result ->
+                when (result) {
+                    is DeleteRefactoringResult.Deleted -> WriteResult.Deleted(result.path, result.references)
+                    is DeleteRefactoringResult.BlockedByReferences -> WriteResult.DeleteBlocked(
+                        result.path,
+                        result.references,
+                    )
+                }
+            },
+            onFailure = { e ->
+                if (e.message == "Directory not empty") WriteResult.NotEmpty
+                else WriteResult.RefactoringFailed(access.relativePath, e.message ?: "Delete refactoring failed")
+            },
+        )
     }
 }
 
@@ -139,7 +155,26 @@ private suspend fun respondResult(call: ApplicationCall, result: WriteResult, fo
         is WriteResult.Created -> call.respond(HttpStatusCode.Created, writeResponse(result.file.url))
         is WriteResult.DirCreated -> call.respond(HttpStatusCode.Created, writeResponse(result.dir.url))
         is WriteResult.Replaced -> call.respond(HttpStatusCode.OK, writeResponse(result.file.url))
-        is WriteResult.Deleted -> call.respondText("true", ContentType.Text.Plain)
+        is WriteResult.Deleted -> call.respond(
+            HttpStatusCode.OK,
+            DeleteResponse(path = result.path, deleted = true, references = result.references),
+        )
+
+        is WriteResult.DeleteBlocked -> call.respond(
+            HttpStatusCode.Conflict,
+            DeleteResponse(
+                path = result.path,
+                deleted = false,
+                references = result.references,
+                error = "References found; retry with force=true to delete",
+            ),
+        )
+
+        is WriteResult.RefactoringFailed -> call.respond(
+            HttpStatusCode.Conflict,
+            DeleteResponse(path = result.path, deleted = false, error = result.reason),
+        )
+
         is WriteResult.Conflict -> call.respond(
             HttpStatusCode.Conflict,
             WriteResponse(error = "Resource already exists"),
@@ -183,13 +218,52 @@ private sealed interface WriteResult {
     data class Created(val file: VirtualFile) : WriteResult
     data class DirCreated(val dir: VirtualFile) : WriteResult
     data class Replaced(val file: VirtualFile) : WriteResult
-    data object Deleted : WriteResult
+    data class Deleted(val path: String, val references: List<FileRefactoringReference>) : WriteResult
+    data class DeleteBlocked(val path: String, val references: List<FileRefactoringReference>) : WriteResult
+    data class RefactoringFailed(val path: String, val reason: String) : WriteResult
     data object Conflict : WriteResult
     data object NotFound : WriteResult
     data object NotEmpty : WriteResult
     data class Forbidden(val reason: String) : WriteResult
     data class Unsupported(val reason: String) : WriteResult
 }
+
+@Serializable
+private data class DeleteResponse(
+    val path: String,
+    val deleted: Boolean,
+    val references: List<FileRefactoringReference> = emptyList(),
+    val error: String? = null,
+) : TextBody {
+    override fun renderTextBody(): String = buildString {
+        appendLine("---")
+        appendLine("path: ${yamlScalar(path)}")
+        appendLine("deleted: $deleted")
+        appendLine("referenceCount: ${references.size}")
+        error?.let { appendLine("error: ${yamlScalar(it)}") }
+        appendLine("---")
+        error?.let {
+            appendLine("ERROR: $it")
+            appendLine()
+        }
+        if (references.isNotEmpty()) {
+            appendLine("## References")
+            appendLine("| path | encodedFileUrl | line | column | usage |")
+            appendLine("| --- | --- | ---: | ---: | --- |")
+            references.forEach { ref ->
+                val fileReference = markdownFileReference(ref.filePath, ref.fileUrl, ref.encodedFileUrl)
+                appendLine(
+                    "| ${markdownCell(fileReference.path)} | ${markdownCell(fileReference.encodedFileUrl)} | " +
+                            "${ref.line} | ${ref.column} | ${markdownCell(ref.usageText)} |",
+                )
+            }
+        }
+    }
+}
+
+private fun markdownCell(value: String): String = value.replace("|", "\\|").replace("\n", " ")
+
+private fun yamlScalar(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 // ── Implementations ─────────────────────────────────────────
 private fun writeGate(
@@ -226,13 +300,6 @@ private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
     val parent = access.parent ?: return null
     val targetName = access.targetName ?: return null
     return backgroundWriteAction { parent.createChildDirectory(Any(), targetName) }
-}
-
-private suspend fun deleteFileResult(file: VirtualFile?): WriteResult {
-    if (file == null) return WriteResult.NotFound
-    if (file.isDirectory && file.children.isNotEmpty()) return WriteResult.NotEmpty
-    backgroundWriteAction { file.delete(Any()) }
-    return WriteResult.Deleted
 }
 
 @RequiresWriteLock
