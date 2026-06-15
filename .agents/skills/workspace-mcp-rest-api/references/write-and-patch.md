@@ -158,14 +158,17 @@ format/problem actions.
 *** End Patch
 ```
 
+For each target file, workspace operations are applied in stable order: `Fix Problem`,
+`Cleanup`, `Optimize Imports`, then `Reformat File`. Duplicate operation kinds for
+the same file are applied once.
+
 Example response:
 
 ```text
 applied:
 - optimize-imports src/A.kt
 - reformat src/A.kt
-failed:
-- src/B.kt: Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.
+- cleanup src/B.kt
 ```
 
 Problem fixes use `problemFix=true`, but public-only v1 returns `409 Conflict`

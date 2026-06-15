@@ -1,5 +1,6 @@
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.codeInsight.actions.CodeCleanupCodeProcessor
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
 import com.intellij.openapi.application.EDT
@@ -95,22 +96,23 @@ internal fun Route.filePatchRoutes() {
     val sessions: RestSessionService = service()
 
     patch<Api.FilesEntry.File> { resource ->
-        val target = when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
-            is RestFileRouteTarget.ProjectFile -> resolved.target
-            is RestFileRouteTarget.VirtualFileReadOnly -> {
-                call.respond(
-                    HttpStatusCode.Forbidden,
-                    PatchResponse(
-                        applied = emptyList(),
-                        error = "VFS URL patches are allowed only for files in the session project workspace",
-                    ),
-                )
-                null
-            }
+        val target =
+            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+                is RestFileRouteTarget.ProjectFile -> resolved.target
+                is RestFileRouteTarget.VirtualFileReadOnly -> {
+                    call.respond(
+                        HttpStatusCode.Forbidden,
+                        PatchResponse(
+                            applied = emptyList(),
+                            error = "VFS URL patches are allowed only for files in the session project workspace",
+                        ),
+                    )
+                    null
+                }
 
-            null -> null
-        }
-            ?: return@patch
+                null -> null
+            }
+                ?: return@patch
         handleSessionPatch(
             call,
             target,
@@ -176,12 +178,12 @@ private suspend fun applyCodex(
     body: String,
     sections: List<CodexFileSection>, call: ApplicationCall,
 ) {
-    val workspaceOperations = parseWorkspaceOperations(body)
-    if (workspaceOperations.isNotEmpty()) {
-        applyWorkspaceOperations(project, routeAccess, isDir, force, workspaceOperations, call)
-        return
-    }
     if (sections.isEmpty()) {
+        val workspaceOperations = parseWorkspaceOperations(body)
+        if (workspaceOperations.isNotEmpty()) {
+            applyWorkspaceOperations(project, routeAccess, isDir, force, workspaceOperations, call)
+            return
+        }
         call.respond(HttpStatusCode.BadRequest, PatchResponse(applied = emptyList(), error = "No patch sections"))
         return
     }
@@ -237,11 +239,23 @@ private data class WorkspaceOperation(
     val filePath: String?,
 )
 
+private data class WorkspaceOperationTarget(
+    val fileRelPath: String,
+    val kinds: MutableSet<WorkspaceOperationKind> = linkedSetOf(),
+)
+
+private val WORKSPACE_OPERATION_ORDER = listOf(
+    WorkspaceOperationKind.FIX_PROBLEM,
+    WorkspaceOperationKind.CLEANUP,
+    WorkspaceOperationKind.OPTIMIZE_IMPORTS,
+    WorkspaceOperationKind.REFORMAT_FILE,
+)
+
 private val WORKSPACE_OPERATION = Regex("""^\*\*\* (Optimize Imports|Reformat File|Cleanup|Fix Problem)(?:: (.+))?$""")
 
 private fun parseWorkspaceOperations(body: String): List<WorkspaceOperation> {
     return body.lineSequence().mapNotNull { rawLine ->
-        val match = WORKSPACE_OPERATION.find(rawLine.trim()) ?: return@mapNotNull null
+        val match = WORKSPACE_OPERATION.find(rawLine) ?: return@mapNotNull null
         val kind = WorkspaceOperationKind.entries.first { it.wireName == match.groupValues[1] }
         WorkspaceOperation(kind, match.groupValues.getOrNull(2)?.takeIf { it.isNotBlank() })
     }.toList()
@@ -257,6 +271,7 @@ private suspend fun applyWorkspaceOperations(
 ) {
     val applied = mutableListOf<Map<String, String>>()
     val failed = mutableListOf<String>()
+    val targets = linkedMapOf<String, WorkspaceOperationTarget>()
     for (operation in operations) {
         val pathForError = operation.filePath ?: routeAccess.relativePath.ifBlank { "." }
         try {
@@ -265,30 +280,54 @@ private suspend fun applyWorkspaceOperations(
             } ?: routeAccess.relativePath.ifBlank {
                 error("${operation.kind.wireName} requires a file path when PATCH target is the session root")
             }
-            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
-            ensurePatchAllowed(access, force)
-            val file = access.file ?: error("File not found: $fileRelPath")
-            val psiFile = resolveWritablePsiFile(project, file)
-            when (operation.kind) {
-                WorkspaceOperationKind.OPTIMIZE_IMPORTS -> runCodeProcessor(project, file, psiFile) {
-                    OptimizeImportsProcessor(project, psiFile).run()
-                }
-
-                WorkspaceOperationKind.REFORMAT_FILE -> runCodeProcessor(project, file, psiFile) {
-                    ReformatCodeProcessor(psiFile, false).run()
-                }
-
-                WorkspaceOperationKind.CLEANUP -> error(
-                    "Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.",
-                )
-
-                WorkspaceOperationKind.FIX_PROBLEM -> error(
-                    "Problem fixes are not supported without IntelliJ public APIs for problem quick-fix discovery.",
-                )
-            }
-            applied += mapOf("path" to fileRelPath, "operation" to operation.kind.resultName)
+            targets.getOrPut(fileRelPath) { WorkspaceOperationTarget(fileRelPath) }.kinds += operation.kind
         } catch (e: Exception) {
             failed += "$pathForError: ${e.message ?: "unknown"}"
+        }
+    }
+    for (target in targets.values) {
+        val access = try {
+            val access = resolvePatchSectionAccess(project, routeAccess, target.fileRelPath)
+            ensurePatchAllowed(access, force)
+            access
+        } catch (e: Exception) {
+            failed += "${target.fileRelPath}: ${e.message ?: "unknown"}"
+            continue
+        }
+        val file = access.file ?: run {
+            failed += "${target.fileRelPath}: File not found: ${target.fileRelPath}"
+            continue
+        }
+        val psiFile = try {
+            resolveWritablePsiFile(project, file)
+        } catch (e: Exception) {
+            failed += "${target.fileRelPath}: ${e.message ?: "unknown"}"
+            continue
+        }
+        val orderedKinds = WORKSPACE_OPERATION_ORDER.filter { it in target.kinds }
+        for (kind in orderedKinds) {
+            try {
+                when (kind) {
+                    WorkspaceOperationKind.OPTIMIZE_IMPORTS -> runCodeProcessor(project, file, psiFile) {
+                        OptimizeImportsProcessor(project, psiFile).run()
+                    }
+
+                    WorkspaceOperationKind.REFORMAT_FILE -> runCodeProcessor(project, file, psiFile) {
+                        ReformatCodeProcessor(psiFile, false).run()
+                    }
+
+                    WorkspaceOperationKind.CLEANUP -> runCodeProcessor(project, file, psiFile) {
+                        CodeCleanupCodeProcessor(project, arrayOf(psiFile), null, false).run()
+                    }
+
+                    WorkspaceOperationKind.FIX_PROBLEM -> error(
+                        "Problem fixes are not supported without IntelliJ public APIs for problem quick-fix discovery.",
+                    )
+                }
+                applied += mapOf("path" to target.fileRelPath, "operation" to kind.resultName)
+            } catch (e: Exception) {
+                failed += "${target.fileRelPath}: ${kind.wireName}: ${e.message ?: "unknown"}"
+            }
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed))

@@ -72,6 +72,10 @@ Use `/files` PATCH with patch-like workspace operations:
 *** End Patch
 ```
 
+When several workspace operations target the same file, the server runs them in
+stable order: `Fix Problem`, `Cleanup`, `Optimize Imports`, then `Reformat File`.
+Duplicate operation kinds for the same file are applied once.
+
 When PATCH targets one file, the operation path may be omitted:
 
 ```patch
@@ -87,8 +91,7 @@ Example response:
 applied:
 - optimize-imports src/A.kt
 - reformat src/A.kt
-failed:
-- src/B.kt: Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.
+- cleanup src/B.kt
 ```
 
 ## Problem Fix

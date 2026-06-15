@@ -126,7 +126,7 @@ The port can be overridden when the IDE starts with `-Ddev.ghostflyby.mcp.worksp
 1. Read problems with `/files/{path}?problems=true&minSeverity=ERROR`.
 2. Run multi-file problem checks with `/inspections/{path}` and `*** Inspect File:` operations.
 3. Run deterministic cleanup with `/files` PATCH operations such as `*** Optimize Imports:` and `*** Reformat File:`.
-4. Treat `Cleanup` and `problemFix=true` unsupported responses as public API limitations unless a newer public API is confirmed.
+4. Treat `problemFix=true` unsupported responses as public API limitations unless a newer public API is confirmed.
 
 ## Reference Files
 

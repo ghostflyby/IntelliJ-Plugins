@@ -75,6 +75,10 @@ Use patch-like workspace operations for deterministic IDE formatting actions:
 *** End Patch
 ```
 
+For each target file, workspace operations are collected first and then applied in
+stable order: `Fix Problem`, `Cleanup`, `Optimize Imports`, then `Reformat File`.
+Duplicate operation kinds for the same file are applied once.
+
 When the PATCH target is a file, the file path may be omitted:
 
 ```patch
@@ -90,14 +94,12 @@ Example response:
 applied:
 - optimize-imports src/A.kt
 - reformat src/A.kt
-failed:
-- src/B.kt: Cleanup is not supported without IntelliJ public APIs; CodeCleanupCodeProcessor delegates to internal/ex inspection APIs.
+- cleanup src/B.kt
 ```
 
 `Reformat File` uses `ReformatCodeProcessor`. `Optimize Imports` uses
-`OptimizeImportsProcessor`. `Cleanup` is accepted as a request operation but is
-reported unsupported in public-only v1 rather than calling internal inspection
-cleanup APIs.
+`OptimizeImportsProcessor`. `Cleanup` uses `CodeCleanupCodeProcessor` and the
+current IDE inspection profile cleanup tools.
 
 ## Problem Fix
 

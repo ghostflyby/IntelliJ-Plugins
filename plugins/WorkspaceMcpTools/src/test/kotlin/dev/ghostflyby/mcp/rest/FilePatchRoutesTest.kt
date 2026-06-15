@@ -394,7 +394,7 @@ deleted file mode 100644
     }
 
     @Test
-    fun `PATCH reports cleanup as public API unsupported`() {
+    fun `PATCH supports workspace cleanup operation`() {
         project
 
         testApplication {
@@ -409,8 +409,77 @@ deleted file mode 100644
             val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
-            Assertions.assertTrue(body.contains("failed"), body)
-            Assertions.assertTrue(body.contains("internal/ex inspection APIs"), body)
+            Assertions.assertTrue(body.contains("- cleanup src/foo.xml"), body)
+        }
+    }
+
+    @Test
+    fun `PATCH applies workspace operations in stable order per file`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Reformat File: foo.xml
+*** Optimize Imports: foo.xml
+*** Cleanup: foo.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            val cleanup = body.indexOf("- cleanup src/foo.xml")
+            val optimizeImports = body.indexOf("- optimize-imports src/foo.xml")
+            val reformat = body.indexOf("- reformat src/foo.xml")
+
+            Assertions.assertTrue(cleanup >= 0, body)
+            Assertions.assertTrue(optimizeImports > cleanup, body)
+            Assertions.assertTrue(reformat > optimizeImports, body)
+        }
+    }
+
+    @Test
+    fun `PATCH ignores indented workspace operation marker text`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val create = """*** Begin Patch
+*** Add File: operation-doc.md
++before
++  *** Cleanup: src/B.kt
++after
+*** End Patch"""
+            val createResp = sessionClient.patch(sessionClient.rootPathUrl("operation-doc.md")) { setBody(create) }
+            Assertions.assertEquals(HttpStatusCode.OK, createResp.status)
+
+            val update = """*** Begin Patch
+*** Update File: operation-doc.md
+@@
+ before
+   *** Cleanup: src/B.kt
+-after
++after updated
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("operation-doc.md")) { setBody(update) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertFalse(body.contains("File not found: src/B.kt"), body)
+
+            val getResp = sessionClient.get(sessionClient.rootPathUrl("operation-doc.md"))
+            Assertions.assertEquals(
+                """before
+  *** Cleanup: src/B.kt
+after updated""",
+                getResp.bodyAsText().trim(),
+            )
         }
     }
 
