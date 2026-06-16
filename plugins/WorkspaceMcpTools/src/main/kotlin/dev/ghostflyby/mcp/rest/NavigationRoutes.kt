@@ -9,9 +9,12 @@ import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.*
-import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiNamedElement
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
@@ -343,13 +346,6 @@ private suspend fun executeDocumentation(
 private fun toNavTarget(element: PsiElement?): NavTarget? {
     val file = element?.containingFile?.virtualFile ?: return null
     val offset = element.textOffset
-    return toNavTarget(file, offset)
-}
-
-private fun toNavTarget(reference: PsiReference): NavTarget? {
-    val element = reference.element
-    val file = element.containingFile?.virtualFile ?: return null
-    val offset = element.textRange.startOffset + reference.rangeInElement.startOffset
     return toNavTarget(file, offset)
 }
 
