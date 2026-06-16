@@ -9,10 +9,8 @@ import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
@@ -21,7 +19,6 @@ import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
@@ -97,80 +94,6 @@ private data class PatchResponse(
                     } |",
                 )
             }
-        }
-    }
-}
-
-private sealed interface FileOp {
-    data class Create(val psiPath: ProjectPatchPath, val content: String) : FileOp
-    data class Delete(val psiPath: ProjectPatchPath) : FileOp
-    data class Update(val psiPath: ProjectPatchPath, val rawLines: List<String>) : FileOp
-    data class Move(val from: ProjectPatchPath, val to: ProjectPatchPath) : FileOp
-}
-
-private suspend fun applyFileOps(project: Project, ops: List<FileOp>) {
-    backgroundWriteAction {
-        CommandProcessor.getInstance().executeCommand(
-            project,
-            {
-                for (op in ops) {
-                    executeFileOp(project, op)
-                }
-            },
-            "REST PATCH", null,
-        )
-    }
-}
-
-private fun executeFileOp(project: Project, op: FileOp) {
-    when (op) {
-        is FileOp.Update -> {
-            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
-                ?: error("File not found: ${op.psiPath.relativePath}")
-            val doc = getOrCreateDocument(vf)
-            val hunks = parseCodexRawHunks(
-                op.rawLines,
-                doc?.immutableCharSequence ?: String(vf.contentsToByteArray(), vf.charset),
-            )
-                ?: error("No valid hunks")
-            val applied = GenericPatchApplier.apply(
-                doc?.immutableCharSequence ?: vf.contentsToByteArray().toString(vf.charset), hunks,
-            )
-                ?: error("Patch does not apply for ${op.psiPath.relativePath}")
-            if (doc != null) {
-                doc.setText(applied.patchedText)
-                val mgr = PsiDocumentManager.getInstance(project)
-                mgr.doPostponedOperationsAndUnblockDocument(doc)
-                mgr.commitDocument(doc)
-                FileDocumentManager.getInstance().saveDocument(doc)
-            } else {
-                vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
-            }
-        }
-
-        is FileOp.Create -> {
-            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
-            if (vf != null) error("File already exists: ${op.psiPath.relativePath}")
-            val nioPath = op.psiPath.nioPath
-            val parentPath = nioPath.parent ?: error("No parent")
-            val targetName = nioPath.fileName.toString()
-            val parent = VfsUtil.createDirectories(parentPath.toString())
-            parent.createChildData(Any(), targetName).apply {
-                setTextWithPolicy(this, project, op.content)
-            }
-        }
-
-        is FileOp.Delete -> {
-            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
-                ?: error("File not found: ${op.psiPath.relativePath}")
-            vf.delete("rest-delete")
-        }
-
-        is FileOp.Move -> {
-            val fromVf = VirtualFileManager.getInstance().findFileByUrl(op.from.url)
-                ?: error("Source not found: ${op.from.relativePath}")
-            fromVf.move(Any(), VfsUtil.createDirectories(op.to.nioPath.parent?.toString() ?: error("No parent")))
-            fromVf.rename(Any(), op.to.nioPath.fileName.toString())
         }
     }
 }
