@@ -1,7 +1,7 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.project.DumbService
@@ -57,7 +57,7 @@ internal suspend fun deleteFileWithRefactoring(
         if (readAction { file.children.isNotEmpty() }) {
             throw DirectoryNotEmptyException(filePath)
         }
-        edtWriteAction { file.delete("rest-delete") }
+        backgroundWriteAction { file.delete("rest-delete") }
         return DeleteRefactoringResult.Deleted(relativePath, emptyList())
     }
 
@@ -110,10 +110,8 @@ internal suspend fun moveFileWithRefactoring(
     if (!readAction { sourceFile.isWritable }) error("not writable")
     if (readAction { vfs.findFileByUrl(to.url) != null }) error("target exists")
 
-    val targetParent = edtWriteAction {
-        val parentPath = to.nioPath.parent ?: error("no parent")
-        VfsUtil.createDirectories(parentPath.toString())
-    }
+    val parentPath = to.nioPath.parent ?: error("no parent")
+    val targetParent = VfsUtil.createDirectories(parentPath.toString())
     val targetName = to.nioPath.fileName.toString()
     val originalName = readAction { sourceFile.name }
     val needsMove = readAction { sourceFile.parent != targetParent }
@@ -153,10 +151,10 @@ private suspend fun runMoveRefactoring(
     val processor = smartReadAction(project) {
         RestMoveFilesOrDirectoriesProcessor(
             project,
-            arrayOf<PsiElement>(psiFile),
+            arrayOf(psiFile),
             psiDirectory,
-            true,
-            true,
+            searchInComments = true,
+            searchInNonJavaFiles = true,
         ).apply {
             prepareSuccessfulSwingThreadCallback = null
             @Suppress("UsePropertyAccessSyntax") setPreviewUsages(false)
@@ -234,7 +232,9 @@ private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit)
     if (DumbService.isDumb(project)) {
         error("Refactoring is unavailable while indexes are updating")
     }
-    edtWriteAction(block)
+    withContext(Dispatchers.EDT) {
+        block()
+    }
 }
 
 private fun UsageInfo.toFileRefactoringReference(projectBasePath: String?): FileRefactoringReference? {

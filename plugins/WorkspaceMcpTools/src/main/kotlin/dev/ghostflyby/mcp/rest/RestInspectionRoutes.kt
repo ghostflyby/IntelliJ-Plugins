@@ -6,11 +6,15 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.codeInspection.InspectionEngine
+import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.problems.WolfTheProblemSolver
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.PsiManager
@@ -104,17 +108,6 @@ private data class ProblemTarget(
     val project: Project,
     val file: VirtualFile,
     val displayPath: String,
-)
-
-private data class SyntaxProblemSnapshot(
-    val startOffset: Int,
-    val endOffset: Int,
-    val message: String,
-    val line: Int,
-    val column: Int,
-    val endLine: Int,
-    val endColumn: Int,
-    val lineText: String,
 )
 
 internal fun Route.inspectionRoutes() {
@@ -318,87 +311,48 @@ private fun collectFiles(root: VirtualFile, limit: Int): FileCollection {
 }
 
 private suspend fun collectProblemsForFile(project: Project, file: VirtualFile): List<RestProblemItem> {
-    val result = mutableListOf<RestProblemItem>()
-    result += collectPsiSyntaxErrors(project, file)
-    val wolf = WolfTheProblemSolver.getInstance(project)
-    val hasSyntaxErrors = readAction { wolf.hasSyntaxErrors(file) }
-    val isProblemFile = readAction { wolf.isProblemFile(file) }
-    if (hasSyntaxErrors && result.isEmpty()) {
-        result += fileStateProblem(project, file, "ERROR", "SyntaxError", "File has syntax errors")
-    } else if (isProblemFile && result.isEmpty()) {
-        result += fileStateProblem(project, file, "WARNING", "IDEProblemState", "IDE marks this file as problematic")
-    }
-    return result
-}
-
-private suspend fun collectPsiSyntaxErrors(project: Project, file: VirtualFile): List<RestProblemItem> {
-    val snapshots = readAction {
-        val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList()
-        val document = PsiDocumentManager.getInstance(project).getDocument(psiFile)
-            ?: getOrCreateDocument(file)
-            ?: return@readAction emptyList()
-        PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java).map { error ->
-            val range = error.textRange
-            val startOffset = range.startOffset.coerceIn(0, document.textLength)
-            val endOffset = range.endOffset.coerceIn(startOffset, document.textLength)
-            val line = document.getLineNumber(startOffset)
-            val column = startOffset - document.getLineStartOffset(line)
-            val endLine = document.getLineNumber(endOffset)
-            val endColumn = endOffset - document.getLineStartOffset(endLine)
-            val lineText = document.getText(
-                com.intellij.openapi.util.TextRange(
-                    document.getLineStartOffset(line),
-                    document.getLineEndOffset(line),
-                ),
-            )
-            SyntaxProblemSnapshot(
-                startOffset = startOffset,
-                endOffset = endOffset,
-                message = error.errorDescription,
+    val psiFile = readAction { PsiManager.getInstance(project).findFile(file) } ?: return emptyList()
+    val document = readAction { PsiDocumentManager.getInstance(project).getDocument(psiFile) }
+        ?: getOrCreateDocument(file) ?: return emptyList()
+    // Inspection results
+    val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
+    val tools = profile.allTools.filterIsInstance<LocalInspectionToolWrapper>()
+    val inspectionResults = if (tools.isNotEmpty()) {
+        coroutineToIndicator { indicator ->
+            val map = InspectionEngine.inspectEx(
+                tools, psiFile, psiFile.textRange, psiFile.textRange,
+                false, false, true, indicator ?: EmptyProgressIndicator(),
+            ) { _, _ -> true }
+            map.values.flatten().mapNotNull { desc ->
+                toProblemItem(project, file, desc)
+            }
+        }
+    } else emptyList()
+    // Parser syntax errors
+    val psiErrors: List<RestProblemItem> = readAction {
+        PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java).map { error: PsiErrorElement ->
+            val offset = error.textRange.startOffset.coerceIn(0, document.textLength)
+            val line = document.getLineNumber(offset)
+            val base = project.basePath
+            val display = if (base != null && file.path.startsWith(base)) file.path.removePrefix("$base/") else file.url
+            RestProblemItem(
+                severity = "ERROR",
+                fileUrl = file.url,
+                encodedFileUrl = encodeRoutePathSegment(file.url),
+                filePath = display,
                 line = line + 1,
-                column = column + 1,
-                endLine = endLine + 1,
-                endColumn = endColumn + 1,
-                lineText = lineText,
+                column = (offset - document.getLineStartOffset(line)).coerceAtLeast(0) + 1,
+                endLine = line + 1, endColumn = 0,
+                inspectionShortName = "SyntaxError",
+                inspectionDisplayName = "Syntax error",
+                groupPath = listOf("Syntax"),
+                message = error.errorDescription,
+                fixes = emptyList(),
             )
         }
     }
-    return snapshots.map { snapshot ->
-        RestProblemItem(
-            severity = "ERROR",
-            fileUrl = file.url,
-            encodedFileUrl = encodeRoutePathSegment(file.url),
-            filePath = displayPath(project, file),
-            line = snapshot.line,
-            column = snapshot.column,
-            endLine = snapshot.endLine,
-            endColumn = snapshot.endColumn,
-            inspectionShortName = "SyntaxError",
-            inspectionDisplayName = "Syntax error",
-            groupPath = listOf("Syntax"),
-            message = snapshot.message,
-            lineText = snapshot.lineText,
-            fixes = emptyList(),
-        )
-    }
+    return (inspectionResults + psiErrors).distinctBy { "${it.fileUrl}:${it.line}:${it.message}" }
 }
-
-private fun fileStateProblem(
-    project: Project,
-    file: VirtualFile,
-    severity: String,
-    inspection: String,
-    message: String,
-): RestProblemItem = RestProblemItem(
-    severity = severity,
-    fileUrl = file.url,
-    encodedFileUrl = encodeRoutePathSegment(file.url),
-    filePath = displayPath(project, file),
-    inspectionShortName = inspection,
-    inspectionDisplayName = inspection,
-    groupPath = listOf("IDE problem state"),
-    message = message,
-)
 
 private fun RestProblemItem.matches(options: ProblemQueryOptions): Boolean {
     if (severityRank(severity) < severityRank(options.minSeverity)) return false

@@ -2,6 +2,7 @@ package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
+import com.intellij.openapi.command.writeCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -78,18 +79,27 @@ internal suspend fun handleSessionPut(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    runUndoable(target.project, "REST PUT") {
     projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
         val file = access.file
         if (file != null) {
-            edtWriteAction { setTextWithPolicy(file, project, body) }
-            WriteResult.Replaced(file)
+            @Suppress("UnstableApiUsage")
+            writeCommandAction(project, "REST PUT") {
+                setTextWithPolicy(file, project, body)
+            }
+            WriteResult.Replaced(file!!)
         } else {
-            WriteResult.Created(createAndWriteFile(project, access, body))
+            @Suppress("UnstableApiUsage")
+            val created = writeCommandAction(project, "REST PUT") {
+                val p = access.parent ?: error("Parent not found: ${access.relativePath}")
+                val n = access.targetName ?: error("Target name not found: ${access.relativePath}")
+                val vf = p.createChildData(Any(), n)
+                setTextWithPolicy(vf, project, body)
+                vf
+            }
+            WriteResult.Created(created)
         }
-    }
     }
 }
 
@@ -98,7 +108,6 @@ internal suspend fun handleSessionPost(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    runUndoable(target.project, "REST POST") {
     projectExec(call, target, force) { access, project, body, force ->
         if (access.targetIsBinary) return@projectExec WriteResult.Unsupported("Binary writes are disabled in this phase")
         writeGate(access, FileContentKind.PUT, force)?.let { return@projectExec it }
@@ -108,8 +117,15 @@ internal suspend fun handleSessionPost(
             val dir = createDir(access) ?: return@projectExec WriteResult.Conflict
             return@projectExec WriteResult.DirCreated(dir)
         }
-        WriteResult.Created(createAndWriteFile(project, access, body))
-    }
+        @Suppress("UnstableApiUsage")
+        val created = writeCommandAction(project, "REST POST") {
+            val p = access.parent ?: error("Parent not found: ${access.relativePath}")
+            val n = access.targetName ?: error("Target name not found: ${access.relativePath}")
+            val vf = p.createChildData(Any(), n)
+            setTextWithPolicy(vf, project, body)
+            vf
+        }
+        WriteResult.Created(created)
     }
 }
 
@@ -118,7 +134,6 @@ internal suspend fun handleSessionDelete(
     target: RestSessionRouteTarget,
     force: Boolean,
 ) {
-    runUndoable(target.project, "REST DELETE") {
     projectExec(call, target, force) { access, project, _, force ->
         val file = access.file ?: return@projectExec WriteResult.NotFound
         if (!file.isDirectory && file.fileType.isBinary) {
@@ -142,7 +157,6 @@ internal suspend fun handleSessionDelete(
                 else WriteResult.RefactoringFailed(access.relativePath, e.message ?: "Delete refactoring failed")
             },
         )
-    }
     }
 }
 
@@ -310,7 +324,7 @@ private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
 }
 
 @RequiresWriteLock
-private fun setTextWithPolicy(
+internal fun setTextWithPolicy(
     file: VirtualFile,
     project: Project,
     text: String,

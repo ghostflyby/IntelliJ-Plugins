@@ -3,21 +3,33 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.codeInsight.actions.CodeCleanupCodeProcessor
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.codeInsight.actions.ReformatCodeProcessor
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.codeInspection.InspectionEngine
+import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.EDT
+import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.command.CommandProcessor
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
 import com.intellij.openapi.diff.impl.patch.apply.GenericPatchApplier
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
+import com.intellij.psi.util.PsiTreeUtil
 import dev.ghostflyby.mcp.filecontent.FileContentKind
 import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
@@ -40,6 +52,7 @@ private data class PatchResponse(
     val applied: List<Map<String, String>>,
     val failed: List<String> = emptyList(),
     val references: List<FileRefactoringReference> = emptyList(),
+    val problems: List<RestProblemItem> = emptyList(),
     val error: String? = null,
 ) : TextBody {
     override fun renderTextBody(): String = buildString {
@@ -72,6 +85,92 @@ private data class PatchResponse(
                             "${ref.line} | ${ref.column} | ${markdownCell(ref.usageText)} |",
                 )
             }
+        }
+        if (problems.isNotEmpty()) {
+            appendLine("## Problems")
+            appendLine("| severity | file | line | message |")
+            appendLine("| --- | --- | ---: | --- |")
+            problems.forEach { p ->
+                appendLine(
+                    "| ${p.severity} | ${p.filePath ?: p.fileUrl} | ${p.line ?: 0} | ${
+                        p.message.take(100).replace("|", "\\|")
+                    } |",
+                )
+            }
+        }
+    }
+}
+
+private sealed interface FileOp {
+    data class Create(val psiPath: ProjectPatchPath, val content: String) : FileOp
+    data class Delete(val psiPath: ProjectPatchPath) : FileOp
+    data class Update(val psiPath: ProjectPatchPath, val rawLines: List<String>) : FileOp
+    data class Move(val from: ProjectPatchPath, val to: ProjectPatchPath) : FileOp
+}
+
+private suspend fun applyFileOps(project: Project, ops: List<FileOp>) {
+    backgroundWriteAction {
+        CommandProcessor.getInstance().executeCommand(
+            project,
+            {
+                for (op in ops) {
+                    executeFileOp(project, op)
+                }
+            },
+            "REST PATCH", null,
+        )
+    }
+}
+
+private fun executeFileOp(project: Project, op: FileOp) {
+    when (op) {
+        is FileOp.Update -> {
+            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
+                ?: error("File not found: ${op.psiPath.relativePath}")
+            val doc = getOrCreateDocument(vf)
+            val hunks = parseCodexRawHunks(
+                op.rawLines,
+                doc?.immutableCharSequence ?: String(vf.contentsToByteArray(), vf.charset),
+            )
+                ?: error("No valid hunks")
+            val applied = GenericPatchApplier.apply(
+                doc?.immutableCharSequence ?: vf.contentsToByteArray().toString(vf.charset), hunks,
+            )
+                ?: error("Patch does not apply for ${op.psiPath.relativePath}")
+            if (doc != null) {
+                doc.setText(applied.patchedText)
+                val mgr = PsiDocumentManager.getInstance(project)
+                mgr.doPostponedOperationsAndUnblockDocument(doc)
+                mgr.commitDocument(doc)
+                FileDocumentManager.getInstance().saveDocument(doc)
+            } else {
+                vf.setBinaryContent(applied.patchedText.toByteArray(vf.charset))
+            }
+        }
+
+        is FileOp.Create -> {
+            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
+            if (vf != null) error("File already exists: ${op.psiPath.relativePath}")
+            val nioPath = op.psiPath.nioPath
+            val parentPath = nioPath.parent ?: error("No parent")
+            val targetName = nioPath.fileName.toString()
+            val parent = VfsUtil.createDirectories(parentPath.toString())
+            parent.createChildData(Any(), targetName).apply {
+                setTextWithPolicy(this, project, op.content)
+            }
+        }
+
+        is FileOp.Delete -> {
+            val vf = VirtualFileManager.getInstance().findFileByUrl(op.psiPath.url)
+                ?: error("File not found: ${op.psiPath.relativePath}")
+            vf.delete("rest-delete")
+        }
+
+        is FileOp.Move -> {
+            val fromVf = VirtualFileManager.getInstance().findFileByUrl(op.from.url)
+                ?: error("Source not found: ${op.from.relativePath}")
+            fromVf.move(Any(), VfsUtil.createDirectories(op.to.nioPath.parent?.toString() ?: error("No parent")))
+            fromVf.rename(Any(), op.to.nioPath.fileName.toString())
         }
     }
 }
@@ -193,7 +292,6 @@ private suspend fun applyCodex(
     body: String,
     sections: List<CodexFileSection>, call: ApplicationCall,
 ) {
-    runUndoable(project, "REST PATCH") {
     if (sections.isEmpty()) {
         val workspaceOperations = parseWorkspaceOperations(body)
         if (workspaceOperations.isNotEmpty()) {
@@ -204,6 +302,7 @@ private suspend fun applyCodex(
         return
     }
     val applied = mutableListOf<Map<String, String>>()
+    val appliedFiles = mutableListOf<VirtualFile>()
     val failed = mutableListOf<String>()
     val references = mutableListOf<FileRefactoringReference>()
     for (section in sections) {
@@ -243,12 +342,16 @@ private suspend fun applyCodex(
                 }
             }
             applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
+            access.file?.let { appliedFiles += it }
         } catch (e: Exception) {
             failed += "${section.filePath}: ${e.message ?: "unknown"}"
         }
     }
-    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
-    }
+    val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
+    call.respond(
+        HttpStatusCode.OK,
+        PatchResponse(applied = applied, failed = failed, references = references, problems = problems),
+    )
 }
 
 private enum class WorkspaceOperationKind(val wireName: String, val resultName: String) {
@@ -294,6 +397,7 @@ private suspend fun applyWorkspaceOperations(
     call: ApplicationCall,
 ) {
     val applied = mutableListOf<Map<String, String>>()
+    val appliedFiles = mutableListOf<VirtualFile>()
     val failed = mutableListOf<String>()
     val targets = linkedMapOf<String, WorkspaceOperationTarget>()
     for (operation in operations) {
@@ -313,6 +417,7 @@ private suspend fun applyWorkspaceOperations(
         val access = try {
             val access = resolvePatchSectionAccess(project, routeAccess, target.fileRelPath)
             ensurePatchAllowed(access, force)
+            access.file?.let { appliedFiles += it }
             access
         } catch (e: Exception) {
             failed += "${target.fileRelPath}: ${e.message ?: "unknown"}"
@@ -388,8 +493,8 @@ private suspend fun applyGit(
     isDir: Boolean, force: Boolean,
     patches: List<TextFilePatch>, call: ApplicationCall,
 ) {
-    runUndoable(project, "REST PATCH") {
     val applied = mutableListOf<Map<String, String>>()
+    val appliedFiles = mutableListOf<VirtualFile>()
     val failed = mutableListOf<String>()
     val references = mutableListOf<FileRefactoringReference>()
     for (p in patches) {
@@ -415,12 +520,17 @@ private suspend fun applyGit(
                 p.isNewFile -> "add"; p.isDeletedFile -> "delete"; else -> "update"
             }
             applied += mapOf("path" to fileRelPath, "operation" to op)
+            access.file?.let { appliedFiles += it }
         } catch (e: Exception) {
             failed += "$path: ${e.message ?: "unknown"}"
         }
     }
     call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
-    }
+    val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
+    call.respond(
+        HttpStatusCode.OK,
+        PatchResponse(applied = applied, failed = failed, references = references, problems = problems),
+    )
 }
 
 private suspend fun deletePatchTargetWithRefactoring(
@@ -485,6 +595,116 @@ private fun patchPathFor(access: ProjectFileAccess): ProjectPatchPath {
         relativePath = access.relativePath,
         nioPath = java.nio.file.Path.of(parent.path).resolve(targetName),
         url = "${parent.url}/$targetName",
+    )
+}
+
+internal suspend fun inspectChangedFiles(
+    project: Project,
+    files: List<VirtualFile>,
+    isOnTheFly: Boolean = true,
+): List<RestProblemItem> {
+    if (!isOnTheFly) {
+        files.forEach { f ->
+            val psi = readAction { PsiManager.getInstance(project).findFile(f) }
+            psi?.let { DaemonCodeAnalyzer.getInstance(project).restart(it) }
+        }
+    }
+    val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
+    val tools = profile.allTools.filterIsInstance<LocalInspectionToolWrapper>()
+    val filesToInspect = files.mapNotNull { file ->
+        val psiFile = readAction { PsiManager.getInstance(project).findFile(file) } ?: return@mapNotNull null
+        file to psiFile
+    }
+    val inspectionResults = if (tools.isNotEmpty()) {
+        coroutineToIndicator { indicator ->
+            filesToInspect.flatMap { (file, psiFile) ->
+                val resultMap = InspectionEngine.inspectEx(
+                    tools, psiFile, psiFile.textRange, psiFile.textRange,
+                    isOnTheFly, false, true,
+                    indicator,
+                ) { _, _ -> true }
+                resultMap.values.flatten().mapNotNull { desc ->
+                    toProblemItem(project, file, desc)
+                }
+            }
+        }
+    } else emptyList()
+    val psiErrorResults = filesToInspect.flatMap { (file, psiFile) ->
+        val document = getOrCreateDocument(file) ?: return@flatMap emptyList()
+        val errors: List<RestProblemItem> = readAction {
+            PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java).map { error: PsiErrorElement ->
+                val offset = error.textRange.startOffset.coerceIn(0, document.textLength)
+                val line = document.getLineNumber(offset)
+                val base = project.basePath
+                val display =
+                    if (base != null && file.path.startsWith(base)) file.path.removePrefix("$base/") else file.url
+                RestProblemItem(
+                    severity = "ERROR",
+                    fileUrl = file.url,
+                    encodedFileUrl = encodeRoutePathSegment(file.url),
+                    filePath = display,
+                    line = line + 1,
+                    column = (offset - document.getLineStartOffset(line)).coerceAtLeast(0) + 1,
+                    endLine = line + 1, endColumn = 0,
+                    inspectionShortName = "SyntaxError",
+                    inspectionDisplayName = "Syntax error",
+                    message = error.errorDescription,
+                    lineText = document.getText(
+                        com.intellij.openapi.util.TextRange(
+                            document.getLineStartOffset(line),
+                            document.getLineEndOffset(line).coerceAtMost(document.textLength),
+                        ),
+                    ),
+                    fixes = emptyList(),
+                )
+            }
+        }
+        errors
+    }
+    return (inspectionResults + psiErrorResults).distinctBy { "${it.fileUrl}:${it.line}:${it.message}" }
+}
+
+internal fun toProblemItem(project: Project, file: VirtualFile, desc: ProblemDescriptor): RestProblemItem {
+    val el = desc.psiElement ?: return toFallbackItem(project, file, desc)
+    val basePath = project.basePath
+    val display =
+        if (basePath != null && file.path.startsWith(basePath)) file.path.removePrefix("$basePath/") else file.path
+    return RestProblemItem(
+        severity = when (desc.highlightType) {
+            ProblemHighlightType.ERROR, ProblemHighlightType.GENERIC_ERROR -> "ERROR"
+            ProblemHighlightType.WARNING, ProblemHighlightType.GENERIC_ERROR_OR_WARNING -> "WARNING"
+            ProblemHighlightType.WEAK_WARNING -> "WEAK_WARNING"
+            ProblemHighlightType.INFORMATION -> "INFO"
+            else -> "WARNING"
+        },
+        fileUrl = file.url,
+        encodedFileUrl = encodeRoutePathSegment(file.url),
+        filePath = display,
+        line = el.textRange.startOffset,
+        column = 0,
+        inspectionShortName = desc.javaClass.simpleName,
+        inspectionDisplayName = desc.descriptionTemplate.take(80),
+        groupPath = listOf("Inspection"),
+        message = desc.descriptionTemplate,
+        fixes = emptyList(),
+    )
+}
+
+private fun toFallbackItem(project: Project, file: VirtualFile, desc: ProblemDescriptor): RestProblemItem {
+    val basePath = project.basePath
+    val display =
+        if (basePath != null && file.path.startsWith(basePath)) file.path.removePrefix("$basePath/") else file.path
+    return RestProblemItem(
+        severity = "WARNING",
+        fileUrl = file.url,
+        encodedFileUrl = encodeRoutePathSegment(file.url),
+        filePath = display,
+        line = 0, column = 0,
+        inspectionShortName = desc.javaClass.simpleName,
+        inspectionDisplayName = desc.descriptionTemplate.take(80),
+        groupPath = listOf("Inspection"),
+        message = desc.descriptionTemplate,
+        fixes = emptyList(),
     )
 }
 

@@ -576,4 +576,26 @@ after updated""",
             Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)
         }
     }
+
+    @Test
+    fun `PATCH reports problems for broken XML file`() {
+        project
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Add File: broken.xml
++<root>
++    <unclosed
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("broken.xml")) {
+                setBody(patch)
+            }
+            Assertions.assertTrue(resp.bodyAsText().contains("applied:"), "PATCH should succeed")
+        }
+    }
 }
