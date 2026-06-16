@@ -38,8 +38,11 @@ internal class WorkspaceMcpSdkServerSettings :
             updateState { state.copy(codexSkillNotifiedVersion = v) }
         }
 
-    internal val port: Int
+    internal var port: Int
         get() = state.port
+        set(value) {
+            updateState { state.copy(port = value) }
+        }
 
     internal data class State(
         val port: Int = 63341,

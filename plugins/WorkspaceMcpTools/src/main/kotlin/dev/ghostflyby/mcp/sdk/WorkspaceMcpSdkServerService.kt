@@ -6,11 +6,9 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
-import java.net.BindException
 import dev.ghostflyby.mcp.rest.installWorkspaceRestContentNegotiation
 import dev.ghostflyby.mcp.rest.restApi
 import io.ktor.server.application.*
@@ -20,20 +18,19 @@ import io.ktor.server.resources.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import java.net.BindException
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
 ) {
     private val logger = logger<WorkspaceMcpSdkServerService>()
 
     init {
-        if (!ApplicationManager.getApplication().isUnitTestMode) {
-            scope.launch {
-                val port = startServerWithFallback()
-                @Suppress("HttpUrlsUsage")
-                logger.info("Workspace MCP REST server started at http://$LOOPBACK_HOST:$port/api/v1")
-            }
+        scope.launch {
+            val port = startServerWithFallback()
+            @Suppress("HttpUrlsUsage")
+            logger.info("Workspace MCP REST server started at http://$LOOPBACK_HOST:$port/api/v1")
         }
     }
 
@@ -48,11 +45,10 @@ internal class WorkspaceMcpSdkServerService(
                     routing { restApi() }
                 }.startSuspend(wait = true)
                 if (port != settings.port) {
-                    @OptIn(com.intellij.util.xmlb.SettingsInternalApi::class)
-                    settings.state = settings.state.copy(port = port)
+                    settings.port = port
                 }
                 return port
-            } catch (e: BindException) {
+            } catch (_: BindException) {
                 logger.warn("Port $port is in use, trying ${port + 1}")
                 port++
             }
