@@ -4,22 +4,26 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
-import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
 import com.intellij.refactoring.RefactoringFactory
+import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFileHandler
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesProcessor
 import com.intellij.usageView.UsageInfo
+import com.intellij.util.IncorrectOperationException
+import com.intellij.util.containers.MultiMap
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.patch.ProjectPatchPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import java.io.IOException
 import java.nio.file.DirectoryNotEmptyException
 
 internal sealed interface DeleteRefactoringResult {
@@ -165,13 +169,13 @@ private suspend fun runMoveRefactoring(
             .getOrElse { error(it.message ?: "Move usage search failed") }
     }
     val refUsages = Ref(usages)
-    val canProceed = smartReadAction(project) {
+    val canProceed = readAction {
         processor.preprocessUsagesForRest(refUsages)
     }
     if (!canProceed) {
         error("Move refactoring was cancelled by conflict preprocessing")
     }
-    runRefactoringProcessor(project) {
+    withContext(Dispatchers.EDT) {
         processor.executeForRest(refUsages.get())
     }
 }
@@ -209,7 +213,7 @@ private suspend fun runRenameRefactoring(
 private class RestMoveFilesOrDirectoriesProcessor(
     project: Project,
     elements: Array<PsiElement>,
-    newParent: com.intellij.psi.PsiDirectory,
+    val newParent: PsiDirectory,
     searchInComments: Boolean,
     searchInNonJavaFiles: Boolean,
 ) : MoveFilesOrDirectoriesProcessor(
@@ -223,18 +227,28 @@ private class RestMoveFilesOrDirectoriesProcessor(
 ) {
     fun findUsagesForRest(): Array<UsageInfo> = findUsages()
 
+    override fun preprocessUsages(usages: Ref<Array<UsageInfo>>): Boolean {
+        val conflicts = MultiMap<PsiElement, String>()
+        MoveFileHandler.detectConflicts(myElementsToMove, usages.get(), newParent, conflicts)
+        if (!conflicts.isEmpty) {
+            error("Move conflicts: ${conflicts.entrySet().map { it.value }}")
+        }
+        return true
+    }
+    
     fun preprocessUsagesForRest(usages: Ref<Array<UsageInfo>>): Boolean = preprocessUsages(usages)
 
-    fun executeForRest(usages: Array<UsageInfo>) = executeEx(usages)
-}
+    override fun performRefactoring(usages: Array<UsageInfo>) {
+        try {
+            super.performRefactoring(usages)
+        } catch (e: IncorrectOperationException) {
+            val cause = e.cause
+            if (cause is IOException) throw RuntimeException(cause)
+            throw e
+        }
+    }
 
-private suspend fun runRefactoringProcessor(project: Project, block: () -> Unit) {
-    if (DumbService.isDumb(project)) {
-        error("Refactoring is unavailable while indexes are updating")
-    }
-    withContext(Dispatchers.EDT) {
-        block()
-    }
+    fun executeForRest(usages: Array<UsageInfo>) = executeEx(usages)
 }
 
 private fun UsageInfo.toFileRefactoringReference(projectBasePath: String?): FileRefactoringReference? {
