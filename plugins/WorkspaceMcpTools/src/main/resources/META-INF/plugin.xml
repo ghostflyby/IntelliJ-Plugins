@@ -10,12 +10,6 @@
     <depends>com.intellij.modules.lang</depends>
     <depends>com.intellij.modules.vcs</depends>
 
-    <extensionPoints>
-        <extensionPoint name="workspaceFeature"
-                        interface="dev.ghostflyby.mcp.server.WorkspaceMcpFeature"
-                        dynamic="true"/>
-    </extensionPoints>
-
     <extensions defaultExtensionNs="com.intellij">
         <notificationGroup id="Workspace Agent Bridge"
                            displayType="BALLOON"
@@ -23,17 +17,6 @@
                            key="sdk.notification.group.name"/>
         <postStartupActivity implementation="dev.ghostflyby.mcp.WorkspaceMcpStartupActivity"/>
         <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.SkillNotificationActivity"/>
-        <vfs.asyncListener implementation="dev.ghostflyby.mcp.filecontent.FileContentVfsListener"/>
     </extensions>
-
-    <applicationListeners>
-        <listener class="dev.ghostflyby.mcp.sdk.WorkspaceMcpProjectLifecycleListener"
-                  topic="com.intellij.openapi.project.ProjectManager$TOPIC"/>
-    </applicationListeners>
-
-    <projectListeners>
-        <listener class="dev.ghostflyby.mcp.sdk.WorkspaceMcpModuleRootListener"
-                  topic="com.intellij.openapi.roots.ModuleRootListener$TOPIC"/>
-    </projectListeners>
 
 </idea-plugin>

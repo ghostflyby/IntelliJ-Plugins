@@ -26,9 +26,6 @@ plugins {
 
 rootProject.name = "IntelliJ-Plugins"
 
-// Composite build: substitute MCP Kotlin SDK binary dependency with local fork.
-includeBuild("third-party/kotlin-sdk")
-
 val excludedPlugins = file(".ci/excluded-plugins.txt")
     .takeIf { it.exists() }
     ?.readLines()

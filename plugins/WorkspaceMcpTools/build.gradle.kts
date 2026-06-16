@@ -22,7 +22,6 @@ buildLogic {
 }
 
 dependencies {
-    api(libs.mcp.kotlin.sdk.server)
     api(libs.ktor.resources)
     api(libs.kotlinx.schema.annotations)
 
@@ -33,12 +32,9 @@ dependencies {
     implementation(libs.ktor.server.resources)
     implementation(libs.ktor.server.cio)
     implementation(project(":modules:intellij-shared"))
-    implementation(project(":modules:workspace-mcp-server"))
 
     implementation(kotlin("reflect"))
 
-    testImplementation(libs.mcp.kotlin.sdk.testing)
-    testImplementation(libs.mcp.kotlin.sdk.client)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher) {

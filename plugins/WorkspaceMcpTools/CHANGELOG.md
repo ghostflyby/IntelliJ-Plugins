@@ -6,26 +6,17 @@
 
 ### Added
 
-- Added an application-level official Kotlin MCP SDK Streamable HTTP endpoint for workspace resources, with VFS and
-  document resource templates plus resource list/update notifications.
-- Migrated workspace resource URI scheme to `ij-workspace://{instanceKey}/projects/{projectKey}/{kind}/{tail}`.
-- Added `instanceKey` (product code + port) and `projectKey` (slug + short hash) for stable project identity.
 - Added structured context routing for session and project-level request handling.
-- Added `server/info`, `projects`, and `projects/{projectKey}` metadata resources.
-- Added new project-scoped resource templates: `files/{relativePath}`, `documents/{relativePath}`,
-  `vfs/{rawVfsUrl}`, and `document-vfs/{rawVfsUrl}`.
 - Added project resolution by key, path, VFS URL, and relative path with multi-candidate disambiguation.
-- Roots snapshot framework for future MCP roots-based project resolution.
 
 ### Changed
-- `resources/list` now emits project-scoped URIs with fallback to raw VFS URIs for files outside the project base.
-- Resource handlers now install `WorkspaceMcpCallContext` and `WorkspaceMcpProjectContext` on the coroutine context before delegating to the workspace resource reader.
+- The workspace server now exposes the REST API only; the experimental Kotlin MCP SDK endpoint has been moved out of
+  this plugin repository.
 
 ### Removed
+- Removed the local Kotlin MCP SDK submodule and the migrated `workspace-mcp-server` module from this repository.
 - Removed the standalone legacy `scope_*` MCP tools. New agent integrations should use the REST search, navigation,
   file, inspection, and patch APIs instead.
-- Removed legacy `ij-workspace-vfs://` and `ij-workspace-document://` URI protocol support.
-- Removed legacy resource template registrations, template matchers, and notification logic.
 
 ### Fixed
 

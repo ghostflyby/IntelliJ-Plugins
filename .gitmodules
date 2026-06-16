@@ -1,4 +1,0 @@
-[submodule "third-party/kotlin-sdk"]
-	path = third-party/kotlin-sdk
-	url = https://github.com/ghostflyby/kotlin-mcp-sdk.git
-	branch = ghostflyby/workspace-mcp-concurrency
