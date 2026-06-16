@@ -606,7 +606,7 @@ internal suspend fun inspectChangedFiles(
     if (!isOnTheFly) {
         files.forEach { f ->
             val psi = readAction { PsiManager.getInstance(project).findFile(f) }
-            psi?.let { DaemonCodeAnalyzer.getInstance(project).restart(it) }
+            psi?.let { DaemonCodeAnalyzer.getInstance(project).restart(it, "Edited by Rest API") }
         }
     }
     val profile = InspectionProjectProfileManager.getInstance(project).currentProfile

@@ -10,7 +10,6 @@ import com.intellij.codeInspection.InspectionEngine
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -321,7 +320,7 @@ private suspend fun collectProblemsForFile(project: Project, file: VirtualFile):
         coroutineToIndicator { indicator ->
             val map = InspectionEngine.inspectEx(
                 tools, psiFile, psiFile.textRange, psiFile.textRange,
-                false, false, true, indicator ?: EmptyProgressIndicator(),
+                false, false, true, indicator,
             ) { _, _ -> true }
             map.values.flatten().mapNotNull { desc ->
                 toProblemItem(project, file, desc)

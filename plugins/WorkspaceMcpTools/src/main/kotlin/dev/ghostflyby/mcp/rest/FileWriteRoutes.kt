@@ -88,7 +88,7 @@ internal suspend fun handleSessionPut(
             writeCommandAction(project, "REST PUT") {
                 setTextWithPolicy(file, project, body)
             }
-            WriteResult.Replaced(file!!)
+            WriteResult.Replaced(file)
         } else {
             @Suppress("UnstableApiUsage")
             val created = writeCommandAction(project, "REST PUT") {
