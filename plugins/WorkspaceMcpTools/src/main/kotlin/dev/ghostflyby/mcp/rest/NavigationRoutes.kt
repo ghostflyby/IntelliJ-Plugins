@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.*
 import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
@@ -269,14 +270,7 @@ private suspend fun executeUsages(
     return readAction {
         val ref = range.psiFile.findReferenceAt(range.selectionStart)?.resolve()
         val searchTarget = ref?.navigationElement ?: range.targetElement
-        val usages = mutableListOf<UsageInfo>()
         val maxResults = 100
-        ReferencesSearch.search(searchTarget).forEach(
-            Processor { reference ->
-                usages += UsageInfo(reference)
-                usages.size < maxResults
-            },
-        )
         @Suppress("CAST_NEVER_SUCCEEDS")
         val handler = (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>)
             .getExtensionList(range.psiFile.project)
@@ -291,8 +285,9 @@ private suspend fun executeUsages(
                 }
             }
 
-        if (handler != null && usages.size < maxResults) {
+        if (handler != null) {
             val options = handler.getFindUsagesOptions(null)
+            val usages = mutableListOf<UsageInfo>()
             handler.processElementUsages(
                 searchTarget,
                 Processor { usage ->
@@ -301,7 +296,22 @@ private suspend fun executeUsages(
                 },
                 options,
             )
+            val results = usages.mapNotNull { toNavTarget(it) }
+            return@readAction NavUsages(
+                path = filePath,
+                results = results.distinctBy { "${it.fileUrl}:${it.lineNumber}:${it.column}" },
+                truncated = results.size >= maxResults,
+            )
         }
+        // Fallback: no handler (private/internal symbols)
+        val searchScope = GlobalSearchScope.projectScope(range.psiFile.project)
+        val usages = mutableListOf<UsageInfo>()
+        ReferencesSearch.search(searchTarget, searchScope).forEach(
+            Processor { reference ->
+                usages += UsageInfo(reference)
+                usages.size < maxResults
+            },
+        )
         val results = usages.mapNotNull { toNavTarget(it) }
         return@readAction NavUsages(
             path = filePath,
