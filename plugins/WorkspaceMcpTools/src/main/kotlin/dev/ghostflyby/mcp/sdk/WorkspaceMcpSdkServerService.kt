@@ -10,6 +10,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import java.net.BindException
 import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import dev.ghostflyby.mcp.pluginVersion
@@ -48,14 +49,8 @@ internal class WorkspaceMcpSdkServerService(
             scope.launch {
                 val createdCore = createCore(features)
                 try {
-                    val port = service<WorkspaceMcpSdkServerSettings>().port
+                    val port = startServerWithFallback(createdCore)
                     core = createdCore
-                    embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-                        installWorkspaceRestContentNegotiation()
-                        install(Resources)
-                        mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdCore.server }
-                        routing { restApi() }
-                    }.startSuspend(wait = true)
                     @Suppress("HttpUrlsUsage")
                     logger.info(
                         "Workspace MCP server started at " +
@@ -69,6 +64,30 @@ internal class WorkspaceMcpSdkServerService(
                 }
             }
         }
+    }
+
+    private suspend fun startServerWithFallback(createdCore: WorkspaceMcpServerCore): Int {
+        val settings = service<WorkspaceMcpSdkServerSettings>()
+        var port = settings.port
+        while (port < settings.port + 10) {
+            try {
+                embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
+                    installWorkspaceRestContentNegotiation()
+                    install(Resources)
+                    mcpStreamableHttp(path = MCP_ENDPOINT_PATH) { createdCore.server }
+                    routing { restApi() }
+                }.startSuspend(wait = true)
+                if (port != settings.port) {
+                    @OptIn(com.intellij.util.xmlb.SettingsInternalApi::class)
+                    settings.state = settings.state.copy(port = port)
+                }
+                return port
+            } catch (e: BindException) {
+                logger.warn("Port $port is in use, trying ${port + 1}")
+                port++
+            }
+        }
+        error("All ports ${settings.port}-${settings.port + 9} are in use")
     }
 
     private fun createCore(initialFeatures: List<WorkspaceMcpFeature>): WorkspaceMcpServerCore {

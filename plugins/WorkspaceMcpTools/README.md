@@ -10,7 +10,7 @@ navigation, inspections, formatting, cleanup, and refactoring-aware file operati
 The REST server is hosted once per IDE application.
 
 - Base URL: `http://127.0.0.1:63341/api/v1`
-- Override the port with `-Ddev.ghostflyby.mcp.workspace.port=<port>`.
+- If port 63341 is already in use, the server scans up to 10 ports and persists the result.
 - Create a workspace session with `POST /sessions` and pass
   `X-Ghostflyby-Workspace-Session-Id` on workspace requests.
 - Default responses are Markdown/plain text optimized for agents. Use `Accept: application/json` only for structured

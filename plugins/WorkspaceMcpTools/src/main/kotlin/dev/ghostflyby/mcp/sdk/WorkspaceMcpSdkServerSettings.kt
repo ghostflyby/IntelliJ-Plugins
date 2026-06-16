@@ -22,6 +22,7 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.openapi.components.RoamingType
 import com.intellij.openapi.components.SerializablePersistentStateComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.State
@@ -30,28 +31,15 @@ import com.intellij.openapi.components.Storage
 @Service(Service.Level.APP)
 @State(
     name = "WorkspaceMcpSdkServerSettings",
-    storages = [Storage("workspace-mcp-sdk.xml")],
+    storages = [Storage("workspace-mcp-sdk.xml",roamingType = RoamingType.DISABLED)],
 )
 internal class WorkspaceMcpSdkServerSettings :
     SerializablePersistentStateComponent<WorkspaceMcpSdkServerSettings.State>(State()) {
 
     internal val port: Int
-        get() = workspaceMcpPortProperty()?.takeIf(::isValidPort) ?: state.port
+        get() = state.port
 
     internal data class State(
-        val port: Int = DEFAULT_PORT,
+        val port: Int = 63341,
     )
-
-    private companion object {
-        private const val DEFAULT_PORT = 63341
-        private const val PORT_PROPERTY = "dev.ghostflyby.mcp.workspace.port"
-
-        private fun workspaceMcpPortProperty(): Int? {
-            return System.getProperty(PORT_PROPERTY)?.toIntOrNull()
-        }
-
-        private fun isValidPort(port: Int): Boolean {
-            return port in 1..65535
-        }
-    }
 }

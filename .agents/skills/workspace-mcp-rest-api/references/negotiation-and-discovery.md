@@ -8,8 +8,7 @@ Default:
 BASE=http://127.0.0.1:63341/api/v1
 ```
 
-The port can be overridden when the IDE starts with
-`-Ddev.ghostflyby.mcp.workspace.port=<port>`.
+Default port is 63341. If in use, server scans 10 ports forward and persists.
 
 ## Headers And Content Negotiation
 
