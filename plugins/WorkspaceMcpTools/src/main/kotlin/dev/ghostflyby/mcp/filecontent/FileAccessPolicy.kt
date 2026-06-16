@@ -108,10 +108,12 @@ private fun classify(
     val file = exactFile ?: parent ?: return FileContentClassification.MISSING
     if (!root.readable || !isUnderRoot(root, file)) return FileContentClassification.OUTSIDE_PROJECT
     if (fileIndex.isExcluded(file)) return FileContentClassification.EXCLUDED
-    if (fileIndex.isInLibraryClasses(file) || fileIndex.isInLibrarySource(file)) {
-        return FileContentClassification.DEPENDENCY_OR_SDK
+    if (!fileIndex.isInContent(file)) {
+        if (fileIndex.isInLibraryClasses(file) || fileIndex.isInLibrarySource(file)) {
+            return FileContentClassification.DEPENDENCY_OR_SDK
+        }
+        return FileContentClassification.OUTSIDE_PROJECT
     }
-    if (!fileIndex.isInContent(file)) return FileContentClassification.OUTSIDE_PROJECT
     if (exactFile?.isDirectory == true) return FileContentClassification.WORKSPACE_TEXT
     val ignored = exactFile?.let { FileTypeRegistry.getInstance().isFileIgnored(it) } ?: false
     val binary = exactFile?.fileType?.isBinary ?: false

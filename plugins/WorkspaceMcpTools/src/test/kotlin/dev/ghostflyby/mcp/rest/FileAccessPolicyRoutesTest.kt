@@ -2,6 +2,7 @@ package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.roots.ModuleRootManager
+import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
@@ -111,6 +112,58 @@ internal class FileAccessPolicyRoutesTest {
 
             val readBack = sessionClient.get(sessionClient.rootPathUrl("ignored.generated"))
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `project content wins over library source classification for writes`() {
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val root = Path.of(requireNotNull(project.basePath))
+            val sourceRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root.resolve("src"))
+                ?: error("src dir missing")
+
+            ApplicationManager.getApplication().runWriteAction {
+                val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
+                var committed = false
+                try {
+                    val library = model.moduleLibraryTable.createLibrary("overlapping-source-library")
+                    library.modifiableModel.apply {
+                        addRoot(sourceRoot, OrderRootType.SOURCES)
+                        commit()
+                    }
+                    model.commit()
+                    committed = true
+                } finally {
+                    if (!committed) model.dispose()
+                }
+            }
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val meta = sessionClient.get(sessionClient.rootPathUrl("src/source.txt", meta = true)) {
+                accept(ContentType.Application.Json)
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, meta.status)
+            val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
+            Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
+            val writableKinds = parsed["writableKinds"]?.let { it as JsonArray }
+                ?.map { it.jsonPrimitive.content }
+                ?.toSet()
+                ?: emptySet()
+            Assertions.assertTrue(setOf("put", "patch", "delete").all { it in writableKinds })
+
+            val put = sessionClient.put(sessionClient.rootPathUrl("src/source.txt")) {
+                setBody("changed source")
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, put.status)
+
+            val readBack = sessionClient.get(sessionClient.rootPathUrl("src/source.txt"))
+            Assertions.assertEquals("changed source", readBack.bodyAsText().trim())
         }
     }
 
