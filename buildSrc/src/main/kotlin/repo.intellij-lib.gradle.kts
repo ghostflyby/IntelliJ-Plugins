@@ -9,7 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
     id("repo.module")
-    alias(libs.plugins.intellij.module)
+    alias(libs.plugins.intellij.platform.base)
     alias(libs.plugins.kover)
 }
 

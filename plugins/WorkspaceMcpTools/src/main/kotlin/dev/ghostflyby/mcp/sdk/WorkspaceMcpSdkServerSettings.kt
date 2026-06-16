@@ -22,11 +22,7 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.components.RoamingType
-import com.intellij.openapi.components.SerializablePersistentStateComponent
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.State
-import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.*
 
 @Service(Service.Level.APP)
 @State(
@@ -36,10 +32,17 @@ import com.intellij.openapi.components.Storage
 internal class WorkspaceMcpSdkServerSettings :
     SerializablePersistentStateComponent<WorkspaceMcpSdkServerSettings.State>(State()) {
 
+    var codexSkillNotifiedVersion: String
+        get() = state.codexSkillNotifiedVersion
+        set(v) {
+            updateState { state.copy(codexSkillNotifiedVersion = v) }
+        }
+
     internal val port: Int
         get() = state.port
 
     internal data class State(
         val port: Int = 63341,
+        val codexSkillNotifiedVersion: String = "",
     )
 }

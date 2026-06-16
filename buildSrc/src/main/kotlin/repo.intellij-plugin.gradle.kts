@@ -13,7 +13,7 @@ import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 
 plugins {
-    id("repo.intellij-module")
+    id("repo.intellij-lib")
     alias(libs.plugins.intellij.platform) // IntelliJ Platform Gradle Plugin
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
 }

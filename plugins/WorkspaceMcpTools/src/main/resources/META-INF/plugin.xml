@@ -17,7 +17,12 @@
     </extensionPoints>
 
     <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup id="Workspace Agent Bridge"
+                           displayType="BALLOON"
+                           bundle="messages.Bundle"
+                           key="sdk.notification.group.name"/>
         <postStartupActivity implementation="dev.ghostflyby.mcp.WorkspaceMcpStartupActivity"/>
+        <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.SkillNotificationActivity"/>
         <vfs.asyncListener implementation="dev.ghostflyby.mcp.filecontent.FileContentVfsListener"/>
     </extensions>
 
