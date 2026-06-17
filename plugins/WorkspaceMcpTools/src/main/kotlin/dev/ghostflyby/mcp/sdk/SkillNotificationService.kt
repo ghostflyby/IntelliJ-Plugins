@@ -53,22 +53,22 @@ internal class SkillNotificationActivity : ProjectActivity {
     private fun Notification.addSkillLocationActions(localSkillPath: Path?) {
         if (localSkillPath != null && Files.isDirectory(localSkillPath)) {
             addAction(
-                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.copyPath")) {
+                NotificationAction.create(Bundle.message("sdk.skill.notification.action.copyPath")) { _, notification ->
                     CopyPasteManager.getInstance().setContents(StringSelection(localSkillPath.toString()))
-                    expire()
+                    notification.expire()
                 },
             )
             addAction(
-                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.showFolder")) {
+                NotificationAction.create(Bundle.message("sdk.skill.notification.action.revealFolder")) { _, notification ->
                     RevealFileAction.openFile(localSkillPath)
-                    expire()
+                    notification.expire()
                 },
             )
         } else {
             addAction(
-                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.openOnline")) {
+                NotificationAction.create(Bundle.message("sdk.skill.notification.action.openOnline")) { _, notification ->
                     BrowserUtil.browse(SKILL_ONLINE_URL)
-                    expire()
+                    notification.expire()
                 },
             )
         }
