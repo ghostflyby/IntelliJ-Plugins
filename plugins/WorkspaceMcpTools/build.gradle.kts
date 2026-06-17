@@ -6,6 +6,7 @@
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -59,6 +60,12 @@ compileKotlin.compilerOptions {
 tasks.test {
     useJUnitPlatform()
     systemProperty("java.awt.headless", true)
+}
+
+tasks.withType<PrepareSandboxTask>().configureEach {
+    from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-mcp-rest-api")) {
+        into(pluginName.map { "$it/agent-skills/workspace-mcp-rest-api" })
+    }
 }
 
 configurations.all {

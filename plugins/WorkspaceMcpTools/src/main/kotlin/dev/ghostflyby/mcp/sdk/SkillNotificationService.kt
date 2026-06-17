@@ -6,24 +6,34 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.ide.BrowserUtil
+import com.intellij.ide.actions.RevealFileAction
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.notification.Notification
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.service
+import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.PluginInfo
 import dev.ghostflyby.mcp.pluginVersion
+import java.awt.datatransfer.StringSelection
+import java.nio.file.Files
+import java.nio.file.Path
 
 internal class SkillNotificationActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         val settings = service<WorkspaceMcpSdkServerSettings>()
         val currentVersion = pluginVersion
-        if (currentVersion == "unknown") return
-        if (currentVersion == settings.codexSkillNotifiedVersion) return
+        if (!shouldNotifySkill(currentVersion, settings.codexSkillNotifiedVersion)) return
 
         settings.codexSkillNotifiedVersion = currentVersion
 
+        val localSkillPath = bundledSkillPath()
         val notification = NotificationGroupManager.getInstance()
             .getNotificationGroup("Workspace Agent Bridge")
             .createNotification(
@@ -31,6 +41,7 @@ internal class SkillNotificationActivity : ProjectActivity {
                 Bundle.message("sdk.skill.notification.content"),
                 NotificationType.INFORMATION,
             )
+        notification.addSkillLocationActions(localSkillPath)
         notification.addAction(
             NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.dismiss")) {
                 notification.expire()
@@ -38,4 +49,49 @@ internal class SkillNotificationActivity : ProjectActivity {
         )
         notification.notify(project)
     }
+
+    private fun Notification.addSkillLocationActions(localSkillPath: Path?) {
+        if (localSkillPath != null && Files.isDirectory(localSkillPath)) {
+            addAction(
+                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.copyPath")) {
+                    CopyPasteManager.getInstance().setContents(StringSelection(localSkillPath.toString()))
+                    expire()
+                },
+            )
+            addAction(
+                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.showFolder")) {
+                    RevealFileAction.openFile(localSkillPath)
+                    expire()
+                },
+            )
+        } else {
+            addAction(
+                NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.openOnline")) {
+                    BrowserUtil.browse(SKILL_ONLINE_URL)
+                    expire()
+                },
+            )
+        }
+    }
+}
+
+internal const val BUNDLED_SKILL_RELATIVE_PATH: String = "agent-skills/workspace-mcp-rest-api"
+internal const val SKILL_ONLINE_URL: String =
+    "https://github.com/ghostflyby/IntelliJ-Plugins/tree/main/.agents/skills/workspace-mcp-rest-api"
+
+internal fun shouldNotifySkill(
+    currentVersion: String,
+    notifiedVersion: String,
+): Boolean = currentVersion != "unknown" && currentVersion != notifiedVersion
+
+internal fun bundledSkillPath(pluginPath: Path?): Path? {
+    return pluginPath?.resolve(BUNDLED_SKILL_RELATIVE_PATH)
+}
+
+private fun bundledSkillPath(): Path? {
+    return bundledSkillPath(
+        PluginManagerCore
+            .getPlugin(PluginId.getId(PluginInfo.id))
+            ?.pluginPath,
+    )
 }
