@@ -39,6 +39,10 @@ internal class FileAccessPolicyRoutesTest {
         project
         val root = Path.of(requireNotNull(project.basePath))
         Files.writeString(root.resolve(".gitignore"), "*.generated")
+        Files.createDirectories(root.resolve(".git"))
+        Files.writeString(root.resolve(".git/config"), "[core]\n")
+        Files.createDirectories(root.resolve("foo.git"))
+        Files.writeString(root.resolve("foo.git/config"), "regular")
         Files.writeString(root.resolve("normal.txt"), "normal")
         Files.write(root.resolve("binary.bin"), byteArrayOf(0, 1, 2, 3))
         Files.writeString(root.resolve("ignored.generated"), "ignored")
@@ -112,6 +116,49 @@ internal class FileAccessPolicyRoutesTest {
 
             val readBack = sessionClient.get(sessionClient.rootPathUrl("ignored.generated"))
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())
+        }
+    }
+
+    @Test
+    fun `git metadata paths are read-only for writes`() {
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+            val root = projectPathFixture.get()
+
+            val putExisting = sessionClient.put(sessionClient.rootPathUrl(".git/config")) {
+                setBody("changed")
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, putExisting.status)
+            Assertions.assertTrue(putExisting.bodyAsText().contains("Git metadata paths are read-only"))
+            Assertions.assertEquals("[core]\n", root.resolve(".git/config").toFile().readText())
+
+            val putMissing = sessionClient.put(sessionClient.rootPathUrl(".git/new-file")) {
+                setBody("new")
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, putMissing.status)
+            Assertions.assertFalse(Files.exists(root.resolve(".git/new-file")))
+
+            val postDirectory = sessionClient.post(sessionClient.rootPathUrl(".git/new-dir")) {
+                setBody("")
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, postDirectory.status)
+            Assertions.assertFalse(Files.exists(root.resolve(".git/new-dir")))
+
+            val force = sessionClient.put(sessionClient.rootPathUrl(".git/config", force = true)) {
+                setBody("forced")
+            }
+            Assertions.assertEquals(HttpStatusCode.Forbidden, force.status)
+            Assertions.assertTrue(force.bodyAsText().contains("force: true"))
+
+            val dotGitSubstring = sessionClient.put(sessionClient.rootPathUrl("foo.git/config")) {
+                setBody("changed")
+            }
+            Assertions.assertEquals(HttpStatusCode.OK, dotGitSubstring.status)
+            Assertions.assertFalse(dotGitSubstring.bodyAsText().contains("Git metadata paths are read-only"))
         }
     }
 

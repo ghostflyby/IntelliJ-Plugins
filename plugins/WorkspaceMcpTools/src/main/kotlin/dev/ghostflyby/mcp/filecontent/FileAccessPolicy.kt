@@ -53,6 +53,8 @@ internal data class ProjectFileAccess(
     val targetName: String? = null,
 )
 
+private const val GIT_METADATA_READ_ONLY_REASON = "Git metadata paths are read-only"
+
 internal suspend fun resolveProjectFileAccess(
     project: Project,
     root: ExposedRoot,
@@ -67,9 +69,14 @@ internal suspend fun resolveProjectFileAccess(
         val classification = classify(project, file, root, parentTarget?.first)
         val targetName = parentTarget?.second
         val writableKinds = writableKindsFor(root, file, classification)
+        val policy = protectGitMetadataWrites(
+            policyFor(classification, writableKinds),
+            relativePath,
+            file ?: parentTarget?.first,
+        )
         ProjectFileAccess(
             file = file,
-            policy = policyFor(classification, writableKinds),
+            policy = policy,
             relativePath = relativePath,
             targetIsBinary = file?.let { !it.isDirectory && it.fileType.isBinary }
                 ?: targetName?.let(::isKnownBinaryFileName)
@@ -153,9 +160,17 @@ private fun missingAccess(
     classification: FileContentClassification,
 ): ProjectFileAccess = ProjectFileAccess(
     file = null,
-    policy = policyFor(
-        classification,
-        writableKindsOverride = if (classification == FileContentClassification.MISSING && !root.writable) emptySet() else null,
+    policy = protectGitMetadataWrites(
+        policyFor(
+            classification,
+            writableKindsOverride = if (classification == FileContentClassification.MISSING && !root.writable) {
+                emptySet()
+            } else {
+                null
+            },
+        ),
+        relativePath,
+        file = null,
     ),
     relativePath = relativePath,
     targetIsBinary = relativePath.substringAfterLast('/', relativePath).let(::isKnownBinaryFileName),
@@ -242,6 +257,31 @@ private fun policyFor(
         )
     }
     return writableKindsOverride?.let { policy.copy(writableKinds = it) } ?: policy
+}
+
+private fun protectGitMetadataWrites(
+    policy: FileAccessPolicy,
+    relativePath: String,
+    file: VirtualFile?,
+): FileAccessPolicy {
+    if (!hasGitMetadataSegment(relativePath) && !hasGitMetadataAncestor(file)) return policy
+    return policy.copy(
+        writableKinds = emptySet(),
+        requiresForceForWrite = false,
+        reason = GIT_METADATA_READ_ONLY_REASON,
+    )
+}
+
+private fun hasGitMetadataSegment(relativePath: String): Boolean =
+    relativePath.split('/', '\\').any { it == ".git" }
+
+private fun hasGitMetadataAncestor(file: VirtualFile?): Boolean {
+    var current = file
+    while (current != null) {
+        if (current.name == ".git") return true
+        current = current.parent
+    }
+    return false
 }
 
 internal fun FileAccessPolicy.readableKindNames(): List<String> =

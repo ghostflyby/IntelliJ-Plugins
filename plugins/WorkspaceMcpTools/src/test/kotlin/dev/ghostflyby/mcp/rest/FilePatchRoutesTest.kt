@@ -405,6 +405,64 @@ deleted file mode 100644
     }
 
     @Test
+    fun `PATCH move to git metadata path is rejected`() {
+        project
+        Files.createDirectories(projectPathFixture.get().resolve("src/.git"))
+        contentRootFixture.get().virtualFile.refresh(false, true)
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Update File: bar.xml
+*** Move to: .git/moved.xml
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertTrue(body.contains("Git metadata paths are read-only"), body)
+
+            val original = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            Assertions.assertEquals(HttpStatusCode.OK, original.status)
+            Assertions.assertEquals("<bar/>", original.bodyAsText().trim())
+
+            Assertions.assertFalse(Files.exists(projectPathFixture.get().resolve("src/.git/moved.xml")))
+        }
+    }
+
+    @Test
+    fun `PATCH section targeting git metadata path is rejected`() {
+        project
+        Files.createDirectories(projectPathFixture.get().resolve("src/.git"))
+        Files.writeString(projectPathFixture.get().resolve("src/.git/config"), "[core]\n")
+        contentRootFixture.get().virtualFile.refresh(false, true)
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Update File: .git/config
+@@
+-[core]
++changed
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = resp.bodyAsText()
+            Assertions.assertTrue(body.contains("Git metadata paths are read-only"), body)
+            Assertions.assertEquals("[core]\n", projectPathFixture.get().resolve("src/.git/config").readText())
+        }
+    }
+
+    @Test
     fun `PATCH move uses headless refactoring without override-only processor`() {
         project
         val srcDir = Files.createDirectories(projectPathFixture.get().resolve("src/pkg"))
