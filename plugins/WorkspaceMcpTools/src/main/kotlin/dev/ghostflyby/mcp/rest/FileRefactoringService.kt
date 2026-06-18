@@ -4,8 +4,9 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
-import com.intellij.openapi.command.writeCommandAction
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.paths.PsiDynaReference
+import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
@@ -235,9 +236,12 @@ private class RestSingleFileMoveRefactoring(
     }
 
     suspend fun execute(usages: RestSingleFileMoveUsages) {
-        @Suppress("UnstableApiUsage")
-        writeCommandAction(project, "Move") {
-            performMove(usages)
+        withContext(Dispatchers.EDT) {
+            coroutineToIndicator {
+                WriteCommandAction.writeCommandAction(project).withName("Move").run<RuntimeException> {
+                    performMove(usages)
+                }
+            }
         }
     }
 
