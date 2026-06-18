@@ -11,7 +11,6 @@ import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diff.impl.patch.PatchLine
 import com.intellij.openapi.diff.impl.patch.PatchReader
 import com.intellij.openapi.diff.impl.patch.TextFilePatch
@@ -33,7 +32,6 @@ import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.patch.*
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.request.*
@@ -129,12 +127,9 @@ private fun detectFormat(body: String, ct: ContentType?): PatchFormat {
 // ── Route ──────────────────────────────────────────────────
 
 internal fun Route.filePatchRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     patch<Api.FilesEntry.File> { resource ->
         val target =
-            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+            when (val resolved = call.resolveFileRouteTarget(resource.path.toRoutePath())) {
                 is RestFileRouteTarget.ProjectFile -> resolved.target
                 is RestFileRouteTarget.VirtualFileReadOnly -> {
                     call.respond(

@@ -3,14 +3,12 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.command.writeCommandAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.util.concurrency.annotations.RequiresWriteLock
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -23,10 +21,8 @@ import kotlinx.serialization.Serializable
 import java.nio.file.DirectoryNotEmptyException
 
 internal fun Route.fileWriteRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
     put<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
             ?: return@put
         handleSessionPut(
             call,
@@ -35,7 +31,7 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     post<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
             ?: return@post
         handleSessionPost(
             call,
@@ -44,7 +40,7 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     delete<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
             ?: return@delete
         handleSessionDelete(
             call,
@@ -55,11 +51,9 @@ internal fun Route.fileWriteRoutes() {
 }
 
 private suspend fun ApplicationCall.resolveWritableFileRouteTarget(
-    sessions: RestSessionService,
-    resolver: WorkspaceProjectResolver,
     path: String,
 ): RestSessionRouteTarget? {
-    return when (val target = resolveFileRouteTarget(sessions, resolver, path)) {
+    return when (val target = resolveFileRouteTarget(path)) {
         is RestFileRouteTarget.ProjectFile -> target.target
         is RestFileRouteTarget.VirtualFileReadOnly -> {
             respond(

@@ -5,15 +5,12 @@
  */
 package dev.ghostflyby.mcp.rest
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.rest.markdown.BlockKind
 import dev.ghostflyby.mcp.rest.markdown.MarkdownBlock
 import dev.ghostflyby.mcp.rest.markdown.MarkdownExclude
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.resources.*
@@ -43,36 +40,28 @@ private data class FileContentResponse(
 
 // -- Route registrations --
 internal fun Route.fileRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     get<Api.Project.Root> { resource ->
         val projectKey = resource.parent.projectKey
-        when (val resolved = resolver.resolve(projectKey = projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> {
-                val target = rootRouteTarget(resolved.project, resource.rootId)
-                if (target != null) {
-                    call.respond(
-                        RootDetailResponse(
-                            id = resource.rootId,
-                            displayName = target.root.displayName,
-                            kind = "${target.root.kind}".lowercase(),
-                            url = target.root.base.url,
-                            encodedUrl = encodeRoutePathSegment(target.root.base.url),
-                        ),
-                    )
-                } else {
-                    call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
-                }
-            }
-
-            is WorkspaceProjectResolution.Unresolved ->
-                call.respond(HttpStatusCode.NotFound, RestError(resolved.message, projectKey))
+        val project = call.resolveWorkspaceProjectOrNull(projectKey = projectKey)
+            ?: return@get
+        val target = rootRouteTarget(project, resource.rootId)
+        if (target != null) {
+            call.respond(
+                RootDetailResponse(
+                    id = resource.rootId,
+                    displayName = target.root.displayName,
+                    kind = "${target.root.kind}".lowercase(),
+                    url = target.root.base.url,
+                    encodedUrl = encodeRoutePathSegment(target.root.base.url),
+                ),
+            )
+        } else {
+            call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
         }
     }
 
     get<Api.FilesEntry.File> { resource ->
-        val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveFileRouteTarget(resource.path.toRoutePath())
             ?: return@get
         if (resource.parent.problems) {
             respondFileProblems(call, target, resource.parent)

@@ -10,7 +10,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mcp.filecontent.ExposedRoot
 import dev.ghostflyby.mcp.filecontent.exposedWorkspaceRoots
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectProvider
+import dev.ghostflyby.mcp.sdk.openWorkspaceProjects
 import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import java.nio.file.Path
 import java.security.SecureRandom
@@ -64,11 +64,10 @@ internal class RestSessionService {
         .thenBy { it.root.base.path }
         .thenBy { it.projectKey }
 
-    internal suspend fun create(pathPrefix: String, projectProvider: WorkspaceProjectProvider): RestSessionCreateResult {
+    internal suspend fun create(pathPrefix: String): RestSessionCreateResult {
         val normalizedPrefix = normalizeExistingPath(pathPrefix)
             ?: return RestSessionCreateResult.Failed("Path prefix not found: $pathPrefix")
-        val matches = projectProvider.openProjects()
-            .filterNot { it.isDisposed }
+        val matches = openWorkspaceProjects()
             .flatMap { project -> matchingRoots(project, normalizedPrefix) }
         val bestByProject = matches
             .sortedWith(rootMatchComparator)
@@ -162,7 +161,7 @@ internal class RestSessionService {
     private fun newSessionId(): String {
         val bytes = ByteArray(16)
         random.nextBytes(bytes)
-        return "s_" + bytes.joinToString("") { "%02x".format(it) }
+        return "s_" + bytes.toHexString()
     }
 
     private data class RootMatch(

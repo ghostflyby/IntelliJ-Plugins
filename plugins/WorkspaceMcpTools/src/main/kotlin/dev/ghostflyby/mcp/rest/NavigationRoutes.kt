@@ -4,7 +4,6 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.find.findUsages.FindUsagesHandlerFactory
 import com.intellij.lang.LanguageDocumentation
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
@@ -20,7 +19,6 @@ import com.intellij.util.Processor
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.request.*
 import io.ktor.server.resources.post
@@ -108,12 +106,9 @@ private fun splitNavigationSections(body: String): List<NavSection> {
 // -- Route --
 
 internal fun Route.navigationRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     post<Api.NavigationPath> { resource: Api.NavigationPath ->
         val target =
-            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+            when (val resolved = call.resolveFileRouteTarget(resource.path.toRoutePath())) {
                 is RestFileRouteTarget.ProjectFile -> resolved.target
                 is RestFileRouteTarget.VirtualFileReadOnly -> {
                     handleNavigation(

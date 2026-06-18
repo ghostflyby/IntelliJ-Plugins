@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.codeInspection.InspectionEngine
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -23,7 +22,6 @@ import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -110,11 +108,8 @@ private data class ProblemTarget(
 )
 
 internal fun Route.inspectionRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     post<Api.InspectionsEntry.Path> { resource ->
-        val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveFileRouteTarget(resource.path.toRoutePath())
             ?: return@post
         val body = call.receiveText()
         respondInspectionRequest(

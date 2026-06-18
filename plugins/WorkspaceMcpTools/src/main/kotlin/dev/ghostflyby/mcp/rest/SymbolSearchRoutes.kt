@@ -10,7 +10,6 @@ import com.intellij.ide.util.gotoByName.*
 import com.intellij.navigation.NavigationItem
 import com.intellij.navigation.PsiElementNavigationItem
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.progress.runBlockingCancellable
@@ -26,8 +25,6 @@ import com.intellij.psi.search.ProjectScope
 import com.intellij.util.Processor
 import com.intellij.util.indexing.FindSymbolParameters
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.resources.*
@@ -120,9 +117,6 @@ private data class SymbolSearchOptions(
 )
 
 internal fun Route.searchSymbolRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     get<Api.SearchSymbolsEntry> { resource ->
         val query = resource.query.trim()
         if (query.isBlank()) {
@@ -143,20 +137,8 @@ internal fun Route.searchSymbolRoutes() {
             return@get
         }
 
-        val record = when (val session = sessions.resolveRecord(call.request.headers[RestSessionHeader])) {
-            is RestSessionRecordResult.Resolved -> session.record
-            is RestSessionRecordResult.NotFound -> {
-                call.respond(HttpStatusCode.NotFound, RestError(session.message))
-                return@get
-            }
-        }
-        val project = when (val projectResult = resolver.resolve(projectKey = record.projectKey)) {
-            is WorkspaceProjectResolution.Resolved -> projectResult.project
-            is WorkspaceProjectResolution.Unresolved -> {
-                call.respond(HttpStatusCode.NotFound, RestError(projectResult.message))
-                return@get
-            }
-        }
+        val sessionProject = call.resolveWorkspaceSessionProjectOrNull()
+            ?: return@get
 
         val options = SymbolSearchOptions(
             query = query,
@@ -165,7 +147,7 @@ internal fun Route.searchSymbolRoutes() {
             limit = resource.limit.coerceAtMost(MaxSymbolLimit),
             timeoutMillis = resource.timeoutMillis,
         )
-        respondSymbolSearch(call, project, options)
+        respondSymbolSearch(call, sessionProject.project, options)
     }
 }
 

@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.mcp.rest
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.ContentReadException
@@ -14,7 +13,6 @@ import dev.ghostflyby.mcp.filecontent.FileContentKind
 import dev.ghostflyby.mcp.filecontent.readGlobResult
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.resources.*
@@ -46,9 +44,6 @@ internal object GlobResultSerializer : KSerializer<GlobResult> {
 // ── Route registration ────────────────────────────────
 
 internal fun Route.globRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     get<Api.GlobEntry.Glob> { resource ->
         val patterns = resource.parent.glob
         if (patterns.isEmpty()) {
@@ -58,7 +53,7 @@ internal fun Route.globRoutes() {
             )
             return@get
         }
-        val target = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())
+        val target = call.resolveFileRouteTarget(resource.path.toRoutePath())
             ?: return@get
         respondGlob(call, target, resource.parent.limit, patterns)
     }

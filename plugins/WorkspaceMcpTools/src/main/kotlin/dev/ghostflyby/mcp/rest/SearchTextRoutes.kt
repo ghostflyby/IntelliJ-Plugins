@@ -9,7 +9,6 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.find.FindModel
 import com.intellij.find.impl.FindInProjectUtil
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
@@ -25,7 +24,6 @@ import com.intellij.util.Processor
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.resources.*
@@ -99,9 +97,6 @@ internal data class SearchTextOptions(
 // -- Route registration --
 
 internal fun Route.searchTextRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
-    val sessions: RestSessionService = service()
-
     get<Api.SearchTextEntry.SearchText> { resource ->
         val entry = resource.parent
         val query = entry.query
@@ -110,7 +105,7 @@ internal fun Route.searchTextRoutes() {
             return@get
         }
         val target =
-            when (val resolved = call.resolveFileRouteTarget(sessions, resolver, resource.path.toRoutePath())) {
+            when (val resolved = call.resolveFileRouteTarget(resource.path.toRoutePath())) {
                 is RestFileRouteTarget.ProjectFile -> resolved.target
                 is RestFileRouteTarget.VirtualFileReadOnly -> {
                     respondSearchText(

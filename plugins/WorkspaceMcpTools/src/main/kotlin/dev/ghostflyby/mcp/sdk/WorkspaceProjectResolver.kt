@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.readAction
-import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.ProjectManager.getInstance
@@ -19,15 +18,6 @@ import java.nio.file.Path
 import java.security.MessageDigest
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.exists
-
-internal enum class WorkspaceProjectResolutionReason {
-    EXPLICIT_PROJECT_KEY,
-    EXPLICIT_PROJECT_PATH,
-    EXPLICIT_PROJECT_NAME,
-    RAW_VFS_URL,
-    RELATIVE_PATH,
-    SINGLE_OPEN_PROJECT,
-}
 
 /**
  * Resolves the stable instanceKey for this IDE application instance.
@@ -53,152 +43,96 @@ internal fun workspaceProjectKey(project: Project): String {
     return "$slug-$shortHash"
 }
 
-internal interface WorkspaceProjectProvider {
-    fun openProjects(): List<Project>
+internal data class WorkspaceProjectHints(
+    val projectKey: String? = null,
+    val projectPath: String? = null,
+    val rawVfsUrl: String? = null,
+    val relativePath: String? = null,
+    val rootsCandidates: List<String> = emptyList(),
+)
 
-    suspend fun resolve(
-        projectKey: String? = null,
-        projectPath: String? = null,
-        rawVfsUrl: String? = null,
-        relativePath: String? = null,
-        rootsCandidates: List<String>? = null,
-    ): WorkspaceProjectResolution
+internal fun openWorkspaceProjects(): List<Project> {
+    return getInstance().openProjects
+        .filterNot { it.isDisposed }
+        .sortedBy { it.basePath ?: it.name }
 }
 
-@Service(Service.Level.APP)
-internal class WorkspaceProjectResolver : WorkspaceProjectProvider {
-
-    override fun openProjects(): List<Project> {
-        return getInstance().openProjects
-            .filterNot { it.isDisposed }
-            .sortedBy { it.basePath ?: it.name }
+internal suspend fun resolveWorkspaceProject(hints: WorkspaceProjectHints): Project? {
+    hints.projectKey?.takeIf { it.isNotBlank() }?.let { key ->
+        findByProjectKey(key)?.let { project -> return project }
     }
 
-    /**
-     * Enhanced resolver supporting projectKey, projectPath, rawVfsUrl, relativePath, and single-project fallback.
-     */
-    override suspend fun resolve(
-        projectKey: String?,
-        projectPath: String?,
-        rawVfsUrl: String?,
-        relativePath: String?,
-        rootsCandidates: List<String>?,
-    ): WorkspaceProjectResolution {
-        // 1. explicit projectKey
-        projectKey?.takeIf { it.isNotBlank() }?.let { key ->
-            findByProjectKey(key)?.let { project ->
-                return WorkspaceProjectResolution.Resolved(
-                    project,
-                    WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_KEY,
-                )
-            }
-        }
-
-        // 2. explicit projectPath
-        projectPath?.takeIf { it.isNotBlank() }?.let { path ->
-            findByProjectPath(path)?.let { project ->
-                return WorkspaceProjectResolution.Resolved(
-                    project,
-                    WorkspaceProjectResolutionReason.EXPLICIT_PROJECT_PATH,
-                )
-            }
-        }
-
-        // 3. rawVfsUrl
-        rawVfsUrl?.takeIf { it.isNotBlank() }?.let { url ->
-            findByRawVfsUrl(url)?.let { project ->
-                return WorkspaceProjectResolution.Resolved(project, WorkspaceProjectResolutionReason.RAW_VFS_URL)
-            }
-        }
-
-        // 4. relativePath + roots candidates
-        if (relativePath != null && rootsCandidates != null) {
-            val projects = openProjects()
-            val normalizedRoots = rootsCandidates.map { normalizePath(it) }
-            val candidates = projects.filter { project ->
-                val bp = project.basePath?.let(::normalizePath) ?: return@filter false
-                // bidirectional prefix match: project base path is a root, or root is inside project
-                normalizedRoots.any { root -> bp == root || bp.startsWith(root) || root.startsWith(bp) }
-            }
-            // Among matching projects, verify relativePath file actually exists
-            val withFile = candidates.filter { project ->
-                val bp = project.basePath ?: return@filter false
-                Path.of(bp, relativePath).exists()
-            }
-            val chosen = if (withFile.size == 1) withFile.single()
-            else if (withFile.isEmpty() && candidates.size == 1) candidates.single()
-            else null
-            if (chosen != null) {
-                return WorkspaceProjectResolution.Resolved(chosen, WorkspaceProjectResolutionReason.RELATIVE_PATH)
-            }
-        }
-
-        // 5. single project fallback
-        val projects = openProjects()
-        return when (projects.size) {
-            0 -> WorkspaceProjectResolution.Unresolved("No open IntelliJ projects are available.")
-            1 -> WorkspaceProjectResolution.Resolved(
-                projects.single(),
-                WorkspaceProjectResolutionReason.SINGLE_OPEN_PROJECT,
-            )
-
-            else -> {
-                val candidates = projects.joinToString("; ") { p ->
-                    "'${workspaceProjectKey(p)}' (${p.name}, ${p.basePath ?: "?"})"
-                }
-                WorkspaceProjectResolution.Unresolved(
-                    "Multiple IntelliJ projects are open. Provide an explicit project key or project path. Candidates: $candidates",
-                )
-            }
-        }
+    hints.projectPath?.takeIf { it.isNotBlank() }?.let { path ->
+        findByProjectPath(path)?.let { project -> return project }
     }
 
-    private fun findByProjectKey(key: String): Project? {
-        return openProjects().firstOrNull { workspaceProjectKey(it) == key }
+    hints.rawVfsUrl?.takeIf { it.isNotBlank() }?.let { url ->
+        findByRawVfsUrl(url)?.let { project -> return project }
     }
 
-    private fun findByProjectPath(projectPath: String): Project? {
-        val normalized = normalizePath(projectPath)
-        return openProjects().firstOrNull { project ->
-            project.basePath?.let { normalizePath(it) } == normalized
-        }
+    hints.relativePath?.let { relativePath ->
+        findByRelativePath(relativePath, hints.rootsCandidates)?.let { project -> return project }
     }
 
-    private suspend fun findByRawVfsUrl(rawVfsUrl: String): Project? {
-        val file = service<VirtualFileManager>().findFileByUrl(rawVfsUrl) ?: return null
-        return readAction {
-            openProjects()
-                .filter { project -> project.owns(file) }
-                .maxByOrNull { project -> project.basePath?.length ?: 0 }
-        }
-    }
+    return openWorkspaceProjects().singleOrNull()
+}
 
-    private fun Project.owns(file: VirtualFile): Boolean {
-        return ProjectFileIndex.getInstance(this).isInContent(file) ||
-                basePath?.let { file.path.startsWith(it) } == true
-    }
+private fun findByProjectKey(key: String): Project? {
+    return openWorkspaceProjects().firstOrNull { workspaceProjectKey(it) == key }
+}
 
-    private fun normalizePath(path: String): String {
-        return runCatching {
-            val nioPath = Path.of(path)
-            if (nioPath.exists()) {
-                nioPath.toRealPath().absolutePathString()
-            } else {
-                nioPath.toAbsolutePath().normalize().absolutePathString()
-            }
-        }.getOrElse {
-            path.trim().trimEnd('/')
-        }
+private fun findByProjectPath(projectPath: String): Project? {
+    val normalized = normalizePath(projectPath)
+    return openWorkspaceProjects().firstOrNull { project ->
+        project.basePath?.let { normalizePath(it) } == normalized
     }
 }
 
-internal sealed class WorkspaceProjectResolution {
-    data class Resolved(
-        val project: Project,
-        val reason: WorkspaceProjectResolutionReason,
-    ) : WorkspaceProjectResolution()
+private suspend fun findByRawVfsUrl(rawVfsUrl: String): Project? {
+    val file = service<VirtualFileManager>().findFileByUrl(rawVfsUrl) ?: return null
+    return readAction {
+        openWorkspaceProjects()
+            .filter { project -> project.owns(file) }
+            .maxByOrNull { project -> project.basePath?.length ?: 0 }
+    }
+}
 
-    data class Unresolved(
-        val message: String,
-    ) : WorkspaceProjectResolution()
+private fun findByRelativePath(relativePath: String, rootsCandidates: List<String>): Project? {
+    if (rootsCandidates.isEmpty()) return null
+    val normalizedRoots = rootsCandidates.map { normalizePath(it) }
+    val candidates = openWorkspaceProjects().filter { project ->
+        val basePath = project.basePath?.let(::normalizePath) ?: return@filter false
+        normalizedRoots.any { root ->
+            basePath == root || basePath.startsWith(root) || root.startsWith(basePath)
+        }
+    }
+    val withFile = candidates.filter { project ->
+        val basePath = project.basePath ?: return@filter false
+        Path.of(basePath, relativePath).exists()
+    }
+    return if (withFile.size == 1) {
+        withFile.single()
+    } else if (withFile.isEmpty() && candidates.size == 1) {
+        candidates.single()
+    } else {
+        null
+    }
+}
+
+private fun Project.owns(file: VirtualFile): Boolean {
+    return ProjectFileIndex.getInstance(this).isInContent(file) ||
+            basePath?.let { file.path.startsWith(it) } == true
+}
+
+private fun normalizePath(path: String): String {
+    return runCatching {
+        val nioPath = Path.of(path)
+        if (nioPath.exists()) {
+            nioPath.toRealPath().absolutePathString()
+        } else {
+            nioPath.toAbsolutePath().normalize().absolutePathString()
+        }
+    }.getOrElse {
+        path.trim().trimEnd('/')
+    }
 }

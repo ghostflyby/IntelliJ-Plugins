@@ -14,8 +14,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.mcp.filecontent.ExposedRoot
 import dev.ghostflyby.mcp.filecontent.findContainingExposedRoot
 import dev.ghostflyby.mcp.filecontent.resolveFileByRawUrlOrNull
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolution
-import dev.ghostflyby.mcp.sdk.WorkspaceProjectResolver
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.request.*
@@ -65,12 +63,11 @@ internal sealed class RestFileRouteTarget {
 }
 
 internal fun Route.sessionRoutes() {
-    val resolver: WorkspaceProjectResolver = service()
     val sessions: RestSessionService = service()
 
     post<Api.Sessions> {
         val request = call.receive<SessionCreateRequest>()
-        when (val result = sessions.create(request.pathPrefix, resolver)) {
+        when (val result = sessions.create(request.pathPrefix)) {
             is RestSessionCreateResult.Created -> call.respond(HttpStatusCode.Created, result.record.toResponse())
             is RestSessionCreateResult.Failed -> call.respond(HttpStatusCode.NotFound, RestError(result.message))
             is RestSessionCreateResult.Ambiguous -> call.respond(HttpStatusCode.Conflict, RestError(result.message))
@@ -84,81 +81,20 @@ internal fun Route.sessionRoutes() {
 }
 
 internal suspend fun ApplicationCall.resolveFileRouteTarget(
-    sessions: RestSessionService,
-    resolver: WorkspaceProjectResolver,
     path: String,
 ): RestFileRouteTarget? {
     if (!path.isFullVfsUrl()) {
-        return resolveSessionRouteTarget(sessions, resolver, path)?.let(RestFileRouteTarget::ProjectFile)
+        return resolveWorkspaceSessionTargetOrNull(path)?.let(RestFileRouteTarget::ProjectFile)
     }
-    val record = when (val result = sessions.resolveRecord(request.headers[RestSessionHeader])) {
-        is RestSessionRecordResult.Resolved -> result.record
-        is RestSessionRecordResult.NotFound -> {
-            respond(HttpStatusCode.NotFound, RestError(result.message))
-            return null
-        }
-    }
+    val sessionProject = resolveWorkspaceSessionProjectOrNull() ?: return null
     val file = resolveFileByRawUrlOrNull(path)
     if (file == null) {
         respond(HttpStatusCode.NotFound, RestError("File not found"))
         return null
     }
-    val sessionProject = when (val resolved = resolver.resolve(projectKey = record.projectKey)) {
-        is WorkspaceProjectResolution.Resolved -> resolved.project
-        is WorkspaceProjectResolution.Unresolved -> {
-            respond(HttpStatusCode.NotFound, RestError(resolved.message))
-            return null
-        }
-    }
-    return sessionProject.sessionProjectTargetFor(file, record)
+    return sessionProject.project.sessionProjectTargetFor(file, sessionProject.record)
         ?.let(RestFileRouteTarget::ProjectFile)
-        ?: RestFileRouteTarget.VirtualFileReadOnly(sessionProject, file)
-}
-
-internal suspend fun ApplicationCall.resolveSessionRouteTarget(
-    sessions: RestSessionService,
-    resolver: WorkspaceProjectResolver,
-    relativePath: String,
-): RestSessionRouteTarget? {
-    return when (val result = sessions.resolveTarget(request.headers[RestSessionHeader], relativePath)) {
-        is RestSessionTargetResult.Resolved -> {
-            when (val resolved = resolver.resolve(projectKey = result.target.record.projectKey)) {
-                is WorkspaceProjectResolution.Resolved -> {
-                    val rootTarget = rootRouteTarget(
-                        resolved.project,
-                        result.target.record.rootId,
-                        result.target.relativePathUnderRoot,
-                    )
-                    if (rootTarget == null) {
-                        respond(HttpStatusCode.NotFound, RestError("Root not found"))
-                        null
-                    } else {
-                        RestSessionRouteTarget(
-                            project = resolved.project,
-                            root = rootTarget.root,
-                            relativePath = rootTarget.relativePath,
-                            record = result.target.record,
-                        )
-                    }
-                }
-
-                is WorkspaceProjectResolution.Unresolved -> {
-                    respond(HttpStatusCode.NotFound, RestError(resolved.message))
-                    null
-                }
-            }
-        }
-
-        is RestSessionTargetResult.NotFound -> {
-            respond(HttpStatusCode.NotFound, RestError(result.message))
-            null
-        }
-
-        is RestSessionTargetResult.Forbidden -> {
-            respond(HttpStatusCode.Forbidden, RestError(result.message))
-            null
-        }
-    }
+        ?: RestFileRouteTarget.VirtualFileReadOnly(sessionProject.project, file)
 }
 
 private suspend fun Project.sessionProjectTargetFor(
