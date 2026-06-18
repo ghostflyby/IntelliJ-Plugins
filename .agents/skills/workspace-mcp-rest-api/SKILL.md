@@ -1,6 +1,6 @@
 ---
 name: workspace-mcp-rest-api
-description: Use when calling, testing, debugging, documenting, or generating client requests for the WorkspaceMcpTools REST API exposed by the IntelliJ plugin at /api/v1. Covers endpoint discovery, session headers, curl examples, content negotiation, file/glob/read/write/patch routes, and safe AI usage rules.
+description: Use in IntelliJ projects with `.idea/` when searching, editing, inspecting, formatting, or exploring workspace and library symbols/text/problems through the IDE.
 ---
 
 # WorkspaceMcpTools REST Development Workflow
@@ -41,47 +41,45 @@ Default port is 63341. If already in use, the server scans up to 10 ports forwar
 ## Development Loop
 
 1. Establish the session and scope.
-    - Create a session rooted at the smallest directory that still contains the work.
-    - If the task may cross modules, start at the repository or plugin root, then narrow with glob/search.
+    - Create a session rooted at the smallest directory that still contains the work. If the task may cross modules,
+      start at the repository or plugin root, then narrow with `/glob` or `/search/*`.
 
-2. Discover repository shape before reading large files.
-    - Use glob with small limits to find candidate files.
-    - Read `meta=true` for file identity and policy when the file kind is uncertain.
-    - Read `structure=true` before full content for source files. Use returned line numbers for targeted peeks.
+2. Discover and search through the REST API first.
+    - Use `/search/files` for fuzzy file names, `/glob` for path patterns, `/search/text/{path...}` for literal or regex
+      text search, and `/search/symbols` for declarations.
+    - Use `libraries=true` only when dependency or SDK symbols are needed. Follow external/JAR results with their
+      `encodedFileUrl`; do not invent filesystem paths for libraries.
 
-3. Search before opening broad content.
-    - Use `/search/files` for fuzzy file names.
-    - Use `/search/text/{path...}` for literals, API names, configuration keys, TODOs, and error strings.
-    - Use `/search/symbols` for declarations, including dependencies when `libraries=true` is needed.
-    - For library or JAR results, use the returned full `fileUrl`/`encodedFileUrl`; do not turn it into a fake relative
-      path.
+3. Read narrowly and keep IDE state visible.
+    - Prefer `structure=true`, `aroundLine=N&radius=M`, `startLine=N&endLine=M`, or `startLine=N&maxLines=M`.
+    - Use `meta=true` when file identity, policy, writability, or encoded VFS URLs matter.
 
-4. Read narrowly.
-    - Prefer `aroundLine=N&radius=M`, `startLine=N&endLine=M`, or `startLine=N&maxLines=M`.
-    - Escalate to full `content=true` only when the local context is insufficient.
-    - For unfamiliar files, inspect `structure=true` again after major edits to keep navigation anchored.
+4. Navigate semantically instead of guessing.
+    - Use `*** Goto:`, `*** Documentation:`, and `*** Usages:` through `/navigation/{path}` for declarations,
+      contracts, and reference checks.
 
-5. Use IDE semantic navigation instead of guessing.
-    - From a call site to a declaration: read the call-site range, send a `*** Goto:` navigation hunk, then read the
-      returned target with a line range.
-    - To understand behavior: use `*** Documentation:` on the symbol at the call site or declaration.
-    - Before deleting, renaming, moving, or changing a public API, run `*** Usages:` from the declaration or a precise
-      symbol occurrence and inspect all returned call sites that are in scope.
-    - If usages are ambiguous, inspect nearby code and repeat with a tighter hunk.
+5. Edit, cleanup, and verify.
+    - Use `/files` PATCH for text edits and workspace operations. Use `PUT`/`POST`/`DELETE` only when replacing,
+      create-only, or delete is the natural operation.
+    - After edits, run IDE operations as needed: `*** Cleanup: path`, `*** Optimize Imports: path`, and
+      `*** Reformat File: path`.
+    - Re-read changed ranges, check `problems=true` or `/inspections/{path...}`, rerun relevant search/navigation
+      checks, then run focused tests or builds.
 
-6. Edit only after the target and references are understood.
-    - Prefer `/files` PATCH with the OpenAI Responses API `apply_patch` format for text edits.
-    - Keep patches small, based on current content, and scoped to the requested behavior.
-    - Use `PUT`/`POST`/`DELETE` only when the requested operation is naturally create/replace/create-only/delete.
-    - For multi-file edits, use one coherent `/files` PATCH rooted at the relevant directory when possible.
+## Typical Mistakes And Replacements
 
-7. Verify after every meaningful edit.
-    - Re-read changed files or targeted ranges to confirm IDE-visible state.
-    - Use `problems=true` or `/inspections/{path...}` when syntax/problem feedback is needed.
-    - Re-run relevant search/navigation checks when references should have changed.
-    - Run targeted tests or build tasks appropriate to the change. If tests cannot run, report why.
-    - If an edit should remove a symbol or call pattern, use text search and/or usages to confirm no unintended
-      references remain.
+Avoid shell-first exploration when this skill is active. The REST API has IDE indexes, session scoping, VFS identity,
+and dependency/library awareness that shell tools do not.
+
+| Do not do this                          | Use this instead                                                                                         |
+|-----------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `find path/to/libraries`                | `/search/symbols?query=Name&libraries=true`, then read returned `encodedFileUrl` with `/files/{path...}` |
+| `find . -name '*Route*'`                | `/search/files?query=Route&limit=50` or `/glob?glob=**/*Route*.kt`                                       |
+| `rg project/directory/`                 | `/search/text/project/directory?query=...&regex=true&fileFilter=**/*.kt` or `regex=false`                |
+| `rg 'class Foo'`                        | `/search/symbols?query=Foo` for declarations; `/search/text?query=class%20Foo` only for text shape       |
+| Read a whole source file first          | `/files/{path}?structure=true`, then `aroundLine` or `startLine` ranges                                  |
+| Turn a JAR/library URL into a fake path | Use the returned `encodedFileUrl` exactly as the `/files/{path...}` route segment                        |
+| Run a formatter command blindly         | `/files` PATCH with `*** Cleanup`, `*** Optimize Imports`, and `*** Reformat File`                       |
 
 ## Common Workflows
 
