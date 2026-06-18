@@ -8,7 +8,6 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.actions.RevealFileAction
-import com.intellij.ide.plugins.PluginManager
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
@@ -86,10 +85,13 @@ internal fun bundledSkillPath(pluginPath: Path?): Path? {
     return pluginPath?.resolve(BUNDLED_SKILL_RELATIVE_PATH)
 }
 
+internal fun pluginPathFromMainJarLocation(mainJarPath: Path?): Path? {
+    val parent = mainJarPath?.parent ?: return null
+    return if (parent.fileName?.toString() == "lib") parent.parent else parent
+}
+
 private fun bundledSkillPath(): Path? {
-    return bundledSkillPath(
-        PluginManager
-            .getPluginByClass(SkillNotificationActivity::class.java)
-            ?.pluginPath,
-    )
+    val location = SkillNotificationActivity::class.java.protectionDomain.codeSource?.location ?: return null
+    val mainJarPath = runCatching { Path.of(location.toURI()) }.getOrNull() ?: return null
+    return bundledSkillPath(pluginPathFromMainJarLocation(mainJarPath))
 }
