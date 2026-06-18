@@ -28,6 +28,7 @@ dependencies {
 
     ksp(libs.kotlinx.schema.ksp)
 
+    implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.server.content.negotiation)
     implementation(libs.snakeyaml)
     implementation(libs.ktor.server.resources)
