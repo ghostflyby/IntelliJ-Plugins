@@ -14,8 +14,10 @@ import kotlinx.serialization.json.jsonObject
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 
 @TestApplication
 internal class FilePatchRoutesTest {
@@ -399,6 +401,63 @@ deleted file mode 100644
 
             val old = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
             Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
+        }
+    }
+
+    @Test
+    fun `PATCH move uses headless refactoring without override-only processor`() {
+        project
+        val srcDir = Files.createDirectories(projectPathFixture.get().resolve("src/pkg"))
+        srcDir.resolve("Alpha.java").writeText(
+            """
+            package pkg;
+
+            public class Alpha {
+                public String name() {
+                    return "alpha";
+                }
+            }
+            """.trimIndent(),
+        )
+        srcDir.resolve("Beta.java").writeText(
+            """
+            package pkg;
+
+            public class Beta {
+                public String call(Alpha target) {
+                    return target.name();
+                }
+            }
+            """.trimIndent(),
+        )
+        contentRootFixture.get().virtualFile.refresh(false, true)
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+
+        testApplication {
+            application { installWorkspaceRestContentNegotiation() }
+            install(Resources)
+            routing { restApi() }
+            val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
+
+            val patch = """*** Begin Patch
+*** Update File: pkg/Alpha.java
+*** Move to: moved/Alpha.java
+*** End Patch"""
+            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            Assertions.assertFalse(resp.bodyAsText().contains("failed:"), resp.bodyAsText())
+
+            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved/Alpha.java"))
+            Assertions.assertEquals(HttpStatusCode.OK, moved.status)
+            Assertions.assertTrue(moved.bodyAsText().contains("public class Alpha"), moved.bodyAsText())
+
+            val old = sessionClient.get(sessionClient.rootPathUrl("src/pkg/Alpha.java"))
+            Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
+
+            val beta = sessionClient.get(sessionClient.rootPathUrl("src/pkg/Beta.java"))
+            Assertions.assertEquals(HttpStatusCode.OK, beta.status)
+            val betaText = beta.bodyAsText()
+            Assertions.assertTrue(betaText.contains("public String call(Alpha target)"), betaText)
         }
     }
 

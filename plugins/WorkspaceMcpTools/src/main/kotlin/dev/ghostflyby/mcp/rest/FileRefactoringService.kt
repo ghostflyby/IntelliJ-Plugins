@@ -4,6 +4,9 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
+import com.intellij.openapi.command.writeCommandAction
+import com.intellij.openapi.paths.PsiDynaReference
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VfsUtil
@@ -12,9 +15,17 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiReference
+import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReference
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.refactoring.RefactoringFactory
+import com.intellij.refactoring.move.FileReferenceContextUtil
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFileHandler
-import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesProcessor
+import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesUtil
+import com.intellij.refactoring.rename.RenameUtil
+import com.intellij.refactoring.util.CommonRefactoringUtil
+import com.intellij.refactoring.util.NonCodeUsageInfo
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.IncorrectOperationException
 import com.intellij.util.containers.MultiMap
@@ -24,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.IOException
+import java.lang.ref.Reference
 import java.nio.file.DirectoryNotEmptyException
 
 internal sealed interface DeleteRefactoringResult {
@@ -152,32 +164,14 @@ private suspend fun runMoveRefactoring(
             ?: error("PSI directory not found: ${targetParent.path}")
         file to directory
     }
-    val processor = smartReadAction(project) {
-        RestMoveFilesOrDirectoriesProcessor(
-            project,
-            arrayOf(psiFile),
-            psiDirectory,
-            searchInComments = true,
-            searchInNonJavaFiles = true,
-        ).apply {
-            prepareSuccessfulSwingThreadCallback = null
-            @Suppress("UsePropertyAccessSyntax") setPreviewUsages(false)
-        }
+    val move = smartReadAction(project) {
+        RestSingleFileMoveRefactoring(project, psiFile, psiDirectory)
     }
-    val usages = smartReadAction(project) {
-        runCatching { processor.findUsagesForRest() }
-            .getOrElse { error(it.message ?: "Move usage search failed") }
+    val usages = readAction { move.findUsages() }
+    readAction {
+        move.checkConflicts(usages)
     }
-    val refUsages = Ref(usages)
-    val canProceed = readAction {
-        processor.preprocessUsagesForRest(refUsages)
-    }
-    if (!canProceed) {
-        error("Move refactoring was cancelled by conflict preprocessing")
-    }
-    withContext(Dispatchers.EDT) {
-        processor.executeForRest(refUsages.get())
-    }
+    move.execute(usages)
 }
 
 private suspend fun runRenameRefactoring(
@@ -210,46 +204,126 @@ private suspend fun runRenameRefactoring(
     }
 }
 
-private class RestMoveFilesOrDirectoriesProcessor(
-    project: Project,
-    elements: Array<PsiElement>,
-    val newParent: PsiDirectory,
-    searchInComments: Boolean,
-    searchInNonJavaFiles: Boolean,
-) : MoveFilesOrDirectoriesProcessor(
-    project,
-    elements,
-    newParent,
-    searchInComments,
-    searchInNonJavaFiles,
-    null,
-    null,
+private class RestSingleFileMoveRefactoring(
+    private val project: Project,
+    private val psiFile: com.intellij.psi.PsiFile,
+    private val newParent: PsiDirectory,
 ) {
-    fun findUsagesForRest(): Array<UsageInfo> = findUsages()
+    fun findUsages(): RestSingleFileMoveUsages {
+        val regularUsages = ReferencesSearch.search(psiFile, GlobalSearchScope.projectScope(project))
+            .findAll()
+            .map { RestMovedFileUsageInfo(it, psiFile) }
+        val handler = MoveFileHandler.forElement(psiFile)
+        val handlerUsages = handler.findUsages(
+            psiFile,
+            newParent,
+            true,
+            true,
+        ) ?: emptyList()
+        return RestSingleFileMoveUsages(
+            allUsages = (regularUsages + handlerUsages).toTypedArray(),
+            handlerUsages = handlerUsages,
+        )
+    }
 
-    override fun preprocessUsages(usages: Ref<Array<UsageInfo>>): Boolean {
+    fun checkConflicts(usages: RestSingleFileMoveUsages) {
         val conflicts = MultiMap<PsiElement, String>()
-        MoveFileHandler.detectConflicts(myElementsToMove, usages.get(), newParent, conflicts)
+        MoveFileHandler.detectConflicts(arrayOf(psiFile), usages.allUsages, newParent, conflicts)
         if (!conflicts.isEmpty) {
             error("Move conflicts: ${conflicts.entrySet().map { it.value }}")
         }
-        return true
     }
-    
-    fun preprocessUsagesForRest(usages: Ref<Array<UsageInfo>>): Boolean = preprocessUsages(usages)
 
-    override fun performRefactoring(usages: Array<UsageInfo>) {
+    suspend fun execute(usages: RestSingleFileMoveUsages) {
+        @Suppress("UnstableApiUsage")
+        writeCommandAction(project, "Move") {
+            performMove(usages)
+        }
+    }
+
+    private fun performMove(usages: RestSingleFileMoveUsages) {
+        val codeUsages = mutableListOf<UsageInfo>()
+        val nonCodeUsages = mutableListOf<NonCodeUsageInfo>()
+        for (usage in usages.allUsages) {
+            if (usage is NonCodeUsageInfo) {
+                nonCodeUsages.add(usage)
+            } else {
+                codeUsages.add(usage)
+            }
+        }
+
+        val movingFileNode = psiFile.node
+        val oldToNewMap = mutableMapOf<PsiElement, PsiElement>()
         try {
-            super.performRefactoring(usages)
+            FileReferenceContextUtil.encodeFileReferences(psiFile)
+            val handler = MoveFileHandler.forElement(psiFile)
+            handler.prepareMovedFile(psiFile, newParent, oldToNewMap)
+
+            if (newParent.findFile(psiFile.name) == null) {
+                MoveFilesOrDirectoriesUtil.doMoveFile(psiFile, newParent)
+            }
+            val movedFile = newParent.findFile(psiFile.name)
+                ?: error("Moved file not found: ${newParent.virtualFile.path}/${psiFile.name}")
+
+            val retargetableUsages = codeUsages.toTypedArray()
+            CommonRefactoringUtil.sortDepthFirstRightLeftOrder(retargetableUsages)
+            DumbService.getInstance(project).completeJustSubmittedTasks()
+
+            MoveFileHandler.forElement(movedFile).updateMovedFile(movedFile)
+            FileReferenceContextUtil.decodeFileReferences(movedFile)
+            retargetRegularUsages(retargetableUsages)
+            retargetHandlerUsages(usages, oldToNewMap)
+
+            if (nonCodeUsages.isNotEmpty()) {
+                RenameUtil.renameNonCodeUsages(project, nonCodeUsages.toTypedArray())
+            }
         } catch (e: IncorrectOperationException) {
             val cause = e.cause
             if (cause is IOException) throw RuntimeException(cause)
             throw e
+        } finally {
+            Reference.reachabilityFence(movingFileNode)
         }
     }
 
-    fun executeForRest(usages: Array<UsageInfo>) = executeEx(usages)
+    private fun retargetRegularUsages(usages: Array<UsageInfo>) {
+        for (usage in usages) {
+            if (usage !is RestMovedFileUsageInfo) continue
+            val reference = usage.psiReference
+            if (reference is FileReference || reference is PsiDynaReference<*>) {
+                val usageElement = usage.element
+                val usageFile = usageElement?.containingFile
+                val basePsiFile = usageFile?.viewProvider?.getPsi(usageFile.viewProvider.baseLanguage)
+                if (basePsiFile != null && basePsiFile == usage.target) {
+                    continue
+                }
+            }
+            if (reference.element.isValid) {
+                reference.bindToElement(usage.target)
+            }
+        }
+    }
+
+    private fun retargetHandlerUsages(
+        usages: RestSingleFileMoveUsages,
+        oldToNewMap: Map<PsiElement, PsiElement>,
+    ) {
+        val sortedUsages = usages.handlerUsages.sortedBy { usage ->
+            usage.element?.textRange?.startOffset ?: -1
+        }
+        MoveFileHandler.forElement(psiFile).retargetUsages(sortedUsages, oldToNewMap)
+    }
 }
+
+private class RestSingleFileMoveUsages(
+    val allUsages: Array<UsageInfo>,
+    val handlerUsages: List<UsageInfo>,
+)
+
+private class RestMovedFileUsageInfo(
+    val psiReference: PsiReference,
+    val target: PsiElement,
+) : UsageInfo(psiReference)
 
 private fun UsageInfo.toFileRefactoringReference(projectBasePath: String?): FileRefactoringReference? {
     val file = virtualFile ?: return null

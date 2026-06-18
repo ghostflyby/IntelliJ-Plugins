@@ -548,8 +548,8 @@ internal suspend fun inspectChangedFiles(
         }
     } else emptyList()
     val psiErrorResults = filesToInspect.flatMap { (file, psiFile) ->
-        val document = getOrCreateDocument(file) ?: return@flatMap emptyList()
         val errors: List<RestProblemItem> = readAction {
+            val document = getOrCreateDocument(file) ?: return@readAction emptyList()
             PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java).map { error: PsiErrorElement ->
                 val offset = error.textRange.startOffset.coerceIn(0, document.textLength)
                 val line = document.getLineNumber(offset)
