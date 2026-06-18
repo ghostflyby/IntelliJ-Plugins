@@ -2,7 +2,6 @@ package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
@@ -120,7 +119,6 @@ internal class WorkspaceGlobQueryTest {
         var walkCalls: Int = 0
 
         override fun filesByName(
-            project: Project,
             fileName: String,
             scope: GlobalSearchScope,
         ): Collection<VirtualFile> {

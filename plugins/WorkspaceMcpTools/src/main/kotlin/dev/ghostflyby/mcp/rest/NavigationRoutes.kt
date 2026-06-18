@@ -269,6 +269,7 @@ private suspend fun executeUsages(
         val ref = range.psiFile.findReferenceAt(range.selectionStart)?.resolve()
         val searchTarget = ref?.navigationElement ?: range.targetElement
         val maxResults = 100
+
         @Suppress("CAST_NEVER_SUCCEEDS")
         val handler = (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>)
             .getExtensionList(range.psiFile.project)

@@ -27,7 +27,7 @@ import com.intellij.openapi.components.*
 @Service(Service.Level.APP)
 @State(
     name = "WorkspaceMcpSdkServerSettings",
-    storages = [Storage("workspace-mcp-sdk.xml",roamingType = RoamingType.DISABLED)],
+    storages = [Storage("workspace-mcp-sdk.xml", roamingType = RoamingType.DISABLED)],
 )
 internal class WorkspaceMcpSdkServerSettings :
     SerializablePersistentStateComponent<WorkspaceMcpSdkServerSettings.State>(State()) {

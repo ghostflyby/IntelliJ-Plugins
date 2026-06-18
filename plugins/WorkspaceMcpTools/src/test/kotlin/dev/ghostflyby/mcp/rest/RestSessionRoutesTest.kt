@@ -32,6 +32,7 @@ import java.time.Duration
 import java.time.Instant
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
+import kotlin.time.Duration.Companion.milliseconds
 
 @TestApplication
 internal class RestSessionRoutesTest {
@@ -122,7 +123,7 @@ internal class RestSessionRoutesTest {
             val initialExpiresAt =
                 Instant.parse(parsed["expiresAt"]?.jsonPrimitive?.content ?: error("missing expiresAt"))
 
-            delay(5)
+            delay(5.milliseconds)
             val sessions = ApplicationManager.getApplication().service<RestSessionService>()
             val refreshed = sessions.resolveRecord(sessionId) as RestSessionRecordResult.Resolved
 

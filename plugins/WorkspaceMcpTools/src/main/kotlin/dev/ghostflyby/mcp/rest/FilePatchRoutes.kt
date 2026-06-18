@@ -432,6 +432,7 @@ private suspend fun applyGit(
                         error("References found; retry with force=true to delete")
                     }
                 }
+
                 else -> applyFileUpdate(project, target, gitHunksToRawLines(p))
             }
             val op = when {

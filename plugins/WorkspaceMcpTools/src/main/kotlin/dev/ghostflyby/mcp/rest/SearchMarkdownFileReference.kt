@@ -26,8 +26,8 @@ internal fun markdownFileReference(
 private fun String.isCompactRelativePath(): Boolean {
     val normalized = replace('\\', '/')
     return normalized.isNotBlank() &&
-        !normalized.startsWith("/") &&
-        !normalized.contains("://") &&
-        !normalized.contains("!/") &&
-        !Regex("^[A-Za-z]:/").containsMatchIn(normalized)
+            !normalized.startsWith("/") &&
+            !normalized.contains("://") &&
+            !normalized.contains("!/") &&
+            !Regex("^[A-Za-z]:/").containsMatchIn(normalized)
 }

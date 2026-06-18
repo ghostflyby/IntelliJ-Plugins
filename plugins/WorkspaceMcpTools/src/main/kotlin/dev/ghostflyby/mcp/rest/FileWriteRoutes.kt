@@ -1,11 +1,11 @@
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
-import com.intellij.openapi.application.edtWriteAction
 import com.intellij.openapi.command.writeCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import com.intellij.util.concurrency.annotations.RequiresWriteLock
 import dev.ghostflyby.mcp.filecontent.*
 import dev.ghostflyby.mcp.rest.markdown.TextBody
@@ -298,18 +298,6 @@ private fun writeGate(
     return null
 }
 
-private suspend fun createAndWriteFile(project: Project, access: ProjectFileAccess, text: String): VirtualFile {
-    if (access.file != null) throw IllegalStateException("File already exists: ${access.relativePath}")
-    val parent = access.parent ?: error("Parent not found: ${access.relativePath}")
-    val targetName = access.targetName ?: error("Target name not found: ${access.relativePath}")
-    val vf = edtWriteAction {
-        val vf = parent.createChildData(Any(), targetName)
-        setTextWithPolicy(vf, project, text)
-        vf
-    }
-    return vf
-}
-
 private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
     if (access.file != null) return null
     val parent = access.parent ?: return null
@@ -318,6 +306,7 @@ private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
 }
 
 @RequiresWriteLock
+@RequiresReadLock
 internal fun setTextWithPolicy(
     file: VirtualFile,
     project: Project,

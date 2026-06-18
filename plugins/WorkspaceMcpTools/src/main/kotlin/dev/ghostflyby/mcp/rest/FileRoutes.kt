@@ -288,8 +288,9 @@ private fun VirtualFile.markdownLanguageTag(): String {
     return extension?.lowercase() ?: fileType.name.lowercase().takeUnless { it == "unknown" }.orEmpty()
 }
 
-private val FileQuery.hasLineRange: Boolean get() =
-    startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
+private val FileQuery.hasLineRange: Boolean
+    get() =
+        startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
 
 private fun FileQuery.toFileLineRange(): FileLineRange? {
     if (!hasLineRange) return null

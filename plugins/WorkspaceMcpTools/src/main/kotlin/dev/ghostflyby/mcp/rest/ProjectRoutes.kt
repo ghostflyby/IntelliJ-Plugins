@@ -38,7 +38,7 @@ internal fun Route.projectRoutes() {
         val projectKey = it.parent.projectKey
         val project = call.resolveWorkspaceProjectOrNull(projectKey = projectKey)
             ?: return@get
-        val roots = exposedWorkspaceRoots(project).map { it.toDto() }
+        val roots = exposedWorkspaceRoots(project).map { root -> root.toDto() }
         call.respond(roots)
     }
 

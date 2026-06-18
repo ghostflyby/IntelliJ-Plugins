@@ -35,14 +35,6 @@ import dev.ghostflyby.mcp.rest.markdown.TextBody
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
 
-internal fun validateProjectRelativePath(relativePath: String) {
-    require(relativePath.isNotBlank()) { "relativePath must not be blank." }
-    require(!relativePath.startsWith('/')) { "relativePath must not be absolute: $relativePath" }
-    require(relativePath.split('/').none { it == ".." }) {
-        "relativePath must not contain '..' segments: $relativePath"
-    }
-}
-
 internal class ContentReadException(message: String) : RuntimeException(message)
 
 /** Raw file content served directly (text/bytes) or a directory listing. */
@@ -111,14 +103,14 @@ internal sealed interface FileLineRange {
         val lines = text.lineSequence().toList()
         if (lines.isEmpty()) return ""
         val lineCount = lines.size
-        val start = startLine(lineCount).coerceIn(1, lineCount + 1)
-        val end = endLine(lineCount).coerceIn(0, lineCount)
+        val start = startLine().coerceIn(1, lineCount + 1)
+        val end = endLine().coerceIn(0, lineCount)
         if (start > end) return ""
         return lines.subList(start - 1, end).joinToString("\n")
     }
 
-    fun startLine(lineCount: Int): Int
-    fun endLine(lineCount: Int): Int
+    fun startLine(): Int
+    fun endLine(): Int
 
     data class Lines(val startLine: Int, val endLine: Int) : FileLineRange {
         init {
@@ -127,8 +119,8 @@ internal sealed interface FileLineRange {
             require(endLine >= startLine) { "endLine must be greater than or equal to startLine" }
         }
 
-        override fun startLine(lineCount: Int): Int = startLine
-        override fun endLine(lineCount: Int): Int = endLine
+        override fun startLine(): Int = startLine
+        override fun endLine(): Int = endLine
     }
 
     data class MaxLines(val startLine: Int, val maxLines: Int) : FileLineRange {
@@ -137,8 +129,8 @@ internal sealed interface FileLineRange {
             require(maxLines > 0) { "maxLines must be positive" }
         }
 
-        override fun startLine(lineCount: Int): Int = startLine
-        override fun endLine(lineCount: Int): Int = startLine + maxLines - 1
+        override fun startLine(): Int = startLine
+        override fun endLine(): Int = startLine + maxLines - 1
     }
 
     data class Around(val aroundLine: Int, val radius: Int) : FileLineRange {
@@ -147,8 +139,8 @@ internal sealed interface FileLineRange {
             require(radius >= 0) { "radius must be non-negative" }
         }
 
-        override fun startLine(lineCount: Int): Int = aroundLine - radius
-        override fun endLine(lineCount: Int): Int = aroundLine + radius
+        override fun startLine(): Int = aroundLine - radius
+        override fun endLine(): Int = aroundLine + radius
     }
 }
 
@@ -446,7 +438,7 @@ private fun readGlobCandidates(
 ): Collection<VirtualFile> {
     if (project == null) return candidateLookup.walkFiles(dir)
     val scope = GlobalSearchScopesCore.directoryScope(project, dir, true)
-    matcher.literalFileName?.let { return candidateLookup.filesByName(project, it, scope) }
+    matcher.literalFileName?.let { return candidateLookup.filesByName(it, scope) }
     matcher.extension?.let { extension ->
         val fileType = FileTypeRegistry.getInstance().getFileTypeByExtension(extension)
         if (fileType.name != "UNKNOWN") return candidateLookup.filesByType(fileType, scope)
@@ -474,13 +466,13 @@ private fun isVisibleGlobResult(project: Project?, file: VirtualFile): Boolean {
 }
 
 internal interface GlobCandidateLookup {
-    fun filesByName(project: Project, fileName: String, scope: GlobalSearchScope): Collection<VirtualFile>
+    fun filesByName(fileName: String, scope: GlobalSearchScope): Collection<VirtualFile>
     fun filesByType(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile>
     fun walkFiles(root: VirtualFile): Collection<VirtualFile>
 }
 
 private object IntelliJGlobCandidateLookup : GlobCandidateLookup {
-    override fun filesByName(project: Project, fileName: String, scope: GlobalSearchScope): Collection<VirtualFile> =
+    override fun filesByName(fileName: String, scope: GlobalSearchScope): Collection<VirtualFile> =
         FilenameIndex.getVirtualFilesByName(fileName, scope)
 
     override fun filesByType(fileType: FileType, scope: GlobalSearchScope): Collection<VirtualFile> =
