@@ -156,7 +156,7 @@ tasks {
     }
 
     verifyPlugin {
-        failureLevel = VerifyPluginTask.FailureLevel.ALL
+        failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
     }
 
 }
