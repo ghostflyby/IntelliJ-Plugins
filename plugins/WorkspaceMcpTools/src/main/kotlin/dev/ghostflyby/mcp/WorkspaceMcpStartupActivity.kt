@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mcp
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -13,6 +14,12 @@ import dev.ghostflyby.mcp.sdk.WorkspaceMcpSdkServerService
 
 internal class WorkspaceMcpStartupActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
-        service<WorkspaceMcpSdkServerService>()
+        if (shouldStartWorkspaceMcpServer()) {
+            service<WorkspaceMcpSdkServerService>()
+        }
     }
+}
+
+internal fun shouldStartWorkspaceMcpServer(): Boolean {
+    return !ApplicationManager.getApplication().isUnitTestMode
 }
