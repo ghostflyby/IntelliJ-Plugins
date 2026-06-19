@@ -9,176 +9,176 @@ package dev.ghostflyby.mcp.rest
 import io.ktor.resources.*
 import kotlinx.serialization.Serializable
 
-public interface ProjectProvider {
-    public val projectKey: String
+internal interface ProjectProvider {
+    val projectKey: String
 }
 
-public interface FileQuery {
-    public val meta: Boolean
-    public val content: Boolean
-    public val exists: Boolean
-    public val structure: Boolean
-    public val force: Boolean
-    public val problems: Boolean
-    public val problemFix: Boolean
-    public val minSeverity: String
-    public val name: List<String>
-    public val inspection: List<String>
-    public val fixable: Boolean
-    public val groupBy: List<String>
-    public val limit: Int
-    public val timeoutMillis: Int
-    public val startLine: Int?
-    public val endLine: Int?
-    public val maxLines: Int?
-    public val aroundLine: Int?
-    public val radius: Int?
+internal interface FileQuery {
+    val meta: Boolean
+    val content: Boolean
+    val exists: Boolean
+    val structure: Boolean
+    val force: Boolean
+    val problems: Boolean
+    val problemFix: Boolean
+    val minSeverity: String
+    val name: List<String>
+    val inspection: List<String>
+    val fixable: Boolean
+    val groupBy: List<String>
+    val limit: Int
+    val timeoutMillis: Int
+    val startLine: Int?
+    val endLine: Int?
+    val maxLines: Int?
+    val aroundLine: Int?
+    val radius: Int?
 }
 
 
-public object Api {
+internal object Api {
     @Serializable
     @Resource("/server/info")
-    public class ServerInfo
+    internal class ServerInfo
 
     @Serializable
     @Resource("/projects")
-    public class Projects
+    internal class Projects
 
     @Serializable
     @Resource("/sessions")
-    public class Sessions {
+    internal class Sessions {
         @Serializable
         @Resource("/{sessionId}")
-        public class Id(
-            public val parent: Sessions = Sessions(),
-            public val sessionId: String,
+        internal class Id(
+            internal val parent: Sessions = Sessions(),
+            internal val sessionId: String,
         )
     }
 
     @Serializable
     @Resource("/files")
-    public class FilesEntry(
-        public override val meta: Boolean = false,
-        public override val content: Boolean = false,
-        public override val exists: Boolean = false,
-        public override val structure: Boolean = false,
-        public override val force: Boolean = false,
-        public override val problems: Boolean = false,
-        public override val problemFix: Boolean = false,
-        public override val minSeverity: String = "WARNING",
-        public override val name: List<String> = emptyList(),
-        public override val inspection: List<String> = emptyList(),
-        public override val fixable: Boolean = false,
-        public override val groupBy: List<String> = emptyList(),
-        public override val limit: Int = 200,
-        public override val timeoutMillis: Int = 20_000,
-        public override val startLine: Int? = null,
-        public override val endLine: Int? = null,
-        public override val maxLines: Int? = null,
-        public override val aroundLine: Int? = null,
-        public override val radius: Int? = null,
+    internal class FilesEntry(
+        override val meta: Boolean = false,
+        override val content: Boolean = false,
+        override val exists: Boolean = false,
+        override val structure: Boolean = false,
+        override val force: Boolean = false,
+        override val problems: Boolean = false,
+        override val problemFix: Boolean = false,
+        override val minSeverity: String = "WARNING",
+        override val name: List<String> = emptyList(),
+        override val inspection: List<String> = emptyList(),
+        override val fixable: Boolean = false,
+        override val groupBy: List<String> = emptyList(),
+        override val limit: Int = 200,
+        override val timeoutMillis: Int = 20_000,
+        override val startLine: Int? = null,
+        override val endLine: Int? = null,
+        override val maxLines: Int? = null,
+        override val aroundLine: Int? = null,
+        override val radius: Int? = null,
     ) : FileQuery {
         @Serializable
         @Resource("/{path...}")
-        public class File(
-            public val parent: FilesEntry,
-            public val path: List<String> = emptyList(),
+        internal class File(
+            internal val parent: FilesEntry,
+            internal val path: List<String> = emptyList(),
         )
     }
 
     @Serializable
     @Resource("/glob")
-    public class GlobEntry(
-        public val limit: Int = 0,
-        public val glob: List<String> = emptyList(),
+    internal class GlobEntry(
+        internal val limit: Int = 0,
+        internal val glob: List<String> = emptyList(),
     ) {
         @Serializable
         @Resource("/{path...}")
-        public class Glob(
-            public val parent: GlobEntry,
-            public val path: List<String> = emptyList(),
+        internal class Glob(
+            internal val parent: GlobEntry,
+            internal val path: List<String> = emptyList(),
         )
     }
 
     @Serializable
     @Resource("/search/text")
-    public class SearchTextEntry(
-        public val query: String = "",
-        public val regex: Boolean = false,
-        public val caseSensitive: Boolean = true,
-        public val wholeWord: Boolean = false,
-        public val context: List<String> = listOf("string", "comment", "other"),
-        public val fileFilter: String? = null,
-        public val limit: Int = 100,
+    internal class SearchTextEntry(
+        internal val query: String = "",
+        internal val regex: Boolean = false,
+        internal val caseSensitive: Boolean = true,
+        internal val wholeWord: Boolean = false,
+        internal val context: List<String> = listOf("string", "comment", "other"),
+        internal val fileFilter: String? = null,
+        internal val limit: Int = 100,
     ) {
         @Serializable
         @Resource("/{path...}")
-        public class SearchText(
-            public val parent: SearchTextEntry,
-            public val path: List<String> = emptyList(),
+        internal class SearchText(
+            internal val parent: SearchTextEntry,
+            internal val path: List<String> = emptyList(),
         )
     }
 
     @Serializable
     @Resource("/search/symbols")
-    public class SearchSymbolsEntry(
-        public val query: String = "",
-        public val libraries: Boolean = false,
-        public val kind: String? = null,
-        public val limit: Int = 50,
-        public val timeoutMillis: Int = 20_000,
+    internal class SearchSymbolsEntry(
+        internal val query: String = "",
+        internal val libraries: Boolean = false,
+        internal val kind: String? = null,
+        internal val limit: Int = 50,
+        internal val timeoutMillis: Int = 20_000,
     )
 
     @Serializable
     @Resource("/search/files")
-    public class SearchFilesEntry(
-        public val query: String = "",
-        public val limit: Int = 50,
-        public val timeoutMillis: Int = 20_000,
+    internal class SearchFilesEntry(
+        internal val query: String = "",
+        internal val limit: Int = 50,
+        internal val timeoutMillis: Int = 20_000,
     )
 
     @Serializable
     @Resource("/inspections")
-    public class InspectionsEntry(
-        public val minSeverity: String = "WARNING",
-        public val name: List<String> = emptyList(),
-        public val inspection: List<String> = emptyList(),
-        public val fixable: Boolean = false,
-        public val groupBy: List<String> = emptyList(),
-        public val limit: Int = 200,
-        public val timeoutMillis: Int = 20_000,
+    internal class InspectionsEntry(
+        internal val minSeverity: String = "WARNING",
+        internal val name: List<String> = emptyList(),
+        internal val inspection: List<String> = emptyList(),
+        internal val fixable: Boolean = false,
+        internal val groupBy: List<String> = emptyList(),
+        internal val limit: Int = 200,
+        internal val timeoutMillis: Int = 20_000,
     ) {
         @Serializable
         @Resource("/{path...}")
-        public class Path(
-            public val parent: InspectionsEntry,
-            public val path: List<String> = emptyList(),
+        internal class Path(
+            internal val parent: InspectionsEntry,
+            internal val path: List<String> = emptyList(),
         )
     }
 
     @Serializable
     @Resource("/navigation/{path...}")
-    public class NavigationPath(
-        public val path: List<String> = emptyList(),
+    internal class NavigationPath(
+        internal val path: List<String> = emptyList(),
     )
 
     @Serializable
     @Resource("/projects/{projectKey}")
-    public class Project(
-        public override val projectKey: String,
+    internal class Project(
+        override val projectKey: String,
     ) : ProjectProvider {
         @Serializable
         @Resource("/roots")
-        public class Roots(
-            public val parent: Project,
+        internal class Roots(
+            internal val parent: Project,
         )
 
         @Serializable
         @Resource("/roots/{rootId}")
-        public class Root(
-            public val parent: Project,
-            public val rootId: String,
+        internal class Root(
+            internal val parent: Project,
+            internal val rootId: String,
         ) : ProjectProvider by parent
     }
 }
