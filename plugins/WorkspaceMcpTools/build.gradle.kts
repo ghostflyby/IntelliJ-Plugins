@@ -15,7 +15,7 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-version = "1.0.4"
+version = "2.0.0"
 
 buildLogic {
     platformVersion = "2026.1"
