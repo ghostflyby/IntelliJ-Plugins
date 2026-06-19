@@ -24,10 +24,10 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.*
 
-@Service(Service.Level.APP)
+@Service
 @State(
     name = "WorkspaceMcpSdkServerSettings",
-    storages = [Storage("workspace-mcp-sdk.xml", roamingType = RoamingType.DISABLED)],
+    storages = [Storage("WorkspaceMcpSdkServerSettings.xml", roamingType = RoamingType.LOCAL)],
 )
 internal class WorkspaceMcpSdkServerSettings :
     SerializablePersistentStateComponent<WorkspaceMcpSdkServerSettings.State>(State()) {
@@ -45,7 +45,7 @@ internal class WorkspaceMcpSdkServerSettings :
         }
 
     internal data class State(
-        val port: Int = 63341,
-        val codexSkillNotifiedVersion: String = "",
+        @JvmField val port: Int = 63341,
+        @JvmField val codexSkillNotifiedVersion: String = "",
     )
 }

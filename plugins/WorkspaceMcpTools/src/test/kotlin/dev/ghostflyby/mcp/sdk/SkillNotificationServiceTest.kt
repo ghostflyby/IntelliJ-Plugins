@@ -6,9 +6,9 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import java.nio.file.Path
 
 internal class SkillNotificationServiceTest {
 
@@ -33,39 +33,4 @@ internal class SkillNotificationServiceTest {
         assertTrue(shouldNotifySkill(currentVersion = "1.0.5", notifiedVersion = "1.0.4"))
     }
 
-    @Test
-    fun `bundled skill path is resolved inside plugin directory`() {
-        val pluginPath = Path.of("/plugins/WorkspaceMcpTools")
-
-        assertEquals(
-            Path.of("/plugins/WorkspaceMcpTools/agent-skills/workspace-mcp-rest-api"),
-            bundledSkillPath(pluginPath),
-        )
-    }
-
-    @Test
-    fun `missing plugin path has no bundled skill path`() {
-        assertEquals(null, bundledSkillPath(null))
-    }
-
-    @Test
-    fun `plugin path is resolved from main jar in lib directory`() {
-        assertEquals(
-            Path.of("/plugins/WorkspaceMcpTools"),
-            pluginPathFromMainJarLocation(Path.of("/plugins/WorkspaceMcpTools/lib/WorkspaceMcpTools.jar")),
-        )
-    }
-
-    @Test
-    fun `plugin path falls back to main jar parent directory`() {
-        assertEquals(
-            Path.of("/plugins/WorkspaceMcpTools"),
-            pluginPathFromMainJarLocation(Path.of("/plugins/WorkspaceMcpTools/WorkspaceMcpTools.jar")),
-        )
-    }
-
-    @Test
-    fun `missing main jar path has no plugin path`() {
-        assertEquals(null, pluginPathFromMainJarLocation(null))
-    }
 }

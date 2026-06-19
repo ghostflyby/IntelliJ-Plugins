@@ -8,19 +8,23 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.actions.RevealFileAction
+import com.intellij.ide.plugins.PluginManager
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.service
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
-import dev.ghostflyby.mcp.Bundle
+import dev.ghostflyby.mcp.PluginInfo
+import dev.ghostflyby.mcp.message
 import dev.ghostflyby.mcp.pluginVersion
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.div
 
 internal class SkillNotificationActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
@@ -34,13 +38,13 @@ internal class SkillNotificationActivity : ProjectActivity {
         val notification = NotificationGroupManager.getInstance()
             .getNotificationGroup("Workspace Agent Bridge")
             .createNotification(
-                Bundle.message("sdk.skill.notification.title"),
-                Bundle.message("sdk.skill.notification.content"),
+                message("sdk.skill.notification.title"),
+                message("sdk.skill.notification.content"),
                 NotificationType.INFORMATION,
             )
         notification.addSkillLocationActions(localSkillPath)
         notification.addAction(
-            NotificationAction.createSimpleExpiring(Bundle.message("sdk.skill.notification.action.dismiss")) {
+            NotificationAction.create(message("sdk.skill.notification.action.dismiss")) {
                 notification.expire()
             },
         )
@@ -50,20 +54,20 @@ internal class SkillNotificationActivity : ProjectActivity {
     private fun Notification.addSkillLocationActions(localSkillPath: Path?) {
         if (localSkillPath != null && Files.isDirectory(localSkillPath)) {
             addAction(
-                NotificationAction.create(Bundle.message("sdk.skill.notification.action.copyPath")) { _, notification ->
+                NotificationAction.create(message("sdk.skill.notification.action.copyPath")) { _, notification ->
                     CopyPasteManager.getInstance().setContents(StringSelection(localSkillPath.toString()))
                     notification.expire()
                 },
             )
             addAction(
-                NotificationAction.create(Bundle.message("sdk.skill.notification.action.revealFolder")) { _, notification ->
+                NotificationAction.create(message("sdk.skill.notification.action.revealFolder")) { _, notification ->
                     RevealFileAction.openFile(localSkillPath)
                     notification.expire()
                 },
             )
         } else {
             addAction(
-                NotificationAction.create(Bundle.message("sdk.skill.notification.action.openOnline")) { _, notification ->
+                NotificationAction.create(message("sdk.skill.notification.action.openOnline")) { _, notification ->
                     BrowserUtil.browse(SKILL_ONLINE_URL)
                     notification.expire()
                 },
@@ -81,17 +85,9 @@ internal fun shouldNotifySkill(
     notifiedVersion: String,
 ): Boolean = currentVersion != "unknown" && currentVersion != notifiedVersion
 
-internal fun bundledSkillPath(pluginPath: Path?): Path? {
-    return pluginPath?.resolve(BUNDLED_SKILL_RELATIVE_PATH)
-}
-
-internal fun pluginPathFromMainJarLocation(mainJarPath: Path?): Path? {
-    val parent = mainJarPath?.parent ?: return null
-    return if (parent.fileName?.toString() == "lib") parent.parent else parent
-}
-
 private fun bundledSkillPath(): Path? {
-    val location = SkillNotificationActivity::class.java.protectionDomain.codeSource?.location ?: return null
-    val mainJarPath = runCatching { Path.of(location.toURI()) }.getOrNull() ?: return null
-    return bundledSkillPath(pluginPathFromMainJarLocation(mainJarPath))
+    val plugin = PluginManager.getInstance().findEnabledPlugin(PluginId(PluginInfo.id)) ?: return null
+    val path = plugin.pluginPath / BUNDLED_SKILL_RELATIVE_PATH
+    return path
 }
+

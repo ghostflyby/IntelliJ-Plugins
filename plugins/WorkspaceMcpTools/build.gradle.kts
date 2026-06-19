@@ -72,5 +72,3 @@ tasks.withType<PrepareSandboxTask>().configureEach {
 configurations.all {
     resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }
-
-sourceSets.map { it.classesTaskName }

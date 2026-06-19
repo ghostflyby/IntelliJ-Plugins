@@ -8,16 +8,17 @@ package dev.ghostflyby.intellij
 
 import org.w3c.dom.Element
 import java.io.InputStream
+import java.lang.ref.WeakReference
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
-public abstract class PluginInfoProvider protected constructor(
-    private val classLoader: ClassLoader,
+public class PluginInfoProvider private constructor(
+    private val classLoader: WeakReference<ClassLoader>,
 ) {
-    protected constructor(anchorClass: Class<*>) : this(anchorClass.classLoader)
+    public constructor(anchorClass: Class<*>) : this(WeakReference(anchorClass.classLoader))
 
     private val info: ParsedPluginInfo by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        readPluginInfo(classLoader)
+        readPluginInfo(classLoader.get()?.apply { classLoader.clear() }!!)
     }
 
     public val id: String

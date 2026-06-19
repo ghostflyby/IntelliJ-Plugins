@@ -17,7 +17,6 @@ import io.ktor.server.engine.*
 import io.ktor.server.resources.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.launch
 import java.net.BindException
 import java.net.InetAddress
@@ -26,27 +25,20 @@ import java.net.ServerSocket
 
 @Service(Service.Level.APP)
 internal class WorkspaceMcpSdkServerService(
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) {
     private val logger = logger<WorkspaceMcpSdkServerService>()
+//    private var server: EmbeddedServer<*, *>? = null
 
     init {
         scope.launch {
-            val startedServer = startServerWithFallback()
-            try {
-                @Suppress("HttpUrlsUsage")
-                logger.info("Workspace MCP REST server started at http://$LOOPBACK_HOST:${startedServer.port}/api/v1")
-                awaitCancellation()
-            } finally {
-                startedServer.engine.stopSuspend()
-            }
+            runServerWithFallback()
         }
     }
 
-    private suspend fun startServerWithFallback(): StartedWorkspaceMcpServer {
-        val settings = service<WorkspaceMcpSdkServerSettings>()
-        val startPort = settings.port
-        for (port in workspaceMcpServerPortRange(startPort)) {
+    private suspend fun runServerWithFallback() {
+        val startPort = service<WorkspaceMcpSdkServerSettings>().port
+        for (port in startPort..<startPort + 100) {
             if (!isLoopbackPortAvailable(port)) {
                 logger.warn("Port $port is in use, trying ${port + 1}")
                 continue
@@ -54,24 +46,26 @@ internal class WorkspaceMcpSdkServerService(
 
             val engine = createServer(port)
             try {
-                engine.startSuspend(wait = false)
                 if (port != startPort) {
-                    settings.port = port
+                    service<WorkspaceMcpSdkServerSettings>().port = port
                 }
-                return StartedWorkspaceMcpServer(engine, port)
+                @Suppress("HttpUrlsUsage")
+                logger.info("Workspace MCP REST server starting at http://$LOOPBACK_HOST:$port/api/v1")
+                engine.startSuspend(wait = true)
+                return
             } catch (cause: Throwable) {
-                engine.stopSuspend()
                 if (cause.findBindException() == null) {
                     throw cause
                 }
                 logger.warn("Port $port is in use, trying ${port + 1}")
+            } finally {
+                engine.stop(500, 1000)
             }
         }
-        error("All ports $startPort-${startPort + WorkspaceMcpServerPortFallbackCount - 1} are in use")
     }
 
-    private fun createServer(port: Int): EmbeddedServer<*, *> {
-        return embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
+    private fun createServer(port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
+        return scope.embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
             installWorkspaceRestContentNegotiation()
             install(Resources)
             routing { restApi() }
@@ -81,12 +75,6 @@ internal class WorkspaceMcpSdkServerService(
     private companion object {
         private const val LOOPBACK_HOST = "127.0.0.1"
     }
-}
-
-internal const val WorkspaceMcpServerPortFallbackCount: Int = 10
-
-internal fun workspaceMcpServerPortRange(startPort: Int): IntRange {
-    return startPort until startPort + WorkspaceMcpServerPortFallbackCount
 }
 
 internal fun isLoopbackPortAvailable(port: Int): Boolean {
@@ -109,8 +97,3 @@ private fun Throwable.findBindException(): BindException? {
     }
     return null
 }
-
-private data class StartedWorkspaceMcpServer(
-    val engine: EmbeddedServer<*, *>,
-    val port: Int,
-)

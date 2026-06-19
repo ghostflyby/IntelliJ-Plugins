@@ -1,16 +1,13 @@
 package dev.ghostflyby.mcp.sdk
 
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 
 internal class WorkspaceMcpSdkServerServiceTest {
-    @Test
-    fun `port range scans ten ports from configured start`() {
-        assertEquals(63341..63350, workspaceMcpServerPortRange(63341))
-    }
 
     @Test
     fun `loopback port probe reports occupied ports unavailable`() {

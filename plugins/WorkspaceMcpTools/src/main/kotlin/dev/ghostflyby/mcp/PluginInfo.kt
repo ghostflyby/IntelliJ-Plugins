@@ -8,7 +8,7 @@ package dev.ghostflyby.mcp
 
 import dev.ghostflyby.intellij.PluginInfoProvider
 
-internal object PluginInfo : PluginInfoProvider(PluginInfo::class.java)
+internal val PluginInfo = PluginInfoProvider(WorkspaceMcpStartupActivity::class.java)
 
 internal val pluginVersion: String
     get() = PluginInfo.version

@@ -9,19 +9,10 @@ package dev.ghostflyby.mcp
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.Nls
 import org.jetbrains.annotations.PropertyKey
-import java.util.function.Supplier
 
 private const val BUNDLE = "messages.Bundle"
 
-internal object Bundle {
-    private val delegate = DynamicBundle(Bundle::class.java, BUNDLE)
+private val bundle = DynamicBundle(WorkspaceMcpStartupActivity::class.java, BUNDLE)
 
-    @JvmStatic
-    fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
-        delegate.getMessage(key, *params)
-
-    @JvmStatic
-    @Nls
-    fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): Supplier<String> =
-        delegate.getLazyMessage(key, *params)
-}
+internal fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
+    bundle.getMessage(key, *params)
