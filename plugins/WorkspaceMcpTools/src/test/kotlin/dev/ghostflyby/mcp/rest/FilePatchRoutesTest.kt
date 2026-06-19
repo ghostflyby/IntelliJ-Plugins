@@ -172,6 +172,9 @@ internal class FilePatchRoutesTest {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
+            val body = json.parseToJsonElement(resp.bodyAsText()).jsonObject
+            Assertions.assertEquals(1, body["applied"]?.jsonArray?.size)
+            Assertions.assertTrue(body["failed"]?.jsonArray.isNullOrEmpty())
 
             val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())

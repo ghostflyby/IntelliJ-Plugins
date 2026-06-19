@@ -444,7 +444,6 @@ private suspend fun applyGit(
             failed += "$path: ${e.message ?: "unknown"}"
         }
     }
-    call.respond(HttpStatusCode.OK, PatchResponse(applied = applied, failed = failed, references = references))
     val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
     call.respond(
         HttpStatusCode.OK,
