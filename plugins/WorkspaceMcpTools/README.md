@@ -1,42 +1,28 @@
 # Workspace Agent Bridge
 
 <!-- Plugin description -->
-Workspace Agent Bridge exposes IntelliJ workspace capabilities to local coding agents through a Markdown-first REST API
-and a lightweight MCP SDK endpoint. The REST API is the primary agent-facing surface for file reads, edits, search,
-navigation, inspections, formatting, cleanup, and refactoring-aware file operations.
+Workspace Agent Bridge lets local coding agents work through the IntelliJ project model instead of guessing from the
+filesystem alone. It exposes a local REST API for reading files, searching indexed project content, navigating symbols,
+checking problems, formatting code, and applying workspace edits with IntelliJ-aware safety checks.
 
-## REST API
+The plugin starts a local server at `http://127.0.0.1:63341/api/v1`. If that port is already busy, it scans nearby ports
+and remembers the selected one. Agents connect by creating a workspace session for the project or directory they intend
+to work in, then use that session for file, search, navigation, inspection, and patch requests.
 
-The REST server is hosted once per IDE application.
+The API is optimized for agent-readable Markdown by default, with JSON available for structured clients. It supports
+common coding-agent workflows such as:
 
-- Base URL: `http://127.0.0.1:63341/api/v1`
-- If port 63341 is already in use, the server scans up to 10 ports and persists the result.
-- Create a workspace session with `POST /sessions` and pass
-  `X-Ghostflyby-Workspace-Session-Id` on workspace requests.
-- Default responses are Markdown/plain text optimized for agents. Use `Accept: application/json` only for structured
-  clients.
+- reading files with metadata, ranges, structure summaries, and problem reports;
+- searching by glob, text, fuzzy file name, or symbol, including read-only library and SDK context when requested;
+- jumping to declarations, finding usages, and reading documentation;
+- creating, replacing, deleting, moving, and patching workspace files;
+- running IntelliJ cleanup, optimize imports, and reformat operations.
 
-Core routes:
+Write access is intentionally limited to project workspace files. Dependency and SDK files are available as read-only
+context, and protected paths require explicit confirmation before writes. Delete and move operations use IntelliJ
+refactoring behavior where possible, so agents can update references instead of only moving bytes on disk.
 
-| Capability                                                                          | Route                                                             |
-|-------------------------------------------------------------------------------------|-------------------------------------------------------------------|
-| Project/session discovery                                                           | `GET /projects`, `POST /sessions`, `DELETE /sessions/{sessionId}` |
-| File read, metadata, structure, problem view                                        | `GET /files/{path...}`                                            |
-| Create or replace text                                                              | `PUT /files/{path...}`                                            |
-| Create only, or create directory with an empty body                                 | `POST /files/{path...}`                                           |
-| Refactoring-aware delete                                                            | `DELETE /files/{path...}`                                         |
-| Apply OpenAI `apply_patch`, Git patch, format, cleanup, move, and delete operations | `PATCH /files/{path...}`                                          |
-| Glob and text search                                                                | `GET /glob/{path...}`, `GET /search/text/{path...}`               |
-| Fuzzy file and symbol search                                                        | `GET /search/files`, `GET /search/symbols`                        |
-| Goto, usages, documentation                                                         | `POST /navigation/{path...}`                                      |
-| Inspection refresh/report                                                           | `POST /inspections/{path...}`                                     |
-
-Path inputs use session-relative paths or URL-encoded full IntelliJ VFS URLs. Full VFS URLs are accepted for reads;
-write operations remain restricted to project workspace files.
-
-`DELETE /files/{path...}` uses IntelliJ safe-delete behavior for files. If references are found, the default response is
-`409 Conflict` with a references table; retry with `force=true` only when deletion is intentional. `PATCH` delete and
-move sections use the same PSI/VFS-aware refactoring path, including IntelliJ move and rename refactoring for
-`*** Move to:`.
+For Codex users, the plugin bundles the `workspace-mcp-rest-api` skill and shows an upgrade notification with actions to
+copy or reveal the local skill directory. The bundled skill contains the agent-facing workflow details and examples.
 
 <!-- Plugin description end -->
