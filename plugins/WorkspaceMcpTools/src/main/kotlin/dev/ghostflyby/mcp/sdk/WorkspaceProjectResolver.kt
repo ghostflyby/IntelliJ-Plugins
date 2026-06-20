@@ -21,7 +21,7 @@ import kotlin.io.path.exists
 
 /**
  * Resolves the stable instanceKey for this IDE application instance.
- * Uses product code lowercase + configured port, e.g. "iu-63341".
+ * Uses product code lowercase + configured port, e.g. "iu-63441".
  */
 internal fun workspaceInstanceKey(): String {
     val productCode = ApplicationInfo.getInstance().build.productCode.lowercase()

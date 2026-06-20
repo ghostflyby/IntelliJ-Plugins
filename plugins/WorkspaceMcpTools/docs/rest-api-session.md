@@ -124,7 +124,7 @@ Request-time validation:
 ## Examples
 
 ```bash
-BASE=http://127.0.0.1:63341/api/v1
+BASE=http://127.0.0.1:63441/api/v1
 
 SESSION_ID=$(curl -sS -X POST "$BASE/sessions" \
   -H 'Content-Type: application/json' \

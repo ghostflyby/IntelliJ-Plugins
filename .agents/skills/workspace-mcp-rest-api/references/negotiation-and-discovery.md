@@ -5,10 +5,10 @@
 Default:
 
 ```bash
-BASE=http://127.0.0.1:63341/api/v1
+BASE=http://127.0.0.1:63441/api/v1
 ```
 
-Default port is 63341. If in use, server scans 10 ports forward and persists.
+Default port is 63441. If in use, server scans upward and uses the first available port.
 
 ## Headers And Content Negotiation
 

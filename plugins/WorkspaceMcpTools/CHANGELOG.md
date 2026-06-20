@@ -24,8 +24,8 @@
 
 - The plugin is now centered on the REST API instead of the previous toolset-heavy MCP surface. New agent integrations
   should use the documented REST routes for file, search, navigation, inspection, and patch workflows.
-- The REST server now starts automatically at the application level, keeps the default port `63341`, scans up to ten
-  fallback ports when the configured port is occupied, and persists the selected fallback port.
+- The REST server now starts automatically at the application level, keeps the default port `63441`, and scans upward
+  when the configured port is occupied.
 - File access policy now treats project-owned source content as writable even when IntelliJ also classifies it as
   library source, while dependency and SDK files outside project content remain read-only.
 - Workspace writes now block Git metadata paths whose route or VFS ancestry contains a `.git` segment; `force=true`

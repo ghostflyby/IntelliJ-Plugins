@@ -12,10 +12,10 @@ isolated HTTP calls.
 Default base URL:
 
 ```bash
-BASE=http://127.0.0.1:63341/api/v1
+BASE=http://127.0.0.1:63441/api/v1
 ```
 
-Default port is 63341. If already in use, the server scans up to 10 ports forward and persists the selected port.
+Default port is 63441. If already in use, the server scans upward and uses the first available port.
 
 ## Core Contract
 
@@ -80,6 +80,32 @@ and dependency/library awareness that shell tools do not.
 | Read a whole source file first          | `/files/{path}?structure=true`, then `aroundLine` or `startLine` ranges                                  |
 | Turn a JAR/library URL into a fake path | Use the returned `encodedFileUrl` exactly as the `/files/{path...}` route segment                        |
 | Run a formatter command blindly         | `/files` PATCH with `*** Cleanup`, `*** Optimize Imports`, and `*** Reformat File`                       |
+
+### Archive And JAR Inspection
+
+When a user forbids `unzip` or `jar tf`, do not use either command for Gradle caches or plugin artifacts. Prefer a ZIP
+reader that lists entries without extracting:
+
+```bash
+jshell --execution local
+```
+
+```java
+var zip = new java.util.zip.ZipFile(System.getProperty("user.home") + "/.gradle/some.jar");
+zip.
+
+stream().
+
+map(java.util.zip.ZipEntry::getName).
+
+forEach(System.out::println);
+zip.
+
+close();
+```
+
+For one-off scripted checks, use a runtime ZIP API such as `java.util.zip.ZipFile` or Node packages that read the ZIP
+central directory. Keep inspection read-only unless the user explicitly asks to extract or rewrite an artifact.
 
 ## Common Workflows
 

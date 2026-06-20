@@ -72,7 +72,7 @@ internal class WorkspaceMcpSdkServerService(
 
     private companion object {
         private const val LOOPBACK_HOST = "127.0.0.1"
-        private const val START_PORT = 63341
+        private const val START_PORT = 63441
     }
 }
 

@@ -5,8 +5,9 @@ Workspace Agent Bridge lets local coding agents work through the IntelliJ projec
 filesystem alone. It exposes a local REST API for reading files, searching indexed project content, navigating symbols,
 checking problems, formatting code, and applying workspace edits with IntelliJ-aware safety checks.
 
-The plugin starts a local server at `http://127.0.0.1:63341/api/v1`. If that port is already busy, it scans nearby ports
-and remembers the selected one. Agents connect by creating a workspace session for the project or directory they intend
+The plugin starts a local server at `http://127.0.0.1:63441/api/v1`. If that port is already busy, it scans nearby ports
+and uses the first available one. Agents connect by creating a workspace session for the project or directory they
+intend
 to work in, then use that session for file, search, navigation, inspection, and patch requests.
 
 The API is optimized for agent-readable Markdown by default, with JSON available for structured clients. It supports
