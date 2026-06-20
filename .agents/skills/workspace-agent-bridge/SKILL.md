@@ -1,5 +1,5 @@
 ---
-name: workspace-mcp-rest-api
+name: workspace-agent-bridge
 description: Use in IntelliJ projects with `.idea/` when searching, editing, inspecting, formatting, or exploring workspace and library symbols/text/problems through the IDE.
 ---
 

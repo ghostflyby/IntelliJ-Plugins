@@ -48,8 +48,8 @@ tasks.test {
 }
 
 tasks.withType<PrepareSandboxTask>().configureEach {
-    from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-mcp-rest-api")) {
-        into(pluginName.map { "$it/agent-skills/workspace-mcp-rest-api" })
+    from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-agent-bridge")) {
+        into(pluginName.map { "$it/agent-skills/workspace-agent-bridge" })
     }
 }
 
