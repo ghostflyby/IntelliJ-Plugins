@@ -23,7 +23,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("repo.intellij-module")
+    id("repo.intellij-lib")
 }
 
 kotlin {

@@ -1,0 +1,308 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package dev.ghostflyby.mcp.rest
+
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.mcp.filecontent.*
+import dev.ghostflyby.mcp.rest.markdown.BlockKind
+import dev.ghostflyby.mcp.rest.markdown.MarkdownBlock
+import dev.ghostflyby.mcp.rest.markdown.MarkdownExclude
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.resources.*
+import io.ktor.server.response.*
+import io.ktor.server.routing.*
+import kotlinx.serialization.Serializable
+import kotlin.io.encoding.Base64
+
+@Serializable
+private data class FileContentResponse(
+    val meta: FileMeta? = null,
+    val exists: Boolean? = null,
+    @MarkdownBlock(
+        BlockKind.CODE_FENCE,
+        languageProperty = "language",
+        skipWhenProperty = "contentFormat",
+        skipWhenEquals = "base64",
+    )
+    val content: String? = null,
+    @MarkdownBlock(BlockKind.STRUCTURE_TREE, heading = "## Structure")
+    val structure: FileStructure? = null,
+    @MarkdownExclude
+    val language: String = "",
+    @MarkdownExclude
+    val contentFormat: String? = null,
+)
+
+// -- Route registrations --
+internal fun Route.fileRoutes() {
+    get<Api.Project.Root> { resource ->
+        val projectKey = resource.parent.projectKey
+        val project = call.resolveWorkspaceProjectOrNull(projectKey = projectKey)
+            ?: return@get
+        val target = rootRouteTarget(project, resource.rootId)
+        if (target != null) {
+            call.respond(
+                RootDetailResponse(
+                    id = resource.rootId,
+                    displayName = target.root.displayName,
+                    kind = "${target.root.kind}".lowercase(),
+                    url = target.root.base.url,
+                    encodedUrl = encodeRoutePathSegment(target.root.base.url),
+                ),
+            )
+        } else {
+            call.respond(HttpStatusCode.NotFound, RestError("Root not found"))
+        }
+    }
+
+    get<Api.FilesEntry.File> { resource ->
+        val target = call.resolveFileRouteTarget(resource.path.toRoutePath())
+            ?: return@get
+        if (resource.parent.problems) {
+            respondFileProblems(call, target, resource.parent)
+            return@get
+        }
+        when (target) {
+            is RestFileRouteTarget.ProjectFile -> respondSessionFile(
+                call = call,
+                target = target.target,
+                meta = resource.parent.meta,
+                content = resource.parent.content,
+                exists = resource.parent.exists,
+                structure = resource.parent.structure,
+                rangeQuery = resource.parent,
+            )
+
+            is RestFileRouteTarget.VirtualFileReadOnly -> respondVirtualFile(
+                call = call,
+                project = target.project,
+                file = target.file,
+                meta = resource.parent.meta,
+                content = resource.parent.content,
+                exists = resource.parent.exists,
+                structure = resource.parent.structure,
+                rangeQuery = resource.parent,
+            )
+        }
+    }
+}
+
+@Serializable
+private data class RootDetailResponse(
+    val id: String,
+    val displayName: String,
+    val kind: String,
+    val url: String,
+    val encodedUrl: String,
+)
+
+internal suspend fun respondSessionFile(
+    call: ApplicationCall,
+    target: RestSessionRouteTarget,
+    meta: Boolean = false,
+    content: Boolean = false,
+    exists: Boolean = false,
+    structure: Boolean = false,
+    rangeQuery: FileQuery? = null,
+) {
+    val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
+    respondFileContent(
+        call,
+        access.file,
+        meta,
+        content,
+        exists,
+        structure,
+        target.project,
+        access.policy,
+        rangeQuery,
+    )
+}
+
+internal suspend fun respondVirtualFile(
+    call: ApplicationCall,
+    project: Project,
+    file: VirtualFile,
+    meta: Boolean = false,
+    content: Boolean = false,
+    exists: Boolean = false,
+    structure: Boolean = false,
+    rangeQuery: FileQuery? = null,
+) {
+    respondFileContent(
+        call,
+        file,
+        meta,
+        content,
+        exists,
+        structure,
+        project = project,
+        policy = fileMetaPolicyFallback(file),
+        rangeQuery = rangeQuery,
+    )
+}
+
+// -- Response dispatch --
+private suspend fun respondFileContent(
+    call: ApplicationCall,
+    file: VirtualFile?,
+    meta: Boolean,
+    content: Boolean,
+    exists: Boolean,
+    structure: Boolean,
+    project: Project?,
+    policy: FileAccessPolicy? = null,
+    rangeQuery: FileQuery? = null,
+) {
+    val wantsContent = content || (rangeQuery?.hasLineRange == true) || (!meta && !exists && !structure)
+    val lineRange = if (wantsContent) {
+        try {
+            rangeQuery?.toFileLineRange()
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, RestError(e.message.orEmpty()))
+            return
+        }
+    } else {
+        null
+    }
+    // exists-only: no file required
+    if (!wantsContent && !meta && exists && !structure) {
+        call.respondText("${file != null}", ContentType.Text.Plain)
+        return
+    }
+    if (file == null) {
+        call.respond(HttpStatusCode.NotFound, RestError("File not found"))
+        return
+    }
+    val effectivePolicy = policy ?: file.let { f ->
+        project?.let { p -> classifyExistingProjectFile(p, f) } ?: fileMetaPolicyFallback(f)
+    }
+    if (effectivePolicy.classification in setOf(
+            FileContentClassification.EXCLUDED,
+            FileContentClassification.OUTSIDE_PROJECT,
+        )
+    ) {
+        call.respond(HttpStatusCode.NotFound, RestError("File not found"))
+        return
+    }
+    if (structure && !effectivePolicy.canRead(FileContentKind.STRUCTURE)) {
+        call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
+        return
+    }
+    if (wantsContent && !effectivePolicy.canRead(FileContentKind.CONTENT) && !effectivePolicy.canRead(FileContentKind.BYTES)
+    ) {
+        call.respond(HttpStatusCode.Forbidden, RestError(effectivePolicy.reason))
+        return
+    }
+    if (wantsContent && lineRange != null && (file.isDirectory || file.fileType.isBinary)) {
+        call.respond(HttpStatusCode.BadRequest, RestError("Range reads are supported only for text files"))
+        return
+    }
+    // Single-responsibility paths
+    if (structure && !meta && !wantsContent && !exists)
+        return structureOnly(call, file, project)
+    if (meta && !wantsContent && !exists && !structure)
+        return metaOnly(call, file, effectivePolicy)
+    if (!meta && !exists && !structure)
+        return contentOnly(call, file, lineRange)
+    // Compound: at least two of meta/content/exists/structure
+    compoundResult(
+        call,
+        file,
+        meta,
+        wantsContent,
+        exists,
+        structure,
+        project,
+        effectivePolicy,
+        lineRange,
+    )
+}
+
+// -- Single response modes --
+private suspend fun contentOnly(call: ApplicationCall, file: VirtualFile, range: FileLineRange? = null) {
+    if (range != null) {
+        val content = try {
+            readTextRangeResult(file, range)
+        } catch (e: IllegalArgumentException) {
+            call.respond(HttpStatusCode.BadRequest, RestError(e.message.orEmpty()))
+            return
+        }
+        call.respondText(content.text, ContentType.parse(content.mimeType))
+        return
+    }
+    when (val c = readContentResult(file)) {
+        is FileContent.Binary -> call.respondBytes(c.bytes, ContentType.parse(c.mimeType))
+        is FileContent.Directory -> call.respond(c.listing)
+        is FileContent.Text -> call.respondText(c.text, ContentType.parse(c.mimeType))
+    }
+}
+
+private suspend fun metaOnly(call: ApplicationCall, file: VirtualFile, policy: FileAccessPolicy) {
+    call.respond(readMetaResult(file, policy))
+}
+
+private suspend fun structureOnly(call: ApplicationCall, file: VirtualFile, project: Project?) {
+    call.respond(if (project != null) readStructureResult(project, file) else FileStructure(emptyList()))
+}
+
+// -- Compound response --
+private suspend fun compoundResult(
+    call: ApplicationCall, file: VirtualFile,
+    wantsMeta: Boolean, wantsContent: Boolean, wantsExists: Boolean, wantsStructure: Boolean,
+    project: Project?,
+    policy: FileAccessPolicy?,
+    range: FileLineRange? = null,
+) {
+    val effectivePolicy = policy ?: fileMetaPolicyFallback(file)
+    val meta = if (wantsMeta) readMetaResult(file, effectivePolicy) else null
+    val content = if (wantsContent) {
+        if (range != null) readTextRangeResult(file, range) else readContentResult(file)
+    } else {
+        null
+    }
+    val structure = if (wantsStructure && project != null) readStructureResult(project, file) else null
+    val response = FileContentResponse(
+        meta = meta,
+        exists = if (wantsExists) true else null,
+        content = content?.let {
+            when (it) {
+                is FileContent.Text -> it.text
+                is FileContent.Binary -> Base64.encode(it.bytes)
+                is FileContent.Directory -> it.listing.renderTextBody()
+            }
+        },
+        structure = structure,
+        language = file.markdownLanguageTag(),
+        contentFormat = if (content is FileContent.Binary) "base64" else null,
+    )
+    call.respond(response)
+}
+
+private fun VirtualFile.markdownLanguageTag(): String {
+    return extension?.lowercase() ?: fileType.name.lowercase().takeUnless { it == "unknown" }.orEmpty()
+}
+
+private val FileQuery.hasLineRange: Boolean
+    get() =
+        startLine != null || endLine != null || maxLines != null || aroundLine != null || radius != null
+
+private fun FileQuery.toFileLineRange(): FileLineRange? {
+    if (!hasLineRange) return null
+    val hasStartEnd = startLine != null && endLine != null && maxLines == null && aroundLine == null && radius == null
+    val hasStartMax = startLine != null && maxLines != null && endLine == null && aroundLine == null && radius == null
+    val hasAround = aroundLine != null && radius != null && startLine == null && endLine == null && maxLines == null
+    return when {
+        hasStartEnd -> FileLineRange.Lines(startLine!!, endLine!!)
+        hasStartMax -> FileLineRange.MaxLines(startLine!!, maxLines!!)
+        hasAround -> FileLineRange.Around(aroundLine!!, radius!!)
+        else -> throw IllegalArgumentException(
+            "Range query must use exactly one of startLine+endLine, startLine+maxLines, or aroundLine+radius",
+        )
+    }
+}

@@ -29,3 +29,9 @@ version = "1.0.4"
 dependencies {
     implementation(project(":modules:intellij-shared"))
 }
+
+dependencies {
+    intellijPlatform {
+        pluginComposedModule(project(":modules:intellij-shared"))
+    }
+}

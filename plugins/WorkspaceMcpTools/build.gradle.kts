@@ -2,31 +2,57 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
+
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
+import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
     id("repo.intellij-plugin")
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "1.0.4"
+version = "2.0.0"
 
-dependencies.intellijPlatform {
-    bundledPlugin("com.intellij.mcpServer")
+buildLogic {
+    platformVersion = "2026.1"
+    pluginSinceBuild = "261"
+}
+
+dependencies {
+    implementation(libs.ktor.resources)
+
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.server.content.negotiation)
+    implementation(libs.snakeyaml)
+    implementation(libs.ktor.server.resources)
+    implementation(libs.ktor.server.cio)
+    implementation(project(":modules:intellij-shared"))
+
+    testImplementation(libs.ktor.server.test.host)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher) {
+        excludeKotlinStdlib()
+    }
+    intellijPlatform {
+        pluginComposedModule(project(":modules:intellij-shared"))
+        testFramework(TestFrameworkType.JUnit5)
+        bundledModule("intellij.platform.vcs.impl")
+    }
+}
+
+tasks.test {
+    useJUnitPlatform()
+    systemProperty("java.awt.headless", true)
+}
+
+tasks.withType<PrepareSandboxTask>().configureEach {
+    from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-agent-bridge")) {
+        into(pluginName.map { "$it/agent-skills/workspace-agent-bridge" })
+    }
+}
+
+configurations.all {
+    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }

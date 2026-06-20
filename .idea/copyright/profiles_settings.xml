@@ -1,9 +1,5 @@
 <component name="CopyrightManager">
-  <settings>
-    <module2copyright>
-      <element module="sources" copyright="default" />
-      <element module="resources" copyright="short" />
-    </module2copyright>
+  <settings default="default">
     <LanguageOptions name="Properties">
       <option name="fileTypeOverride" value="3" />
       <option name="block" value="false" />

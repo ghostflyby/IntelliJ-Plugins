@@ -15,3 +15,11 @@ public final class dev/ghostflyby/intellij/AutoCleanKeyKt {
 	public static final fun toAutoCleanKey (Lcom/intellij/openapi/util/Key;Lkotlinx/coroutines/CoroutineScope;)Ldev/ghostflyby/intellij/AutoCleanKey;
 }
 
+public abstract class dev/ghostflyby/intellij/PluginInfoProvider {
+	protected fun <init> (Ljava/lang/Class;)V
+	protected fun <init> (Ljava/lang/ClassLoader;)V
+	public final fun getId ()Ljava/lang/String;
+	public final fun getName ()Ljava/lang/String;
+	public final fun getVersion ()Ljava/lang/String;
+}
+

@@ -26,3 +26,10 @@ plugins {
 
 version = "1.1.0"
 
+dependencies {
+    testImplementation(libs.kotlin.stdlib)
+    testImplementation(libs.kotlinx.coroutines.test) {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core-jvm")
+    }
+}

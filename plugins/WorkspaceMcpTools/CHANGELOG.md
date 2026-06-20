@@ -1,20 +1,55 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# Workspace MCP Tools Changelog
+# Workspace Agent Bridge Changelog
 
 ## [Unreleased]
 
 ### Added
 
+- Added a Markdown-first REST API for local agent integrations, covering workspace sessions, file reads and metadata,
+  writes, patch application, glob/text/file/symbol search, navigation, usages, documentation, inspections, formatting,
+  cleanup, and refactoring-aware file operations.
+- Added session-scoped workspace access with `POST /sessions` and `X-Ghostflyby-Workspace-Session-Id`, including
+  support for session-relative paths and URL-encoded IntelliJ VFS URLs.
+- Added structured file metadata, range reads, declaration structure summaries, problem reports, and encoded VFS URL
+  outputs so agents can inspect workspace and library files without inventing local paths.
+- Added PATCH support for OpenAI `apply_patch` bodies, Git diffs, multi-file directory patches, deterministic cleanup
+  and formatting operations, refactoring-aware file moves, and safe-delete style deletes.
+- Added indexed REST search routes for globs, text search, fuzzy file lookup, and symbol lookup, with optional library
+  and SDK search for read-only dependency context.
+- Added a bundled `workspace-mcp-rest-api` Codex skill and version-upgrade notification actions to copy or reveal the
+  local skill path, with an online fallback when the bundled skill directory is unavailable.
+
 ### Changed
 
-### Deprecated
+- The plugin is now centered on the REST API instead of the previous toolset-heavy MCP surface. New agent integrations
+  should use the documented REST routes for file, search, navigation, inspection, and patch workflows.
+- The REST server now starts automatically at the application level, keeps the default port `63441`, and scans upward
+  when the configured port is occupied.
+- File access policy now treats project-owned source content as writable even when IntelliJ also classifies it as
+  library source, while dependency and SDK files outside project content remain read-only.
+- Workspace writes now block Git metadata paths whose route or VFS ancestry contains a `.git` segment; `force=true`
+  still only applies to intentionally overriding protected text paths such as ignored files.
+- Plugin packaging now uses repository IntelliJ library conventions and bundles the REST runtime dependencies directly
+  instead of relying on the local Kotlin SDK submodule.
 
 ### Removed
 
+- Removed the standalone legacy VFS, Document, Navigation, Quality, and `scope_*` MCP toolsets from this plugin.
+
 ### Fixed
 
-### Security
+- Fixed REST server startup during tests and on occupied ports so route tests stay in-process and production startup can
+  select a fallback port without leaking bind failures.
+- Fixed REST path handling for root URLs, full VFS URLs, ambiguous session roots, Markdown file references, and
+  session-scoped project/root resolution.
+- Fixed PATCH persistence so successful document edits are saved to disk, Git patch responses are sent only once, and
+  invalid or partially rejected patch sections report clear failures.
+- Fixed headless move and rename support to keep language-specific IntelliJ refactoring behavior without depending on
+  UI-only processor calls.
+- Fixed inspection and problem collection to run with the required progress indicator context and include syntax error
+  fallback reporting.
+- Fixed bundled skill path resolution to avoid IntelliJ internal plugin lookup APIs.
 
 ## [1.0.4] - 2026-05-04
 

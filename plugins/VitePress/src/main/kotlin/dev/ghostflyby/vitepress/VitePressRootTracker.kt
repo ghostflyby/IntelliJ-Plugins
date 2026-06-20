@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 
@@ -137,9 +121,9 @@ internal class VitePressRootTracker(
         if (roots.isEmpty()) return false
         val update: (PersistentSet<VirtualFile>) -> PersistentSet<VirtualFile> =
             if (isAdd) {
-                { current -> current.addAll(roots) }
+                { current -> current.addAllBridge(roots) }
             } else {
-                { current -> current.removeAll(roots) }
+                { current -> current.removeAllBridge(roots) }
             }
 
         val previous =
@@ -158,10 +142,10 @@ internal class VitePressRootTracker(
         if (files.isEmpty()) return false
         val previous =
             stateRef.getAndUpdate { state ->
-                val nextPendingFiles = state.pendingFiles.addAll(files)
+                val nextPendingFiles = state.pendingFiles.addAllBridge(files)
                 if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
             }
-        val changed = previous.pendingFiles.addAll(files) != previous.pendingFiles
+        val changed = previous.pendingFiles.addAllBridge(files) != previous.pendingFiles
         if (changed) {
             modificationCount.getAndIncrement()
         }
@@ -206,7 +190,7 @@ internal class VitePressRootTracker(
                 if (state.old == snapshot.old) {
                     nextState = nextState.copy(old = nextState.current)
                 }
-                val remainingPendingFiles = nextState.pendingFiles.removeAll(pendingFiles)
+                val remainingPendingFiles = nextState.pendingFiles.removeAllBridge(pendingFiles)
                 if (remainingPendingFiles != nextState.pendingFiles) {
                     nextState = nextState.copy(pendingFiles = remainingPendingFiles)
                 }

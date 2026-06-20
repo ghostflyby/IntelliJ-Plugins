@@ -20,6 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import org.gradle.api.artifacts.ResolutionStrategy
 import org.jetbrains.intellij.platform.gradle.extensions.excludeCoroutines
 import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 
@@ -45,4 +46,8 @@ dependencies {
         excludeKotlinStdlib()
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
+}
+
+configurations.all {
+    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }

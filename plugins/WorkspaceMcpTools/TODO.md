@@ -1,22 +1,18 @@
 # WorkspaceMcpTools TODO
 
-Status: Planned
-Last Updated: 2026-02-27
+Status: In Progress
+Last Updated: 2026-06-14
 
-## Refactor Plan
+## Active Plan
 
-1. Add a docs-generation workflow to keep tool inventories synchronized between code and docs.
-2. Isolate scope-provider compatibility/reflection behavior behind a dedicated compatibility layer.
-3. Add contract regression tests for quick presets, canonical enum values, and descriptor compatibility.
-4. Continue reducing duplicated validation/activity text by expanding shared common helpers.
+1. Keep the REST API contract authoritative for agent-facing workspace file operations:
+   session header plus `/files/{path...}`, `/glob/{path...}`, `/search/text/{path...}`, and `/navigation/{path...}`.
+2. Maintain regression coverage for session lifecycle, relative path and full VFS URL resolution, project-only writes,
+   markdown-first responses, and removed legacy file routes.
+3. Keep `.agents/skills/workspace-mcp-rest-api` and REST docs synchronized with implemented route behavior and output shape.
+4. Audit README and older design notes for stale Resources-era path model language after the REST contract settles.
 
-## Done Criteria
+## Archive
 
-1. Documentation drift is minimized by generation or automated checks.
-2. Scope provider compatibility logic is localized and testable.
-3. Serialization and descriptor backward-compatibility are covered by tests.
-
-## Post-Implementation Archive
-
-Move this file content into:
-`plugins/WorkspaceMcpTools/docs/WorkspaceMcpTools-ContractAndDocsRefactor.md`
+Completed Resources-era core/feature boundary notes moved to:
+`plugins/WorkspaceMcpTools/docs/WorkspaceMcpTools-CoreFeatureBoundary.md`
