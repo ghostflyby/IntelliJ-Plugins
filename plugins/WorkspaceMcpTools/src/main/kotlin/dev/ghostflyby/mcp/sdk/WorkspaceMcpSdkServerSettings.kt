@@ -23,29 +23,26 @@
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.*
+import kotlinx.serialization.Serializable
 
 @Service
 @State(
-    name = "WorkspaceMcpSdkServerSettings",
-    storages = [Storage("WorkspaceMcpSdkServerSettings.xml", roamingType = RoamingType.LOCAL)],
+    name = "WorkspaceAgentBridge",
+    storages = [Storage("workspace-agent-bridge.xml", roamingType = RoamingType.LOCAL)],
 )
 internal class WorkspaceMcpSdkServerSettings :
     SerializablePersistentStateComponent<WorkspaceMcpSdkServerSettings.State>(State()) {
 
-    var codexSkillNotifiedVersion: String
-        get() = state.codexSkillNotifiedVersion
+    var previousVersion: String
+        get() = state.previousVersion
         set(v) {
-            updateState { state.copy(codexSkillNotifiedVersion = v) }
+            updateState {
+                it.copy(previousVersion = v)
+            }
         }
 
-    internal var port: Int
-        get() = state.port
-        set(value) {
-            updateState { state.copy(port = value) }
-        }
-
+    @Serializable
     internal data class State(
-        @JvmField val port: Int = 63341,
-        @JvmField val codexSkillNotifiedVersion: String = "",
+        val previousVersion: String = "",
     )
 }

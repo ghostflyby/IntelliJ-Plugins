@@ -7,7 +7,6 @@
 package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import dev.ghostflyby.mcp.rest.installWorkspaceRestContentNegotiation
 import dev.ghostflyby.mcp.rest.restApi
@@ -36,19 +35,18 @@ internal class WorkspaceMcpSdkServerService(
         }
     }
 
+    var port = START_PORT
+
     private suspend fun runServerWithFallback() {
-        val startPort = service<WorkspaceMcpSdkServerSettings>().port
-        for (port in startPort..<startPort + 100) {
+        for (port in START_PORT..<START_PORT + 100) {
             if (!isLoopbackPortAvailable(port)) {
                 logger.warn("Port $port is in use, trying ${port + 1}")
                 continue
             }
 
+            this.port = port
             val engine = createServer(port)
             try {
-                if (port != startPort) {
-                    service<WorkspaceMcpSdkServerSettings>().port = port
-                }
                 @Suppress("HttpUrlsUsage")
                 logger.info("Workspace MCP REST server starting at http://$LOOPBACK_HOST:$port/api/v1")
                 engine.startSuspend(wait = true)
@@ -74,6 +72,7 @@ internal class WorkspaceMcpSdkServerService(
 
     private companion object {
         private const val LOOPBACK_HOST = "127.0.0.1"
+        private const val START_PORT = 63341
     }
 }
 

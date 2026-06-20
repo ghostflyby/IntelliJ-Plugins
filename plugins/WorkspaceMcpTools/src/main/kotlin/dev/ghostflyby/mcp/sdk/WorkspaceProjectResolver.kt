@@ -25,7 +25,7 @@ import kotlin.io.path.exists
  */
 internal fun workspaceInstanceKey(): String {
     val productCode = ApplicationInfo.getInstance().build.productCode.lowercase()
-    val port = service<WorkspaceMcpSdkServerSettings>().port
+    val port = service<WorkspaceMcpSdkServerService>().port
     return "$productCode-$port"
 }
 

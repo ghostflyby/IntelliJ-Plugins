@@ -30,9 +30,9 @@ internal class SkillNotificationActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
         val settings = service<WorkspaceMcpSdkServerSettings>()
         val currentVersion = pluginVersion
-        if (!shouldNotifySkill(currentVersion, settings.codexSkillNotifiedVersion)) return
+        if (!shouldNotifySkill(currentVersion, settings.previousVersion)) return
 
-        settings.codexSkillNotifiedVersion = currentVersion
+        settings.previousVersion = currentVersion
 
         val localSkillPath = bundledSkillPath()
         val notification = NotificationGroupManager.getInstance()
