@@ -30,7 +30,7 @@ jobs:
       modules: ${{ steps.discover.outputs.modules }}
     steps:
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
@@ -124,7 +124,7 @@ jobs:
           tool-cache: false
           large-packages: false
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
@@ -209,7 +209,7 @@ jobs:
           tool-cache: false
           large-packages: false
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -252,7 +252,7 @@ jobs:
           tool-cache: false
           large-packages: false
       - name: Fetch Sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
