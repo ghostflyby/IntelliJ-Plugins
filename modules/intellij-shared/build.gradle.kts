@@ -5,8 +5,8 @@
  */
 
 plugins {
-    id("repo.intellij-lib")
+    id("repo.intellij-module")
     `java-library`
 }
 
-// Core IntelliJ platform dependency comes from repo.intellij-lib.
+// Core IntelliJ platform dependency comes from repo.intellij-module.

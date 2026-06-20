@@ -42,6 +42,7 @@ afterEvaluate {
 
 dependencies {
     testImplementation(libs.junit)
+    testImplementation(libs.junit.jupiter)
     testImplementation(libs.opentest4j)
     intellijPlatform {
         testFramework(TestFrameworkType.JUnit5)

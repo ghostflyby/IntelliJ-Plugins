@@ -31,7 +31,10 @@ dependencies {
     implementation(project(":modules:intellij-shared"))
 }
 
-dependencies.intellijPlatform {
-    bundledPlugin("org.intellij.plugins.markdown")
-    bundledPlugin("org.jetbrains.plugins.vue")
+dependencies {
+    intellijPlatform {
+        pluginComposedModule(project(":modules:intellij-shared"))
+        bundledPlugin("org.intellij.plugins.markdown")
+        bundledPlugin("org.jetbrains.plugins.vue")
+    }
 }

@@ -6,31 +6,31 @@
 
 package dev.ghostflyby.intellij
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertThrows
-import org.junit.Test
+import com.intellij.testFramework.junit5.TestApplication
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 import java.net.URLClassLoader
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 
-class PluginInfoTest {
+@TestApplication
+internal class PluginInfoTest {
     @Test
     fun readsPluginXmlMetadataFromProvider() {
         withPluginXmlResource(
             """
             <idea-plugin>
-                <id>dev.ghostflyby.test</id>
-                <name>Test Plugin</name>
+                <id>com.intellij</id>
+                <name>Ignored Test Plugin Name</name>
                 <version>1.2.3</version>
             </idea-plugin>
             """.trimIndent(),
         ) { classLoader ->
-            val info = TestPluginInfoProvider(classLoader)
+            val info = PluginInfoProvider(classLoader)
 
-            assertEquals("dev.ghostflyby.test", info.id)
-            assertEquals("Test Plugin", info.name)
-            assertEquals("1.2.3", info.version)
+            assertEquals("com.intellij", info.id)
+            assertEquals("IDEA CORE", info.name)
         }
     }
 
@@ -39,38 +39,17 @@ class PluginInfoTest {
         withPluginXmlResource(
             """
             <idea-plugin>
-                <id>dev.ghostflyby.lazy</id>
-                <name>Lazy Plugin</name>
+                <id>com.intellij</id>
+                <name>Ignored Test Plugin Name</name>
                 <version>2.0.0</version>
             </idea-plugin>
             """.trimIndent(),
         ) { classLoader ->
-            val info = TestPluginInfoProvider(classLoader)
+            val info = PluginInfoProvider(classLoader)
 
-            assertEquals("dev.ghostflyby.lazy", info.id)
-            assertEquals("dev.ghostflyby.lazy", info.id)
-            assertEquals("Lazy Plugin", info.name)
-            assertEquals("2.0.0", info.version)
-        }
-    }
-
-    @Test
-    fun requiresVersionElement() {
-        withPluginXmlResource(
-            """
-            <idea-plugin>
-                <id>dev.ghostflyby.test</id>
-                <name>Test Plugin</name>
-            </idea-plugin>
-            """.trimIndent(),
-        ) { classLoader ->
-            val info = TestPluginInfoProvider(classLoader)
-
-            val error = assertThrows(IllegalStateException::class.java) {
-                info.version
-            }
-
-            assertEquals("plugin.xml is missing required <version> element.", error.message)
+            assertEquals("com.intellij", info.id)
+            assertEquals("com.intellij", info.id)
+            assertEquals("IDEA CORE", info.name)
         }
     }
 
@@ -88,5 +67,4 @@ class PluginInfoTest {
         }
     }
 
-    private class TestPluginInfoProvider(classLoader: ClassLoader) : PluginInfoProvider(classLoader)
 }

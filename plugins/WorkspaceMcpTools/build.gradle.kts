@@ -43,6 +43,7 @@ dependencies {
         excludeKotlinStdlib()
     }
     intellijPlatform {
+        pluginComposedModule(project(":modules:intellij-shared"))
         testFramework(TestFrameworkType.JUnit5)
         bundledModule("intellij.platform.vcs.impl")
     }

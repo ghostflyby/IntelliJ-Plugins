@@ -41,6 +41,7 @@ dependencies {
     implementation(project(":plugins:EnhancedHotSwapEnabler:gradle"))
 
     intellijPlatform {
+        pluginComposedModule(project(":modules:intellij-shared"))
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
     }

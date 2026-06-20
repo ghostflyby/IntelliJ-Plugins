@@ -6,6 +6,9 @@
 
 package dev.ghostflyby.intellij
 
+import com.intellij.ide.plugins.IdeaPluginDescriptor
+import com.intellij.ide.plugins.PluginManager
+import com.intellij.openapi.extensions.PluginId
 import org.w3c.dom.Element
 import java.io.InputStream
 import java.lang.ref.WeakReference
@@ -17,33 +20,30 @@ public class PluginInfoProvider private constructor(
 ) {
     public constructor(anchorClass: Class<*>) : this(WeakReference(anchorClass.classLoader))
 
-    private val info: ParsedPluginInfo by lazy(LazyThreadSafetyMode.PUBLICATION) {
+    public constructor(classLoader: ClassLoader) : this(WeakReference(classLoader))
+
+    public val pluginDescriptor: IdeaPluginDescriptor by lazy(LazyThreadSafetyMode.PUBLICATION) {
         readPluginInfo(classLoader.get()?.apply { classLoader.clear() }!!)
     }
 
     public val id: String
-        get() = info.id
+        get() = pluginDescriptor.pluginId.idString
 
     public val name: String
-        get() = info.name
+        get() = pluginDescriptor.name
 
     public val version: String
-        get() = info.version
+        get() = pluginDescriptor.version
 }
 
-private data class ParsedPluginInfo(
-    val id: String,
-    val name: String,
-    val version: String,
-)
-
-private fun readPluginInfo(classLoader: ClassLoader): ParsedPluginInfo {
+private fun readPluginInfo(classLoader: ClassLoader): IdeaPluginDescriptor {
     val stream = classLoader.getResourceAsStream(PLUGIN_XML_RESOURCE)
         ?: error("Cannot find $PLUGIN_XML_RESOURCE from plugin class loader.")
-    return stream.use(::readPluginInfo)
+    return stream.use(::readPluginDescriptor)
 }
 
-private fun readPluginInfo(stream: InputStream): ParsedPluginInfo {
+
+private fun readPluginDescriptor(stream: InputStream): IdeaPluginDescriptor {
     val root = DocumentBuilderFactory.newInstance()
         .apply {
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
@@ -53,11 +53,8 @@ private fun readPluginInfo(stream: InputStream): ParsedPluginInfo {
         .parse(stream)
         .documentElement
 
-    return ParsedPluginInfo(
-        id = root.requiredDirectChildText("id"),
-        name = root.requiredDirectChildText("name"),
-        version = root.requiredDirectChildText("version"),
-    )
+        val id = root.requiredDirectChildText("id")
+    return PluginManager.getInstance().findEnabledPlugin(PluginId(id))!!
 }
 
 private fun Element.requiredDirectChildText(tagName: String): String {
