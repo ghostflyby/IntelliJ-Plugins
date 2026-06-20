@@ -7,7 +7,7 @@
 package dev.ghostflyby.intellij
 
 import com.intellij.ide.plugins.IdeaPluginDescriptor
-import com.intellij.ide.plugins.PluginManager
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.extensions.PluginId
 import org.w3c.dom.Element
 import java.io.InputStream
@@ -54,7 +54,7 @@ private fun readPluginDescriptor(stream: InputStream): IdeaPluginDescriptor {
         .documentElement
 
         val id = root.requiredDirectChildText("id")
-    return PluginManager.getInstance().findEnabledPlugin(PluginId(id))!!
+    return PluginManagerCore.getPlugin(PluginId(id))!!
 }
 
 private fun Element.requiredDirectChildText(tagName: String): String {

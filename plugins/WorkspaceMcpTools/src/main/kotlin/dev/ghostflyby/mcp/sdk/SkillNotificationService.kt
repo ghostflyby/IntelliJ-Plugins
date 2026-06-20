@@ -8,13 +8,11 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.ide.BrowserUtil
 import com.intellij.ide.actions.RevealFileAction
-import com.intellij.ide.plugins.PluginManager
 import com.intellij.notification.Notification
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.service
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -85,8 +83,8 @@ internal fun shouldNotifySkill(
     notifiedVersion: String,
 ): Boolean = currentVersion != "unknown" && currentVersion != notifiedVersion
 
-private fun bundledSkillPath(): Path? {
-    val plugin = PluginManager.getInstance().findEnabledPlugin(PluginId(PluginInfo.id)) ?: return null
+private fun bundledSkillPath(): Path {
+    val plugin = PluginInfo.pluginDescriptor
     val path = plugin.pluginPath / BUNDLED_SKILL_RELATIVE_PATH
     return path
 }
