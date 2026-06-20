@@ -1,27 +1,28 @@
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.smartReadAction
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.paths.PsiDynaReference
 import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiReference
+import com.intellij.psi.*
 import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReference
+import com.intellij.psi.impl.source.resolve.reference.impl.providers.FileReferenceOwner
+import com.intellij.psi.impl.source.resolve.reference.impl.providers.PsiFileReference
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.refactoring.RefactoringFactory
-import com.intellij.refactoring.move.FileReferenceContextUtil
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFileHandler
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesUtil
 import com.intellij.refactoring.rename.RenameUtil
@@ -207,7 +208,7 @@ private suspend fun runRenameRefactoring(
 
 private class RestSingleFileMoveRefactoring(
     private val project: Project,
-    private val psiFile: com.intellij.psi.PsiFile,
+    private val psiFile: PsiFile,
     private val newParent: PsiDirectory,
 ) {
     fun findUsages(): RestSingleFileMoveUsages {
@@ -259,7 +260,7 @@ private class RestSingleFileMoveRefactoring(
         val movingFileNode = psiFile.node
         val oldToNewMap = mutableMapOf<PsiElement, PsiElement>()
         try {
-            FileReferenceContextUtil.encodeFileReferences(psiFile)
+            RestFileReferenceContext.encodeFileReferences(psiFile)
             val handler = MoveFileHandler.forElement(psiFile)
             handler.prepareMovedFile(psiFile, newParent, oldToNewMap)
 
@@ -274,7 +275,7 @@ private class RestSingleFileMoveRefactoring(
             DumbService.getInstance(project).completeJustSubmittedTasks()
 
             MoveFileHandler.forElement(movedFile).updateMovedFile(movedFile)
-            FileReferenceContextUtil.decodeFileReferences(movedFile)
+            RestFileReferenceContext.decodeFileReferences(movedFile)
             retargetRegularUsages(retargetableUsages)
             retargetHandlerUsages(usages, oldToNewMap)
 
@@ -328,6 +329,115 @@ private class RestMovedFileUsageInfo(
     val psiReference: PsiReference,
     val target: PsiElement,
 ) : UsageInfo(psiReference)
+
+private object RestFileReferenceContext {
+    private val logger = Logger.getInstance(RestFileReferenceContext::class.java)
+    private val fileReferenceKey = Key.create<StoredFileReference>("dev.ghostflyby.mcp.rest.fileReference")
+
+    fun encodeFileReferences(element: PsiElement?) {
+        if (element == null || element is PsiCompiledElement || element.isBinaryFileElement()) return
+
+        element.accept(
+            object : PsiRecursiveElementWalkingVisitor(true) {
+                override fun visitElement(element: PsiElement) {
+                    if (element is PsiLanguageInjectionHost && element.isValid) {
+                        InjectedLanguageManager.getInstance(element.project)
+                            .enumerate(element) { injectedPsi, _ -> encodeFileReferences(injectedPsi) }
+                    }
+
+                    val references = element.references
+                    for (refIndex in references.indices) {
+                        val fileReference = (references[refIndex] as? FileReferenceOwner)?.lastFileReference
+                        if (fileReference != null && encodeFileReference(element, fileReference, refIndex)) break
+                    }
+                    super.visitElement(element)
+                }
+            },
+        )
+    }
+
+    private fun encodeFileReference(
+        element: PsiElement,
+        reference: PsiFileReference,
+        refIndex: Int,
+    ): Boolean {
+        for (result in reference.multiResolve(false)) {
+            val fileSystemItem = result.element as? PsiFileSystemItem ?: continue
+            element.putCopyableUserData(fileReferenceKey, StoredFileReference(fileSystemItem, refIndex))
+            return true
+        }
+        return false
+    }
+
+    fun decodeFileReferences(element: PsiElement?) {
+        if (element == null || element is PsiCompiledElement || element.isBinaryFileElement()) return
+
+        element.accept(
+            object : PsiRecursiveElementVisitor(true) {
+                override fun visitElement(element: PsiElement) {
+                    val storedReference = element.getCopyableUserData(fileReferenceKey)
+                    element.putCopyableUserData(fileReferenceKey, null)
+
+                    val reboundElement = bindElement(
+                        element,
+                        storedReference?.fileSystemItem,
+                        storedReference?.refIndex ?: -1,
+                    )
+                    reboundElement.acceptChildren(this)
+
+                    if (reboundElement is PsiLanguageInjectionHost) {
+                        InjectedLanguageManager.getInstance(reboundElement.project)
+                            .enumerate(reboundElement) { injectedPsi, _ -> decodeFileReferences(injectedPsi) }
+                    }
+                }
+            },
+        )
+    }
+
+    private fun bindElement(
+        element: PsiElement,
+        fileSystemItem: PsiFileSystemItem?,
+        refIndex: Int,
+    ): PsiElement {
+        if (fileSystemItem?.isValid != true || fileSystemItem.virtualFile == null) return element
+
+        val references = element.references
+        if (refIndex >= 0 && references.size > refIndex && references[refIndex] is FileReferenceOwner) {
+            bindAndCheckElement(references[refIndex], element, fileSystemItem)?.let { return it }
+        }
+
+        for (reference in references) {
+            if (reference is FileReferenceOwner) {
+                bindAndCheckElement(reference, element, fileSystemItem)?.let { return it }
+                break
+            }
+        }
+        return element
+    }
+
+    private fun bindAndCheckElement(
+        reference: PsiReference,
+        element: PsiElement,
+        fileSystemItem: PsiFileSystemItem,
+    ): PsiElement? {
+        val fileReference = (reference as FileReferenceOwner).lastFileReference ?: return null
+        val newElement = fileReference.bindToElement(fileSystemItem)
+        if (newElement != null && element::class.java != newElement::class.java) {
+            logger.error("Reference $reference changed ${element::class.java.name} to ${newElement::class.java.name}")
+        }
+        return newElement
+    }
+
+    private fun PsiElement.isBinaryFileElement(): Boolean {
+        val containingFile = containingFile ?: return true
+        return containingFile.fileType.isBinary
+    }
+
+    private data class StoredFileReference(
+        val fileSystemItem: PsiFileSystemItem,
+        val refIndex: Int,
+    )
+}
 
 private fun UsageInfo.toFileRefactoringReference(projectBasePath: String?): FileRefactoringReference? {
     val file = virtualFile ?: return null
