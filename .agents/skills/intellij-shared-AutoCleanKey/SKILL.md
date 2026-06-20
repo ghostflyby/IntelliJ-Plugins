@@ -1,5 +1,5 @@
 ---
-name: intellij-shared-AutoCleanKey
+name: intellij-shared-autocleankey
 description: AutoCleanKey usage guide for UserData lifecycle management in IntelliJ plugins. Use when working with UserDataHolder cleanup tied to Disposable or CoroutineScope.
 ---
 
