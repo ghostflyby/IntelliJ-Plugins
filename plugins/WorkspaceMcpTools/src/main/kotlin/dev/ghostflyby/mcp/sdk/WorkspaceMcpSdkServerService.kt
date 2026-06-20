@@ -8,13 +8,11 @@ package dev.ghostflyby.mcp.sdk
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.logger
-import dev.ghostflyby.mcp.rest.installWorkspaceRestContentNegotiation
-import dev.ghostflyby.mcp.rest.restApi
-import io.ktor.server.application.*
+import dev.ghostflyby.mcp.pluginVersion
+import dev.ghostflyby.mcp.rest.WorkspaceRestApplicationContext
+import dev.ghostflyby.mcp.rest.installWorkspaceRestApi
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
-import io.ktor.server.resources.*
-import io.ktor.server.routing.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.net.BindException
@@ -63,10 +61,13 @@ internal class WorkspaceMcpSdkServerService(
     }
 
     private fun createServer(port: Int): EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration> {
+        val context = WorkspaceRestApplicationContext(
+            port = port,
+            instanceKey = workspaceInstanceKey(port),
+            version = pluginVersion,
+        )
         return scope.embeddedServer(CIO, host = LOOPBACK_HOST, port = port) {
-            installWorkspaceRestContentNegotiation()
-            install(Resources)
-            routing { restApi() }
+            installWorkspaceRestApi(context)
         }
     }
 

@@ -7,13 +7,34 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.resources.*
 import io.ktor.resources.serialization.*
+import io.ktor.server.application.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 internal val TestMarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
+internal val TestWorkspaceRestApplicationContext = WorkspaceRestApplicationContext(
+    port = 63441,
+    instanceKey = "test-63441",
+    version = "test-version",
+)
 private const val ApiPrefix: String = "/api/v1"
 private val TestResourcesFormat: ResourcesFormat = ResourcesFormat()
+
+internal fun restTestApplication(
+    context: WorkspaceRestApplicationContext = TestWorkspaceRestApplicationContext,
+    configure: Application.() -> Unit = {},
+    block: suspend ApplicationTestBuilder.() -> Unit,
+) {
+    testApplication {
+        application {
+            configure()
+            installWorkspaceRestApi(context)
+        }
+        block()
+    }
+}
 
 internal fun HttpResponse.responseContentType(): ContentType? {
     return headers[HttpHeaders.ContentType]?.let(ContentType::parse)

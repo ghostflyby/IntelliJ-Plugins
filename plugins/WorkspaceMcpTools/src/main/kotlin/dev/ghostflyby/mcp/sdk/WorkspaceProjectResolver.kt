@@ -23,9 +23,8 @@ import kotlin.io.path.exists
  * Resolves the stable instanceKey for this IDE application instance.
  * Uses product code lowercase + configured port, e.g. "iu-63441".
  */
-internal fun workspaceInstanceKey(): String {
+internal fun workspaceInstanceKey(port: Int): String {
     val productCode = ApplicationInfo.getInstance().build.productCode.lowercase()
-    val port = service<WorkspaceMcpSdkServerService>().port
     return "$productCode-$port"
 }
 

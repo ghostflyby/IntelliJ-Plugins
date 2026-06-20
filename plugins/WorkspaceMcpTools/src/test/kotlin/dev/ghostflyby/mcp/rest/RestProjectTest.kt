@@ -13,8 +13,6 @@ import dev.ghostflyby.mcp.sdk.workspaceProjectKey
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -34,10 +32,7 @@ internal class RestProjectTest {
     @Test
     fun `project list returns open projects`() {
         project
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get(apiUrl(Api.Projects())) {
                 accept(ContentType.Application.Json)
@@ -58,10 +53,7 @@ internal class RestProjectTest {
     @Test
     fun `project list defaults to markdown table`() {
         project
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get(apiUrl(Api.Projects()))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -75,10 +67,7 @@ internal class RestProjectTest {
         project
         val key = workspaceProjectKey(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get(apiUrl(Api.Project(key))) {
                 accept(ContentType.Application.Json)
@@ -96,10 +85,7 @@ internal class RestProjectTest {
         project
         val key = workspaceProjectKey(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get(apiUrl(Api.Project.Roots(Api.Project(key)))) {
                 accept(ContentType.Application.Json)
@@ -121,10 +107,7 @@ internal class RestProjectTest {
         project
         val key = workspaceProjectKey(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get(apiUrl(Api.Project.Roots(Api.Project(key))))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
@@ -138,10 +121,7 @@ internal class RestProjectTest {
     @Test
     fun `unknown project key falls back to single open project`() {
         project
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             // With only one open project, the resolver falls back to it
             val response = client.get(apiUrl(Api.Project("nonexistent")))

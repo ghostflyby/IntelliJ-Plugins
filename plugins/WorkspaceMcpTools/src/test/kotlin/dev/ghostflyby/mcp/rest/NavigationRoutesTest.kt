@@ -6,8 +6,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -61,10 +59,7 @@ internal class NavigationRoutesTest {
     fun `goto finds definition`() {
 
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val body = """*** Goto:
@@ -98,10 +93,7 @@ internal class NavigationRoutesTest {
     fun `usages finds references`() {
 
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val body = """*** Usages:
@@ -127,10 +119,7 @@ internal class NavigationRoutesTest {
     fun `documentation returns element info`() {
 
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val body = """*** Documentation:
@@ -156,10 +145,7 @@ internal class NavigationRoutesTest {
     fun `navigation accepts standard apply patch line prefixes`() {
 
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val body = """*** Documentation:
@@ -184,10 +170,7 @@ internal class NavigationRoutesTest {
     fun `empty body returns 400`() {
 
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.post(navigationUrl("src/Alpha.java")) {

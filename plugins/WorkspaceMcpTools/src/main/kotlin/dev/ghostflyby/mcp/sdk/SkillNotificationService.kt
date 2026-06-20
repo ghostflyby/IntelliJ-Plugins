@@ -12,6 +12,7 @@ import com.intellij.notification.Notification
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
@@ -26,6 +27,8 @@ import kotlin.io.path.div
 
 internal class SkillNotificationActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
+        if (!shouldRunSkillNotificationActivity()) return
+
         val settings = service<WorkspaceMcpSdkServerSettings>()
         val currentVersion = pluginVersion
         if (!shouldNotifySkill(currentVersion, settings.previousVersion)) return
@@ -83,9 +86,12 @@ internal fun shouldNotifySkill(
     notifiedVersion: String,
 ): Boolean = currentVersion != "unknown" && currentVersion != notifiedVersion
 
+internal fun shouldRunSkillNotificationActivity(): Boolean {
+    return !ApplicationManager.getApplication().isUnitTestMode
+}
+
 private fun bundledSkillPath(): Path {
     val plugin = PluginInfo.pluginDescriptor
     val path = plugin.pluginPath / BUNDLED_SKILL_RELATIVE_PATH
     return path
 }
-

@@ -16,8 +16,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -90,10 +88,7 @@ internal class RestSessionRoutesTest {
     fun `session creation binds path prefix without project key or root id input`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.createSession(projectPathFixture.get().toString())
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -111,10 +106,7 @@ internal class RestSessionRoutesTest {
     fun `session access refreshes expiration deadline`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.createSession(projectPathFixture.get().toString())
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -142,10 +134,7 @@ internal class RestSessionRoutesTest {
     fun `session creation chooses nested root without same project ambiguity`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val nestedRoot = projectPathFixture.get().resolve("nested-session-root").toString()
             val response = client.createSession(nestedRoot)
@@ -161,10 +150,7 @@ internal class RestSessionRoutesTest {
     fun `session file reads resolve relative paths under path prefix`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val response = client.get("/api/v1/files/plain.txt") {
@@ -180,10 +166,7 @@ internal class RestSessionRoutesTest {
     fun `session glob resolves relative paths under path prefix`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val response = client.get("/api/v1/glob/glob?glob=**/*.kt") {
@@ -201,10 +184,7 @@ internal class RestSessionRoutesTest {
     fun `session glob reads full vfs url outside session path prefix`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val globUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob"))
@@ -223,10 +203,7 @@ internal class RestSessionRoutesTest {
     fun `session rejects paths outside path prefix`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val inside = client.get("/api/v1/files/RootFile.txt") {
@@ -245,10 +222,7 @@ internal class RestSessionRoutesTest {
     fun `file route reads full vfs url outside session path prefix`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val plainTextUrl = encodedVfsUrl(projectPathFixture.get().resolve("plain.txt"))
@@ -265,10 +239,7 @@ internal class RestSessionRoutesTest {
     fun `file route reads structure for full vfs url outside project`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val externalUrl = encodedVfsUrl(externalPathFixture.get().resolve("External.kt"))
@@ -286,10 +257,7 @@ internal class RestSessionRoutesTest {
     fun `file route permits vfs url writes only for files in the session project`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val plainTextUrl = encodedVfsUrl(projectPathFixture.get().resolve("plain.txt"))
@@ -323,10 +291,7 @@ internal class RestSessionRoutesTest {
     fun `file route requires valid vendor session header`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val missing = client.get("/api/v1/files/plain.txt")
             Assertions.assertEquals(HttpStatusCode.NotFound, missing.status)
@@ -342,10 +307,7 @@ internal class RestSessionRoutesTest {
     fun `deleted session no longer authorizes file routes`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val deleted = client.delete("/api/v1/sessions/$sessionId")
@@ -362,10 +324,7 @@ internal class RestSessionRoutesTest {
     fun `legacy session and raw vfs file routes are not registered`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val sessionPrefix = client.get("/api/v1/session/files/plain.txt") {
@@ -384,10 +343,7 @@ internal class RestSessionRoutesTest {
     fun `session file write routes create replace and delete relative paths`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val created = client.post("/api/v1/files/session-created.txt") {
@@ -421,10 +377,7 @@ internal class RestSessionRoutesTest {
     fun `session patch route updates relative file target`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val patch = """*** Begin Patch
@@ -451,10 +404,7 @@ internal class RestSessionRoutesTest {
     fun `session search text route searches under relative path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val response = client.get("/api/v1/search/text/glob?query=RootFile&limit=10") {
@@ -471,10 +421,7 @@ internal class RestSessionRoutesTest {
     fun `session search text route accepts project vfs url path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val globUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob"))
@@ -492,10 +439,7 @@ internal class RestSessionRoutesTest {
     fun `session search text route rejects non indexed vfs url path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val externalUrl = encodedVfsUrl(externalPathFixture.get())
@@ -515,10 +459,7 @@ internal class RestSessionRoutesTest {
     fun `session navigation route executes against relative path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().toString())
             val body = """*** Goto:
@@ -540,10 +481,7 @@ internal class RestSessionRoutesTest {
     fun `session navigation route accepts project vfs url path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val rootFileUrl = encodedVfsUrl(projectPathFixture.get().resolve("glob/RootFile.kt"))
@@ -566,10 +504,7 @@ internal class RestSessionRoutesTest {
     fun `session navigation route accepts non project vfs url path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val sessionId = client.createSessionId(projectPathFixture.get().resolve("glob").toString())
             val externalUrl = encodedVfsUrl(externalPathFixture.get().resolve("External.kt"))

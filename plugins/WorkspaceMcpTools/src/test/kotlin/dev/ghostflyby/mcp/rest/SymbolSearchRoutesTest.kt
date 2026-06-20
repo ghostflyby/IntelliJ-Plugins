@@ -18,8 +18,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
@@ -75,10 +73,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `symbol search requires session header`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val missing = client.get(searchSymbolsUrl(query = "AlphaSymbol")) {
                 accept(ContentType.Application.Json)
@@ -95,10 +90,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `symbol search rejects blank query`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchSymbolsUrl(query = "   ")) {
@@ -110,10 +102,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `default project search finds symbol locations`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val item = firstItem(
@@ -133,10 +122,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `kind filter supports generic symbol kind`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchSymbolsUrl(query = "AlphaSymbol", kind = "symbol")) {
@@ -151,10 +137,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `limit marks truncated results`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchSymbolsUrl(query = "Symbol", limit = 1)) {
@@ -169,10 +152,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `project only search does not return library locations`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchSymbolsUrl(query = "String", libraries = false, limit = 20)) {
@@ -191,10 +171,7 @@ internal class SymbolSearchRoutesTest {
 
     @Test
     fun `symbol search defaults to markdown table`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchSymbolsUrl(query = "AlphaSymbol"))

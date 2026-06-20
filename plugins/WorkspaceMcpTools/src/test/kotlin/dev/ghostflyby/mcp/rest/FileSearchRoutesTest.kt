@@ -14,8 +14,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions
@@ -60,10 +58,7 @@ internal class FileSearchRoutesTest {
 
     @Test
     fun `file search requires session header`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val missing = client.get(searchFilesUrl(query = "AlphaFile")) {
                 accept(ContentType.Application.Json)
@@ -80,10 +75,7 @@ internal class FileSearchRoutesTest {
 
     @Test
     fun `file search rejects blank query`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().resolve("src/in").toString(), json)
 
             val response = sessionClient.get(searchFilesUrl(query = "   ")) {
@@ -95,10 +87,7 @@ internal class FileSearchRoutesTest {
 
     @Test
     fun `file search uses fuzzy goto file matching within session prefix`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().resolve("src/in").toString(), json)
 
             val response = sessionClient.get(searchFilesUrl(query = "AF")) {
@@ -130,10 +119,7 @@ internal class FileSearchRoutesTest {
 
     @Test
     fun `file search marks truncated results`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().resolve("src/in").toString(), json)
 
             val response = sessionClient.get(searchFilesUrl(query = "File", limit = 1)) {
@@ -148,10 +134,7 @@ internal class FileSearchRoutesTest {
 
     @Test
     fun `file search defaults to markdown table`() {
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().resolve("src/in").toString(), json)
 
             val response = sessionClient.get(searchFilesUrl(query = "AlphaFile"))

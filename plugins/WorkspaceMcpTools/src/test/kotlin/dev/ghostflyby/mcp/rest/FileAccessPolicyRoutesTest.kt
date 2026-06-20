@@ -10,8 +10,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
@@ -78,10 +76,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `gitignore file alone does not classify file as ignored`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val meta = sessionClient.get(sessionClient.rootPathUrl("ignored.generated", meta = true)) {
@@ -103,10 +98,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `gitignore file alone does not require force for writes`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val denied = sessionClient.put(sessionClient.rootPathUrl("ignored.generated")) {
@@ -122,10 +114,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `git metadata paths are read-only for writes`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
             val root = projectPathFixture.get()
 
@@ -165,10 +154,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `project content wins over library source classification for writes`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val root = Path.of(requireNotNull(project.basePath))
             val sourceRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root.resolve("src"))
                 ?: error("src dir missing")
@@ -217,10 +203,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `binary files are GET only`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val meta = sessionClient.get(sessionClient.rootPathUrl("binary.bin", meta = true)) {
@@ -246,10 +229,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `excluded files are returned as not found`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val get = sessionClient.get(sessionClient.rootPathUrl("excluded/hidden.kt"))
@@ -277,10 +257,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `glob silently filters excluded files`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("", glob = listOf("**/*.kt"))) {
@@ -297,10 +274,7 @@ internal class FileAccessPolicyRoutesTest {
     @Test
     fun `glob limit caps returned paths`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val limited = sessionClient.get(globPathUrl("", glob = listOf("**/*.kt"), limit = 2)) {

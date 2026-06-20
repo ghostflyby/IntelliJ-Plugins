@@ -6,8 +6,6 @@
 
 package dev.ghostflyby.mcp.rest
 
-import dev.ghostflyby.mcp.pluginVersion
-import dev.ghostflyby.mcp.sdk.workspaceInstanceKey
 import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -21,10 +19,11 @@ private data class ServerInfoResponse(
 
 internal fun Route.serverInfoRoutes() {
     get<Api.ServerInfo> {
+        val context = call.application.workspaceRestContext()
         call.respond(
             ServerInfoResponse(
-                instanceKey = workspaceInstanceKey(),
-                version = pluginVersion,
+                instanceKey = context.instanceKey,
+                version = context.version,
             ),
         )
     }

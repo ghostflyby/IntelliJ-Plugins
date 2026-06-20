@@ -6,8 +6,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -47,10 +45,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH updates an existing file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -75,10 +70,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH creates a new file via Add section`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -100,10 +92,7 @@ internal class FilePatchRoutesTest {
     fun `root URL PATCH updates an existing workspace file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -124,10 +113,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH on file target ignores section path`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -155,10 +141,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH with git diff format updates existing file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
@@ -185,10 +168,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH with git diff format ignores path for file target`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/other-file.txt b/other-file.txt
@@ -214,10 +194,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH with text-x-patch content-type requires git format`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
@@ -238,10 +215,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH with text-x-patch rejects invalid git format`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
@@ -258,10 +232,7 @@ internal class FilePatchRoutesTest {
     fun `PATCH with git diff format creates new file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/newfile.txt b/newfile.txt
@@ -281,10 +252,7 @@ new file mode 100644
     fun `PATCH with git diff format deletes file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val diff = """diff --git a/plain.txt b/plain.txt
@@ -306,10 +274,7 @@ deleted file mode 100644
     @Test
     fun `PATCH on directory allows multi-file operations`() {
         project
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -331,10 +296,7 @@ deleted file mode 100644
     @Test
     fun `PATCH on directory still uses section paths`() {
         project
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -357,10 +319,7 @@ deleted file mode 100644
     fun `PATCH supports standard move section`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -385,10 +344,7 @@ deleted file mode 100644
     fun `PATCH supports move and rename through refactoring`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -414,10 +370,7 @@ deleted file mode 100644
         contentRootFixture.get().virtualFile.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -445,10 +398,7 @@ deleted file mode 100644
         contentRootFixture.get().virtualFile.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -494,10 +444,7 @@ deleted file mode 100644
         contentRootFixture.get().virtualFile.refresh(false, true)
         IndexingTestUtil.waitUntilIndexesAreReady(project)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -526,10 +473,7 @@ deleted file mode 100644
     fun `PATCH supports workspace reformat operation`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -546,10 +490,7 @@ deleted file mode 100644
     fun `PATCH supports workspace cleanup operation`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -566,10 +507,7 @@ deleted file mode 100644
     fun `PATCH applies workspace operations in stable order per file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -594,10 +532,7 @@ deleted file mode 100644
     fun `PATCH ignores indented workspace operation marker text`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val create = """*** Begin Patch
@@ -636,10 +571,7 @@ after updated""",
     fun `PATCH problemFix query reports unsupported public API`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val resp = sessionClient.patch("${sessionClient.rootPathUrl("plain.txt")}?problemFix=true") {
@@ -661,10 +593,7 @@ after updated""",
     fun `PATCH on directory rejects section with bad hunk`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch
@@ -684,10 +613,7 @@ after updated""",
     fun `PATCH with unknown format returns 400`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
@@ -701,10 +627,7 @@ after updated""",
     fun `PATCH reports problems for broken XML file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val patch = """*** Begin Patch

@@ -6,8 +6,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
@@ -42,10 +40,7 @@ internal class FileWriteRoutesTest {
     fun `POST creates a new file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.post(sessionClient.rootPathUrl("new.txt")) {
@@ -67,10 +62,7 @@ internal class FileWriteRoutesTest {
     fun `POST creates a directory with empty body`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.post(sessionClient.rootPathUrl("newdir")) {
@@ -84,10 +76,7 @@ internal class FileWriteRoutesTest {
     fun `POST on existing file returns 409`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             // plain.txt exists from blueprint
@@ -104,10 +93,7 @@ internal class FileWriteRoutesTest {
     fun `PUT creates a new file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.put(sessionClient.rootPathUrl("put-created.txt")) {
@@ -121,10 +107,7 @@ internal class FileWriteRoutesTest {
     fun `PUT replaces existing file content`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.put(sessionClient.rootPathUrl("plain.txt")) {
@@ -141,10 +124,7 @@ internal class FileWriteRoutesTest {
     fun `root URL supports PUT POST and DELETE for workspace text files`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val put = sessionClient.put(rootPathUrl("plain.txt")) {
@@ -172,10 +152,7 @@ internal class FileWriteRoutesTest {
     fun `DELETE removes an existing file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.delete(sessionClient.rootPathUrl("plain.txt"))
@@ -193,10 +170,7 @@ internal class FileWriteRoutesTest {
     fun `DELETE missing file returns 404`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.delete(sessionClient.rootPathUrl("doesnotexist.txt"))
@@ -208,10 +182,7 @@ internal class FileWriteRoutesTest {
     fun `DELETE non-empty directory returns 409`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.delete(sessionClient.rootPathUrl("src"))

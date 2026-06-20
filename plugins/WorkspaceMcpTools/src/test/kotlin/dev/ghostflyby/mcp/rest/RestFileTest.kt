@@ -13,8 +13,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.*
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.BeforeEach
@@ -76,10 +74,7 @@ internal class RestFileTest {
     fun `file content returns text body for plain file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl("plain.txt"))
@@ -92,10 +87,7 @@ internal class RestFileTest {
     fun `file meta returns JSON metadata`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -121,10 +113,7 @@ internal class RestFileTest {
     fun `file meta defaults to markdown front matter`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -143,10 +132,7 @@ internal class RestFileTest {
     fun `file meta false returns content body`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -160,10 +146,7 @@ internal class RestFileTest {
     fun `file exists returns true for existing file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -177,10 +160,7 @@ internal class RestFileTest {
     fun `file exists returns false for missing file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -194,10 +174,7 @@ internal class RestFileTest {
     fun `missing file returns 404`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl("nonexistent.txt"))
@@ -209,10 +186,7 @@ internal class RestFileTest {
     fun `root URL reads workspace file and missing root file returns 404`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(sessionClient.rootPathUrlByRootUrl("plain.txt"))
@@ -234,10 +208,7 @@ internal class RestFileTest {
     fun `missing session header returns 404`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val response = client.get("/api/v1/files/plain.txt")
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
@@ -251,10 +222,7 @@ internal class RestFileTest {
         broken.writeText("<root>")
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(broken)?.refresh(false, false)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -275,10 +243,7 @@ internal class RestFileTest {
         broken.writeText("<root>")
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(broken)?.refresh(false, false)
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val body = """*** Begin Patch
@@ -298,10 +263,7 @@ internal class RestFileTest {
     fun `second workspace root file is classified by its containing root`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
 
             val secondRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(secondRootPathFixture.get())
             assertNotNull(secondRoot)
@@ -324,10 +286,7 @@ internal class RestFileTest {
     fun `file meta and content compound response`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -354,10 +313,7 @@ internal class RestFileTest {
     fun `file meta and content default to markdown document`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response =
@@ -382,10 +338,7 @@ internal class RestFileTest {
     fun `file structure includes line ranges in JSON and markdown`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val jsonResponse = sessionClient.get(
@@ -411,10 +364,7 @@ internal class RestFileTest {
     fun `file range reads return raw text`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val byEnd = sessionClient.get(
@@ -439,10 +389,7 @@ internal class RestFileTest {
     fun `file range reads trim content inside compound responses`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(
@@ -469,10 +416,7 @@ internal class RestFileTest {
     fun `file range reads combine with explicit non-content flags`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val exists = sessionClient.get(
@@ -515,10 +459,7 @@ internal class RestFileTest {
     fun `file range reads validate query and target kind`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val invalidCombination = sessionClient.get(
@@ -552,10 +493,7 @@ internal class RestFileTest {
     fun `file glob star matches current directory files only`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("glob", glob = listOf("*.kt"))) {
@@ -574,10 +512,7 @@ internal class RestFileTest {
     fun `file glob globstar matches current and nested directory files`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("glob", glob = listOf("**/*.kt")))
@@ -593,10 +528,7 @@ internal class RestFileTest {
     fun `file glob merges multiple patterns and keeps JSON path array`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(
@@ -616,10 +548,7 @@ internal class RestFileTest {
     fun `file glob rejects file targets and invalid patterns`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val fileTarget = sessionClient.get(globPathUrl("plain.txt", glob = listOf("*.kt")))
@@ -634,10 +563,7 @@ internal class RestFileTest {
     fun `glob prefix block single root file`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("glob", glob = listOf("*.txt"))) {
@@ -654,10 +580,7 @@ internal class RestFileTest {
     fun `glob prefix block mixed root and nested`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("glob", glob = listOf("**/*.kt")))
@@ -677,10 +600,7 @@ internal class RestFileTest {
     fun `glob prefix block multiple files same directory`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(globPathUrl("glob", glob = listOf("**/*.*")))
@@ -699,10 +619,7 @@ internal class RestFileTest {
     fun `directory content defaults to markdown listing and JSON accept returns listing`() {
         project
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val defaultResponse = sessionClient.get(sessionClient.rootPathUrlByRootUrl("src"))

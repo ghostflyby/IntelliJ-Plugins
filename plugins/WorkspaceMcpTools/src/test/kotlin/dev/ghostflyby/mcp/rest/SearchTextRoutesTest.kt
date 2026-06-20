@@ -6,8 +6,6 @@ import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
-import io.ktor.server.resources.*
-import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -46,10 +44,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `basic plain search returns hits`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src", query = "hello")) {
@@ -64,10 +59,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `search defaults to markdown hit list`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src", query = "hello"))
@@ -83,10 +75,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `search without query returns 400`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl(query = "")) {
@@ -99,10 +88,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `search with file filter respects glob`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src", query = "world", fileFilter = "*.kt")) {
@@ -116,10 +102,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `search can use a single file as range`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src/Ignore.txt", query = "again")) {
@@ -137,10 +120,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `search limit caps hits`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src", query = "class", limit = 1)) {
@@ -155,10 +135,7 @@ internal class SearchTextRoutesTest {
     @Test
     fun `hit includes occurrenceId and offsets`() {
 
-        testApplication {
-            application { installWorkspaceRestContentNegotiation() }
-            install(Resources)
-            routing { restApi() }
+        restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             val response = sessionClient.get(searchTextUrl("src", query = "hello")) {

@@ -6,10 +6,12 @@
 
 package dev.ghostflyby.mcp.sdk
 
+import com.intellij.testFramework.junit5.TestApplication
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+@TestApplication
 internal class SkillNotificationServiceTest {
 
     @Test
@@ -31,6 +33,11 @@ internal class SkillNotificationServiceTest {
     @Test
     fun `different notified version notifies current version`() {
         assertTrue(shouldNotifySkill(currentVersion = "1.0.5", notifiedVersion = "1.0.4"))
+    }
+
+    @Test
+    fun `notification activity does not run in unit test mode`() {
+        assertFalse(shouldRunSkillNotificationActivity())
     }
 
 }
