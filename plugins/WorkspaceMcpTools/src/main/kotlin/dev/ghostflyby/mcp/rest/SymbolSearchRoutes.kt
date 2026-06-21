@@ -124,16 +124,8 @@ internal fun Route.searchSymbolRoutes() {
             call.respond(HttpStatusCode.BadRequest, RestError("kind '${resource.kind}' is not supported."))
             return@get
         }
-        if (resource.limit < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("limit must be greater than 0."))
-            return@get
-        }
-        if (resource.timeoutMillis < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("timeoutMillis must be greater than 0."))
-            return@get
-        }
 
-        val sessionProject = call.resolveWorkspaceSessionProjectOrNull()
+        val sessionProject = call.requireSessionOrRespond(resource.limit, resource.timeoutMillis)
             ?: return@get
 
         val options = SymbolSearchOptions(

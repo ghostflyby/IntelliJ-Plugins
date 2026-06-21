@@ -115,16 +115,8 @@ internal fun Route.searchFileRoutes() {
             call.respond(HttpStatusCode.BadRequest, RestError("query must not be blank."))
             return@get
         }
-        if (resource.limit < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("limit must be greater than 0."))
-            return@get
-        }
-        if (resource.timeoutMillis < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("timeoutMillis must be greater than 0."))
-            return@get
-        }
 
-        val sessionProject = call.resolveWorkspaceSessionProjectOrNull()
+        val sessionProject = call.requireSessionOrRespond(resource.limit, resource.timeoutMillis)
             ?: return@get
         val root = resolveFileSearchRoot(sessionProject.record)
         if (root == null) {

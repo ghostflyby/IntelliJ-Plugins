@@ -126,3 +126,22 @@ private fun unresolvedProjectMessage(): String {
         }
     }
 }
+
+/**
+ * Validate common search parameters (limit, timeoutMillis), then resolve the session project.
+ * Returns null (and responds with an error) if validation or session resolution fails.
+ */
+internal suspend fun ApplicationCall.requireSessionOrRespond(
+    limit: Int,
+    timeoutMillis: Int,
+): RestSessionProject? {
+    if (limit < 1) {
+        respond(HttpStatusCode.BadRequest, RestError("limit must be greater than 0."))
+        return null
+    }
+    if (timeoutMillis < 1) {
+        respond(HttpStatusCode.BadRequest, RestError("timeoutMillis must be greater than 0."))
+        return null
+    }
+    return resolveWorkspaceSessionProjectOrNull()
+}
