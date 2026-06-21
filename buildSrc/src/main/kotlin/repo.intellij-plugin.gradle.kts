@@ -18,7 +18,7 @@ plugins {
     alias(libs.plugins.changelog) // Gradle Changelog Plugin
 }
 
-val buildLogic: BuildLogicSettings by extensions
+val buildLogic: BuildLogicSettings = extensions.getByType()
 
 intellijPlatform {
     pluginConfiguration {
@@ -68,6 +68,7 @@ intellijPlatform {
             VerifyPluginTask.VerificationReportsFormats.MARKDOWN,
             VerifyPluginTask.VerificationReportsFormats.PLAIN,
         )
+        failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
         ides.recommended()
     }
 
@@ -153,10 +154,6 @@ tasks {
 
     publishPlugin {
         finalizedBy(upload)
-    }
-
-    verifyPlugin {
-        failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
     }
 
 }
