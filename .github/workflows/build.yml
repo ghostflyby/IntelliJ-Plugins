@@ -17,106 +17,18 @@ on:
     branches: [ main ]
   pull_request:
 
+defaults:
+  run:
+    shell: pwsh
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-
-  discover:
-    name: Discover changed modules
-    runs-on: ubuntu-latest
-    outputs:
-      modules: ${{ steps.discover.outputs.modules }}
-    steps:
-      - name: Fetch Sources
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: recursive
-      - name: Determine modules
-        id: discover
-        shell: pwsh
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
-        run: |
-          [string[]]$excludedPlugins = @()
-          if (Test-Path '.ci/excluded-plugins.txt')
-          {
-              $excludedPlugins = Get-Content '.ci/excluded-plugins.txt' |
-                      ForEach-Object { $_.Trim() } |
-                      Where-Object { $_ -and -not $_.StartsWith('#') }
-          }
-
-          # Fetch main to compare diffs; ignore failures
-          git fetch origin main --quiet | Out-Null
-
-          # Compute the diff range depending on event type
-          $diff = @()
-          if ($env:EVENT_NAME -eq 'push')
-          {
-              $base = $env:BEFORE
-              if ([string]::IsNullOrEmpty($base) -or $base -eq '0000000000000000000000000000000000000000')
-              {
-                  $base = (git rev-parse origin/main) 2> $null
-              }
-              $diff = (git diff --name-only "$base...$env:AFTER") 2> $null
-          }
-          else
-          {
-              $diff = (git diff --name-only origin/main...HEAD) 2> $null
-          }
-
-          if (-not $diff)
-          {
-              $diff = @()
-          }
-
-          # Keep only paths under plugins/, reduce to first two segments, unique
-          $paths = $diff |
-                  Where-Object { $_ -match '^plugins/' } |
-                  ForEach-Object {
-                      $parts = $_.Split('/')
-                      if ($parts.Length -ge 2)
-                      {
-                          ($parts[0..1] -join '/')
-                      }
-                      else
-                      {
-                          $null
-                      }
-                  } |
-                  Where-Object { $_ } |
-                  Where-Object {
-                      $pluginName = $_.Split('/')[1]
-                      $pluginName -notin $excludedPlugins
-                  } |
-                  Sort-Object -Unique
-
-          # Map to :plugins:module format and emit JSON array
-          [string[]]$modules = $paths | ForEach-Object { $_ -replace 'plugins/', ':plugins:' }
-          if ($modules.Count -eq 0)
-          {
-              $modules = Get-ChildItem -Path 'plugins/*' -Directory |
-                      Where-Object { $_.Name -notin $excludedPlugins } |
-                      ForEach-Object { ":plugins:$( $_.Name )" }
-          }
-          $json = $modules | ConvertTo-Json -Compress -AsArray
-
-          Write-Host "Changed modules: $json"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "modules=$json"
-
   build-and-check:
     name: Build and Check
-    needs: [ discover ]
-    if: ${{ needs.discover.outputs.modules != '[]' }}
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
       - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -139,58 +51,82 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-      - name: Resolve module path
-        id: modpath
-        shell: bash
-        run: |
-          P=${{ matrix.module }}
-          P=${P#:}
-          echo "path=${P//:/\/}" >> "$GITHUB_OUTPUT"
-          echo "namesegment=${P//:/-}" >> "$GITHUB_OUTPUT"
       - name: Build plugin
-        run: ./gradlew --configuration-cache ${{ matrix.module }}:buildPlugin
-      - name: Prepare Plugin Artifact
-        id: artifact
-        shell: bash
         run: |
-          cd ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/distributions
-          FILENAME=$(ls *.zip)
-          BASENAME=$(basename "$FILENAME" .zip)
-          REALPATH=$(realpath "$FILENAME")
-          echo "filename=$BASENAME" >> $GITHUB_OUTPUT
-          echo "pluginpath=$REALPATH" >> $GITHUB_OUTPUT
-      - name: Upload artifact
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache buildPlugin
+      - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.artifact.outputs.filename }}
-          path: ${{ steps.artifact.outputs.pluginpath }}
+          name: plugin-distributions
+          path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
+          if-no-files-found: error
       - name: Run Tests
-        run: ./gradlew --configuration-cache ${{ matrix.module }}:check
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache check
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result-${{ steps.modpath.outputs.namesegment }}
+          name: tests-result
           path: ${{ github.workspace }}/**/build/reports/tests
+      - name: Collect Code Coverage Reports
+        id: coverage
+        run: |
+          $reports = Get-ChildItem `
+            -Path (Join-Path $env:GITHUB_WORKSPACE "plugins/*/build/reports/kover/report.xml") `
+            -File `
+            -ErrorAction SilentlyContinue
+          if (-not $reports)
+          {
+              exit 0
+          }
+          "files=$( $reports.FullName -join ',' )" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
       - name: Upload Code Coverage Report
+        if: ${{ steps.coverage.outputs.files != '' }}
         uses: codecov/codecov-action@v7
         with:
-          files: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/kover/report.xml
+          files: ${{ steps.coverage.outputs.files }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Run Plugin Verification tasks
-        run: ./gradlew --configuration-cache ${{ matrix.module }}:verifyPlugin
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache verifyPlugin
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
-          name: pluginVerifier-result-${{ steps.modpath.outputs.namesegment }}
-          path: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
+          name: pluginVerifier-result
+          path: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
       - name: Plugin Verifier Summary
-        shell: pwsh
         env:
-          reports: ${{ github.workspace }}/${{ steps.modpath.outputs.path }}/build/reports/pluginVerifier
+          reports: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
         run: |
-          gci ${env:reports}/*/*.md | gc | Out-File -Encoding utf8 -Append $env:GITHUB_STEP_SUMMARY
+          Get-ChildItem -Path $env:reports -Filter "*.md" -Recurse -File |
+                  Get-Content |
+                  Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
   
 
   inspectCode:
@@ -211,7 +147,7 @@ jobs:
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           submodules: recursive
       - name: Setup Java
@@ -236,15 +172,11 @@ jobs:
 
   releaseDraft:
     name: Release draft
-    if: github.event_name != 'pull_request' && needs.discover.outputs.modules != '[]'
-    needs: [ build-and-check, inspectCode, discover ]
+    if: github.event_name != 'pull_request'
+    needs: [ build-and-check, inspectCode ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        module: ${{ fromJSON(needs.discover.outputs.modules) }}
     steps:
       - name: Maximize Build Space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -268,40 +200,47 @@ jobs:
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           cache-read-only: true
-      - name: Resolve module path
-        id: modpath
-        shell: bash
-        run: |
-          P=${{ matrix.module }}
-          P=${P#:}
-          TAG_PATH=${P//plugins:/}
-          echo "tagpath=$TAG_PATH" >> "$GITHUB_OUTPUT"
-      - name: Export Properties
-        id: properties
-        shell: bash
-        run: |
-          PROPERTIES="$(./gradlew --configuration-cache ${{ matrix.module }}:properties --console=plain -q)"
-          VERSION="$(echo "$PROPERTIES" | grep "^version:" | cut -f2- -d ' ')"
-          CHANGELOG="$(./gradlew --configuration-cache ${{ matrix.module }}:getChangelog --unreleased --no-header --no-empty-sections --console=plain -q)"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - name: Remove Old Release Drafts for this module
+      - name: Create release drafts
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api repos/{owner}/{repo}/releases \
-            --jq '.[] | select(.draft == true and (.tag_name | startswith("'${{ steps.modpath.outputs.tagpath }}'"))) | .id' \
-            | xargs -I '{}' gh api -X DELETE repos/{owner}/{repo}/releases/{}
-      - name: Create Release Draft
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ steps.modpath.outputs.tagpath }}-v${{ steps.properties.outputs.version }}" \
-            --draft \
-            --title "${{ steps.modpath.outputs.tagpath }} v${{ steps.properties.outputs.version }}" \
-            --notes "$(cat << 'EOM'
-          ${{ steps.properties.outputs.changelog }}
-          EOM
-          )"
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          $pluginPaths = & $gradlew tasks --all --console=plain -q |
+                  ForEach-Object {
+                      if ($_ -match "^(plugins:[^:]+):getChangelog")
+                      {
+                          ":$( $Matches[1] )"
+                      }
+                  } |
+                  Sort-Object -Unique
+
+          foreach ($pluginPath in $pluginPaths)
+          {
+              $tagPath = $pluginPath.TrimStart(":").Replace(":", "/")
+              $properties = & $gradlew --configuration-cache "${pluginPath}:properties" --console=plain -q
+              $versionLine = $properties | Where-Object { $_ -like "version:*" } | Select-Object -First 1
+              $version = $versionLine.Substring("version:".Length).Trim()
+              $changelog = (& $gradlew --configuration-cache "${pluginPath}:getChangelog" --unreleased --no-header --no-empty-sections --console=plain -q) -join [Environment]::NewLine
+              
+              $releaseIds = gh api "repos/{owner}/{repo}/releases" `
+              --jq ".[] | select(.draft == true and (.tag_name | startswith(`"$tagPath`"))) | .id"
+              foreach ($releaseId in $releaseIds)
+              {
+                  if ($releaseId)
+                  {
+                      gh api -X DELETE "repos/{owner}/{repo}/releases/$releaseId"
+                  }
+              }
+              
+              gh release create "$tagPath-v$version" `
+              --draft `
+              --title "$tagPath v$version" `
+              --notes "$changelog"
+          }

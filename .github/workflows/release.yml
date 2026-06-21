@@ -5,7 +5,11 @@
 name: Release
 on:
   release:
-    types: [ prereleased, released ]
+    types: [ published ]
+
+defaults:
+  run:
+    shell: pwsh
 
 jobs:
 
@@ -50,27 +54,25 @@ jobs:
       # Resolve module from tag (format: plugins/<module>-vX.Y.Z)
       - name: Resolve module
         id: mod
-        shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          MOD_PATH="${TAG%%-v*}"
-          GRADLE_PATH=":${MOD_PATH//\//:}"
-          echo "module_path=$MOD_PATH" >> "$GITHUB_OUTPUT"
-          echo "gradle_path=$GRADLE_PATH" >> "$GITHUB_OUTPUT"
+          $tag = ""
+          $modPath = $tag -replace "-v.*$", ""
+          $gradlePath = ":$($modPath.Replace("/", ":") )"
+          "module_path=$modPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "gradle_path=$gradlePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       # Set environment variables
       - name: Export Properties
         id: properties
-        shell: bash
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
         run: |
-          CHANGELOG="$(cat << 'EOM' | sed -e 's/^[[:space:]]*$//g' -e '/./,$!d'
-          ${{ github.event.release.body }}
-          EOM
-          )"
-          
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          $changelog = $env:RELEASE_BODY -replace "(?m)^\s*$", ""
+          $changelog = $changelog.TrimStart()
+
+          "changelog<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $changelog | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       # Update the Unreleased section with the current release note
       - name: Patch Changelog
@@ -78,11 +80,19 @@ jobs:
         env:
           CHANGELOG: ${{ github.event.release.body }}
         run: |
-          RELEASE_NOTE=$(mktemp)
-          echo "$CHANGELOG" > $RELEASE_NOTE
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          $releaseNote = New-TemporaryFile
+          Set-Content -Path $releaseNote -Value $env:CHANGELOG -Encoding utf8
 
-          ./gradlew --configuration-cache :plugins${{ steps.mod.outputs.gradle_path }}:patchChangelog --release-note-file=$RELEASE_NOTE
-          rm $RELEASE_NOTE
+          & $gradlew --configuration-cache:patchChangelog --release-note-file="$releaseNote"
+          Remove-Item $releaseNote
 
       # Publish the plugin to JetBrains Marketplace
       - name: Publish Plugin
@@ -93,7 +103,16 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: ./gradlew --configuration-cache :plugin${{ steps.mod.outputs.gradle_path }}:publishPlugin
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache:publishPlugin
 
       # Create a pull request
       - name: Create Pull Request
@@ -101,26 +120,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          BRANCH="changelog-update-$VERSION"
-          LABEL="release changelog"
+          $version = ""
+          $branch = "changelog-update-$version"
+          $label = "release changelog"
 
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
 
-          git checkout -b $BRANCH
-          git commit -am "chore: Changelog update - $VERSION [skip ci]"
-          git push --set-upstream origin $BRANCH
+          git checkout -b $branch
+          git commit -am "chore: Changelog update - $version [skip ci]"
+          git push --set-upstream origin $branch
           
-          gh label create "$LABEL" \
-            --description "Pull requests with release changelog update" \
-            --force \
-            || true
+          gh label create "$label" `
+            --description "Pull requests with release changelog update" `
+            --force
 
-          PR_URL=$(gh pr create \
-          --title "chore: Changelog update - $VERSION [skip ci]" \
-          --body "Current pull request contains patched CHANGELOG.md file for the $VERSION version." \
-          --label "$LABEL" \
-          --head "$BRANCH" )
+          $prUrl = gh pr create `
+            --title "chore: Changelog update - $version [skip ci]" `
+            --body "Current pull request contains patched CHANGELOG.md file for the $version version." `
+            --label "$label" `
+            --head "$branch"
           
-          gh pr merge "$PR_URL" --squash --auto
+          gh pr merge "$prUrl" --squash --auto
