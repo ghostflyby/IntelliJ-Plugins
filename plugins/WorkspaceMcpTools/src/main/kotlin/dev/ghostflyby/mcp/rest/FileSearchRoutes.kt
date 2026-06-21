@@ -71,11 +71,7 @@ private data class FileSearchResponse(
         appendLine("---")
         appendLine("query: ${yamlScalar(query)}")
         appendLine("pathPrefix: ${yamlScalar(pathPrefix)}")
-        appendLine("limit: $limit")
-        appendLine("timeoutMillis: $timeoutMillis")
-        appendLine("count: $count")
-        appendLine("truncated: $truncated")
-        appendLine("timedOut: $timedOut")
+        appendSearchMetadataYaml(limit, timeoutMillis, count, truncated, timedOut)
         appendLine("---")
         if (items.isEmpty()) {
             appendLine("No files")
@@ -405,22 +401,6 @@ private suspend fun convertFileCandidate(
             ),
         )
     }
-}
-
-private fun StringBuilder.appendDiagnostics(diagnostics: List<String>) {
-    if (diagnostics.isNotEmpty()) {
-        appendLine("## Diagnostics")
-        diagnostics.forEach { appendLine("- $it") }
-    }
-}
-
-private fun markdownCell(value: String): String {
-    return value.replace("|", "\\|").replace("\n", " ")
-}
-
-private fun yamlScalar(value: String): String {
-    val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
-    return "\"$escaped\""
 }
 
 private data class FileRawCandidate(
