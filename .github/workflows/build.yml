@@ -223,14 +223,14 @@ jobs:
 
           foreach ($pluginPath in $pluginPaths)
           {
-              $tagPath = $pluginPath.TrimStart(":").Replace(":", "/")
+              $tagPrefix = ($pluginPath -split ":")[-1]
               $properties = & $gradlew --configuration-cache "${pluginPath}:properties" --console=plain -q
               $versionLine = $properties | Where-Object { $_ -like "version:*" } | Select-Object -First 1
               $version = $versionLine.Substring("version:".Length).Trim()
               $changelog = (& $gradlew --configuration-cache "${pluginPath}:getChangelog" --unreleased --no-header --no-empty-sections --console=plain -q) -join [Environment]::NewLine
               
               $releaseIds = gh api "repos/{owner}/{repo}/releases" `
-              --jq ".[] | select(.draft == true and (.tag_name | startswith(`"$tagPath`"))) | .id"
+              --jq ".[] | select(.draft == true and (.tag_name | startswith(`"$tagPrefix-v`"))) | .id"
               foreach ($releaseId in $releaseIds)
               {
                   if ($releaseId)
@@ -238,9 +238,9 @@ jobs:
                       gh api -X DELETE "repos/{owner}/{repo}/releases/$releaseId"
                   }
               }
-              
-              gh release create "$tagPath-v$version" `
-              --draft `
-              --title "$tagPath v$version" `
-              --notes "$changelog"
+
+              gh release create "$tagPrefix-v$version" `
+                      --draft `
+                      --title "$tagPrefix v$version" `
+                      --notes "$changelog"
           }

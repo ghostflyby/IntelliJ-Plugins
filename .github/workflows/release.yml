@@ -51,15 +51,35 @@ jobs:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           cache-read-only: true
 
-      # Resolve module from tag (format: plugins/<module>-vX.Y.Z)
+      # Resolve module from tag (format: <module>-vX.Y.Z)
       - name: Resolve module
         id: mod
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
           $tag = $env:RELEASE_TAG
-          $modPath = $tag -replace "-v.*$", ""
-          $gradlePath = ":$($modPath.Replace("/", ":") )"
+          $tagPrefix = $tag -replace "-v.*$", ""
+          $gradlePath = & $gradlew tasks --all --console=plain -q |
+                  ForEach-Object {
+                      if ($_ -match "^(plugins:[^:]+):getChangelog" -and ($Matches[1] -split ":")[-1] -eq $tagPrefix)
+                      {
+                          ":$( $Matches[1] )"
+                      }
+                  } |
+                  Select-Object -First 1
+          if (-not $gradlePath)
+          {
+              throw "No Gradle plugin project found for release tag '$tag'."
+          }
+          $modPath = $gradlePath.TrimStart(":").Replace(":", "/")
           "module_path=$modPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "gradle_path=$gradlePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
