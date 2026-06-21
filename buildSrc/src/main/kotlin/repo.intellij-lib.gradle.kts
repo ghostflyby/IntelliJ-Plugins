@@ -15,9 +15,7 @@ plugins {
 
 @OptIn(ExperimentalAbiValidation::class)
 kotlin {
-    abiValidation {
-        enabled = true
-    }
+    abiValidation()
 }
 
 repositories {
