@@ -54,8 +54,10 @@ jobs:
       # Resolve module from tag (format: plugins/<module>-vX.Y.Z)
       - name: Resolve module
         id: mod
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $tag = ""
+          $tag = $env:RELEASE_TAG
           $modPath = $tag -replace "-v.*$", ""
           $gradlePath = ":$($modPath.Replace("/", ":") )"
           "module_path=$modPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -79,6 +81,7 @@ jobs:
         if: ${{ github.event.release.body != '' }}
         env:
           CHANGELOG: ${{ github.event.release.body }}
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -91,7 +94,7 @@ jobs:
           $releaseNote = New-TemporaryFile
           Set-Content -Path $releaseNote -Value $env:CHANGELOG -Encoding utf8
 
-          & $gradlew --configuration-cache:patchChangelog --release-note-file="$releaseNote"
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:patchChangelog" --release-note-file="$( $releaseNote.FullName )"
           Remove-Item $releaseNote
 
       # Publish the plugin to JetBrains Marketplace
@@ -103,6 +106,7 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_RELEASE_TAG: ${{ github.event.release.tag_name }}
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -112,15 +116,16 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache:publishPlugin
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
 
       # Create a pull request
       - name: Create Pull Request
         if: ${{ github.event.release.body != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          $version = ""
+          $version = $env:RELEASE_TAG
           $branch = "changelog-update-$version"
           $label = "release changelog"
 
