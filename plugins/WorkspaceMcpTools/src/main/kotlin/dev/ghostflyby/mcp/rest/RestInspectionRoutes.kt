@@ -6,20 +6,10 @@
 
 package dev.ghostflyby.mcp.rest
 
-import com.intellij.codeInspection.InspectionEngine
-import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
-import com.intellij.openapi.application.readAction
-import com.intellij.openapi.progress.coroutineToIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.profile.codeInspection.InspectionProjectProfileManager
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiErrorElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.util.PsiTreeUtil
 import dev.ghostflyby.mcp.filecontent.FileContentClassification
 import dev.ghostflyby.mcp.filecontent.ProjectFileAccess
-import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import io.ktor.http.*
@@ -43,14 +33,14 @@ internal data class RestProblemReport(
 ) : TextBody {
     override fun renderTextBody(): String = buildString {
         appendLine("---")
-        appendLine("path: ${yamlString(path)}")
-        appendLine("minSeverity: ${yamlString(minSeverity)}")
+        appendLine("path: ${yamlScalar(path)}")
+        appendLine("minSeverity: ${yamlScalar(minSeverity)}")
         appendLine("count: $count")
         appendLine("truncated: $truncated")
         appendLine("timedOut: $timedOut")
         if (groupCounts.isNotEmpty()) {
             appendLine("groupCounts:")
-            groupCounts.forEach { (key, value) -> appendLine("  ${yamlString(key)}: $value") }
+            groupCounts.forEach { (key, value) -> appendLine("  ${yamlScalar(key)}: $value") }
         }
         appendLine("---")
         appendLine("## Problems")
@@ -61,9 +51,9 @@ internal data class RestProblemReport(
             appendLine("| --- | --- | ---: | --- | --- | --- |")
             problems.forEach { problem ->
                 appendLine(
-                    "| ${tableCell(problem.severity)} | ${tableCell(problem.filePath ?: problem.fileUrl)} | " +
-                            "${problem.line ?: 0} | ${tableCell(problem.inspectionShortName)} | " +
-                            "${tableCell(problem.message)} | ${tableCell(problem.fixes.joinToString(", "))} |",
+                    "| ${markdownCell(problem.severity)} | ${markdownCell(problem.filePath ?: problem.fileUrl)} | " +
+                            "${problem.line ?: 0} | ${markdownCell(problem.inspectionShortName)} | " +
+                            "${markdownCell(problem.message)} | ${markdownCell(problem.fixes.joinToString(", "))} |",
                 )
             }
         }
@@ -158,7 +148,7 @@ private suspend fun respondProblemReport(
             truncated = true
             break
         }
-        val fileProblems = collectProblemsForFile(target.project, target.file)
+        val fileProblems = collectRestProblemsForFile(target.project, target.file)
             .filter { it.matches(options) }
         problems += fileProblems.take(remaining)
         if (fileProblems.size > remaining) truncated = true
@@ -304,50 +294,6 @@ private fun collectFiles(root: VirtualFile, limit: Int): FileCollection {
     return FileCollection(files, truncated)
 }
 
-private suspend fun collectProblemsForFile(project: Project, file: VirtualFile): List<RestProblemItem> {
-    val psiFile = readAction { PsiManager.getInstance(project).findFile(file) } ?: return emptyList()
-    val document = readAction { PsiDocumentManager.getInstance(project).getDocument(psiFile) }
-        ?: getOrCreateDocument(file) ?: return emptyList()
-    // Inspection results
-    val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
-    val tools = profile.allTools.filterIsInstance<LocalInspectionToolWrapper>()
-    val inspectionResults = if (tools.isNotEmpty()) {
-        coroutineToIndicator { indicator ->
-            val map = InspectionEngine.inspectEx(
-                tools, psiFile, psiFile.textRange, psiFile.textRange,
-                false, false, true, indicator,
-            ) { _, _ -> true }
-            map.values.flatten().mapNotNull { desc ->
-                toProblemItem(project, file, desc)
-            }
-        }
-    } else emptyList()
-    // Parser syntax errors
-    val psiErrors: List<RestProblemItem> = readAction {
-        PsiTreeUtil.findChildrenOfType(psiFile, PsiErrorElement::class.java).map { error: PsiErrorElement ->
-            val offset = error.textRange.startOffset.coerceIn(0, document.textLength)
-            val line = document.getLineNumber(offset)
-            val base = project.basePath
-            val display = if (base != null && file.path.startsWith(base)) file.path.removePrefix("$base/") else file.url
-            RestProblemItem(
-                severity = "ERROR",
-                fileUrl = file.url,
-                encodedFileUrl = encodeRoutePathSegment(file.url),
-                filePath = display,
-                line = line + 1,
-                column = (offset - document.getLineStartOffset(line)).coerceAtLeast(0) + 1,
-                endLine = line + 1, endColumn = 0,
-                inspectionShortName = "SyntaxError",
-                inspectionDisplayName = "Syntax error",
-                groupPath = listOf("Syntax"),
-                message = error.errorDescription,
-                fixes = emptyList(),
-            )
-        }
-    }
-    return (inspectionResults + psiErrors).distinctBy { "${it.fileUrl}:${it.line}:${it.message}" }
-}
-
 private fun RestProblemItem.matches(options: ProblemQueryOptions): Boolean {
     if (severityRank(severity) < severityRank(options.minSeverity)) return false
     if (options.fixable && fixes.isEmpty()) return false
@@ -404,10 +350,6 @@ private fun displayPath(project: Project, file: VirtualFile): String? {
     val filePath = file.path
     return if (filePath == basePath) "." else filePath.removePrefix("$basePath/").takeIf { it != filePath }
 }
-
-private fun joinRelativePath(base: String, child: String): String =
-    if (base.isBlank()) child else "$base/$child"
-
 private fun severityRank(raw: String): Int = when (raw.uppercase()) {
     "ERROR" -> 400
     "WARNING" -> 300
@@ -415,7 +357,3 @@ private fun severityRank(raw: String): Int = when (raw.uppercase()) {
     "INFO", "INFORMATION" -> 100
     else -> 0
 }
-
-private fun yamlString(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
-private fun tableCell(value: String): String = value.replace("|", "\\|").replace("\n", " ")

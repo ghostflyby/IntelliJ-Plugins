@@ -72,11 +72,7 @@ private data class SymbolSearchResponse(
         appendLine("query: ${yamlScalar(query)}")
         appendLine("libraries: $libraries")
         kind?.let { appendLine("kind: $it") }
-        appendLine("limit: $limit")
-        appendLine("timeoutMillis: $timeoutMillis")
-        appendLine("count: $count")
-        appendLine("truncated: $truncated")
-        appendLine("timedOut: $timedOut")
+        appendSearchMetadataYaml(limit, timeoutMillis, count, truncated, timedOut)
         appendLine("---")
         if (items.isEmpty()) {
             appendLine("No symbols")
@@ -128,16 +124,8 @@ internal fun Route.searchSymbolRoutes() {
             call.respond(HttpStatusCode.BadRequest, RestError("kind '${resource.kind}' is not supported."))
             return@get
         }
-        if (resource.limit < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("limit must be greater than 0."))
-            return@get
-        }
-        if (resource.timeoutMillis < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("timeoutMillis must be greater than 0."))
-            return@get
-        }
 
-        val sessionProject = call.resolveWorkspaceSessionProjectOrNull()
+        val sessionProject = call.requireSessionOrRespond(resource.limit, resource.timeoutMillis)
             ?: return@get
 
         val options = SymbolSearchOptions(
@@ -482,15 +470,6 @@ private fun inferKind(element: PsiElement?): String {
 private fun parseSymbolKind(raw: String?): String? {
     val normalized = raw?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() } ?: return null
     return normalized.takeIf { it in setOf("class", "method", "field", "symbol", "unknown") }
-}
-
-private fun markdownCell(value: String): String {
-    return value.replace("|", "\\|").replace("\n", " ")
-}
-
-private fun yamlScalar(value: String): String {
-    val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
-    return "\"$escaped\""
 }
 
 private data class RawCandidate(
