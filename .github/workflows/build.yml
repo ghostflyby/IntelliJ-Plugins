@@ -113,7 +113,7 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache --no-parallel verifyPlugin
+          & $gradlew --configuration-cache verifyPlugin
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

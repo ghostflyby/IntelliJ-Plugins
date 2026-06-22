@@ -156,6 +156,13 @@ tasks {
         finalizedBy(upload)
     }
 
+    verifyPlugin {
+        systemProperty(
+            "plugin.verifier.home.dir",
+            layout.buildDirectory.dir("plugin-verifier-home").get().asFile.absolutePath
+        )
+    }
+
 }
 
 intellijPlatformTesting {
