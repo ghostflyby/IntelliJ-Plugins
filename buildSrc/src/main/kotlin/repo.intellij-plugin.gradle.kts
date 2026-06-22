@@ -161,6 +161,12 @@ tasks {
             "plugin.verifier.home.dir",
             layout.buildDirectory.dir("plugin-verifier-home").get().asFile.absolutePath
         )
+        systemProperty(
+            "intellij.plugin.verifier.download.ide.temp.dir",
+            providers.systemProperty("user.dir").map {
+                "$it/plugin-verifier-ides"
+            }
+        )
     }
 
 }
