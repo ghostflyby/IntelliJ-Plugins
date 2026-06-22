@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
@@ -6,8 +12,8 @@ import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.mcp.rest.encodeRoutePathSegment
 import kotlinx.serialization.Serializable
-import java.net.URLEncoder
 
 internal enum class ExposedRootKind {
     WORKSPACE,
@@ -47,9 +53,6 @@ internal data class ExposedRoot(
         writable = writable,
     )
 }
-
-private fun encodeRoutePathSegment(value: String): String =
-    URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
 internal suspend fun exposedWorkspaceRoots(project: Project): List<ExposedRoot> = readAction {
     val contentRoots = ProjectRootManager.getInstance(project).contentRoots.toList()

@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.lang.injection.InjectedLanguageManager
@@ -32,6 +38,7 @@ import com.intellij.usageView.UsageInfo
 import com.intellij.util.IncorrectOperationException
 import com.intellij.util.containers.MultiMap
 import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
+import dev.ghostflyby.mcp.message
 import dev.ghostflyby.mcp.patch.ProjectPatchPath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -239,7 +246,8 @@ private class RestSingleFileMoveRefactoring(
     suspend fun execute(usages: RestSingleFileMoveUsages) {
         withContext(Dispatchers.EDT) {
             coroutineToIndicator {
-                WriteCommandAction.writeCommandAction(project).withName("Move").run<RuntimeException> {
+                WriteCommandAction.writeCommandAction(project).withName(message("command.name.move"))
+                    .run<RuntimeException> {
                     performMove(usages)
                 }
             }

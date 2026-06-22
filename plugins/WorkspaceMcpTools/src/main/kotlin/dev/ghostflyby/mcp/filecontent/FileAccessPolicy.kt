@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
@@ -63,7 +69,7 @@ internal suspend fun resolveProjectFileAccess(
     val file = resolveExposedRootFile(root, relativePath)
     val parentTarget = if (file == null) resolveExposedRootParent(root, relativePath) else null
     if (file == null && parentTarget == null) {
-        return missingAccess(relativePath, root, FileContentClassification.MISSING)
+        return missingAccess(relativePath, root)
     }
     return readAction {
         val classification = classify(project, file, root, parentTarget?.first)
@@ -157,13 +163,12 @@ private fun isUnderRoot(root: ExposedRoot, file: VirtualFile): Boolean =
 private fun missingAccess(
     relativePath: String,
     root: ExposedRoot,
-    classification: FileContentClassification,
 ): ProjectFileAccess = ProjectFileAccess(
     file = null,
     policy = protectGitMetadataWrites(
         policyFor(
-            classification,
-            writableKindsOverride = if (classification == FileContentClassification.MISSING && !root.writable) {
+            FileContentClassification.MISSING,
+            writableKindsOverride = if (!root.writable) {
                 emptySet()
             } else {
                 null

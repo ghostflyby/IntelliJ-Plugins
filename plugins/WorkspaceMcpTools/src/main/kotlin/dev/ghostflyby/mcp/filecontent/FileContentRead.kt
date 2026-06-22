@@ -31,9 +31,9 @@ import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.GlobalSearchScopesCore
 import com.intellij.util.concurrency.annotations.RequiresReadLock
+import dev.ghostflyby.mcp.rest.encodeRoutePathSegment
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import kotlinx.serialization.Serializable
-import java.net.URLEncoder
 
 internal class ContentReadException(message: String) : RuntimeException(message)
 
@@ -200,9 +200,6 @@ internal suspend fun readMetaResult(
         )
     }
 }
-
-private fun encodeRoutePathSegment(value: String): String =
-    URLEncoder.encode(value, Charsets.UTF_8).replace("+", "%20")
 
 // -- structure read --
 

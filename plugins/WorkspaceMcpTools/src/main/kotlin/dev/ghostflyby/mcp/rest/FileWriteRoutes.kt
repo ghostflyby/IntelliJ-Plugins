@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.backgroundWriteAction
@@ -8,6 +14,7 @@ import com.intellij.psi.PsiDocumentManager
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import com.intellij.util.concurrency.annotations.RequiresWriteLock
 import dev.ghostflyby.mcp.filecontent.*
+import dev.ghostflyby.mcp.message
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -22,7 +29,7 @@ import java.nio.file.DirectoryNotEmptyException
 
 internal fun Route.fileWriteRoutes() {
     put<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
+        val target = call.resolveWritableSessionRouteTarget(resource.path.toRoutePath())
             ?: return@put
         handleSessionPut(
             call,
@@ -31,7 +38,7 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     post<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
+        val target = call.resolveWritableSessionRouteTarget(resource.path.toRoutePath())
             ?: return@post
         handleSessionPost(
             call,
@@ -40,30 +47,13 @@ internal fun Route.fileWriteRoutes() {
         )
     }
     delete<Api.FilesEntry.File> { resource: Api.FilesEntry.File ->
-        val target = call.resolveWritableFileRouteTarget(resource.path.toRoutePath())
+        val target = call.resolveWritableSessionRouteTarget(resource.path.toRoutePath())
             ?: return@delete
         handleSessionDelete(
             call,
             target,
             resource.parent.force,
         )
-    }
-}
-
-private suspend fun ApplicationCall.resolveWritableFileRouteTarget(
-    path: String,
-): RestSessionRouteTarget? {
-    return when (val target = resolveFileRouteTarget(path)) {
-        is RestFileRouteTarget.ProjectFile -> target.target
-        is RestFileRouteTarget.VirtualFileReadOnly -> {
-            respond(
-                HttpStatusCode.Forbidden,
-                RestError("VFS URL writes are allowed only for files in the session project workspace"),
-            )
-            null
-        }
-
-        null -> null
     }
 }
 
@@ -79,18 +69,14 @@ internal suspend fun handleSessionPut(
         val file = access.file
         if (file != null) {
             @Suppress("UnstableApiUsage")
-            writeCommandAction(project, "REST PUT") {
+            writeCommandAction(project, message("command.name.rest.put")) {
                 setTextWithPolicy(file, project, body)
             }
             WriteResult.Replaced(file)
         } else {
             @Suppress("UnstableApiUsage")
-            val created = writeCommandAction(project, "REST PUT") {
-                val p = access.parent ?: error("Parent not found: ${access.relativePath}")
-                val n = access.targetName ?: error("Target name not found: ${access.relativePath}")
-                val vf = p.createChildData(Any(), n)
-                setTextWithPolicy(vf, project, body)
-                vf
+            val created = writeCommandAction(project, message("command.name.rest.put")) {
+                createNewChildFile(access, project, body)
             }
             WriteResult.Created(created)
         }
@@ -112,12 +98,8 @@ internal suspend fun handleSessionPost(
             return@projectExec WriteResult.DirCreated(dir)
         }
         @Suppress("UnstableApiUsage")
-        val created = writeCommandAction(project, "REST POST") {
-            val p = access.parent ?: error("Parent not found: ${access.relativePath}")
-            val n = access.targetName ?: error("Target name not found: ${access.relativePath}")
-            val vf = p.createChildData(Any(), n)
-            setTextWithPolicy(vf, project, body)
-            vf
+        val created = writeCommandAction(project, message("command.name.rest.post")) {
+            createNewChildFile(access, project, body)
         }
         WriteResult.Created(created)
     }
@@ -261,24 +243,9 @@ private data class DeleteResponse(
             appendLine("ERROR: $it")
             appendLine()
         }
-        if (references.isNotEmpty()) {
-            appendLine("## References")
-            appendLine("| path | encodedFileUrl | line | column | usage |")
-            appendLine("| --- | --- | ---: | ---: | --- |")
-            references.forEach { ref ->
-                val fileReference = markdownFileReference(ref.filePath, ref.fileUrl, ref.encodedFileUrl)
-                appendLine(
-                    "| ${markdownCell(fileReference.path)} | ${markdownCell(fileReference.encodedFileUrl)} | " +
-                            "${ref.line} | ${ref.column} | ${markdownCell(ref.usageText)} |",
-                )
-            }
-        }
+        appendRefactoringReferences(references)
     }
 }
-
-private fun markdownCell(value: String): String = value.replace("|", "\\|").replace("\n", " ")
-
-private fun yamlScalar(value: String): String = "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 // ── Implementations ─────────────────────────────────────────
 private fun writeGate(
@@ -303,6 +270,14 @@ private suspend fun createDir(access: ProjectFileAccess): VirtualFile? {
     val parent = access.parent ?: return null
     val targetName = access.targetName ?: return null
     return backgroundWriteAction { parent.createChildDirectory(Any(), targetName) }
+}
+
+private fun createNewChildFile(access: ProjectFileAccess, project: Project, body: String): VirtualFile {
+    val p = access.parent ?: error("Parent not found: ${access.relativePath}")
+    val n = access.targetName ?: error("Target name not found: ${access.relativePath}")
+    val vf = p.createChildData(Any(), n)
+    setTextWithPolicy(vf, project, body)
+    return vf
 }
 
 @RequiresWriteLock
