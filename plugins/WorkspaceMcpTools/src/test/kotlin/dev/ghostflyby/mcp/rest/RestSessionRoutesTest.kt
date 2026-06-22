@@ -9,7 +9,9 @@ package dev.ghostflyby.mcp.rest
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.roots.ModuleRootManager
+import com.intellij.openapi.util.io.toCanonicalPath
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
@@ -52,7 +54,7 @@ internal class RestSessionRoutesTest {
     @BeforeEach
     fun refresh() {
         val nestedRootPath = projectPathFixture.get().resolve("nested-session-root")
-        nestedRootPath.createDirectories()
+        val nestedRoot = VfsUtil.createDirectories(nestedRootPath.toCanonicalPath())
         nestedRootPath.resolve("NestedRootFile.kt").writeText("class NestedRootFile")
         val globDir = projectPathFixture.get().resolve("glob")
         globDir.resolve("nested").createDirectories()
@@ -65,8 +67,6 @@ internal class RestSessionRoutesTest {
         externalPathFixture.get().resolve("nested").createDirectories()
         externalPathFixture.get().resolve("nested/ExternalSearch.kt")
             .writeText("""class ExternalSearch { val marker = "external needle" }""")
-        val nestedRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(nestedRootPath)
-            ?: error("nested root missing")
         ApplicationManager.getApplication().runWriteAction {
             val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
             var committed = false

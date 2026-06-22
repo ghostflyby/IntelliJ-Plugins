@@ -1,9 +1,16 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.OrderRootType
-import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.util.io.toCanonicalPath
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
@@ -45,7 +52,7 @@ internal class FileAccessPolicyRoutesTest {
         Files.write(root.resolve("binary.bin"), byteArrayOf(0, 1, 2, 3))
         Files.writeString(root.resolve("ignored.generated"), "ignored")
         Files.writeString(root.resolve("visible.kt"), "class Visible")
-        Files.createDirectories(root.resolve("excluded"))
+        val excluded = VfsUtil.createDirectories(root.resolve("excluded").toCanonicalPath())
         Files.writeString(root.resolve("excluded/hidden.kt"), "class Hidden")
         Files.createDirectories(root.resolve("src"))
         Files.writeString(root.resolve("src/source.txt"), "source")
@@ -53,9 +60,6 @@ internal class FileAccessPolicyRoutesTest {
         Files.writeString(root.resolve("a_one.kt"), "class AOne")
         Files.writeString(root.resolve("b_two.kt"), "class BTwo")
         Files.writeString(root.resolve("c_three.kt"), "class CThree")
-
-        val excluded = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root.resolve("excluded"))
-            ?: error("excluded dir missing")
         ApplicationManager.getApplication().runWriteAction {
             val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
             var committed = false
@@ -156,8 +160,7 @@ internal class FileAccessPolicyRoutesTest {
 
         restTestApplication {
             val root = Path.of(requireNotNull(project.basePath))
-            val sourceRoot = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(root.resolve("src"))
-                ?: error("src dir missing")
+            val sourceRoot = VfsUtil.createDirectories(root.resolve("src").toCanonicalPath())
 
             ApplicationManager.getApplication().runWriteAction {
                 val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
