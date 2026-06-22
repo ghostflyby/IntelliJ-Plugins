@@ -71,11 +71,7 @@ private data class FileSearchResponse(
         appendLine("---")
         appendLine("query: ${yamlScalar(query)}")
         appendLine("pathPrefix: ${yamlScalar(pathPrefix)}")
-        appendLine("limit: $limit")
-        appendLine("timeoutMillis: $timeoutMillis")
-        appendLine("count: $count")
-        appendLine("truncated: $truncated")
-        appendLine("timedOut: $timedOut")
+        appendSearchMetadataYaml(limit, timeoutMillis, count, truncated, timedOut)
         appendLine("---")
         if (items.isEmpty()) {
             appendLine("No files")
@@ -119,16 +115,8 @@ internal fun Route.searchFileRoutes() {
             call.respond(HttpStatusCode.BadRequest, RestError("query must not be blank."))
             return@get
         }
-        if (resource.limit < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("limit must be greater than 0."))
-            return@get
-        }
-        if (resource.timeoutMillis < 1) {
-            call.respond(HttpStatusCode.BadRequest, RestError("timeoutMillis must be greater than 0."))
-            return@get
-        }
 
-        val sessionProject = call.resolveWorkspaceSessionProjectOrNull()
+        val sessionProject = call.requireSessionOrRespond(resource.limit, resource.timeoutMillis)
             ?: return@get
         val root = resolveFileSearchRoot(sessionProject.record)
         if (root == null) {
@@ -405,22 +393,6 @@ private suspend fun convertFileCandidate(
             ),
         )
     }
-}
-
-private fun StringBuilder.appendDiagnostics(diagnostics: List<String>) {
-    if (diagnostics.isNotEmpty()) {
-        appendLine("## Diagnostics")
-        diagnostics.forEach { appendLine("- $it") }
-    }
-}
-
-private fun markdownCell(value: String): String {
-    return value.replace("|", "\\|").replace("\n", " ")
-}
-
-private fun yamlScalar(value: String): String {
-    val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
-    return "\"$escaped\""
 }
 
 private data class FileRawCandidate(
