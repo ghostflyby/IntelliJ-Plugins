@@ -12,7 +12,7 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.Processor
 import org.jetbrains.yaml.psi.YAMLScalar
 
-internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>() {
+internal class SkillDirRenameSearchExecutor : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
 
     override fun processQuery(
         queryParameters: ReferencesSearch.SearchParameters,

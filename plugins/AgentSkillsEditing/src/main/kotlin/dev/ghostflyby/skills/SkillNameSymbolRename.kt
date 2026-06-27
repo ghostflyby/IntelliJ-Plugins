@@ -12,14 +12,17 @@ import com.intellij.model.Pointer
 import com.intellij.model.Symbol
 import com.intellij.model.psi.PsiSymbolDeclaration
 import com.intellij.model.psi.PsiSymbolDeclarationProvider
+import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.backend.presentation.TargetPresentation
 import com.intellij.psi.*
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.refactoring.rename.api.*
-import com.intellij.refactoring.rename.symbol.RenameableSymbol
+import com.intellij.refactoring.rename.symbol.SymbolRenameTargetFactory
 import com.intellij.usages.impl.rules.UsageType
 import com.intellij.util.AbstractQuery
 import com.intellij.util.Processor
@@ -31,13 +34,42 @@ import org.jetbrains.yaml.psi.YAMLScalar
 @ConsistentCopyVisibility
 internal data class AgentSkillSymbol private constructor(
     val virtualFile: VirtualFile,
-) : Symbol, RenameTarget, RenameableSymbol {
+) : Symbol {
     constructor(directory: PsiDirectory) : this(directory.virtualFile)
 
-    override val targetName: String
-        get() = virtualFile.name
-
     override fun createPointer(): Pointer<AgentSkillSymbol> = Pointer.hardPointer(this)
+}
+
+internal class SkillSymbolRenameTargetFactory : SymbolRenameTargetFactory {
+    override fun renameTarget(
+        project: Project,
+        symbol: Symbol,
+    ): RenameTarget? {
+        if (symbol !is AgentSkillSymbol) return null
+        val psiDirectory = PsiManager.getInstance(project).findDirectory(symbol.virtualFile) ?: return null
+        return SkillSymbolRenameTarget(psiDirectory)
+    }
+}
+
+internal class SkillSymbolRenameTarget private constructor(
+    val yamlScalar: YAMLScalar,
+    val directory: PsiDirectory,
+) : RenameTarget {
+    companion object {
+        operator fun invoke(psiDirectory: PsiDirectory): SkillSymbolRenameTarget? {
+            val scalar = psiDirectory.skillMarkdownFile?.skillNameScalar() ?: return null
+            return SkillSymbolRenameTarget(scalar, psiDirectory)
+        }
+    }
+
+    override val targetName: String
+        get() = yamlScalar.textValue
+
+    override fun createPointer(): Pointer<SkillSymbolRenameTarget> {
+        return Pointer.delegatingPointer(directory.createSmartPointer()) {
+            SkillSymbolRenameTarget(it)
+        }
+    }
 
     override fun presentation(): TargetPresentation {
         return TargetPresentation.builder(targetName)
@@ -49,8 +81,8 @@ internal data class AgentSkillSymbol private constructor(
         return SkillNameRenameValidator
     }
 
-    override val renameTarget: RenameTarget
-        get() = this
+    override val maximalSearchScope: SearchScope
+        get() = GlobalSearchScope.projectScope(yamlScalar.project)
 
 }
 
@@ -87,10 +119,10 @@ private object SkillNameRenameValidator : RenameValidator {
 internal class SkillNameRenameUsageSearcher : RenameUsageSearcher {
     @RequiresBackgroundThread
     override fun collectSearchRequest(parameters: RenameUsageSearchParameters): Query<out RenameUsage>? {
-        val (project, target, _) = parameters
-        val symbol = target as? AgentSkillSymbol ?: return null
-        val directory = PsiManager.getInstance(project).findDirectory(symbol.virtualFile) ?: return null
-        return SkillNameRenameUsageQuery(directory, parameters.searchScope)
+        val (_, target, _) = parameters
+        val symbol = target as? SkillSymbolRenameTarget ?: return null
+        val directory = symbol.directory
+        return SkillNameRenameUsageQuery(directory, target.maximalSearchScope)
     }
 }
 
@@ -103,7 +135,9 @@ private class SkillNameRenameUsageQuery(
             SkillNameOccurrenceRenameUsage(psiReference)
         }
         if (!delegateProcessResults(nameOccurrences, consumer)) return false
-        return consumer.process(SkillDirectoryRenameUsage(directory.virtualFile))
+        return runReadActionBlocking {
+            consumer.process(SkillDirectoryRenameUsage(directory.virtualFile))
+        }
     }
 }
 
@@ -118,12 +152,7 @@ internal class SkillNameOccurrenceRenameUsage(
     override val usageType: UsageType? = null
     override val modelUpdater: ModifiableRenameUsage.ModelUpdater = SkillNameOccurrenceModelUpdater
 
-    override fun createPointer(): Pointer<SkillNameOccurrenceRenameUsage> =
-        Pointer.delegatingPointer(psiReference.element.createSmartPointer()) { element ->
-            val scalar = element as? YAMLScalar ?: return@delegatingPointer null
-            val directory = (scalar.containingFile as? YAMLFile)?.skillDirectory ?: return@delegatingPointer null
-            SkillNameOccurrenceRenameUsage(SkillDirectoryNameReference(scalar, directory))
-        }
+    override fun createPointer(): Pointer<SkillNameOccurrenceRenameUsage> = Pointer.hardPointer(this)
 
     internal fun updateName(newName: String) {
         psiReference.handleElementRename(newName)

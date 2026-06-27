@@ -8,6 +8,7 @@
 
 package dev.ghostflyby.skills
 
+import com.intellij.model.Pointer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.QueryExecutorBase
 import com.intellij.openapi.command.WriteCommandAction
@@ -68,6 +69,20 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
         val nameUsage = usages.filterIsInstance<SkillNameOccurrenceRenameUsage>().single()
         nameUsage.updateModelTo("new-skill-name")
         assertEquals("new-skill-name", requireSkillNameScalar(file).textValue)
+    }
+
+    fun `test symbol rename usage search works from background without explicit read action`() {
+        configureSkill("intellij-psi-vfs-safety")
+        val directory = requireDirectory("intellij-psi-vfs-safety")
+        val app = ApplicationManager.getApplication()
+
+        val pointers = app.executeOnPooledThread<List<Pointer<out RenameUsage>>> {
+            assertFalse(app.isReadAccessAllowed)
+            collectSymbolRenameUsagePointers(directory)
+        }.get()
+
+        assertEquals(2, pointers.size)
+        assertTrue(pointers.all { it.dereference() != null })
     }
 
     fun `test symbol rename usage search collects references search pipeline`() {
@@ -255,6 +270,19 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
             ?: error("Expected $SKILL_MD_FILE_NAME in ${directory.name}")
 
     private fun collectSymbolRenameUsages(directory: PsiDirectory): List<RenameUsage> {
+        return collectSymbolRenameUsageQuery(directory).findAll().toList()
+    }
+
+    private fun collectSymbolRenameUsagePointers(directory: PsiDirectory) =
+        collectSymbolRenameUsageQuery(directory)
+            .mapping { usage ->
+                ApplicationManager.getApplication().assertReadAccessAllowed()
+                usage.createPointer()
+            }
+            .findAll()
+            .toList()
+
+    private fun collectSymbolRenameUsageQuery(directory: PsiDirectory): com.intellij.util.Query<out RenameUsage> {
         val testProject = project
         val parameters = object : RenameUsageSearchParameters {
             override fun areValid(): Boolean = true
@@ -262,9 +290,8 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
             override val target: RenameTarget = AgentSkillSymbol(directory)
             override val searchScope: SearchScope = GlobalSearchScope.projectScope(testProject)
         }
-        val query = SkillNameRenameUsageSearcher().collectSearchRequest(parameters)
+        return SkillNameRenameUsageSearcher().collectSearchRequest(parameters)
             ?: error("Expected skill rename usage query")
-        return query.findAll().toList()
     }
 
     private fun registerExtraDirectoryReference(reference: ExtraSkillDirectoryReference) {
