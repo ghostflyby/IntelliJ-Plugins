@@ -11,6 +11,7 @@ package dev.ghostflyby.skills
 import com.intellij.model.Pointer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.QueryExecutorBase
+import com.intellij.openapi.application.runReadActionBlocking
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
 import com.intellij.psi.*
@@ -83,6 +84,7 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
 
         assertEquals(2, pointers.size)
         assertTrue(pointers.all { it.dereference() != null })
+        assertTrue(pointers.any { it.dereference() is SkillNameOccurrenceRenameUsage })
     }
 
     fun `test symbol rename usage search collects references search pipeline`() {
@@ -121,6 +123,29 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
         )
         nameUsage.updateModelTo("renamed-quoted-skill")
         assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
+    }
+
+    fun `test skill name occurrence pointer restores value range`() {
+        configureSkillWithName("quoted-skill", "'quoted-skill'")
+        val directory = requireDirectory("quoted-skill")
+        val pointer = collectSymbolRenameUsagePointers(directory)
+            .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
+            .single()
+
+        assertEquals("quoted-skill", pointer.file.text.substring(pointer.range.startOffset, pointer.range.endOffset))
+    }
+
+    fun `test skill name occurrence pointer restores injected reference search occurrence`() {
+        configureSkill("intellij-psi-vfs-safety")
+        val directory = requireDirectory("intellij-psi-vfs-safety")
+        val aliasFile = configureSkillWithName("alias-skill", "intellij-psi-vfs-safety")
+        val aliasReference = ExtraSkillDirectoryReference(requireSkillNameScalar(aliasFile), directory)
+        registerExtraDirectoryReference(aliasReference)
+
+        val restoredOccurrences = collectSymbolRenameUsagePointers(directory)
+            .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
+
+        assertTrue(restoredOccurrences.any { it.matchesReference(aliasReference) })
     }
 
     fun `test directory rename updates skill frontmatter name`() {
@@ -287,7 +312,9 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
         val parameters = object : RenameUsageSearchParameters {
             override fun areValid(): Boolean = true
             override fun getProject(): Project = testProject
-            override val target: RenameTarget = AgentSkillSymbol(directory)
+            override val target: RenameTarget = runReadActionBlocking {
+                SkillSymbolRenameTarget(directory) ?: error("Expected skill rename target")
+            }
             override val searchScope: SearchScope = GlobalSearchScope.projectScope(testProject)
         }
         return SkillNameRenameUsageSearcher().collectSearchRequest(parameters)
@@ -295,7 +322,7 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     }
 
     private fun registerExtraDirectoryReference(reference: ExtraSkillDirectoryReference) {
-        val executor = object : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>() {
+        val executor = object : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
             override fun processQuery(
                 queryParameters: ReferencesSearch.SearchParameters,
                 consumer: Processor<in PsiReference>,

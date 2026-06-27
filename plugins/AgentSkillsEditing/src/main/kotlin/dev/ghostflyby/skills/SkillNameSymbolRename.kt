@@ -27,7 +27,6 @@ import com.intellij.usages.impl.rules.UsageType
 import com.intellij.util.AbstractQuery
 import com.intellij.util.Processor
 import com.intellij.util.Query
-import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLScalar
 
@@ -54,11 +53,16 @@ internal class SkillSymbolRenameTargetFactory : SymbolRenameTargetFactory {
 internal class SkillSymbolRenameTarget private constructor(
     val yamlScalar: YAMLScalar,
     val directory: PsiDirectory,
+    override val maximalSearchScope: SearchScope,
 ) : RenameTarget {
     companion object {
         operator fun invoke(psiDirectory: PsiDirectory): SkillSymbolRenameTarget? {
             val scalar = psiDirectory.skillMarkdownFile?.skillNameScalar() ?: return null
-            return SkillSymbolRenameTarget(scalar, psiDirectory)
+            return SkillSymbolRenameTarget(
+                scalar,
+                psiDirectory,
+                scalar.project.let { GlobalSearchScope.projectScope(it) },
+            )
         }
     }
 
@@ -80,9 +84,6 @@ internal class SkillSymbolRenameTarget private constructor(
     override fun validator(): RenameValidator {
         return SkillNameRenameValidator
     }
-
-    override val maximalSearchScope: SearchScope
-        get() = GlobalSearchScope.projectScope(yamlScalar.project)
 
 }
 
@@ -117,9 +118,8 @@ private object SkillNameRenameValidator : RenameValidator {
 }
 
 internal class SkillNameRenameUsageSearcher : RenameUsageSearcher {
-    @RequiresBackgroundThread
     override fun collectSearchRequest(parameters: RenameUsageSearchParameters): Query<out RenameUsage>? {
-        val (_, target, _) = parameters
+        val target = parameters.target
         val symbol = target as? SkillSymbolRenameTarget ?: return null
         val directory = symbol.directory
         return SkillNameRenameUsageQuery(directory, target.maximalSearchScope)
@@ -132,7 +132,7 @@ private class SkillNameRenameUsageQuery(
 ) : AbstractQuery<RenameUsage>() {
     override fun processResults(consumer: Processor<in RenameUsage>): Boolean {
         val nameOccurrences = ReferencesSearch.search(directory, searchScope).mapping { psiReference ->
-            SkillNameOccurrenceRenameUsage(psiReference)
+            SkillNameOccurrenceRenameUsage(psiReference, directory)
         }
         if (!delegateProcessResults(nameOccurrences, consumer)) return false
         return runReadActionBlocking {
@@ -143,6 +143,7 @@ private class SkillNameRenameUsageQuery(
 
 internal class SkillNameOccurrenceRenameUsage(
     private val psiReference: PsiReference,
+    private val target: PsiElement,
 ) : PsiRenameUsage, ModifiableRenameUsage {
 
     override val file: PsiFile get() = psiReference.element.containingFile
@@ -152,7 +153,20 @@ internal class SkillNameOccurrenceRenameUsage(
     override val usageType: UsageType? = null
     override val modelUpdater: ModifiableRenameUsage.ModelUpdater = SkillNameOccurrenceModelUpdater
 
-    override fun createPointer(): Pointer<SkillNameOccurrenceRenameUsage> = Pointer.hardPointer(this)
+    override fun createPointer(): Pointer<SkillNameOccurrenceRenameUsage> {
+        val elementPointer = psiReference.element.createSmartPointer()
+        val targetPointer = target.createSmartPointer()
+        val rangeInElement = psiReference.rangeInElement
+        return Pointer pointer@{
+            val element = elementPointer.dereference() ?: return@pointer null
+            val target = targetPointer.dereference() ?: return@pointer null
+            val scope = GlobalSearchScope.fileScope(element.containingFile)
+            val restoredReference = ReferencesSearch.search(target, scope).firstOrNull { reference ->
+                reference.element == element && reference.rangeInElement == rangeInElement
+            } ?: return@pointer null
+            SkillNameOccurrenceRenameUsage(restoredReference, target)
+        }
+    }
 
     internal fun updateName(newName: String) {
         psiReference.handleElementRename(newName)
