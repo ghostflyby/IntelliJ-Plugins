@@ -157,13 +157,12 @@ internal class SkillNameOccurrenceRenameUsage(
     override fun createPointer(): Pointer<SkillNameOccurrenceRenameUsage> {
         val elementPointer = psiReference.element.createSmartPointer()
         val targetPointer = target.createSmartPointer()
-        val rangeInElement = psiReference.rangeInElement
         return Pointer pointer@{
             val element = elementPointer.dereference() ?: return@pointer null
             val target = targetPointer.dereference() ?: return@pointer null
             val scope = GlobalSearchScope.fileScope(element.containingFile)
             val restoredReference = ReferencesSearch.search(target, scope).firstOrNull { reference ->
-                reference.element == element && reference.rangeInElement == rangeInElement
+                reference.element == element
             } ?: return@pointer null
             SkillNameOccurrenceRenameUsage(restoredReference, target)
         }
@@ -183,13 +182,31 @@ private object SkillNameOccurrenceModelUpdater : ModifiableRenameUsage.ModelUpda
         if (occurrences.isEmpty()) return emptyList()
         val project = occurrences.first().file.project
         val psiDocumentManager = PsiDocumentManager.getInstance(project)
-        val documents = occurrences.mapNotNullTo(LinkedHashSet()) { occurrence ->
-            psiDocumentManager.getDocument(occurrence.file)
+        val occurrencePointers = occurrences.map { occurrence ->
+            occurrence.createPointer()
         }
         return object : ModifiableRenameUsage.ModelUpdate {
+            private fun PsiDocumentManager.commitModelUpdateDocuments(documents: Collection<Document>) {
+                documents.forEach { document ->
+                    doPostponedOperationsAndUnblockDocument(document)
+                    commitDocument(document)
+                }
+            }
+
+            private fun restoreOccurrences(): List<SkillNameOccurrenceRenameUsage> =
+                occurrencePointers.mapNotNull { pointer ->
+                    pointer.dereference()
+                }
+
+            private fun List<SkillNameOccurrenceRenameUsage>.documents(): LinkedHashSet<Document> =
+                mapNotNullTo(LinkedHashSet()) { occurrence ->
+                    psiDocumentManager.getDocument(occurrence.file)
+                }
+
             override fun updateModel(newName: String) {
-                psiDocumentManager.commitModelUpdateDocuments(documents)
-                occurrences.forEach { occurrence ->
+                val currentOccurrences = restoreOccurrences()
+                val documents = currentOccurrences.documents()
+                currentOccurrences.forEach { occurrence ->
                     occurrence.updateName(newName)
                 }
                 psiDocumentManager.commitModelUpdateDocuments(documents)
@@ -197,12 +214,6 @@ private object SkillNameOccurrenceModelUpdater : ModifiableRenameUsage.ModelUpda
         }.let(::listOf)
     }
 
-    private fun PsiDocumentManager.commitModelUpdateDocuments(documents: Collection<Document>) {
-        documents.forEach { document ->
-            doPostponedOperationsAndUnblockDocument(document)
-            commitDocument(document)
-        }
-    }
 }
 
 private class SkillDirectoryRenameUsage(

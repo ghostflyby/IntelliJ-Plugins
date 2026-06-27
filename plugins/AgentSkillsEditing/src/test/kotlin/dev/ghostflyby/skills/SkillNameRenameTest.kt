@@ -155,15 +155,34 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
             .filterIsInstance<SkillNameOccurrenceRenameUsage>()
             .single()
         val update = usage.modelUpdater.prepareModelUpdateBatch(listOf(usage)).single()
-        val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: error("Expected document")
 
         WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel("renamed-quoted-skill")
-            document.insertString(document.textLength, "\n")
+        }
+        WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel("quoted-skill")
         }
 
         assertTrue(file.text.contains("name: 'quoted-skill'"))
+    }
+
+    fun `test skill name occurrence model update unblocks document after update`() {
+        val file = configureSkillWithName("quoted-skill", "'quoted-skill'")
+        val directory = requireDirectory("quoted-skill")
+        val usage = collectSymbolRenameUsages(directory)
+            .filterIsInstance<SkillNameOccurrenceRenameUsage>()
+            .single()
+        val update = usage.modelUpdater.prepareModelUpdateBatch(listOf(usage)).single()
+        val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: error("Expected document")
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            update.updateModel("renamed-quoted-skill")
+        }
+        WriteCommandAction.runWriteCommandAction(project) {
+            document.insertString(document.textLength, "\n")
+        }
+
+        assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
     }
 
     fun `test directory rename updates skill frontmatter name`() {
