@@ -148,6 +148,24 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
         assertTrue(restoredOccurrences.any { it.matchesReference(aliasReference) })
     }
 
+    fun `test skill name occurrence model update commits documents before undo style update`() {
+        val file = configureSkillWithName("quoted-skill", "'quoted-skill'")
+        val directory = requireDirectory("quoted-skill")
+        val usage = collectSymbolRenameUsages(directory)
+            .filterIsInstance<SkillNameOccurrenceRenameUsage>()
+            .single()
+        val update = usage.modelUpdater.prepareModelUpdateBatch(listOf(usage)).single()
+        val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: error("Expected document")
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            update.updateModel("renamed-quoted-skill")
+            document.insertString(document.textLength, "\n")
+            update.updateModel("quoted-skill")
+        }
+
+        assertTrue(file.text.contains("name: 'quoted-skill'"))
+    }
+
     fun `test directory rename updates skill frontmatter name`() {
         configureSkill("intellij-junit5-platform-testing")
         val directory = requireDirectory("intellij-junit5-platform-testing")
@@ -343,7 +361,8 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     }
 
     private fun SkillNameOccurrenceRenameUsage.updateModelTo(newName: String) {
-        val update = modelUpdater.prepareModelUpdate(this) ?: error("Expected name occurrence model update")
+        val update = modelUpdater.prepareModelUpdateBatch(listOf(this)).singleOrNull()
+            ?: error("Expected name occurrence model update")
         WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel(newName)
         }

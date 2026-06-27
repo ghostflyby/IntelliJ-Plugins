@@ -13,6 +13,7 @@ import com.intellij.model.Symbol
 import com.intellij.model.psi.PsiSymbolDeclaration
 import com.intellij.model.psi.PsiSymbolDeclarationProvider
 import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
@@ -175,12 +176,31 @@ internal class SkillNameOccurrenceRenameUsage(
 }
 
 private object SkillNameOccurrenceModelUpdater : ModifiableRenameUsage.ModelUpdater {
-    override fun prepareModelUpdate(usage: ModifiableRenameUsage): ModifiableRenameUsage.ModelUpdate? {
-        val occurrence = usage as? SkillNameOccurrenceRenameUsage ?: return null
+    override fun prepareModelUpdateBatch(
+        usages: Collection<ModifiableRenameUsage>,
+    ): Collection<ModifiableRenameUsage.ModelUpdate> {
+        val occurrences = usages.filterIsInstance<SkillNameOccurrenceRenameUsage>()
+        if (occurrences.isEmpty()) return emptyList()
+        val project = occurrences.first().file.project
+        val psiDocumentManager = PsiDocumentManager.getInstance(project)
+        val documents = occurrences.mapNotNullTo(LinkedHashSet()) { occurrence ->
+            psiDocumentManager.getDocument(occurrence.file)
+        }
         return object : ModifiableRenameUsage.ModelUpdate {
             override fun updateModel(newName: String) {
-                occurrence.updateName(newName)
+                psiDocumentManager.commitModelUpdateDocuments(documents)
+                occurrences.forEach { occurrence ->
+                    occurrence.updateName(newName)
+                }
+                psiDocumentManager.commitModelUpdateDocuments(documents)
             }
+        }.let(::listOf)
+    }
+
+    private fun PsiDocumentManager.commitModelUpdateDocuments(documents: Collection<Document>) {
+        documents.forEach { document ->
+            doPostponedOperationsAndUnblockDocument(document)
+            commitDocument(document)
         }
     }
 }
