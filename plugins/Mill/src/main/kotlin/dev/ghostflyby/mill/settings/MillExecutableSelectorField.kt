@@ -62,10 +62,6 @@ private class MillExecutableChoiceComboBoxAdapter(
         return t.editorText
     }
 
-    override fun leftHint(t: MillExecutableChoice?): String {
-        return t?.editorHintText.orEmpty()
-    }
-
     override fun fromText(
         text: String,
     ): MillExecutableChoice? {
