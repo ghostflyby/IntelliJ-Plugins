@@ -27,7 +27,6 @@ public interface EditableHintedComboBoxAdapter<T> {
         text: String,
     ): T?
 
-    public fun leftHint(t: T?): String = ""
 }
 
 

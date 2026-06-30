@@ -198,10 +198,6 @@ internal class EditableHintedComboBoxTest {
             return t.text
         }
 
-        override fun leftHint(t: Choice?): String {
-            return t?.hint.orEmpty()
-        }
-
         override fun fromText(
             text: String,
         ): Choice {
