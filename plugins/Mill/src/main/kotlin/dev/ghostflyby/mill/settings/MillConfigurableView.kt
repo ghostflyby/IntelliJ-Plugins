@@ -12,7 +12,9 @@ import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.*
 import dev.ghostflyby.intellij.ui.EditableHintedComboBox
+import dev.ghostflyby.intellij.ui.bindLeftHint
 import dev.ghostflyby.intellij.ui.bindRightHint
+import dev.ghostflyby.intellij.ui.bindText
 import dev.ghostflyby.mill.Bundle
 import javax.swing.DefaultComboBoxModel
 
@@ -49,6 +51,8 @@ internal fun millConfigurableView(
         cell(createMillExecutableSelectorField(project, model))
             .installExecutableChoicesModel(model)
             .bindItem(model.executableSelectedChoiceProperty::get, model.executableSelectedChoiceProperty::set)
+            .bindText(model.executableInputTextProperty)
+            .bindLeftHint(model.executableInputLeftHintProperty)
             .bindRightHint(model.executableVersionTextProperty)
             .resizableColumn()
             .align(Align.FILL)

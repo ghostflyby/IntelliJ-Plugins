@@ -7,8 +7,10 @@
 package dev.ghostflyby.intellij.ui
 
 import com.intellij.icons.AllIcons
+import com.intellij.openapi.observable.properties.PropertyGraph
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.ui.components.fields.ExtendableTextComponent
+import com.intellij.ui.dsl.builder.panel
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import javax.swing.SwingUtilities
@@ -70,7 +72,7 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
-    fun selectingDropdownItemUpdatesTextAndLeftHint() {
+    fun selectingDropdownItemUpdatesText() {
         val comboBox = createComboBox()
         val project = choice("project", text = "Project", hint = "/repo/mill")
         comboBox.addItem(project)
@@ -79,7 +81,6 @@ internal class EditableHintedComboBoxTest {
 
         assertEquals(project, comboBox.selectedItem)
         assertEquals("Project", comboBox.editorTextField.text)
-        assertEquals("/repo/mill", comboBox.leftHint)
     }
 
     @Test
@@ -98,25 +99,30 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
-    fun committingMatchingTextUpdatesSelectedItem() {
+    fun typingMatchingTextDoesNotCommitSelectedItem() {
         val comboBox = createComboBox()
         val path = choice("path", text = "PATH")
-        comboBox.addItem(choice("project", text = "Project"))
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
         comboBox.addItem(path)
+        comboBox.selectedItem = project
 
         comboBox.editorTextField.text = "PATH"
 
-        assertEquals(path, comboBox.selectedItem)
+        assertEquals(project, comboBox.selectedItem)
         assertEquals("PATH", comboBox.editorTextField.text)
     }
 
     @Test
-    fun committingCustomTextCreatesSelectedItem() {
+    fun typingCustomTextDoesNotCreateSelectedItem() {
         val comboBox = createComboBox(createCustomValues = true)
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
 
         comboBox.editorTextField.text = "/usr/local/bin/mill"
 
-        assertEquals(choice("custom:/usr/local/bin/mill", text = "/usr/local/bin/mill"), comboBox.selectedItem)
+        assertEquals(project, comboBox.selectedItem)
         assertEquals("/usr/local/bin/mill", comboBox.editorTextField.text)
     }
 
@@ -134,7 +140,7 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
-    fun committingUnresolvedTextDoesNotClearDraft() {
+    fun typingUnresolvedTextDoesNotClearDraft() {
         val comboBox = createComboBox(createCustomValues = false)
         val project = choice("project", text = "Project")
         comboBox.addItem(project)
@@ -144,6 +150,90 @@ internal class EditableHintedComboBoxTest {
 
         assertEquals(project, comboBox.selectedItem)
         assertEquals("unknown", comboBox.editorTextField.text)
+    }
+
+    @Test
+    fun bindTextSynchronizesEditorDraftToPropertyWithoutChangingSelectedItem() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+        val property = PropertyGraph().property(comboBox.editorTextField.text.orEmpty())
+        panel {
+            row {
+                cell(comboBox).bindText(property)
+            }
+        }
+
+        comboBox.editorTextField.text = "PATH"
+
+        assertEquals("PATH", property.get())
+        assertEquals(project, comboBox.selectedItem)
+    }
+
+    @Test
+    fun bindTextSynchronizesPropertyToEditorDraftWithoutChangingSelectedItem() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+        val property = PropertyGraph().property(comboBox.editorTextField.text.orEmpty())
+        panel {
+            row {
+                cell(comboBox).bindText(property)
+            }
+        }
+
+        property.set("PATH")
+
+        assertEquals("PATH", comboBox.editorTextField.text)
+        assertEquals(project, comboBox.selectedItem)
+    }
+
+    @Test
+    fun bindTextReceivesSelectedItemTextWriteBack() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        val path = choice("path", text = "PATH")
+        comboBox.addItem(project)
+        comboBox.addItem(path)
+        val property = PropertyGraph().property("")
+        panel {
+            row {
+                cell(comboBox).bindText(property)
+            }
+        }
+
+        comboBox.selectedItem = path
+
+        assertEquals("PATH", comboBox.editorTextField.text)
+        assertEquals("PATH", property.get())
+    }
+
+    @Test
+    fun boundHintsDoNotCommitDraftText() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+        val propertyGraph = PropertyGraph()
+        val leftHintProperty = propertyGraph.property("")
+        val rightHintProperty = propertyGraph.property("")
+        panel {
+            row {
+                cell(comboBox)
+                    .bindLeftHint(leftHintProperty)
+                    .bindRightHint(rightHintProperty)
+            }
+        }
+
+        comboBox.editorTextField.text = "PATH"
+        leftHintProperty.set("/repo/mill")
+        rightHintProperty.set("1.0.0")
+
+        assertEquals("/repo/mill", comboBox.leftHint)
+        assertEquals("1.0.0", comboBox.rightHint)
+        assertEquals(project, comboBox.selectedItem)
     }
 
     @Test
@@ -200,8 +290,12 @@ internal class EditableHintedComboBoxTest {
 
         override fun fromText(
             text: String,
-        ): Choice {
-            return Choice(id = "custom:$text", text = text, hint = null)
+        ): Choice? {
+            return if (createCustomValues) {
+                Choice(id = "custom:$text", text = text, hint = null)
+            } else {
+                null
+            }
         }
     }
 }

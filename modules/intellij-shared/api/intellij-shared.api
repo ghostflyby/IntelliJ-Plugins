@@ -25,29 +25,31 @@ public final class dev/ghostflyby/intellij/PluginInfoProvider {
 }
 
 public final class dev/ghostflyby/intellij/ui/EditableHintedComboBox : com/intellij/openapi/ui/ComboBox {
-	public fun addNotify ()V
-	public final fun commitEditorText ()V
+	public fun <init> ()V
+	public fun <init> (Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;)V
+	public synthetic fun <init> (Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAdapter ()Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;
 	public final fun getEditorTextField ()Lcom/intellij/ui/components/fields/ExtendableTextField;
 	public final fun getLeftHint ()Ljava/lang/String;
 	public fun getPreferredSize ()Ljava/awt/Dimension;
 	public final fun getRightHint ()Ljava/lang/String;
+	public final fun setAdapter (Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;)V
 	public final fun setLeftHint (Ljava/lang/String;)V
 	public final fun setRightHint (Ljava/lang/String;)V
-	public fun updateUI ()V
 }
 
 public abstract interface class dev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter {
-	public fun itemFromText (Ljava/lang/String;Ljavax/swing/ComboBoxModel;Ljava/lang/Object;)Ljava/lang/Object;
-	public fun leftHintOf (Ljava/lang/Object;)Ljava/lang/String;
-	public fun textOf (Ljava/lang/Object;)Ljava/lang/String;
-}
-
-public final class dev/ghostflyby/intellij/ui/EditableHintedComboBoxKt {
-	public static final fun editableHintedComboBox (Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;)Ldev/ghostflyby/intellij/ui/EditableHintedComboBox;
+	public abstract fun fromText (Ljava/lang/String;)Ljava/lang/Object;
+	public abstract fun text (Ljava/lang/Object;)Ljava/lang/String;
 }
 
 public final class dev/ghostflyby/intellij/ui/EditableHintedComboBoxUiDslKt {
+	public static final fun bindLeftHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
 	public static final fun bindRightHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun bindText (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableMutableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun editableHintedComboBox (Lcom/intellij/ui/dsl/builder/Row;Ljava/util/Collection;Ljavax/swing/ListCellRenderer;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun editableHintedComboBox (Lcom/intellij/ui/dsl/builder/Row;Ljavax/swing/ComboBoxModel;Ljavax/swing/ListCellRenderer;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static synthetic fun editableHintedComboBox$default (Lcom/intellij/ui/dsl/builder/Row;Ljava/util/Collection;Ljavax/swing/ListCellRenderer;ILjava/lang/Object;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static synthetic fun editableHintedComboBox$default (Lcom/intellij/ui/dsl/builder/Row;Ljavax/swing/ComboBoxModel;Ljavax/swing/ListCellRenderer;ILjava/lang/Object;)Lcom/intellij/ui/dsl/builder/Cell;
 }
 

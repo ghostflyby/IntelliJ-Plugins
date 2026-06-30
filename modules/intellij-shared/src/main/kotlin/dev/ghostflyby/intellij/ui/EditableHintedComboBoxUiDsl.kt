@@ -6,7 +6,9 @@
 
 package dev.ghostflyby.intellij.ui
 
+import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
+import com.intellij.openapi.observable.util.bind
 import com.intellij.openapi.observable.util.lockOrSkip
 import com.intellij.ui.NewUI
 import com.intellij.ui.SimpleListCellRenderer
@@ -29,6 +31,26 @@ public fun <T> Cell<EditableHintedComboBox<T>>.bindRightHint(
         }
     }
 }
+
+public fun <T> Cell<EditableHintedComboBox<T>>.bindLeftHint(
+    property: ObservableProperty<String>,
+): Cell<EditableHintedComboBox<T>> = applyToComponent {
+    leftHint = property.get()
+    val mutex = AtomicBoolean()
+    property.afterChange {
+        mutex.lockOrSkip {
+            leftHint = it
+        }
+    }
+}
+
+
+public fun <T> Cell<EditableHintedComboBox<T>>.bindText(
+    property: ObservableMutableProperty<String>,
+): Cell<EditableHintedComboBox<T>> = applyToComponent {
+    editorTextField.bind(property)
+}
+
 
 public fun <T> Row.editableHintedComboBox(
     model: ComboBoxModel<T>,
