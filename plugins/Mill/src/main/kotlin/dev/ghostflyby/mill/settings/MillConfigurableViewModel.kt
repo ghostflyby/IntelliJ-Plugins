@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mill.settings
@@ -72,11 +56,6 @@ internal class MillConfigurableViewModel(
         propertyGraph.property(emptyList())
     val executableSelectedChoiceProperty: ObservableMutableProperty<MillExecutableChoice?> =
         propertyGraph.property(null)
-    val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableSelectedChoiceBindingProperty: ObservableMutableProperty<MillExecutableChoice?> =
-        createBindingProperty(executableSelectedChoiceProperty, parentDisposable, ::selectExecutableChoice)
-    val executableInputTextBindingProperty: ObservableMutableProperty<String> =
-        createBindingProperty(executableInputTextProperty, parentDisposable, ::updateExecutableInput)
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
@@ -113,6 +92,7 @@ internal class MillConfigurableViewModel(
                 persistSelectedProjectState()
             }
         }
+        executableSelectedChoiceProperty.afterChange(parentDisposable, ::selectExecutableChoice)
 
         loadSelectedProjectState(selectedProjectPathProperty.get())
         refreshExecutableSelector()
@@ -226,55 +206,6 @@ internal class MillConfigurableViewModel(
         applyExecutableSelection(selectedChoice.source, selectedChoice.manualPath)
     }
 
-    fun updateExecutableInput(text: String) {
-        if (isSynchronizing) {
-            return
-        }
-        val trimmedText = text.trim()
-        val matchedChoice = findExecutableChoiceByInput(trimmedText)
-        if (matchedChoice != null) {
-            applyExecutableSelection(matchedChoice.source, matchedChoice.manualPath)
-            return
-        }
-        applyExecutableSelection(MillExecutableSource.MANUAL, trimmedText)
-    }
-
-    private fun <T> createBindingProperty(
-        delegate: ObservableMutableProperty<T>,
-        parentDisposable: Disposable,
-        setter: (T) -> Unit,
-    ): ObservableMutableProperty<T> {
-        val binding = propertyGraph.property(delegate.get())
-        var updatingFromDelegate = false
-        var updatingFromBinding = false
-
-        delegate.afterChange(parentDisposable) { value ->
-            if (updatingFromBinding || binding.get() == value) {
-                return@afterChange
-            }
-            updatingFromDelegate = true
-            try {
-                binding.set(value)
-            } finally {
-                updatingFromDelegate = false
-            }
-        }
-
-        binding.afterChange(parentDisposable) { value ->
-            if (updatingFromDelegate || delegate.get() == value) {
-                return@afterChange
-            }
-            updatingFromBinding = true
-            try {
-                setter(value)
-            } finally {
-                updatingFromBinding = false
-            }
-        }
-
-        return binding
-    }
-
     private fun currentSelectedState(): MillLinkedProjectSettingsState? {
         return selectedProjectPathProperty.get()
             .takeUnless(String::isBlank)
@@ -357,7 +288,6 @@ internal class MillConfigurableViewModel(
                 executableChoicesProperty.set(emptyList())
                 if (updateEditorPresentation) {
                     executableSelectedChoiceProperty.set(null)
-                    executableInputTextProperty.set("")
                     executableSelectionToolTipProperty.set("")
                 }
                 return
@@ -367,7 +297,6 @@ internal class MillConfigurableViewModel(
                 executableChoicesProperty.set(emptyList())
                 if (updateEditorPresentation) {
                     executableSelectedChoiceProperty.set(null)
-                    executableInputTextProperty.set("")
                     executableSelectionToolTipProperty.set("")
                 }
                 return
@@ -378,12 +307,6 @@ internal class MillConfigurableViewModel(
             executableChoicesProperty.set(choices)
             executableSelectedChoiceProperty.set(selectedChoice)
             if (updateEditorPresentation) {
-                executableInputTextProperty.set(
-                    selectedChoice?.editorText ?: createManualEditorText(
-                        projectPath,
-                        state.manualExecutablePath,
-                    ),
-                )
                 executableSelectionToolTipProperty.set(
                     selectedChoice?.tooltipText ?: createManualTooltip(
                         projectPath,
@@ -472,13 +395,6 @@ internal class MillConfigurableViewModel(
         )
     }
 
-    private fun createManualEditorText(projectPath: String, manualPath: String): String {
-        if (manualPath.isBlank()) {
-            return ""
-        }
-        return createManualChoice(Path.of(projectPath), manualPath).manualPath
-    }
-
     private fun createManualTooltip(projectPath: String, manualPath: String): String {
         if (manualPath.isBlank()) {
             return ""
@@ -559,7 +475,7 @@ internal class MillConfigurableViewModel(
         if (localValidationMessage != null) {
             checkingProjectPaths.remove(projectPath)
             if (selectedProjectPathProperty.get() == projectPath) {
-                updateDisplayedProbeStatus(isError = true, versionText = "!")
+                updateDisplayedProbeStatus(versionText = "!")
             }
             return
         }
@@ -567,7 +483,6 @@ internal class MillConfigurableViewModel(
         checkingProjectPaths += projectPath
         if (selectedProjectPathProperty.get() == projectPath) {
             updateDisplayedProbeStatus(
-                isError = false,
                 versionText = checkingVersionText(projectPath, state),
             )
         }
@@ -607,21 +522,20 @@ internal class MillConfigurableViewModel(
     private fun refreshDisplayedProbeStatus() {
         val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
         if (projectPath == null) {
-            updateDisplayedProbeStatus(isError = false, versionText = "")
+            updateDisplayedProbeStatus(versionText = "")
             return
         }
         val state = projectStatesByPath[projectPath]
         if (state == null) {
-            updateDisplayedProbeStatus(isError = false, versionText = "")
+            updateDisplayedProbeStatus(versionText = "")
             return
         }
         manualPathValidationMessage(state)?.let {
-            updateDisplayedProbeStatus(isError = true, versionText = "!")
+            updateDisplayedProbeStatus(versionText = "!")
             return
         }
         if (projectPath in checkingProjectPaths) {
             updateDisplayedProbeStatus(
-                isError = false,
                 versionText = checkingVersionText(projectPath, state),
             )
             return
@@ -629,12 +543,11 @@ internal class MillConfigurableViewModel(
         val cachedProbe = probeResultsByPath[projectPath]
         if (cachedProbe != null && cachedProbe.settingsState == state) {
             updateDisplayedProbeStatus(
-                isError = !cachedProbe.probeResult.isValid,
                 versionText = formatProbeVersion(cachedProbe.probeResult),
             )
             return
         }
-        updateDisplayedProbeStatus(isError = false, versionText = "")
+        updateDisplayedProbeStatus(versionText = "")
     }
 
     private fun checkingVersionText(projectPath: String, state: MillLinkedProjectSettingsState): String {
@@ -645,8 +558,7 @@ internal class MillConfigurableViewModel(
         return formatProbeVersion(cachedProbe.probeResult).takeUnless { it == "!" } ?: ""
     }
 
-    private fun updateDisplayedProbeStatus(isError: Boolean, versionText: String) {
-        executableStatusIsErrorProperty.set(isError)
+    private fun updateDisplayedProbeStatus(versionText: String) {
         executableVersionTextProperty.set(versionText)
         executableValidationMessageProperty.set(currentExecutableValidationMessage())
     }
