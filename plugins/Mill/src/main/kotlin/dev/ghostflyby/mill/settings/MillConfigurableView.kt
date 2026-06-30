@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mill.settings
@@ -26,15 +10,11 @@ import com.intellij.openapi.observable.util.bind
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ValidationInfo
 import com.intellij.ui.SimpleListCellRenderer
-import com.intellij.ui.dsl.builder.Align
-import com.intellij.ui.dsl.builder.bindItem
-import com.intellij.ui.dsl.builder.bindSelected
-import com.intellij.ui.dsl.builder.panel
-import dev.ghostflyby.intellij.ui.bindEditorText
-import dev.ghostflyby.intellij.ui.bindItems
+import com.intellij.ui.dsl.builder.*
+import dev.ghostflyby.intellij.ui.EditableHintedComboBox
 import dev.ghostflyby.intellij.ui.bindRightHint
-import dev.ghostflyby.intellij.ui.bindRightHintError
 import dev.ghostflyby.mill.Bundle
+import javax.swing.DefaultComboBoxModel
 
 internal fun millConfigurableView(
     project: Project,
@@ -67,28 +47,9 @@ internal fun millConfigurableView(
 
     row(Bundle.message("settings.mill.executable.label")) {
         cell(createMillExecutableSelectorField(project, model))
-            .bindItems(model.executableChoicesProperty)
-            .bindItem(
-                getter = model.executableSelectedChoiceBindingProperty::get,
-                setter = model.executableSelectedChoiceBindingProperty::set,
-            )
-            .bindEditorText(model.executableInputTextBindingProperty)
+            .installExecutableChoicesModel(model)
+            .bindItem(model.executableSelectedChoiceProperty::get, model.executableSelectedChoiceProperty::set)
             .bindRightHint(model.executableVersionTextProperty)
-            .bindRightHintError(model.executableStatusIsErrorProperty)
-            .applyToComponent {
-                fun updateExecutableValidation(message: String?) {
-                    val outline = if (message == null) null else "error"
-                    putClientProperty("JComponent.outline", outline)
-                    editorTextField.putClientProperty("JComponent.outline", outline)
-                    toolTipText = message
-                    editorTextField.toolTipText = message
-                    repaint()
-                    editorTextField.repaint()
-                }
-
-                updateExecutableValidation(model.executableValidationMessageProperty.get())
-                model.executableValidationMessageProperty.afterChange(::updateExecutableValidation)
-            }
             .resizableColumn()
             .align(Align.FILL)
             .validationOnApply { component ->
@@ -105,4 +66,17 @@ internal fun millConfigurableView(
         checkBox(Bundle.message("settings.mill.per.module.tasks"))
             .bindSelected(model.createPerModuleTaskNodesProperty)
     }.contextHelp(Bundle.message("settings.mill.per.module.tasks.tooltip"))
+}
+
+private fun Cell<EditableHintedComboBox<MillExecutableChoice>>.installExecutableChoicesModel(
+    model: MillConfigurableViewModel,
+): Cell<EditableHintedComboBox<MillExecutableChoice>> = applyToComponent {
+    fun replaceExecutableChoices(choices: List<MillExecutableChoice>) {
+        val mutableModel = this.model as? DefaultComboBoxModel<MillExecutableChoice> ?: return
+        mutableModel.removeAllElements()
+        choices.forEach(mutableModel::addElement)
+    }
+
+    replaceExecutableChoices(model.executableChoicesProperty.get())
+    model.executableChoicesProperty.afterChange(::replaceExecutableChoices)
 }

@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mill.settings
@@ -30,29 +14,18 @@ import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.ui.GroupedComboBoxRenderer
 import com.intellij.ui.components.fields.ExtendableTextComponent
 import dev.ghostflyby.intellij.ui.EditableHintedComboBox
-import dev.ghostflyby.intellij.ui.EditableHintedComboBoxInputResolver
-import dev.ghostflyby.intellij.ui.EditableHintedComboBoxPresentation
-import dev.ghostflyby.intellij.ui.createEditableHintedComboBox
+import dev.ghostflyby.intellij.ui.EditableHintedComboBoxAdapter
 import dev.ghostflyby.mill.Bundle
-
-private val millExecutableChoicePresentation = EditableHintedComboBoxPresentation<MillExecutableChoice>(
-    editorTextOf = { it.editorText },
-    editorLeftHintOf = { it?.editorHintText.orEmpty() },
-)
+import javax.swing.DefaultComboBoxModel
 
 internal fun createMillExecutableSelectorField(
     project: Project,
     viewModel: MillConfigurableViewModel,
 ): EditableHintedComboBox<MillExecutableChoice> {
-    val selector = createEditableHintedComboBox(
-        presentation = millExecutableChoicePresentation,
+    val selector = EditableHintedComboBox(
+        model = DefaultComboBoxModel(),
+        adapter = MillExecutableChoiceComboBoxAdapter(viewModel),
     )
-        .configureInputResolver(
-            EditableHintedComboBoxInputResolver(
-                createInlineValue = ::createInlineManualChoice,
-                findValueByEditorText = { _, text -> viewModel.findExecutableChoiceByInput(text) },
-            ),
-        )
     selector.renderer = object : GroupedComboBoxRenderer<MillExecutableChoice>(selector) {
         override fun getText(item: MillExecutableChoice): String {
             return item.displayName
@@ -62,7 +35,7 @@ internal fun createMillExecutableSelectorField(
             return null
         }
     }
-    selector.addExtension(
+    selector.editorTextField.addExtension(
         ExtendableTextComponent.Extension.create(
             AllIcons.General.OpenDisk,
             AllIcons.General.OpenDiskHover,
@@ -80,6 +53,26 @@ internal fun createMillExecutableSelectorField(
         },
     )
     return selector
+}
+
+private class MillExecutableChoiceComboBoxAdapter(
+    private val viewModel: MillConfigurableViewModel,
+) : EditableHintedComboBoxAdapter<MillExecutableChoice> {
+    override fun text(t: MillExecutableChoice): String {
+        return t.editorText
+    }
+
+    override fun leftHint(t: MillExecutableChoice?): String {
+        return t?.editorHintText.orEmpty()
+    }
+
+    override fun fromText(
+        text: String,
+    ): MillExecutableChoice? {
+        val trimmedText = text.trim()
+        return viewModel.findExecutableChoiceByInput(trimmedText)
+            ?: trimmedText.takeUnless(String::isBlank)?.let(::createInlineManualChoice)
+    }
 }
 
 private fun createInlineManualChoice(text: String): MillExecutableChoice {
