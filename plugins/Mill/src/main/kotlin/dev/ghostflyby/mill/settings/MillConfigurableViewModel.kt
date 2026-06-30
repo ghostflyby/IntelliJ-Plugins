@@ -25,6 +25,9 @@ import java.nio.file.Path
 internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
+    private val discoverExecutables: (Path) -> MillExecutableDiscovery = MillCommandLineUtil::discoverExecutables,
+    private val probeExecutable: (Path, MillExecutableSource, String) -> MillExecutableProbeResult = MillCommandLineUtil::probeExecutable,
+    private val draftProbeDebounceMillis: Long = 300,
 ) {
     private val propertyGraph = PropertyGraph("MillConfigurableViewModel")
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -38,6 +41,8 @@ internal class MillConfigurableViewModel(
     private val probeJobsByPath = mutableMapOf<String, Job>()
     private val discoveryJobsByPath = mutableMapOf<String, Job>()
     private val probeResultsByPath = mutableMapOf<String, MillCachedExecutableProbe>()
+    private var draftProbeJob: Job? = null
+    private var draftProbeState: MillLinkedProjectSettingsState? = null
     private val executableDiscoveriesByPath = mutableMapOf<String, MillExecutableDiscovery>()
     private val checkingProjectPaths = linkedSetOf<String>()
     private var isSynchronizing = false
@@ -56,6 +61,8 @@ internal class MillConfigurableViewModel(
         propertyGraph.property(emptyList())
     val executableSelectedChoiceProperty: ObservableMutableProperty<MillExecutableChoice?> =
         propertyGraph.property(null)
+    val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
+    val executableInputLeftHintProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
     val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
@@ -93,6 +100,7 @@ internal class MillConfigurableViewModel(
             }
         }
         executableSelectedChoiceProperty.afterChange(parentDisposable, ::selectExecutableChoice)
+        executableInputTextProperty.afterChange(parentDisposable, ::updateExecutableDraftText)
 
         loadSelectedProjectState(selectedProjectPathProperty.get())
         refreshExecutableSelector()
@@ -115,6 +123,9 @@ internal class MillConfigurableViewModel(
 
         probeJobsByPath.values.forEach(Job::cancel)
         probeJobsByPath.clear()
+        draftProbeJob?.cancel()
+        draftProbeJob = null
+        draftProbeState = null
         discoveryJobsByPath.values.forEach(Job::cancel)
         discoveryJobsByPath.clear()
         probeResultsByPath.clear()
@@ -239,6 +250,12 @@ internal class MillConfigurableViewModel(
         val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return
         val currentState = projectStatesByPath[projectPath] ?: return
         if (currentState.executableSource == source && currentState.manualExecutablePath == manualPath) {
+            refreshExecutableDraftFromSelection(
+                findChoiceForState(
+                    currentState,
+                    executableChoicesProperty.get(),
+                ),
+            )
             return
         }
         projectStatesByPath[projectPath] = MillLinkedProjectSettingsState.create(
@@ -307,6 +324,7 @@ internal class MillConfigurableViewModel(
             executableChoicesProperty.set(choices)
             executableSelectedChoiceProperty.set(selectedChoice)
             if (updateEditorPresentation) {
+                refreshExecutableDraftFromSelection(selectedChoice)
                 executableSelectionToolTipProperty.set(
                     selectedChoice?.tooltipText ?: createManualTooltip(
                         projectPath,
@@ -317,6 +335,18 @@ internal class MillConfigurableViewModel(
         } finally {
             isSynchronizing = false
         }
+    }
+
+    private fun isExecutableDraftEditing(): Boolean {
+        val selectedText = executableSelectedChoiceProperty.get()?.editorText.orEmpty()
+        return executableInputTextProperty.get() != selectedText
+    }
+
+    private fun refreshExecutableDraftFromSelection(selectedChoice: MillExecutableChoice?) {
+        draftProbeJob?.cancel()
+        draftProbeJob = null
+        draftProbeState = null
+        executableInputTextProperty.set(selectedChoice?.editorText.orEmpty())
     }
 
     private fun buildExecutableChoices(
@@ -442,6 +472,101 @@ internal class MillConfigurableViewModel(
         }
     }
 
+    private fun updateExecutableDraftText(text: String) {
+        if (isSynchronizing) {
+            refreshExecutableDraftPresentation(text)
+            return
+        }
+        refreshExecutableDraftPresentation(text)
+        scheduleDraftProbe(text)
+    }
+
+    private fun refreshExecutableDraftPresentation(text: String) {
+        executableInputLeftHintProperty.set(leftHintForExecutableInput(text))
+    }
+
+    private fun leftHintForExecutableInput(text: String): String {
+        val trimmedText = text.trim()
+        if (trimmedText.isBlank()) {
+            return ""
+        }
+        findExecutableChoiceByInput(trimmedText)?.editorHintText?.let { return it }
+        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return ""
+        if (trimmedText == MillConstants.defaultExecutable) {
+            executableDiscoveriesByPath[projectPath]
+                ?.pathExecutables
+                ?.firstOrNull()
+                ?.toString()
+                ?.let { return it }
+        }
+        return resolveDisplayPath(Path.of(projectPath), trimmedText).orEmpty()
+    }
+
+    private fun scheduleDraftProbe(text: String) {
+        val draftState = executableDraftState(text)
+        draftProbeState = draftState
+        draftProbeJob?.cancel()
+
+        if (draftState == null) {
+            updateDisplayedProbeStatus(versionText = "")
+            return
+        }
+
+        val localValidationMessage = manualPathValidationMessage(draftState)
+        if (localValidationMessage != null) {
+            updateDisplayedProbeStatus(versionText = "!")
+            return
+        }
+
+        executableVersionTextProperty.set(
+            probeResultsByPath[draftState.externalProjectPath]
+                ?.takeIf { it.settingsState == draftState }
+                ?.probeResult
+                ?.let(::formatProbeVersion)
+                .orEmpty(),
+        )
+
+        draftProbeJob = scope.launch {
+            try {
+                if (draftProbeDebounceMillis > 0) {
+                    delay(draftProbeDebounceMillis)
+                }
+                val probeResult = withContext(Dispatchers.IO) {
+                    probeExecutable(
+                        Path.of(draftState.externalProjectPath),
+                        draftState.executableSource,
+                        draftState.manualExecutablePath,
+                    )
+                }
+                withContext(Dispatchers.UI) {
+                    if (!scope.isActive || isDisposed || draftProbeState != draftState) {
+                        return@withContext
+                    }
+                    updateDisplayedProbeStatus(versionText = formatProbeVersion(probeResult))
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            }
+        }
+    }
+
+    private fun executableDraftState(text: String): MillLinkedProjectSettingsState? {
+        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return null
+        val currentState = projectStatesByPath[projectPath] ?: return null
+        val trimmedText = text.trim()
+        if (trimmedText.isBlank()) {
+            return null
+        }
+        val choice = findExecutableChoiceByInput(trimmedText)
+        return MillLinkedProjectSettingsState.create(
+            externalProjectPath = projectPath,
+            executableSource = choice?.source ?: MillExecutableSource.MANUAL,
+            manualExecutablePath = choice?.manualPath ?: trimmedText,
+            useMillMetadataDuringImport = currentState.useMillMetadataDuringImport,
+            createPerModuleTaskNodes = currentState.createPerModuleTaskNodes,
+        )
+    }
+
     private fun scheduleDiscovery(projectPath: String, debounceMillis: Long = 0) {
         discoveryJobsByPath.remove(projectPath)?.cancel()
         discoveryJobsByPath[projectPath] = scope.launch {
@@ -450,7 +575,7 @@ internal class MillConfigurableViewModel(
                     delay(debounceMillis)
                 }
                 val discovery = withContext(Dispatchers.IO) {
-                    MillCommandLineUtil.discoverExecutables(Path.of(projectPath))
+                    discoverExecutables(Path.of(projectPath))
                 }
                 withContext(Dispatchers.UI) {
                     if (!scope.isActive || isDisposed) {
@@ -458,7 +583,11 @@ internal class MillConfigurableViewModel(
                     }
                     executableDiscoveriesByPath[projectPath] = discovery
                     if (selectedProjectPathProperty.get() == projectPath) {
-                        refreshExecutableSelector()
+                        if (isExecutableDraftEditing()) {
+                            refreshExecutableDraftPresentation(executableInputTextProperty.get())
+                        } else {
+                            refreshExecutableSelector()
+                        }
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -493,10 +622,10 @@ internal class MillConfigurableViewModel(
                     delay(debounceMillis)
                 }
                 val probeResult = withContext(Dispatchers.IO) {
-                    MillCommandLineUtil.probeExecutable(
-                        projectRoot = Path.of(projectPath),
-                        executableSource = state.executableSource,
-                        executablePath = state.manualExecutablePath,
+                    probeExecutable(
+                        Path.of(projectPath),
+                        state.executableSource,
+                        state.manualExecutablePath,
                     )
                 }
                 withContext(Dispatchers.Main) {
@@ -509,8 +638,12 @@ internal class MillConfigurableViewModel(
                     checkingProjectPaths.remove(projectPath)
                     probeResultsByPath[projectPath] = MillCachedExecutableProbe(state, probeResult)
                     if (selectedProjectPathProperty.get() == projectPath) {
-                        refreshExecutableSelector()
-                        refreshDisplayedProbeStatus()
+                        if (isExecutableDraftEditing()) {
+                            refreshExecutableDraftPresentation(executableInputTextProperty.get())
+                        } else {
+                            refreshExecutableSelector()
+                            refreshDisplayedProbeStatus()
+                        }
                     }
                 }
             } catch (cancelled: CancellationException) {
