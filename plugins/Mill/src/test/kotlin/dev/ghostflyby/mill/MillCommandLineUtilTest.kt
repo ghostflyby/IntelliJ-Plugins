@@ -8,10 +8,13 @@ package dev.ghostflyby.mill
 
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.settings.MillExecutableSource
+import dev.ghostflyby.mill.settings.MillExecutionSettings
 import org.junit.Assert.*
 import org.junit.Test
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 internal class MillCommandLineUtilTest {
     @Test
@@ -52,6 +55,51 @@ internal class MillCommandLineUtilTest {
             )
 
             assertEquals(MillConstants.defaultExecutable, resolved)
+        } finally {
+            deleteRecursively(root)
+        }
+    }
+
+    @Test
+    fun `interrupting runCommand destroys running process`() {
+        val root = Files.createTempDirectory("mill-project")
+        try {
+            val script = root.resolve("slow-mill.sh")
+            Files.writeString(
+                script,
+                """
+                #!/bin/sh
+                trap 'exit 143' TERM
+                sleep 30
+                """.trimIndent(),
+            )
+            script.toFile().setExecutable(true)
+            val started = CountDownLatch(1)
+            val stopped = CountDownLatch(1)
+            val worker = Thread {
+                try {
+                    started.countDown()
+                    MillCommandLineUtil.runCommand(
+                        projectRoot = root,
+                        settings = MillExecutionSettings().also {
+                            it.millExecutableSource = MillExecutableSource.MANUAL
+                            it.millExecutablePath = script.toString()
+                        },
+                        arguments = listOf("--version"),
+                    )
+                } catch (_: InterruptedException) {
+                    // Expected: cancellation should interrupt runCommand and kill the process.
+                } finally {
+                    stopped.countDown()
+                }
+            }
+
+            worker.start()
+            assertTrue(started.await(1, TimeUnit.SECONDS))
+            Thread.sleep(200)
+            worker.interrupt()
+
+            assertTrue(stopped.await(3, TimeUnit.SECONDS))
         } finally {
             deleteRecursively(root)
         }

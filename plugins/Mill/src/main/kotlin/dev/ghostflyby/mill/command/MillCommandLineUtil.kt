@@ -307,9 +307,10 @@ internal object MillCommandLineUtil {
         timeoutMillis: Int = 0,
     ): MillCommandResult {
         val commandLine = createCommandLine(projectRoot, settings, arguments)
+        var process: Process? = null
         return try {
             val processBuilder = commandLine.toProcessBuilder()
-            val process = processBuilder.start()
+            process = processBuilder.start()
             val charset = commandLine.charset
             val stdoutReader = readStreamAsync(process.inputStream, charset)
             val stderrReader = readStreamAsync(process.errorStream, charset)
@@ -338,6 +339,14 @@ internal object MillCommandLineUtil {
                 startupFailed = false,
                 timedOut = !finished,
             )
+        } catch (interrupted: InterruptedException) {
+            process?.destroyForcibly()
+            process?.let {
+                closeQuietly(it.inputStream)
+                closeQuietly(it.errorStream)
+            }
+            Thread.currentThread().interrupt()
+            throw interrupted
         } catch (_: ExecutionException) {
             MillCommandResult(
                 projectRoot = projectRoot,

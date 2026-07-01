@@ -34,45 +34,38 @@ public class EditableHintedComboBox<E>(
     model: ComboBoxModel<E> = DefaultComboBoxModel(),
     public var adapter: EditableHintedComboBoxAdapter<E>? = null,
 ) : ComboBox<E>(model) {
+    private val hintedEditorTextField = HintOverlayTextField().apply { border = null }
+    private val comboBoxEditor = object : BasicComboBoxEditor() {
+        override fun createEditorComponent(): JTextField {
+            return hintedEditorTextField
+        }
+
+        override fun setItem(anObject: Any?) {
+            val adapter = adapter
+            if (anObject != null && adapter != null) {
+                @Suppress("UNCHECKED_CAST")
+                editor.text = adapter.text(anObject as E)
+            } else super.setItem(anObject)
+        }
+
+        override fun getItem(): Any? {
+            val adapter = adapter
+            return if (adapter != null)
+                adapter.fromText(editor.text)
+            else
+                super.item
+        }
+    }
+
     init {
         isSwingPopup = false
         isEditable = true
-
-        val editor = object : BasicComboBoxEditor() {
-
-            protected override fun createEditorComponent(): JTextField {
-                return HintOverlayTextField().apply { border = null }
-            }
-
-            override fun setItem(anObject: Any?) {
-                val adapter = adapter
-                if (anObject != null && adapter != null) {
-                    @Suppress("UNCHECKED_CAST")
-                    editor.text = adapter.text(anObject as E)
-                } else super.setItem(anObject)
-            }
-
-            override fun getItem(): Any? {
-                val adapter = adapter
-                return if (adapter != null)
-                    adapter.fromText(editor.text)
-                else
-                    super.item
-            }
-
-        }
-
-        super.setEditor(editor)
+        super.setEditor(comboBoxEditor)
     }
 
-    public val editorTextField: ExtendableTextField get() = hintOverlayTextField
-    public var leftHint: String by hintOverlayTextField::trailingHint
-    public var rightHint: String by hintOverlayTextField::rightHint
-
-    private val hintOverlayTextField: HintOverlayTextField
-        get() {
-            return editor.editorComponent as HintOverlayTextField
-        }
+    public val editorTextField: ExtendableTextField get() = hintedEditorTextField
+    public var leftHint: String by hintedEditorTextField::trailingHint
+    public var rightHint: String by hintedEditorTextField::rightHint
 
 
     override fun getPreferredSize(): Dimension {
@@ -83,7 +76,7 @@ public class EditableHintedComboBox<E>(
         return try {
             sizeProvider()
         } catch (_: NullPointerException) {
-            val editorSize = hintOverlayTextField.preferredSize
+            val editorSize = hintedEditorTextField.preferredSize
             val insets = insets
             Dimension(
                 editorSize.width + insets.left + insets.right + JBUI.scale(32),

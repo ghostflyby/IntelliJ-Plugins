@@ -211,6 +211,56 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
+    fun bindTextTracksVisibleEditorAfterUpdateUi() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+        val property = PropertyGraph().property(comboBox.editorTextField.text.orEmpty())
+        panel {
+            row {
+                cell(comboBox).bindText(property)
+            }
+        }
+        val boundEditor = comboBox.editorTextField
+
+        comboBox.updateUI()
+        flushEdt()
+        comboBox.editorTextField.text = "PATH"
+
+        assertSame(boundEditor, comboBox.editorTextField)
+        assertSame(comboBox.editorTextField, comboBox.editor.editorComponent)
+        assertEquals("PATH", property.get())
+        assertEquals(project, comboBox.selectedItem)
+    }
+
+    @Test
+    fun boundHintsUpdateVisibleEditorAfterUpdateUi() {
+        val comboBox = createComboBox()
+        val propertyGraph = PropertyGraph()
+        val leftHintProperty = propertyGraph.property("")
+        val rightHintProperty = propertyGraph.property("")
+        panel {
+            row {
+                cell(comboBox)
+                    .bindLeftHint(leftHintProperty)
+                    .bindRightHint(rightHintProperty)
+            }
+        }
+        val boundEditor = comboBox.editorTextField
+
+        comboBox.updateUI()
+        flushEdt()
+        leftHintProperty.set("/repo/mill")
+        rightHintProperty.set("1.0.0")
+
+        assertSame(boundEditor, comboBox.editorTextField)
+        assertSame(comboBox.editorTextField, comboBox.editor.editorComponent)
+        assertEquals("/repo/mill", comboBox.leftHint)
+        assertEquals("1.0.0", comboBox.rightHint)
+    }
+
+    @Test
     fun boundHintsDoNotCommitDraftText() {
         val comboBox = createComboBox()
         val project = choice("project", text = "Project")

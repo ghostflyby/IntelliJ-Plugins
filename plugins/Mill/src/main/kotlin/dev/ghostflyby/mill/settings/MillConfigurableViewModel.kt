@@ -10,8 +10,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.UI
 import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
-import com.intellij.openapi.observable.properties.PropertyGraph
-import com.intellij.openapi.observable.util.transform
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.util.Disposer
 import dev.ghostflyby.mill.Bundle
@@ -20,8 +18,11 @@ import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.command.MillExecutableDiscovery
 import dev.ghostflyby.mill.command.MillExecutableProbeResult
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.milliseconds
 
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
@@ -29,133 +30,280 @@ internal class MillConfigurableViewModel(
     private val probeExecutable: (Path, MillExecutableSource, String) -> MillExecutableProbeResult = MillCommandLineUtil::probeExecutable,
     private val draftProbeDebounceMillis: Long = 300,
 ) {
-    private val propertyGraph = PropertyGraph("MillConfigurableViewModel")
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
-    private val originalSettingsByPath = linkedProjectSettings
-        .map(MillProjectSettings::clone)
-        .associateBy(MillProjectSettings::getExternalProjectPath)
-        .toMutableMap()
-    private val projectStatesByPath = originalSettingsByPath.values
-        .associate { settings -> settings.externalProjectPath to MillLinkedProjectSettingsState.from(settings) }
-        .toMutableMap()
-    private val probeJobsByPath = mutableMapOf<String, Job>()
-    private val discoveryJobsByPath = mutableMapOf<String, Job>()
-    private val probeResultsByPath = mutableMapOf<String, MillCachedExecutableProbe>()
-    private var draftProbeJob: Job? = null
-    private var draftProbeState: MillLinkedProjectSettingsState? = null
-    private val executableDiscoveriesByPath = mutableMapOf<String, MillExecutableDiscovery>()
-    private val checkingProjectPaths = linkedSetOf<String>()
-    private var isSynchronizing = false
-    private var isDisposed = false
+    private val _originalSettingsByPath = MutableStateFlow(originalSettingsMap(linkedProjectSettings))
+    private val _projectStatesByPath = MutableStateFlow(projectStatesFrom(_originalSettingsByPath.value))
+    private val _resetVersion = MutableStateFlow(0)
+    private val _selectedProjectPath =
+        MutableStateFlow(_projectStatesByPath.value.keys.minOrNull().orEmpty())
+    private val initialExecutableChoices = currentExecutableChoices()
+    private val initialExecutableChoice = currentSelectedExecutableChoice(initialExecutableChoices)
+    private val _executableInputText = MutableStateFlow(initialExecutableChoice?.editorText.orEmpty())
 
-    val linkedProjectPaths: List<String> = projectStatesByPath.keys.sorted()
-    val hasLinkedProjects: Boolean = linkedProjectPaths.isNotEmpty()
-    val hasMultipleLinkedProjects: Boolean = linkedProjectPaths.size > 1
+    val linkedProjectPaths: List<String> get() = _projectStatesByPath.value.keys.sorted()
+    val hasLinkedProjects: Boolean get() = linkedProjectPaths.isNotEmpty()
+    val hasMultipleLinkedProjects: Boolean get() = linkedProjectPaths.size > 1
+
+    private val selectedProjectStateFlow: StateFlow<MillLinkedProjectSettingsState?> =
+        combine(_projectStatesByPath, _selectedProjectPath) { statesByPath, path ->
+            path.takeUnless(String::isBlank)?.let(statesByPath::get)
+        }.stateIn(scope, SharingStarted.Eagerly, currentSelectedState())
+
+    private val selectedProjectDisplayNameFlow: StateFlow<String> = _selectedProjectPath
+        .map { path -> path.takeUnless(String::isBlank)?.let(::presentableProjectName).orEmpty() }
+        .stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            _selectedProjectPath.value.takeUnless(String::isBlank)?.let(::presentableProjectName).orEmpty(),
+        )
+
+    private val discoveryResultsFlow: StateFlow<Map<String, MillExecutableDiscovery>> =
+        _projectStatesByPath
+            .map { states -> states.keys.sorted() }
+            .distinctUntilChanged()
+            .flatMapLatest { projectPaths ->
+                if (projectPaths.isEmpty()) {
+                    flowOf(emptyMap<String, MillExecutableDiscovery>())
+                } else {
+                    val discoveryFlows: Iterable<Flow<Pair<String, MillExecutableDiscovery>>> =
+                        projectPaths.map { projectPath ->
+                            flow<Pair<String, MillExecutableDiscovery>> {
+                                val discovery = runInterruptible(Dispatchers.IO) {
+                                    discoverExecutables(Path.of(projectPath))
+                                }
+                                emit(projectPath to discovery)
+                            }
+                        }
+                    discoveryFlows.merge()
+                        .runningFold(emptyMap<String, MillExecutableDiscovery>()) { discoveries, discovered ->
+                            discoveries + (discovered.first to discovered.second)
+                        }
+                }
+            }
+            .stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
+    private val projectStatesSetFlow: Flow<Set<MillLinkedProjectSettingsState>> =
+        combine(_projectStatesByPath, _resetVersion) { statesByPath, resetVersion ->
+            resetVersion to statesByPath.values.toSet()
+        }
+            .distinctUntilChanged()
+            .map { it.second }
+
+    private val committedProbeEventsFlow: Flow<MillCommittedProbeEvent> = merge(
+        _resetVersion.drop(1).map { MillCommittedProbeEvent.Clear as MillCommittedProbeEvent },
+        projectStatesSetFlow.map { MillCommittedProbeEvent.ActiveStates(it) },
+        projectStatesSetFlow.flatMapLatest { states ->
+            val probeFlows: List<Flow<MillCommittedProbeEvent>> = states.mapNotNull { state ->
+                if (manualPathValidationMessage(state) != null) {
+                    null
+                } else {
+                    flow {
+                        emit(MillCommittedProbeEvent.Started(state))
+                        delay(300.milliseconds)
+                        val result = runInterruptible(Dispatchers.IO) {
+                            probeExecutable(
+                                Path.of(state.externalProjectPath),
+                                state.executableSource,
+                                state.manualExecutablePath,
+                            )
+                        }
+                        emit(MillCommittedProbeEvent.Finished(state, result))
+                    }
+                }
+            }
+            if (probeFlows.isEmpty()) {
+                emptyFlow<MillCommittedProbeEvent>()
+            } else {
+                probeFlows.merge()
+            }
+        },
+    )
+
+    private val committedProbeStateFlow: StateFlow<MillCommittedProbeState> =
+        committedProbeEventsFlow
+            .runningFold(MillCommittedProbeState(), ::reduceCommittedProbeState)
+            .stateIn(scope, SharingStarted.Eagerly, MillCommittedProbeState())
+
+    private val executableChoicesFlow: StateFlow<List<MillExecutableChoice>> =
+        combine(
+            _selectedProjectPath,
+            selectedProjectStateFlow,
+            discoveryResultsFlow,
+            committedProbeStateFlow,
+        ) { projectPath, state, discoveriesByPath, probeState ->
+            if (projectPath.isBlank() || state == null) {
+                emptyList()
+            } else {
+                buildExecutableChoices(projectPath, state, discoveriesByPath[projectPath], probeState.results)
+            }
+        }.stateIn(scope, SharingStarted.Eagerly, initialExecutableChoices)
+
+    private val executableSelectedChoiceFlow: StateFlow<MillExecutableChoice?> =
+        combine(selectedProjectStateFlow, executableChoicesFlow) { state, choices ->
+            state?.let { findChoiceForState(it, choices) }
+        }.stateIn(scope, SharingStarted.Eagerly, initialExecutableChoice)
+
+    private val executablePreviewStateFlow: StateFlow<MillLinkedProjectSettingsState?> =
+        combine(
+            selectedProjectStateFlow,
+            _executableInputText,
+            executableChoicesFlow,
+            executableSelectedChoiceFlow,
+        ) { selectedProjectState, inputText, choices, selectedChoice ->
+            executableDraftState(selectedProjectState, inputText, choices, selectedChoice)
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            executableDraftState(
+                currentSelectedState(),
+                _executableInputText.value,
+                initialExecutableChoices,
+                initialExecutableChoice,
+            ),
+        )
+
+    private val executableInputLeftHintFlow: StateFlow<String> =
+        combine(
+            _selectedProjectPath,
+            _executableInputText,
+            executableChoicesFlow,
+            executableSelectedChoiceFlow,
+            discoveryResultsFlow,
+        ) { projectPath, inputText, choices, selectedChoice, discoveriesByPath ->
+            leftHintForExecutableInput(projectPath, inputText, choices, selectedChoice, discoveriesByPath[projectPath])
+        }.stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            leftHintForExecutableInput(
+                _selectedProjectPath.value,
+                _executableInputText.value,
+                initialExecutableChoices,
+                initialExecutableChoice,
+                null,
+            ),
+        )
+
+    private val draftProbeResultFlow: StateFlow<MillCachedExecutableProbe?> =
+        executablePreviewStateFlow
+            .transformLatest { draftState ->
+                emit(null)
+                if (draftState == null ||
+                    draftState == selectedProjectStateFlow.value ||
+                    manualPathValidationMessage(draftState) != null
+                ) {
+                    return@transformLatest
+                }
+                if (draftProbeDebounceMillis > 0) {
+                    delay(draftProbeDebounceMillis)
+                }
+                val result = runInterruptible(Dispatchers.IO) {
+                    probeExecutable(
+                        Path.of(draftState.externalProjectPath),
+                        draftState.executableSource,
+                        draftState.manualExecutablePath,
+                    )
+                }
+                emit(MillCachedExecutableProbe(draftState, result))
+            }
+            .stateIn(scope, SharingStarted.Eagerly, null)
+
+    private val executableVersionTextFlow: StateFlow<String> =
+        combine(
+            executablePreviewStateFlow,
+            committedProbeStateFlow,
+            draftProbeResultFlow,
+        ) { previewState, probeState, draftProbe ->
+            versionTextForPreview(previewState, probeState, draftProbe)
+        }.stateIn(scope, SharingStarted.Eagerly, "")
+
+    private val executableValidationMessageFlow: StateFlow<String?> =
+        combine(selectedProjectStateFlow, committedProbeStateFlow) { selectedState, probeState ->
+            executableValidationMessage(selectedState, probeState)
+        }.stateIn(scope, SharingStarted.Eagerly, null)
+
+    private val selectedProjectUseMillMetadataFlow: StateFlow<Boolean> = selectedProjectStateFlow
+        .map { state -> state?.useMillMetadataDuringImport ?: true }
+        .stateIn(scope, SharingStarted.Eagerly, currentSelectedState()?.useMillMetadataDuringImport ?: true)
+
+    private val selectedProjectCreatePerModuleTasksFlow: StateFlow<Boolean> = selectedProjectStateFlow
+        .map { state -> state?.createPerModuleTaskNodes ?: true }
+        .stateIn(scope, SharingStarted.Eagerly, currentSelectedState()?.createPerModuleTaskNodes ?: true)
 
     val selectedProjectPathProperty: ObservableMutableProperty<String> =
-        propertyGraph.property(linkedProjectPaths.firstOrNull().orEmpty())
-    val selectedProjectDisplayNameProperty: ObservableProperty<String> = selectedProjectPathProperty.transform { path ->
-        path.takeUnless(String::isBlank)?.let(::presentableProjectName).orEmpty()
-    }
-    val executableChoicesProperty: ObservableMutableProperty<List<MillExecutableChoice>> =
-        propertyGraph.property(emptyList())
+        _selectedProjectPath.toReducerObservable(
+            scope = scope,
+            setter = ::selectProjectPath,
+        )
+    val selectedProjectDisplayNameProperty: ObservableProperty<String> =
+        selectedProjectDisplayNameFlow.toObservable(scope)
+    val executableChoicesProperty: ObservableProperty<List<MillExecutableChoice>> =
+        executableChoicesFlow.toObservable(scope)
     val executableSelectedChoiceProperty: ObservableMutableProperty<MillExecutableChoice?> =
-        propertyGraph.property(null)
-    val executableInputTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableInputLeftHintProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableSelectionToolTipProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableVersionTextProperty: ObservableMutableProperty<String> = propertyGraph.property("")
-    val executableStatusIsErrorProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(false)
-    val executableValidationMessageProperty: ObservableMutableProperty<String?> = propertyGraph.property(null)
-    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(
-        currentSelectedState()?.useMillMetadataDuringImport ?: true,
-    )
-    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> = propertyGraph.property(
-        currentSelectedState()?.createPerModuleTaskNodes ?: true,
-    )
+        executableSelectedChoiceFlow.toReducerObservable(
+            scope = scope,
+            setter = ::selectExecutableChoice,
+        )
+    val executableInputTextProperty: ObservableMutableProperty<String> = _executableInputText.toObservable(scope)
+    val executableInputLeftHintProperty: ObservableProperty<String> = executableInputLeftHintFlow.toObservable(scope)
+    val executableSelectionToolTipProperty: ObservableProperty<String> = combine(
+        _selectedProjectPath,
+        selectedProjectStateFlow,
+        executableSelectedChoiceFlow,
+    ) { projectPath, state, selectedChoice ->
+        selectedChoice?.tooltipText ?: state?.let { createManualTooltip(projectPath, it.manualExecutablePath) }
+            .orEmpty()
+    }.stateIn(scope, SharingStarted.Eagerly, initialExecutableChoice?.tooltipText.orEmpty()).toObservable(scope)
+    val executableVersionTextProperty: ObservableProperty<String> = executableVersionTextFlow.toObservable(scope)
+    val executableValidationMessageProperty: ObservableProperty<String?> =
+        executableValidationMessageFlow.toObservable(scope)
+    val useMillMetadataDuringImportProperty: ObservableMutableProperty<Boolean> =
+        selectedProjectUseMillMetadataFlow.toReducerObservable(
+            scope = scope,
+            setter = { updateSelectedProjectFlags(useMillMetadataDuringImport = it) },
+        )
+    val createPerModuleTaskNodesProperty: ObservableMutableProperty<Boolean> =
+        selectedProjectCreatePerModuleTasksFlow.toReducerObservable(
+            scope = scope,
+            setter = { updateSelectedProjectFlags(createPerModuleTaskNodes = it) },
+        )
 
     init {
         Disposer.register(parentDisposable) {
-            isDisposed = true
             scope.cancel()
-        }
-
-        selectedProjectPathProperty.afterChange(parentDisposable) {
-            loadSelectedProjectState(it)
-            refreshExecutableSelector()
-            refreshDisplayedProbeStatus()
-            it.takeUnless(String::isBlank)?.let { projectPath ->
-                scheduleDiscovery(projectPath)
-                scheduleProbe(projectPath)
-            }
-        }
-        useMillMetadataDuringImportProperty.afterChange(parentDisposable) {
-            if (!isSynchronizing) {
-                persistSelectedProjectState()
-            }
-        }
-        createPerModuleTaskNodesProperty.afterChange(parentDisposable) {
-            if (!isSynchronizing) {
-                persistSelectedProjectState()
-            }
-        }
-        executableSelectedChoiceProperty.afterChange(parentDisposable, ::selectExecutableChoice)
-        executableInputTextProperty.afterChange(parentDisposable, ::updateExecutableDraftText)
-
-        loadSelectedProjectState(selectedProjectPathProperty.get())
-        refreshExecutableSelector()
-        refreshDisplayedProbeStatus()
-        linkedProjectPaths.forEachIndexed { index, projectPath ->
-            scheduleDiscovery(projectPath, debounceMillis = if (index == 0) 0 else 100)
-            scheduleProbe(projectPath, debounceMillis = if (index == 0) 0 else 150)
         }
     }
 
     fun resetFrom(linkedProjectSettings: Collection<MillProjectSettings>) {
-        originalSettingsByPath.clear()
-        linkedProjectSettings.map(MillProjectSettings::clone)
-            .forEach { originalSettingsByPath[it.externalProjectPath] = it }
+        val nextOriginalSettingsByPath = originalSettingsMap(linkedProjectSettings)
+        val nextProjectStatesByPath = projectStatesFrom(nextOriginalSettingsByPath)
 
-        projectStatesByPath.clear()
-        originalSettingsByPath.values.forEach { settings ->
-            projectStatesByPath[settings.externalProjectPath] = MillLinkedProjectSettingsState.from(settings)
-        }
+        _originalSettingsByPath.value = nextOriginalSettingsByPath
+        _projectStatesByPath.value = nextProjectStatesByPath
+        _resetVersion.value += 1
 
-        probeJobsByPath.values.forEach(Job::cancel)
-        probeJobsByPath.clear()
-        draftProbeJob?.cancel()
-        draftProbeJob = null
-        draftProbeState = null
-        discoveryJobsByPath.values.forEach(Job::cancel)
-        discoveryJobsByPath.clear()
-        probeResultsByPath.clear()
-        executableDiscoveriesByPath.clear()
-        checkingProjectPaths.clear()
-
-        val selectedPath = selectedProjectPathProperty.get()
+        val selectedPath = _selectedProjectPath.value
         val nextSelectedPath = when {
-            selectedPath in projectStatesByPath -> selectedPath
-            linkedProjectPaths.isNotEmpty() -> linkedProjectPaths.first()
+            selectedPath in nextProjectStatesByPath -> selectedPath
+            nextProjectStatesByPath.isNotEmpty() -> nextProjectStatesByPath.keys.sorted().first()
             else -> ""
         }
-        selectedProjectPathProperty.set(nextSelectedPath)
-        loadSelectedProjectState(nextSelectedPath)
-        refreshExecutableSelector()
-        refreshDisplayedProbeStatus()
-        linkedProjectPaths.forEachIndexed { index, projectPath ->
-            scheduleDiscovery(projectPath, debounceMillis = if (index == 0) 0 else 100)
-            scheduleProbe(projectPath, debounceMillis = if (index == 0) 0 else 150)
-        }
+        _selectedProjectPath.value = nextSelectedPath
+        _executableInputText.value =
+            selectedChoiceFor(nextSelectedPath, nextProjectStatesByPath, emptyMap(), emptyMap())
+                ?.editorText
+                .orEmpty()
     }
 
     fun isModified(currentSettings: Collection<MillProjectSettings>): Boolean {
-        return snapshotStates(currentSettings) != projectStatesByPath.toSortedMap()
+        return snapshotStates(currentSettings) != _projectStatesByPath.value.toSortedMap()
     }
 
     @Throws(ConfigurationException::class)
     fun validateBeforeApply() {
-        projectStatesByPath.values.sortedBy(MillLinkedProjectSettingsState::externalProjectPath).forEach { state ->
-            val validationMessage = validationMessageForApply(state) ?: return@forEach
+        val probeState = committedProbeStateFlow.value
+        _projectStatesByPath.value.values.sortedBy(MillLinkedProjectSettingsState::externalProjectPath)
+            .forEach { state ->
+                val validationMessage = validationMessageForApply(state, probeState) ?: return@forEach
             throw ConfigurationException(
                 Bundle.message(
                     "settings.validation.executable.invalid",
@@ -168,9 +316,11 @@ internal class MillConfigurableViewModel(
 
     fun applyTo(settings: MillSettings) {
         val updatedSettings = linkedSetOf<MillProjectSettings>()
-        linkedProjectPaths.forEach { projectPath ->
-            val state = projectStatesByPath[projectPath] ?: return@forEach
-            val baseSettings = originalSettingsByPath[projectPath]?.clone() ?: MillProjectSettings().also {
+        val currentStatesByPath = _projectStatesByPath.value
+        val currentOriginalSettingsByPath = _originalSettingsByPath.value
+        currentStatesByPath.keys.sorted().forEach { projectPath ->
+            val state = currentStatesByPath[projectPath] ?: return@forEach
+            val baseSettings = currentOriginalSettingsByPath[projectPath]?.clone() ?: MillProjectSettings().also {
                 it.externalProjectPath = projectPath
             }
             baseSettings.millExecutableSource = state.executableSource
@@ -184,23 +334,11 @@ internal class MillConfigurableViewModel(
     }
 
     fun currentManualPathValidationMessage(): String? {
-        return selectedProjectPathProperty.get()
-            .takeUnless(String::isBlank)
-            ?.let(projectStatesByPath::get)
-            ?.let(::manualPathValidationMessage)
+        return selectedProjectStateFlow.value?.let(::manualPathValidationMessage)
     }
 
     fun currentExecutableValidationMessage(): String? {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return null
-        val state = projectStatesByPath[projectPath] ?: return null
-        manualPathValidationMessage(state)?.let { return it }
-        val cachedProbe = probeResultsByPath[projectPath]
-        if (cachedProbe == null || cachedProbe.settingsState != state) {
-            return null
-        }
-        return cachedProbe.probeResult.errorDetails
-            ?.takeIf { !cachedProbe.probeResult.isValid }
-            ?.let(::cleanProbeMessage)
+        return executableValidationMessageFlow.value
     }
 
     fun presentableProjectName(projectPath: String): String {
@@ -209,77 +347,73 @@ internal class MillConfigurableViewModel(
         }.getOrNull().takeUnless(String?::isNullOrBlank) ?: projectPath
     }
 
+    private fun selectProjectPath(projectPath: String) {
+        _selectedProjectPath.value = projectPath
+        _executableInputText.value = selectedChoiceFor(
+            projectPath = projectPath,
+            statesByPath = _projectStatesByPath.value,
+            discoveriesByPath = discoveryResultsFlow.value,
+            probeResults = committedProbeStateFlow.value.results,
+        )
+            ?.editorText
+            .orEmpty()
+    }
+
     fun selectExecutableChoice(selectedChoice: MillExecutableChoice?) {
-        if (isSynchronizing) {
-            return
-        }
         selectedChoice ?: return
-        applyExecutableSelection(selectedChoice.source, selectedChoice.manualPath)
+        updateSelectedProjectState { currentState ->
+            MillLinkedProjectSettingsState.create(
+                externalProjectPath = currentState.externalProjectPath,
+                executableSource = selectedChoice.source,
+                manualExecutablePath = selectedChoice.manualPath,
+                useMillMetadataDuringImport = currentState.useMillMetadataDuringImport,
+                createPerModuleTaskNodes = currentState.createPerModuleTaskNodes,
+            )
+        }
+        _executableInputText.value = selectedChoice.editorText
     }
 
     private fun currentSelectedState(): MillLinkedProjectSettingsState? {
-        return selectedProjectPathProperty.get()
+        return _selectedProjectPath.value
             .takeUnless(String::isBlank)
-            ?.let(projectStatesByPath::get)
+            ?.let(_projectStatesByPath.value::get)
     }
 
-    private fun loadSelectedProjectState(projectPath: String?) {
-        val state = projectPath?.let(projectStatesByPath::get) ?: return
-        isSynchronizing = true
-        try {
-            useMillMetadataDuringImportProperty.set(state.useMillMetadataDuringImport)
-            createPerModuleTaskNodesProperty.set(state.createPerModuleTaskNodes)
-        } finally {
-            isSynchronizing = false
-        }
-    }
-
-    private fun persistSelectedProjectState() {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return
-        val existingState = projectStatesByPath[projectPath] ?: return
-        projectStatesByPath[projectPath] = MillLinkedProjectSettingsState.create(
-            externalProjectPath = projectPath,
-            executableSource = existingState.executableSource,
-            manualExecutablePath = existingState.manualExecutablePath,
-            useMillMetadataDuringImport = useMillMetadataDuringImportProperty.get(),
-            createPerModuleTaskNodes = createPerModuleTaskNodesProperty.get(),
-        )
-    }
-
-    private fun applyExecutableSelection(source: MillExecutableSource, manualPath: String) {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return
-        val currentState = projectStatesByPath[projectPath] ?: return
-        if (currentState.executableSource == source && currentState.manualExecutablePath == manualPath) {
-            refreshExecutableDraftFromSelection(
-                findChoiceForState(
-                    currentState,
-                    executableChoicesProperty.get(),
-                ),
+    private fun updateSelectedProjectFlags(
+        useMillMetadataDuringImport: Boolean? = null,
+        createPerModuleTaskNodes: Boolean? = null,
+    ) {
+        updateSelectedProjectState { currentState ->
+            MillLinkedProjectSettingsState.create(
+                externalProjectPath = currentState.externalProjectPath,
+                executableSource = currentState.executableSource,
+                manualExecutablePath = currentState.manualExecutablePath,
+                useMillMetadataDuringImport = useMillMetadataDuringImport ?: currentState.useMillMetadataDuringImport,
+                createPerModuleTaskNodes = createPerModuleTaskNodes ?: currentState.createPerModuleTaskNodes,
             )
-            return
         }
-        projectStatesByPath[projectPath] = MillLinkedProjectSettingsState.create(
-            externalProjectPath = projectPath,
-            executableSource = source,
-            manualExecutablePath = manualPath,
-            useMillMetadataDuringImport = currentState.useMillMetadataDuringImport,
-            createPerModuleTaskNodes = currentState.createPerModuleTaskNodes,
-        )
-        refreshExecutableSelector()
-        scheduleProbe(projectPath)
     }
 
-    private fun validationMessageForApply(state: MillLinkedProjectSettingsState): String? {
+    private fun updateSelectedProjectState(transform: (MillLinkedProjectSettingsState) -> MillLinkedProjectSettingsState) {
+        val selectedProjectPath = _selectedProjectPath.value.takeUnless(String::isBlank) ?: return
+        _projectStatesByPath.update { statesByPath ->
+            val currentState = statesByPath[selectedProjectPath] ?: return@update statesByPath
+            statesByPath + (selectedProjectPath to transform(currentState))
+        }
+    }
+
+    private fun validationMessageForApply(
+        state: MillLinkedProjectSettingsState,
+        probeState: MillCommittedProbeState,
+    ): String? {
         manualPathValidationMessage(state)?.let { return it }
-        if (state.externalProjectPath in checkingProjectPaths) {
+        if (state in probeState.runningStates) {
             return Bundle.message("settings.validation.executable.checking")
         }
-        val cachedProbe = probeResultsByPath[state.externalProjectPath]
-        if (cachedProbe == null || cachedProbe.settingsState != state) {
-            return Bundle.message("settings.validation.executable.recheck.required")
-        }
-        if (!cachedProbe.probeResult.isValid) {
-            return cleanProbeMessage(cachedProbe.probeResult.errorDetails)
+        val cachedProbe =
+            probeState.results[state] ?: return Bundle.message("settings.validation.executable.recheck.required")
+        if (!cachedProbe.isValid) {
+            return cleanProbeMessage(cachedProbe.errorDetails)
         }
         return null
     }
@@ -297,71 +431,40 @@ internal class MillConfigurableViewModel(
         return null
     }
 
-    private fun refreshExecutableSelector(updateEditorPresentation: Boolean = true) {
-        isSynchronizing = true
-        try {
-            val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
-            if (projectPath == null) {
-                executableChoicesProperty.set(emptyList())
-                if (updateEditorPresentation) {
-                    executableSelectedChoiceProperty.set(null)
-                    executableSelectionToolTipProperty.set("")
-                }
-                return
-            }
-            val state = projectStatesByPath[projectPath]
-            if (state == null) {
-                executableChoicesProperty.set(emptyList())
-                if (updateEditorPresentation) {
-                    executableSelectedChoiceProperty.set(null)
-                    executableSelectionToolTipProperty.set("")
-                }
-                return
-            }
-
-            val choices = buildExecutableChoices(projectPath, state)
-            val selectedChoice = findChoiceForState(state, choices)
-            executableChoicesProperty.set(choices)
-            executableSelectedChoiceProperty.set(selectedChoice)
-            if (updateEditorPresentation) {
-                refreshExecutableDraftFromSelection(selectedChoice)
-                executableSelectionToolTipProperty.set(
-                    selectedChoice?.tooltipText ?: createManualTooltip(
-                        projectPath,
-                        state.manualExecutablePath,
-                    ),
-                )
-            }
-        } finally {
-            isSynchronizing = false
-        }
+    private fun currentExecutableChoices(): List<MillExecutableChoice> {
+        val projectPath = _selectedProjectPath.value.takeUnless(String::isBlank) ?: return emptyList()
+        val state = _projectStatesByPath.value[projectPath] ?: return emptyList()
+        return buildExecutableChoices(projectPath, state, null, emptyMap())
     }
 
-    private fun isExecutableDraftEditing(): Boolean {
-        val selectedText = executableSelectedChoiceProperty.get()?.editorText.orEmpty()
-        return executableInputTextProperty.get() != selectedText
+    private fun currentSelectedExecutableChoice(choices: List<MillExecutableChoice>): MillExecutableChoice? {
+        return currentSelectedState()?.let { findChoiceForState(it, choices) }
     }
 
-    private fun refreshExecutableDraftFromSelection(selectedChoice: MillExecutableChoice?) {
-        draftProbeJob?.cancel()
-        draftProbeJob = null
-        draftProbeState = null
-        executableInputTextProperty.set(selectedChoice?.editorText.orEmpty())
+    private fun selectedChoiceFor(
+        projectPath: String,
+        statesByPath: Map<String, MillLinkedProjectSettingsState>,
+        discoveriesByPath: Map<String, MillExecutableDiscovery>,
+        probeResults: Map<MillLinkedProjectSettingsState, MillExecutableProbeResult>,
+    ): MillExecutableChoice? {
+        val state = statesByPath[projectPath] ?: return null
+        val choices = buildExecutableChoices(projectPath, state, discoveriesByPath[projectPath], probeResults)
+        return findChoiceForState(state, choices)
     }
 
     private fun buildExecutableChoices(
         projectPath: String,
         state: MillLinkedProjectSettingsState,
+        discovery: MillExecutableDiscovery?,
+        probeResults: Map<MillLinkedProjectSettingsState, MillExecutableProbeResult>,
     ): List<MillExecutableChoice> {
-        val discovery = executableDiscoveriesByPath[projectPath]
-        val discoveryCompleted = executableDiscoveriesByPath.containsKey(projectPath)
+        val discoveryCompleted = discovery != null
         val projectRoot = Path.of(projectPath)
-        val expectedProjectWrapper = projectRoot.resolve(MillConstants.wrapperScriptName).normalize().toString()
+        val expectedProjectWrapper = expectedProjectWrapperPath(projectRoot)
         val projectWrapper = discovery?.projectWrapper?.toString()
         val pathExecutables = discovery?.pathExecutables.orEmpty().map(Path::toString)
-        val selectedProbe = probeResultsByPath[projectPath]
-            ?.takeIf { it.settingsState == state && it.probeResult.isValid }
-            ?.probeResult
+        val selectedProbe = probeResults[state]
+            ?.takeIf { it.isValid }
         val choices = linkedMapOf<String, MillExecutableChoice>()
 
         val projectChoice = MillExecutableChoice(
@@ -449,6 +552,15 @@ internal class MillConfigurableViewModel(
         }
     }
 
+    private fun expectedProjectWrapperPath(projectRoot: Path): String {
+        val wrapperName = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
+            MillConstants.wrapperBatchName
+        } else {
+            MillConstants.wrapperScriptName
+        }
+        return projectRoot.resolve(wrapperName).normalize().toString()
+    }
+
     private fun findChoiceForState(
         state: MillLinkedProjectSettingsState,
         choices: List<MillExecutableChoice>,
@@ -464,102 +576,99 @@ internal class MillConfigurableViewModel(
         if (text.isBlank()) {
             return null
         }
-        return executableChoicesProperty.get().firstOrNull { choice ->
-            text == choice.inputMatchText ||
+        return executableInputChoices(
+            executableChoicesFlow.value,
+            executableSelectedChoiceFlow.value,
+        ).firstOrNull { choice ->
+            text == choice.editorText ||
+                    text == choice.inputMatchText ||
                     (choice.source == MillExecutableSource.MANUAL &&
                             choice.inputMatchText == null &&
                             text == choice.manualPath)
         }
     }
 
-    private fun updateExecutableDraftText(text: String) {
-        if (isSynchronizing) {
-            refreshExecutableDraftPresentation(text)
-            return
-        }
-        refreshExecutableDraftPresentation(text)
-        scheduleDraftProbe(text)
+    private fun executableInputChoices(
+        choices: List<MillExecutableChoice>,
+        selectedChoice: MillExecutableChoice?,
+    ): Sequence<MillExecutableChoice> {
+        return sequence {
+            choices.forEach { yield(it) }
+            selectedChoice?.let { yield(it) }
+        }.distinctBy(MillExecutableChoice::key)
     }
 
-    private fun refreshExecutableDraftPresentation(text: String) {
-        executableInputLeftHintProperty.set(leftHintForExecutableInput(text))
-    }
-
-    private fun leftHintForExecutableInput(text: String): String {
+    private fun leftHintForExecutableInput(
+        projectPath: String,
+        text: String,
+        choices: List<MillExecutableChoice>,
+        selectedChoice: MillExecutableChoice?,
+        discovery: MillExecutableDiscovery?,
+    ): String {
         val trimmedText = text.trim()
         if (trimmedText.isBlank()) {
             return ""
         }
-        findExecutableChoiceByInput(trimmedText)?.editorHintText?.let { return it }
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return ""
-        if (trimmedText == MillConstants.defaultExecutable) {
-            executableDiscoveriesByPath[projectPath]
-                ?.pathExecutables
-                ?.firstOrNull()
-                ?.toString()
-                ?.let { return it }
+        val matchedChoice = executableInputChoices(choices, selectedChoice).firstOrNull { choice ->
+            trimmedText == choice.editorText ||
+                    trimmedText == choice.inputMatchText ||
+                    (choice.source == MillExecutableSource.MANUAL &&
+                            choice.inputMatchText == null &&
+                            trimmedText == choice.manualPath)
         }
-        return resolveDisplayPath(Path.of(projectPath), trimmedText).orEmpty()
+        matchedChoice?.editorHintText?.let { return it }
+        if (projectPath.isBlank()) {
+            return ""
+        }
+        val hintInput = matchedChoice
+            ?.takeIf { it.source == MillExecutableSource.MANUAL }
+            ?.manualPath
+            ?.takeUnless(String::isBlank)
+            ?: trimmedText
+        findPathExecutableByInput(discovery, hintInput)?.let { return it }
+        if (isExecutableName(hintInput)) {
+            return ""
+        }
+        return resolveDisplayPath(Path.of(projectPath), hintInput).orEmpty()
     }
 
-    private fun scheduleDraftProbe(text: String) {
-        val draftState = executableDraftState(text)
-        draftProbeState = draftState
-        draftProbeJob?.cancel()
-
-        if (draftState == null) {
-            updateDisplayedProbeStatus(versionText = "")
-            return
-        }
-
-        val localValidationMessage = manualPathValidationMessage(draftState)
-        if (localValidationMessage != null) {
-            updateDisplayedProbeStatus(versionText = "!")
-            return
-        }
-
-        executableVersionTextProperty.set(
-            probeResultsByPath[draftState.externalProjectPath]
-                ?.takeIf { it.settingsState == draftState }
-                ?.probeResult
-                ?.let(::formatProbeVersion)
-                .orEmpty(),
-        )
-
-        draftProbeJob = scope.launch {
-            try {
-                if (draftProbeDebounceMillis > 0) {
-                    delay(draftProbeDebounceMillis)
-                }
-                val probeResult = withContext(Dispatchers.IO) {
-                    probeExecutable(
-                        Path.of(draftState.externalProjectPath),
-                        draftState.executableSource,
-                        draftState.manualExecutablePath,
-                    )
-                }
-                withContext(Dispatchers.UI) {
-                    if (!scope.isActive || isDisposed || draftProbeState != draftState) {
-                        return@withContext
-                    }
-                    updateDisplayedProbeStatus(versionText = formatProbeVersion(probeResult))
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
+    private fun findPathExecutableByInput(discovery: MillExecutableDiscovery?, input: String): String? {
+        return discovery
+            ?.pathExecutables
+            .orEmpty()
+            .firstOrNull { executable ->
+                executable.toString() == input || executable.fileName?.toString() == input
             }
-        }
+            ?.toString()
     }
 
-    private fun executableDraftState(text: String): MillLinkedProjectSettingsState? {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank) ?: return null
-        val currentState = projectStatesByPath[projectPath] ?: return null
+    private fun isExecutableName(text: String): Boolean {
+        return !text.contains('/') &&
+                !text.contains('\\') &&
+                !text.startsWith(".") &&
+                runCatching { Path.of(text).nameCount == 1 }.getOrDefault(false)
+    }
+
+    private fun executableDraftState(
+        selectedProjectState: MillLinkedProjectSettingsState?,
+        text: String,
+        choices: List<MillExecutableChoice>,
+        selectedChoice: MillExecutableChoice?,
+    ): MillLinkedProjectSettingsState? {
+        val currentState = selectedProjectState ?: return null
         val trimmedText = text.trim()
         if (trimmedText.isBlank()) {
             return null
         }
-        val choice = findExecutableChoiceByInput(trimmedText)
+        val choice = executableInputChoices(choices, selectedChoice).firstOrNull { candidate ->
+            trimmedText == candidate.editorText ||
+                    trimmedText == candidate.inputMatchText ||
+                    (candidate.source == MillExecutableSource.MANUAL &&
+                            candidate.inputMatchText == null &&
+                            trimmedText == candidate.manualPath)
+        }
         return MillLinkedProjectSettingsState.create(
-            externalProjectPath = projectPath,
+            externalProjectPath = currentState.externalProjectPath,
             executableSource = choice?.source ?: MillExecutableSource.MANUAL,
             manualExecutablePath = choice?.manualPath ?: trimmedText,
             useMillMetadataDuringImport = currentState.useMillMetadataDuringImport,
@@ -567,133 +676,39 @@ internal class MillConfigurableViewModel(
         )
     }
 
-    private fun scheduleDiscovery(projectPath: String, debounceMillis: Long = 0) {
-        discoveryJobsByPath.remove(projectPath)?.cancel()
-        discoveryJobsByPath[projectPath] = scope.launch {
-            try {
-                if (debounceMillis > 0) {
-                    delay(debounceMillis)
-                }
-                val discovery = withContext(Dispatchers.IO) {
-                    discoverExecutables(Path.of(projectPath))
-                }
-                withContext(Dispatchers.UI) {
-                    if (!scope.isActive || isDisposed) {
-                        return@withContext
-                    }
-                    executableDiscoveriesByPath[projectPath] = discovery
-                    if (selectedProjectPathProperty.get() == projectPath) {
-                        if (isExecutableDraftEditing()) {
-                            refreshExecutableDraftPresentation(executableInputTextProperty.get())
-                        } else {
-                            refreshExecutableSelector()
-                        }
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            }
-        }
-    }
-
-    private fun scheduleProbe(projectPath: String, debounceMillis: Long = 300) {
-        val state = projectStatesByPath[projectPath] ?: return
-        val localValidationMessage = manualPathValidationMessage(state)
-        probeJobsByPath.remove(projectPath)?.cancel()
-
-        if (localValidationMessage != null) {
-            checkingProjectPaths.remove(projectPath)
-            if (selectedProjectPathProperty.get() == projectPath) {
-                updateDisplayedProbeStatus(versionText = "!")
-            }
-            return
-        }
-
-        checkingProjectPaths += projectPath
-        if (selectedProjectPathProperty.get() == projectPath) {
-            updateDisplayedProbeStatus(
-                versionText = checkingVersionText(projectPath, state),
-            )
-        }
-
-        probeJobsByPath[projectPath] = scope.launch {
-            try {
-                if (debounceMillis > 0) {
-                    delay(debounceMillis)
-                }
-                val probeResult = withContext(Dispatchers.IO) {
-                    probeExecutable(
-                        Path.of(projectPath),
-                        state.executableSource,
-                        state.manualExecutablePath,
-                    )
-                }
-                withContext(Dispatchers.Main) {
-                    if (!scope.isActive || isDisposed) {
-                        return@withContext
-                    }
-                    if (projectStatesByPath[projectPath] != state) {
-                        return@withContext
-                    }
-                    checkingProjectPaths.remove(projectPath)
-                    probeResultsByPath[projectPath] = MillCachedExecutableProbe(state, probeResult)
-                    if (selectedProjectPathProperty.get() == projectPath) {
-                        if (isExecutableDraftEditing()) {
-                            refreshExecutableDraftPresentation(executableInputTextProperty.get())
-                        } else {
-                            refreshExecutableSelector()
-                            refreshDisplayedProbeStatus()
-                        }
-                    }
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            }
-        }
-    }
-
-    private fun refreshDisplayedProbeStatus() {
-        val projectPath = selectedProjectPathProperty.get().takeUnless(String::isBlank)
-        if (projectPath == null) {
-            updateDisplayedProbeStatus(versionText = "")
-            return
-        }
-        val state = projectStatesByPath[projectPath]
-        if (state == null) {
-            updateDisplayedProbeStatus(versionText = "")
-            return
-        }
-        manualPathValidationMessage(state)?.let {
-            updateDisplayedProbeStatus(versionText = "!")
-            return
-        }
-        if (projectPath in checkingProjectPaths) {
-            updateDisplayedProbeStatus(
-                versionText = checkingVersionText(projectPath, state),
-            )
-            return
-        }
-        val cachedProbe = probeResultsByPath[projectPath]
-        if (cachedProbe != null && cachedProbe.settingsState == state) {
-            updateDisplayedProbeStatus(
-                versionText = formatProbeVersion(cachedProbe.probeResult),
-            )
-            return
-        }
-        updateDisplayedProbeStatus(versionText = "")
-    }
-
-    private fun checkingVersionText(projectPath: String, state: MillLinkedProjectSettingsState): String {
-        val cachedProbe = probeResultsByPath[projectPath] ?: return ""
-        if (cachedProbe.settingsState != state) {
+    private fun versionTextForPreview(
+        previewState: MillLinkedProjectSettingsState?,
+        probeState: MillCommittedProbeState,
+        draftProbe: MillCachedExecutableProbe?,
+    ): String {
+        if (previewState == null) {
             return ""
         }
-        return formatProbeVersion(cachedProbe.probeResult).takeUnless { it == "!" } ?: ""
+        manualPathValidationMessage(previewState)?.let {
+            return "!"
+        }
+        probeState.results[previewState]?.let {
+            return formatProbeVersion(it)
+        }
+        draftProbe
+            ?.takeIf { it.settingsState == previewState }
+            ?.let { return formatProbeVersion(it.probeResult) }
+        if (previewState in probeState.runningStates) {
+            return probeState.results[previewState]?.let(::formatProbeVersion).takeUnless { it == "!" } ?: ""
+        }
+        return ""
     }
 
-    private fun updateDisplayedProbeStatus(versionText: String) {
-        executableVersionTextProperty.set(versionText)
-        executableValidationMessageProperty.set(currentExecutableValidationMessage())
+    private fun executableValidationMessage(
+        selectedState: MillLinkedProjectSettingsState?,
+        probeState: MillCommittedProbeState,
+    ): String? {
+        val state = selectedState ?: return null
+        manualPathValidationMessage(state)?.let { return it }
+        val cachedProbe = probeState.results[state] ?: return null
+        return cachedProbe.errorDetails
+            ?.takeIf { !cachedProbe.isValid }
+            ?.let(::cleanProbeMessage)
     }
 
     private fun formatProbeVersion(probeResult: MillExecutableProbeResult): String {
@@ -740,12 +755,72 @@ internal class MillConfigurableViewModel(
             .associateBy(MillLinkedProjectSettingsState::externalProjectPath)
             .toSortedMap()
     }
+
+    private fun originalSettingsMap(settings: Collection<MillProjectSettings>): Map<String, MillProjectSettings> {
+        return settings
+            .map(MillProjectSettings::clone)
+            .associateBy(MillProjectSettings::getExternalProjectPath)
+    }
+
+    private fun projectStatesFrom(settingsByPath: Map<String, MillProjectSettings>): Map<String, MillLinkedProjectSettingsState> {
+        return settingsByPath.values.associate { settings ->
+            settings.externalProjectPath to MillLinkedProjectSettingsState.from(settings)
+        }
+    }
 }
 
 private data class MillCachedExecutableProbe(
     val settingsState: MillLinkedProjectSettingsState,
     val probeResult: MillExecutableProbeResult,
 )
+
+private data class MillCommittedProbeState(
+    val activeStates: Set<MillLinkedProjectSettingsState> = emptySet(),
+    val runningStates: Set<MillLinkedProjectSettingsState> = emptySet(),
+    val results: Map<MillLinkedProjectSettingsState, MillExecutableProbeResult> = emptyMap(),
+)
+
+private sealed interface MillCommittedProbeEvent {
+    data object Clear : MillCommittedProbeEvent
+
+    data class ActiveStates(
+        val states: Set<MillLinkedProjectSettingsState>,
+    ) : MillCommittedProbeEvent
+
+    data class Started(
+        val state: MillLinkedProjectSettingsState,
+    ) : MillCommittedProbeEvent
+
+    data class Finished(
+        val state: MillLinkedProjectSettingsState,
+        val result: MillExecutableProbeResult,
+    ) : MillCommittedProbeEvent
+}
+
+private fun reduceCommittedProbeState(
+    currentState: MillCommittedProbeState,
+    event: MillCommittedProbeEvent,
+): MillCommittedProbeState {
+    return when (event) {
+        MillCommittedProbeEvent.Clear -> MillCommittedProbeState()
+        is MillCommittedProbeEvent.ActiveStates -> currentState.copy(
+            activeStates = event.states,
+            runningStates = currentState.runningStates.intersect(event.states),
+            results = currentState.results.filterKeys(event.states::contains),
+        )
+
+        is MillCommittedProbeEvent.Started -> currentState.copy(
+            activeStates = currentState.activeStates + event.state,
+            runningStates = currentState.runningStates + event.state,
+        )
+
+        is MillCommittedProbeEvent.Finished -> currentState.copy(
+            activeStates = currentState.activeStates + event.state,
+            runningStates = currentState.runningStates - event.state,
+            results = currentState.results + (event.state to event.result),
+        )
+    }
+}
 
 internal data class MillLinkedProjectSettingsState(
     val externalProjectPath: String,
@@ -800,4 +875,74 @@ internal data class MillExecutableChoice(
             MillExecutableSource.MANUAL -> manualPath
             else -> displayName
         }
+}
+
+internal fun <T> StateFlow<T>.toObservable(scope: CoroutineScope): ObservableProperty<T> {
+    return object : ObservableProperty<T> {
+        override fun get(): T {
+            return value
+        }
+
+        override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
+            registerAfterChange(scope, parentDisposable, listener)
+        }
+    }
+}
+
+internal fun <T> MutableStateFlow<T>.toObservable(scope: CoroutineScope): ObservableMutableProperty<T> {
+    return toMutableObservable(scope)
+}
+
+internal fun <T> MutableStateFlow<T>.toMutableObservable(scope: CoroutineScope): ObservableMutableProperty<T> {
+    return object : ObservableMutableProperty<T> {
+        override fun set(value: T) {
+            this@toMutableObservable.value = value
+        }
+
+        override fun get(): T {
+            return value
+        }
+
+        override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
+            registerAfterChange(scope, parentDisposable, listener)
+        }
+    }
+}
+
+internal fun <T> StateFlow<T>.toReducerObservable(
+    scope: CoroutineScope,
+    setter: (T) -> Unit,
+): ObservableMutableProperty<T> {
+    return object : ObservableMutableProperty<T> {
+        override fun set(value: T) {
+            setter(value)
+        }
+
+        override fun get(): T {
+            return value
+        }
+
+        override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
+            registerAfterChange(scope, parentDisposable, listener)
+        }
+    }
+}
+
+private fun <T> StateFlow<T>.registerAfterChange(
+    scope: CoroutineScope,
+    parentDisposable: Disposable?,
+    listener: (T) -> Unit,
+) {
+    val job = scope.launch {
+        drop(1).collect { value ->
+            withContext(Dispatchers.UI) {
+                listener(value)
+            }
+        }
+    }
+    parentDisposable?.let {
+        Disposer.register(it) {
+            job.cancel()
+        }
+    }
 }
