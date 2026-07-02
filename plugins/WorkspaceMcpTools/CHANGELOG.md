@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-07-02
+
 ### Fixed
 
 - Wrong skill name preventing the installation guide
@@ -148,7 +150,8 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.1...HEAD
+[2.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.0...WorkspaceMcpTools-v2.0.1
 [2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.4...WorkspaceMcpTools-v2.0.0
 [1.0.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.3...WorkspaceMcpTools-v1.0.4
 [1.0.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.2...WorkspaceMcpTools-v1.0.3
