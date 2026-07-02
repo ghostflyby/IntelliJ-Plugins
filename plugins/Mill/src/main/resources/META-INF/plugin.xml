@@ -1,0 +1,65 @@
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <id>dev.ghostflyby.mill</id>
+    <name>Mill</name>
+    <vendor>ghostflyby</vendor>
+    <resource-bundle>messages.Bundle</resource-bundle>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.externalSystem</depends>
+    <depends>com.intellij.modules.java</depends>
+    <depends>org.intellij.scala</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup
+                id="dev.ghostflyby.mill.import"
+                bundle="messages.Bundle"
+                key="notification.group.display.name"
+                displayType="BALLOON"/>
+        <fileTypeOverrider implementation="dev.ghostflyby.mill.script.MillBuildScriptFileTypeOverrider"/>
+        <additionalLibraryRootsProvider implementation="dev.ghostflyby.mill.script.MillBuildScriptLibraryRootsProvider"/>
+        <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
+        <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
+        <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <configurationType implementation="dev.ghostflyby.mill.MillExternalTaskConfigurationType"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillProjectJdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.MillModuleJdkDataService"/>
+        <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
+        <projectOpenProcessor
+                id="mill"
+                implementation="dev.ghostflyby.mill.MillProjectOpenProcessor"
+                order="first"/>
+        <projectConfigurable
+                groupId="build.tools"
+                groupWeight="115"
+                id="reference.settingsdialog.project.mill"
+                bundle="messages.Bundle"
+                key="settings.display.name"
+                instance="dev.ghostflyby.mill.settings.MillConfigurable"/>
+        <toolWindow id="Mill" anchor="right" factoryClass="dev.ghostflyby.mill.MillToolWindowFactory"/>
+    </extensions>
+    <extensions defaultExtensionNs="org.intellij.scala">
+        <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>
+    </extensions>
+    <actions>
+        <group id="dev.ghostflyby.mill.taskMenu" popup="true"/>
+        <action
+                id="dev.ghostflyby.mill.linkProject"
+                class="dev.ghostflyby.mill.MillLinkProjectAction">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+        <action
+                id="dev.ghostflyby.mill.runTask"
+                class="dev.ghostflyby.mill.MillRunTaskAction">
+            <add-to-group group-id="dev.ghostflyby.mill.taskMenu" anchor="first"/>
+        </action>
+        <action
+                id="dev.ghostflyby.mill.reloadProject"
+                class="dev.ghostflyby.mill.MillReloadProjectAction">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
