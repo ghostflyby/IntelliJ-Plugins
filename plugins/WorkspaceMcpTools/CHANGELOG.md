@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Wrong skill name preventing the installation guide
+
 ## [2.0.0] - 2026-06-22
 
 ### Added
