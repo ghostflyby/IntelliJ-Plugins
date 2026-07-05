@@ -13,7 +13,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "2.0.0"
+version = "2.0.1"
 
 buildLogic {
     platformVersion = "2026.1"
