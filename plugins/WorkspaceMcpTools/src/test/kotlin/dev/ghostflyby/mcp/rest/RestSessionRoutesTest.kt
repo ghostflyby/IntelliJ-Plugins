@@ -79,8 +79,13 @@ internal class RestSessionRoutesTest {
             }
         }
         contentRootFixture.get().virtualFile.refresh(false, true)
-        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(projectPathFixture.get())?.refresh(false, true)
-        LocalFileSystem.getInstance().refreshAndFindFileByNioFile(externalPathFixture.get())?.refresh(false, true)
+        refreshRequiredFile(projectPathFixture.get().resolve("plain.txt"))
+        refreshRequiredFile(globDir.resolve("RootFile.kt"))
+        refreshRequiredFile(globDir.resolve("RootFile.txt"))
+        refreshRequiredFile(globDir.resolve("nested/NestedFile.kt"))
+        refreshRequiredFile(externalPathFixture.get().resolve("external.txt"))
+        refreshRequiredFile(externalPathFixture.get().resolve("External.kt"))
+        refreshRequiredFile(externalPathFixture.get().resolve("nested/ExternalSearch.kt"))
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -545,5 +550,11 @@ internal class RestSessionRoutesTest {
         val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
             ?: error("missing test file: $path")
         return URLEncoder.encode(file.url, Charsets.UTF_8).replace("+", "%20")
+    }
+
+    private fun refreshRequiredFile(path: Path) {
+        val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+            ?: error("missing test file: $path")
+        file.refresh(false, file.isDirectory)
     }
 }
