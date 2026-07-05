@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.intellij
@@ -27,8 +11,8 @@ import com.intellij.openapi.util.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 
 class AutoCleanKeyTest {
 
@@ -44,11 +28,11 @@ class AutoCleanKeyTest {
 
         holder.value = "kept"
 
-        assertEquals("kept", holder.value)
+        Assertions.assertEquals("kept", holder.value)
 
         Disposer.dispose(disposable)
 
-        assertNull(holder.getUserData(key))
+        Assertions.assertNull(holder.getUserData(key))
     }
 
     @Test
@@ -69,8 +53,8 @@ class AutoCleanKeyTest {
 
         Disposer.dispose(disposable)
 
-        assertNull(holderA.getUserData(key))
-        assertNull(holderB.getUserData(key))
+        Assertions.assertNull(holderA.getUserData(key))
+        Assertions.assertNull(holderB.getUserData(key))
     }
 
     @Test
@@ -83,7 +67,7 @@ class AutoCleanKeyTest {
             val value: String by cleaner
         }
 
-        assertEquals("fallback", holder.value)
+        Assertions.assertEquals("fallback", holder.value)
 
         Disposer.dispose(disposable)
     }
@@ -100,7 +84,7 @@ class AutoCleanKeyTest {
 
         holder.value = "stored"
 
-        assertEquals("stored", holder.value)
+        Assertions.assertEquals("stored", holder.value)
 
         Disposer.dispose(disposable)
     }
@@ -123,7 +107,7 @@ class AutoCleanKeyTest {
             job.join()
         }
 
-        assertNull(holder.getUserData(key))
+        Assertions.assertNull(holder.getUserData(key))
     }
 
     @Test
@@ -138,7 +122,7 @@ class AutoCleanKeyTest {
             val value: String by cleaner
         }
 
-        assertEquals("computed", holder.value)
+        Assertions.assertEquals("computed", holder.value)
 
         Disposer.dispose(disposable)
     }
@@ -154,11 +138,11 @@ class AutoCleanKeyTest {
         }
 
         holder.value = "stored"
-        assertEquals("stored", holder.value)
+        Assertions.assertEquals("stored", holder.value)
 
         Disposer.dispose(disposable)
 
-        assertNull(holder.getUserData(key))
+        Assertions.assertNull(holder.getUserData(key))
     }
 
     @Test
@@ -173,14 +157,14 @@ class AutoCleanKeyTest {
         }
 
         holder.value = "scoped"
-        assertEquals("scoped", holder.value)
+        Assertions.assertEquals("scoped", holder.value)
 
         runBlocking {
             job.complete()
             job.join()
         }
 
-        assertNull(holder.getUserData(key))
+        Assertions.assertNull(holder.getUserData(key))
     }
 
     @Test
@@ -194,7 +178,7 @@ class AutoCleanKeyTest {
                 disposable
             }
 
-        assertFalse(providerCalled)
+        Assertions.assertFalse(providerCalled)
 
         val holder = object : UserDataHolderBase() {
             var value: String? by cleaner
@@ -202,11 +186,11 @@ class AutoCleanKeyTest {
 
         holder.value = "stored"
 
-        assertTrue(providerCalled)
+        Assertions.assertTrue(providerCalled)
 
         Disposer.dispose(disposable)
 
-        assertNull(holder.getUserData(key))
+        Assertions.assertNull(holder.getUserData(key))
     }
 
     @Test
@@ -215,7 +199,7 @@ class AutoCleanKeyTest {
         val key = Key.create<String>("key.toDisposableKey.property")
         val cleaner = key.toAutoCleanKey { disposable }
 
-        assertEquals(key, cleaner.key)
+        Assertions.assertEquals(key, cleaner.key)
 
         Disposer.dispose(disposable)
     }
