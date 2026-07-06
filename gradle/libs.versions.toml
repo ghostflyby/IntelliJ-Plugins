@@ -14,7 +14,7 @@ changelog = "2.5.0"
 intelliJPlatform = "2.16.0"
 kotlin = "2.4.0"
 ksp = "2.3.9"
-kotlinxSchema = "0.5.0"
+kotlinxSchema = "0.6.0"
 kover = "0.9.8"
 
 [libraries]
