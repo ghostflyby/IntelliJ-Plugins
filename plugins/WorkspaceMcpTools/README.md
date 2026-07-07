@@ -23,7 +23,7 @@ Write access is intentionally limited to project workspace files. Dependency and
 context, and protected paths require explicit confirmation before writes. Delete and move operations use IntelliJ
 refactoring behavior where possible, so agents can update references instead of only moving bytes on disk.
 
-For Codex users, the plugin bundles the `workspace-mcp-rest-api` skill and shows an upgrade notification with actions to
+For Codex users, the plugin bundles the `workspace-agent-bridge` skill and shows an upgrade notification with actions to
 copy or reveal the local skill directory. The bundled skill contains the agent-facing workflow details and examples.
 
 <!-- Plugin description end -->
