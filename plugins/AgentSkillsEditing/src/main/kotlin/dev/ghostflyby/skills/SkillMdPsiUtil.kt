@@ -9,7 +9,6 @@ package dev.ghostflyby.skills
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.elementType
 import org.intellij.plugins.markdown.lang.MarkdownElementType
@@ -68,19 +67,6 @@ internal val YAMLScalar.isSkillNameScalar: Boolean
         return yamlFile.skillDirectory != null
     }
 
-internal fun PsiElement.enclosingSkillNameScalar(): YAMLScalar? {
-    var current: PsiElement? = this
-    while (current != null) {
-        when (current) {
-            is YAMLScalar -> if (current.isSkillNameScalar) return current
-            is YAMLKeyValue -> return current.skillNameScalar()
-            is YAMLFile -> return null
-        }
-        current = current.parent
-    }
-    return null
-}
-
 internal fun YAMLKeyValue.skillNameScalar(): YAMLScalar? {
     if (keyText != SKILL_NAME_KEY || !isTopLevel) return null
     val yamlFile = containingFile as? YAMLFile ?: return null
@@ -89,22 +75,10 @@ internal fun YAMLKeyValue.skillNameScalar(): YAMLScalar? {
 }
 
 internal fun PsiFile.skillNameScalarAt(offset: Int): YAMLScalar? {
-    val direct = findElementAt(offset)?.enclosingSkillNameScalar()
-    if (direct != null) return direct
-
-    if (!isSkillMarkdownFile) return null
-    val injectionManager = InjectedLanguageManager.getInstance(project)
-    injectionManager.findInjectedElementAt(this, offset)?.enclosingSkillNameScalar()?.let { return it }
-
-    val text = viewProvider.document?.charsSequence ?: return null
-    var previousOffset = offset - 1
-    while (previousOffset >= 0 && (previousOffset >= text.length || text[previousOffset].isWhitespace())) {
-        previousOffset--
-    }
-    if (previousOffset < 0) return null
-
-    return findElementAt(previousOffset)?.enclosingSkillNameScalar()
-        ?: injectionManager.findInjectedElementAt(this, previousOffset)?.enclosingSkillNameScalar()
+    val scalar = skillNameScalar() ?: return null
+    val range = scalar.textRange
+    return if (range.contains(offset)) scalar
+    else null
 }
 
 internal fun PsiFile.skillNameScalar(): YAMLScalar? {

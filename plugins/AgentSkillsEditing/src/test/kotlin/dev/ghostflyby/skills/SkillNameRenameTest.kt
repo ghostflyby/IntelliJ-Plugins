@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
-import java.nio.file.Path.of
 
 @TestApplication
 internal class SkillNameRenameTest {
@@ -33,10 +32,9 @@ internal class SkillNameRenameTest {
     }
 
 
-    val moduleFixture = projectFixture.moduleFixture(name = "agent-skills-test")
-
-    val sourceRootFixture = moduleFixture.sourceRootFixture(
-        pathFixture = projectFixture.pathInProjectFixture(of(this.toString(), NAME)),
+    val sourceRootFixture = projectFixture.moduleFixture(name = "agent-skills-test")
+        .sourceRootFixture(
+            pathFixture = tempPathFixture(subdirName = NAME),// projectFixture.pathInProjectFixture(of(this.toString(), NAME)),
     )
     val sourceRoot by sourceRootFixture
     val fileFixture = sourceRootFixture.psiFileFixture(
