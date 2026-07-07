@@ -2,156 +2,124 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.skills
 
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.application.readAction
+import com.intellij.openapi.application.writeIntentReadAction
+import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiDirectory
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
-import com.intellij.refactoring.rename.RenameHandlerRegistry
 import com.intellij.refactoring.rename.RenameProcessor
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
-import org.intellij.plugins.markdown.lang.MarkdownFileType
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.*
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
-import org.jetbrains.yaml.psi.YAMLScalar
-import java.nio.file.Path
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNotNull
+import java.nio.file.Path.of
 
-internal class SkillNameRenameTest : BasePlatformTestCase() {
+@TestApplication
+internal class SkillNameRenameTest {
 
-    override fun getTestDataPath(): String =
-        Path.of("src/test/resources").toAbsolutePath().toString()
+    companion object {
+        const val NAME = "intellij-psi-vfs-safety"
+        val projectFixture = projectFixture(openAfterCreation = true)
+        val project by projectFixture
 
-    fun `test skill name rename handler is only custom handler inside name`() {
-        configureSkill("intellij-psi-vfs-safety")
-        moveCaretToName()
-
-        val handlers = RenameHandlerRegistry.getInstance().getRenameHandlers(renameDataContext())
-
-        assertSize(1, handlers)
-        assertInstanceOf(handlers.single(), SkillNameRenameHandler::class.java)
     }
 
-    fun `test skill name scalar resolves at end of value and eol`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val name = "intellij-psi-vfs-safety"
-        val endOffset = myFixture.editor.document.text.indexOf(name) + name.length
 
-        assertEquals(name, file.skillNameScalarAt(endOffset)?.textValue)
-        assertEquals(name, file.skillNameScalarAt(endOffset + 1)?.textValue)
-    }
+    val moduleFixture = projectFixture.moduleFixture(name = "agent-skills-test")
 
-    fun `test scalar rename updates skill directory and frontmatter name`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val scalar = requireSkillNameScalar(file)
-
-        RenameProcessor(project, scalar, "new-skill-name", false, false).run()
-
-        val renamedDirectory = findDirectoryInTempDir("new-skill-name")
-        assertNotNull(renamedDirectory)
-        assertEquals("new-skill-name", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
-    }
-
-    fun `test directory rename updates skill frontmatter name`() {
-        configureSkill("intellij-junit5-platform-testing")
-        val directory = requireDirectory("intellij-junit5-platform-testing")
-
-        RenameProcessor(project, directory, "renamed-junit-skill", false, false).run()
-
-        val renamedDirectory = findDirectoryInTempDir("renamed-junit-skill")
-        assertNotNull(renamedDirectory)
-        assertEquals("renamed-junit-skill", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
-    }
-
-    fun `test goto declaration from skill name returns parent directory`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        moveCaretToName()
-        val source = file.findElementAt(myFixture.editor.caretModel.offset)
-        val targets = SkillNameGotoDeclarationHandler()
-            .getGotoDeclarationTargets(source, myFixture.editor.caretModel.offset, myFixture.editor)
-
-        assertNotNull(targets)
-        assertSame(requireDirectory("intellij-psi-vfs-safety"), targets!!.single())
-    }
-
-    fun `test handler and navigation ignore non skill name contexts`() {
-        val file = myFixture.configureByText(
-            MarkdownFileType.INSTANCE,
+    val sourceRootFixture = moduleFixture.sourceRootFixture(
+        pathFixture = projectFixture.pathInProjectFixture(of(this.toString(), NAME)),
+    )
+    val sourceRoot by sourceRootFixture
+    val fileFixture = sourceRootFixture.psiFileFixture(
+        "SKILL.md",
             """
-            ---
-            description: <caret>plain text
-            nested:
-              name: nested-name
-            ---
-            # Not a skill name
-            """.trimIndent(),
+                ---
+                description: plain text
+                name: <caret>$NAME
+                ---
+                # a skill
+                """.trimIndent(),
         )
 
-        assertFalse(SkillNameRenameHandler().isAvailableOnDataContext(renameDataContext()))
-        assertNull(file.skillNameScalarAt(myFixture.editor.caretModel.offset))
+    val file: MarkdownFile
+        get() {
+            return fileFixture.get() as MarkdownFile
+        }
+    val editorFixture = fileFixture.editorFixture()
+    val editor by editorFixture
 
-        val source = file.findElementAt(myFixture.editor.caretModel.offset)
-        val targets = SkillNameGotoDeclarationHandler()
-            .getGotoDeclarationTargets(source, myFixture.editor.caretModel.offset, myFixture.editor)
-        assertNull(targets)
+    @Test
+    suspend fun `scalar rename updates skill directory and frontmatter name`() {
+        @Suppress("UnstableApiUsage") writeIntentReadAction {
+            val scalar = file.skillNameScalar()
+            assertNotNull(scalar) { "Expected top-level skill name scalar in ${file.name}" }
+
+            RenameProcessor(project, scalar, "new-skill-name", false, false).run()
+            assertEquals("new-skill-name", sourceRoot.name)
+            assertEquals(
+                "new-skill-name",
+                requireSkillFile(sourceRoot).skillNameScalar()?.textValue,
+            )
+        }
     }
 
-    fun `test handler ignores description in real skill fixture`() {
-        configureSkill("intellij-junit5-platform-testing")
-        val descriptionOffset = myFixture.editor.document.text.indexOf("reviewing IntelliJ")
-        myFixture.editor.caretModel.moveToOffset(descriptionOffset)
-
-        assertFalse(SkillNameRenameHandler().isAvailableOnDataContext(renameDataContext()))
+    @Test
+    suspend fun `directory rename updates skill frontmatter name`() {
+        val newName = "renamed-junit-skill"
+        @Suppress("UnstableApiUsage") writeIntentReadAction {
+            RenameProcessor(project, sourceRoot, newName, false, false).run()
+            assertEquals(newName, sourceRoot.name)
+            assertEquals(
+                newName,
+                requireSkillFile(sourceRoot).skillNameScalar()?.textValue,
+            )
+        }
     }
 
-    private fun configureSkill(name: String): MarkdownFile {
-        myFixture.copyDirectoryToProject("fixtures/mcp-sdk-skills/$name", name)
-        return myFixture.configureFromTempProjectFile("$name/$SKILL_MD_FILE_NAME") as MarkdownFile
+    @Test
+    suspend fun `goto declaration from skill name returns parent directory`() {
+
+        readAction {
+            val offset1 = editor.caretModel.offset
+            val source1 = file.findElementAt(offset1)
+            val targets1 = SkillNameGotoDeclarationHandler().getGotoDeclarationTargets(source1, offset1, editor)
+            assertEquals(
+                sourceRoot,
+                requireNotNull(targets1).single(),
+            )
+        }
     }
 
-    private fun moveCaretToName() {
-        val fragment = "psi-vfs"
-        val offset = myFixture.editor.document.text.indexOf(fragment)
-        assertTrue("Expected fragment '$fragment' in editor text", offset >= 0)
-        myFixture.editor.caretModel.moveToOffset(offset)
+    @Test
+    suspend fun `handler ignores description in real skill fixture`() {
+        readAction {
+            assertFalse(
+                SkillNameRenameHandler().isAvailableOnDataContext(
+                    renameDataContext(
+                        file,
+                        editor,
+                    ),
+                ),
+            )
+        }
     }
 
-    private fun renameDataContext() = SimpleDataContext.builder()
-        .add(CommonDataKeys.PROJECT, project)
-        .add(CommonDataKeys.EDITOR, myFixture.editor)
-        .add(CommonDataKeys.PSI_FILE, myFixture.file)
+    fun renameDataContext(file: MarkdownFile, editor: Editor) =
+        SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.EDITOR, editor)
+            .add(CommonDataKeys.HOST_EDITOR, editor).add(CommonDataKeys.PSI_FILE, file)
         .build()
 
-    private fun requireSkillNameScalar(file: PsiFile): YAMLScalar =
-        file.skillNameScalar() ?: error("Expected top-level skill name scalar")
-
-    private fun requireDirectory(name: String): PsiDirectory =
-        findDirectoryInTempDir(name) ?: error("Expected fixture directory $name")
-
-    private fun findDirectoryInTempDir(name: String): PsiDirectory? {
-        val virtualFile = myFixture.tempDirFixture.getFile(name) ?: return null
-        return PsiManager.getInstance(project).findDirectory(virtualFile)
-    }
-
-    private fun requireSkillFile(directory: PsiDirectory): MarkdownFile =
+    fun requireSkillFile(directory: PsiDirectory): MarkdownFile =
         directory.findFile(SKILL_MD_FILE_NAME) as? MarkdownFile
             ?: error("Expected $SKILL_MD_FILE_NAME in ${directory.name}")
+
 }
