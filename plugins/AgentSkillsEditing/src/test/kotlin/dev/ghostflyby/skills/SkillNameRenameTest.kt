@@ -14,6 +14,7 @@ import com.intellij.openapi.application.writeIntentReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiDirectory
 import com.intellij.refactoring.rename.RenameProcessor
+import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +22,7 @@ import kotlinx.coroutines.withContext
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertNotNull
 
@@ -57,6 +59,13 @@ internal class SkillNameRenameTest {
         }
     val editorFixture = fileFixture.editorFixture()
     val editor by editorFixture
+
+    @BeforeEach
+    fun waitForIndexes() {
+        editor
+        sourceRoot.virtualFile.refresh(false, true)
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+    }
 
     @Test
     suspend fun `scalar rename updates skill directory and frontmatter name`() {
