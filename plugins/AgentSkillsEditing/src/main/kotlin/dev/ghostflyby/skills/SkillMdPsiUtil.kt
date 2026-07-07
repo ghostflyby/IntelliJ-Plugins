@@ -11,6 +11,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.elementType
+import com.intellij.psi.util.parentOfType
 import org.intellij.plugins.markdown.lang.MarkdownElementType
 import org.intellij.plugins.markdown.lang.parser.blocks.frontmatter.FrontMatterHeaderMarkerProvider
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
@@ -75,8 +76,13 @@ internal fun YAMLKeyValue.skillNameScalar(): YAMLScalar? {
 }
 
 internal fun PsiFile.skillNameScalarAt(offset: Int): YAMLScalar? {
+    val injectionManager = InjectedLanguageManager.getInstance(project)
+    val injectedScalar = injectionManager.findInjectedElementAt(this, offset)
+        ?.parentOfType<YAMLScalar>(withSelf = true)
+    if (injectedScalar?.isSkillNameScalar == true) return injectedScalar
+
     val scalar = skillNameScalar() ?: return null
-    val range = scalar.textRange
+    val range = injectionManager.injectedToHost(scalar, scalar.textRange)
     return if (range.contains(offset)) scalar
     else null
 }

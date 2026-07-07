@@ -8,6 +8,7 @@ package dev.ghostflyby.skills
 
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.impl.SimpleDataContext
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeIntentReadAction
 import com.intellij.openapi.editor.Editor
@@ -15,6 +16,8 @@ import com.intellij.psi.PsiDirectory
 import com.intellij.refactoring.rename.RenameProcessor
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -26,15 +29,15 @@ internal class SkillNameRenameTest {
 
     companion object {
         const val NAME = "intellij-psi-vfs-safety"
-        val projectFixture = projectFixture(openAfterCreation = true)
-        val project by projectFixture
-
     }
+
+    val projectFixture = projectFixture(openAfterCreation = true)
+    val project by projectFixture
 
 
     val sourceRootFixture = projectFixture.moduleFixture(name = "agent-skills-test")
         .sourceRootFixture(
-            pathFixture = tempPathFixture(subdirName = NAME),// projectFixture.pathInProjectFixture(of(this.toString(), NAME)),
+            pathFixture = tempPathFixture(subdirName = NAME),
     )
     val sourceRoot by sourceRootFixture
     val fileFixture = sourceRootFixture.psiFileFixture(
@@ -99,19 +102,22 @@ internal class SkillNameRenameTest {
 
     @Test
     suspend fun `handler ignores description in real skill fixture`() {
+        val descriptionOffset = readAction { file.text.indexOf("plain text") }
+        require(descriptionOffset >= 0) { "Expected description text in ${file.name}" }
+        withContext(Dispatchers.EDT) {
+            editor.caretModel.moveToOffset(descriptionOffset)
+        }
+
         readAction {
             assertFalse(
                 SkillNameRenameHandler().isAvailableOnDataContext(
-                    renameDataContext(
-                        file,
-                        editor,
-                    ),
+                    renameDataContext(),
                 ),
             )
         }
     }
 
-    fun renameDataContext(file: MarkdownFile, editor: Editor) =
+    fun renameDataContext(file: MarkdownFile = this.file, editor: Editor = this.editor) =
         SimpleDataContext.builder().add(CommonDataKeys.PROJECT, project).add(CommonDataKeys.EDITOR, editor)
             .add(CommonDataKeys.HOST_EDITOR, editor).add(CommonDataKeys.PSI_FILE, file)
         .build()
