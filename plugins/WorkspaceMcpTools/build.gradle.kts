@@ -14,11 +14,6 @@ plugins {
 
 version = "2.0.1"
 
-buildLogic {
-    platformVersion = "2026.1"
-    pluginSinceBuild = "261"
-}
-
 dependencies {
     implementation(libs.ktor.resources)
 
