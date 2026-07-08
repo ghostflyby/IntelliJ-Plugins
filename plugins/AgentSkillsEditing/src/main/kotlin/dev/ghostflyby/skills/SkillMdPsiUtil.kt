@@ -68,13 +68,6 @@ internal val YAMLScalar.isSkillNameScalar: Boolean
         return yamlFile.skillDirectory != null
     }
 
-internal fun YAMLKeyValue.skillNameScalar(): YAMLScalar? {
-    if (keyText != SKILL_NAME_KEY || !isTopLevel) return null
-    val yamlFile = containingFile as? YAMLFile ?: return null
-    if (yamlFile.skillDirectory == null) return null
-    return value as? YAMLScalar
-}
-
 internal fun PsiFile.skillNameScalarAt(offset: Int): YAMLScalar? {
     val injectionManager = InjectedLanguageManager.getInstance(project)
     val injectedScalar = injectionManager.findInjectedElementAt(this, offset)
