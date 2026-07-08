@@ -2,30 +2,13 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.mcp.gradle.common
 
 import com.intellij.mcpserver.McpExpectedError
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 import java.nio.file.Path
 
 internal class GradleLinkedProjectSupportTest {
@@ -38,7 +21,7 @@ internal class GradleLinkedProjectSupportTest {
 
         val matched = matchLinkedProjectPath(linkedProjectPaths, Path.of("/repo/root"))
 
-        assertEquals(Path.of("/repo/root"), matched)
+        Assertions.assertEquals(Path.of("/repo/root"), matched)
     }
 
     @Test
@@ -50,7 +33,7 @@ internal class GradleLinkedProjectSupportTest {
 
         val matched = matchLinkedProjectPath(linkedProjectPaths, Path.of("plugins/GradleMcpTools"))
 
-        assertEquals(Path.of("/repo/root/plugins/GradleMcpTools"), matched)
+        Assertions.assertEquals(Path.of("/repo/root/plugins/GradleMcpTools"), matched)
     }
 
     @Test
@@ -64,7 +47,7 @@ internal class GradleLinkedProjectSupportTest {
             matchLinkedProjectPath(linkedProjectPaths, Path.of("plugins/GradleMcpTools"))
         }
 
-        assertTrue(error.message.orEmpty().contains("Ambiguous Gradle project path"))
+        Assertions.assertTrue(error.message.orEmpty().contains("Ambiguous Gradle project path"))
     }
 
     @Test
@@ -75,7 +58,7 @@ internal class GradleLinkedProjectSupportTest {
             matchLinkedProjectPath(linkedProjectPaths, Path.of("/repo/other"))
         }
 
-        assertTrue(error.message.orEmpty().contains("is not linked"))
+        Assertions.assertTrue(error.message.orEmpty().contains("is not linked"))
     }
 
     private fun expectMcpExpectedError(block: () -> Unit): McpExpectedError {

@@ -5,6 +5,7 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 import org.jetbrains.kotlin.gradle.dsl.abi.ExperimentalAbiValidation
 
 plugins {
@@ -41,9 +42,17 @@ afterEvaluate {
 dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher) {
+        excludeKotlinStdlib()
+    }
     testImplementation(libs.opentest4j)
     intellijPlatform {
         testFramework(TestFrameworkType.JUnit5)
         testFramework(TestFrameworkType.Platform)
     }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    systemProperty("java.awt.headless", true)
 }
