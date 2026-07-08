@@ -5,7 +5,6 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
@@ -13,12 +12,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "2.0.0"
-
-buildLogic {
-    platformVersion = "2026.1"
-    pluginSinceBuild = "261"
-}
+version = "2.0.1"
 
 dependencies {
     implementation(libs.ktor.resources)
@@ -31,19 +25,11 @@ dependencies {
     implementation(project(":modules:intellij-shared"))
 
     testImplementation(libs.ktor.server.test.host)
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher) {
-        excludeKotlinStdlib()
-    }
     intellijPlatform {
         pluginComposedModule(project(":modules:intellij-shared"))
         testFramework(TestFrameworkType.JUnit5)
         bundledModule("intellij.platform.vcs.impl")
     }
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 tasks.withType<PrepareSandboxTask>().configureEach {

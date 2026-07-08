@@ -32,5 +32,8 @@ public class PluginInfoProvider private constructor(
 }
 
 private fun readPluginInfo(classLoader: ClassLoader): PluginDescriptor {
-    return (classLoader as PluginAwareClassLoader).pluginDescriptor
+    require(classLoader is PluginAwareClassLoader) {
+        "PluginInfoProvider requires a PluginAwareClassLoader, but got ${classLoader::class.java.name}."
+    }
+    return classLoader.pluginDescriptor
 }

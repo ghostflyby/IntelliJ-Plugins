@@ -8,13 +8,29 @@
 
 package dev.ghostflyby.skills
 
+import com.intellij.codeInspection.InspectionManager
+import com.intellij.codeInspection.LocalQuickFix
+import com.intellij.codeInspection.ProblemDescriptor
+import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.model.Pointer
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.QueryExecutorBase
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runReadActionBlocking
+import com.intellij.openapi.application.writeAction
+import com.intellij.openapi.application.writeIntentReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.project.Project
-import com.intellij.psi.*
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.psi.ElementManipulators
+import com.intellij.psi.PsiDirectory
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.PsiReference
+import com.intellij.psi.PsiReferenceBase
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
@@ -23,45 +39,106 @@ import com.intellij.refactoring.rename.api.ModifiableRenameUsage
 import com.intellij.refactoring.rename.api.RenameTarget
 import com.intellij.refactoring.rename.api.RenameUsage
 import com.intellij.refactoring.rename.api.RenameUsageSearchParameters
-import com.intellij.testFramework.ExtensionTestUtil
+import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.PlatformTestUtil
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.editorFixture
+import com.intellij.testFramework.junit5.fixture.extensionPointFixture
+import com.intellij.testFramework.junit5.fixture.moduleFixture
+import com.intellij.testFramework.junit5.fixture.projectFixture
+import com.intellij.testFramework.junit5.fixture.psiFileFixture
+import com.intellij.testFramework.junit5.fixture.sourceRootFixture
+import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import com.intellij.util.Processor
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.intellij.plugins.markdown.lang.psi.impl.MarkdownFile
 import org.jetbrains.yaml.psi.YAMLScalar
-import java.nio.file.Path
+import org.jetbrains.yaml.psi.YAMLFile
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNotNull
 
-internal class SkillNameRenameTest : BasePlatformTestCase() {
+@TestApplication
+internal class SkillNameRenameTest {
 
-    override fun getTestDataPath(): String =
-        Path.of("src/test/resources").toAbsolutePath().toString()
-
-    @Suppress("UnstableApiUsage")
-    fun `test skill name scalar exposes symbol at value`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val scalar = requireSkillNameScalar(file)
-        val offsetInElement = scalar.valueTextRangeInElement().startOffset
-
-        val declarations = SkillNameDeclarationProvider().getDeclarations(scalar, offsetInElement)
-        val symbols = declarations.map { it.symbol }.filterIsInstance<AgentSkillSymbol>()
-
-        assertSize(1, symbols)
-        assertEquals(requireDirectory("intellij-psi-vfs-safety").virtualFile, symbols.single().virtualFile)
+    private companion object {
+        const val NAME = "intellij-psi-vfs-safety"
     }
 
-    fun `test skill name scalar resolves at end of value and eol`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val name = "intellij-psi-vfs-safety"
-        val endOffset = myFixture.editor.document.text.indexOf(name) + name.length
-
-        assertEquals(name, file.skillNameScalarAt(endOffset)?.textValue)
-        assertEquals(name, file.skillNameScalarAt(endOffset + 1)?.textValue)
+    private val extraDirectoryReferences = mutableListOf<ExtraSkillDirectoryReference>()
+    private val projectFixture = projectFixture(openAfterCreation = true)
+    private val project by projectFixture
+    private val sourceRootFixture = projectFixture.moduleFixture(name = "agent-skills-test")
+        .sourceRootFixture(
+            pathFixture = tempPathFixture(subdirName = NAME),
+        )
+    private val sourceRoot by sourceRootFixture
+    private val fileFixture = sourceRootFixture.psiFileFixture(
+        SKILL_MD_FILE_NAME,
+        skillFileContent("<caret>$NAME"),
+    )
+    private val file: MarkdownFile
+        get() = fileFixture.get() as MarkdownFile
+    private val editorFixture = fileFixture.editorFixture()
+    private val editor by editorFixture
+    private val extraDirectoryReferenceFixture = extensionPointFixture(ReferencesSearch.EP_NAME) {
+        object : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
+            override fun processQuery(
+                queryParameters: ReferencesSearch.SearchParameters,
+                consumer: Processor<in PsiReference>,
+            ) {
+                extraDirectoryReferences
+                    .filter { queryParameters.elementToSearch == it.directory }
+                    .forEach { consumer.process(it) }
+            }
+        }
     }
 
-    fun `test symbol rename usage search includes directory reference and file rename`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
-        val usages = collectSymbolRenameUsages(directory)
+    @BeforeEach
+    fun waitForIndexes() {
+        editor
+        extraDirectoryReferenceFixture.get()
+        sourceRoot.virtualFile.refresh(false, true)
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+    }
+
+    @Test
+    suspend fun `skill name scalar exposes symbol at value`() {
+        val file = configureSkill(NAME)
+
+        readAction {
+            val scalar = requireSkillNameScalar(file)
+            val offsetInElement = scalar.valueTextRangeInElement().startOffset
+            val declarations = SkillNameDeclarationProvider().getDeclarations(scalar, offsetInElement)
+            val symbols = declarations.map { it.symbol }.filterIsInstance<AgentSkillSymbol>()
+
+            assertEquals(1, symbols.size)
+            assertEquals(requireDirectory(NAME).virtualFile, symbols.single().virtualFile)
+        }
+    }
+
+    @Test
+    suspend fun `skill name scalar resolves at end of value`() {
+        val file = configureSkill(NAME)
+        val name = NAME
+        val lastValueOffset = editor.document.text.indexOf(name) + name.lastIndex
+
+        readAction {
+            assertEquals(name, file.skillNameScalarAt(lastValueOffset)?.textValue)
+        }
+    }
+
+    @Test
+    suspend fun `symbol rename usage search includes directory reference and file rename`() {
+        val file = configureSkill(NAME)
+        val directory = requireDirectory(NAME)
+        val usages = readAction { collectSymbolRenameUsages(directory) }
 
         assertEquals(2, usages.size)
         assertTrue(usages.any { it is SkillNameOccurrenceRenameUsage })
@@ -69,12 +146,15 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
 
         val nameUsage = usages.filterIsInstance<SkillNameOccurrenceRenameUsage>().single()
         nameUsage.updateModelTo("new-skill-name")
-        assertEquals("new-skill-name", requireSkillNameScalar(file).textValue)
+        readAction {
+            assertEquals("new-skill-name", requireSkillNameScalar(file).textValue)
+        }
     }
 
-    fun `test symbol rename usage search works from background without explicit read action`() {
-        configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `symbol rename usage search works from background without explicit read action`() {
+        configureSkill(NAME)
+        val directory = requireDirectory(NAME)
         val app = ApplicationManager.getApplication()
 
         val pointers = app.executeOnPooledThread<List<Pointer<out RenameUsage>>> {
@@ -83,78 +163,105 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
         }.get()
 
         assertEquals(2, pointers.size)
-        assertTrue(pointers.all { it.dereference() != null })
-        assertTrue(pointers.any { it.dereference() is SkillNameOccurrenceRenameUsage })
-    }
-
-    fun `test symbol rename usage search collects references search pipeline`() {
-        val primaryFile = configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
-        val aliasFile = configureSkillWithName("alias-skill", "intellij-psi-vfs-safety")
-        val aliasReference = ExtraSkillDirectoryReference(requireSkillNameScalar(aliasFile), directory)
-        registerExtraDirectoryReference(aliasReference)
-
-        val references = ReferencesSearch.search(directory).findAll()
-        assertSize(2, references)
-        assertTrue(references.any { it.element == requireSkillNameScalar(primaryFile) })
-        assertTrue(references.any { it === aliasReference })
-
-        val usages = collectSymbolRenameUsages(directory)
-        val nameOccurrences = usages.filterIsInstance<SkillNameOccurrenceRenameUsage>()
-
-        assertSize(2, nameOccurrences)
-        assertTrue(usages.any { it is ModifiableRenameUsage && it.modifiesDirectoryNameTo("new-skill-name") })
-        for (reference in references) {
-            assertTrue(nameOccurrences.any { it.matchesReference(reference) })
+        readAction {
+            assertTrue(pointers.all { it.dereference() != null })
+            assertTrue(pointers.any { it.dereference() is SkillNameOccurrenceRenameUsage })
         }
     }
 
-    fun `test symbol rename usage uses directory reference value range`() {
+    @Test
+    suspend fun `symbol rename usage search collects references search pipeline`() {
+        val primaryFile = configureSkill(NAME)
+        val directory = requireDirectory(NAME)
+        val aliasFile = configureSkillWithName("alias-skill", NAME)
+        val aliasReference = readAction {
+            ExtraSkillDirectoryReference(requireSkillNameScalar(aliasFile), directory)
+        }
+        registerExtraDirectoryReference(aliasReference)
+
+        val references = readAction { ReferencesSearch.search(directory).findAll() }
+        assertEquals(2, references.size)
+        assertTrue(readAction { references.any { it.element == requireSkillNameScalar(primaryFile) } })
+        assertTrue(references.any { it === aliasReference })
+
+        val usages = readAction { collectSymbolRenameUsages(directory) }
+        val nameOccurrences = usages.filterIsInstance<SkillNameOccurrenceRenameUsage>()
+
+        assertEquals(2, nameOccurrences.size)
+        assertTrue(usages.any { it is ModifiableRenameUsage && it.modifiesDirectoryNameTo("new-skill-name") })
+        readAction {
+            for (reference in references) {
+                assertTrue(nameOccurrences.any { it.matchesReference(reference) })
+            }
+        }
+    }
+
+    @Test
+    suspend fun `symbol rename usage uses directory reference value range`() {
         val file = configureSkillWithName("quoted-skill", "'quoted-skill'")
         val directory = requireDirectory("quoted-skill")
 
-        val nameUsage = collectSymbolRenameUsages(directory)
-            .filterIsInstance<SkillNameOccurrenceRenameUsage>()
-            .single()
+        val nameUsage = readAction {
+            collectSymbolRenameUsages(directory)
+                .filterIsInstance<SkillNameOccurrenceRenameUsage>()
+                .single()
+        }
 
         assertEquals(
             "quoted-skill",
-            nameUsage.file.text.substring(nameUsage.range.startOffset, nameUsage.range.endOffset),
+            readAction { nameUsage.file.text.substring(nameUsage.range.startOffset, nameUsage.range.endOffset) },
         )
         nameUsage.updateModelTo("renamed-quoted-skill")
-        assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
+        readAction {
+            assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
+        }
     }
 
-    fun `test skill name occurrence pointer restores value range`() {
+    @Test
+    suspend fun `skill name occurrence pointer restores value range`() {
         configureSkillWithName("quoted-skill", "'quoted-skill'")
         val directory = requireDirectory("quoted-skill")
-        val pointer = collectSymbolRenameUsagePointers(directory)
-            .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
-            .single()
+        val pointer = readAction {
+            collectSymbolRenameUsagePointers(directory)
+                .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
+                .single()
+        }
 
-        assertEquals("quoted-skill", pointer.file.text.substring(pointer.range.startOffset, pointer.range.endOffset))
+        readAction {
+            assertEquals("quoted-skill", pointer.file.text.substring(pointer.range.startOffset, pointer.range.endOffset))
+        }
     }
 
-    fun `test skill name occurrence pointer restores injected reference search occurrence`() {
-        configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
-        val aliasFile = configureSkillWithName("alias-skill", "intellij-psi-vfs-safety")
-        val aliasReference = ExtraSkillDirectoryReference(requireSkillNameScalar(aliasFile), directory)
+    @Test
+    suspend fun `skill name occurrence pointer restores injected reference search occurrence`() {
+        configureSkill(NAME)
+        val directory = requireDirectory(NAME)
+        val aliasFile = configureSkillWithName("alias-skill", NAME)
+        val aliasReference = readAction {
+            ExtraSkillDirectoryReference(requireSkillNameScalar(aliasFile), directory)
+        }
         registerExtraDirectoryReference(aliasReference)
 
-        val restoredOccurrences = collectSymbolRenameUsagePointers(directory)
-            .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
+        val restoredOccurrences = readAction {
+            collectSymbolRenameUsagePointers(directory)
+                .mapNotNull { it.dereference() as? SkillNameOccurrenceRenameUsage }
+        }
 
-        assertTrue(restoredOccurrences.any { it.matchesReference(aliasReference) })
+        readAction {
+            assertTrue(restoredOccurrences.any { it.matchesReference(aliasReference) })
+        }
     }
 
-    fun `test skill name occurrence model update commits documents before undo style update`() {
+    @Test
+    suspend fun `skill name occurrence model update commits documents before undo style update`() {
         val file = configureSkillWithName("quoted-skill", "'quoted-skill'")
         val directory = requireDirectory("quoted-skill")
-        val usage = collectSymbolRenameUsages(directory)
-            .filterIsInstance<SkillNameOccurrenceRenameUsage>()
-            .single()
-        val update = usage.modelUpdater.prepareModelUpdateBatch(listOf(usage)).single()
+        val usage = readAction {
+            collectSymbolRenameUsages(directory)
+                .filterIsInstance<SkillNameOccurrenceRenameUsage>()
+                .single()
+        }
+        val update = usage.prepareSingleModelUpdate()
 
         WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel("renamed-quoted-skill")
@@ -163,17 +270,24 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
             update.updateModel("quoted-skill")
         }
 
-        assertTrue(file.text.contains("name: 'quoted-skill'"))
+        readAction {
+            assertTrue(file.text.contains("name: 'quoted-skill'"))
+        }
     }
 
-    fun `test skill name occurrence model update unblocks document after update`() {
+    @Test
+    suspend fun `skill name occurrence model update unblocks document after update`() {
         val file = configureSkillWithName("quoted-skill", "'quoted-skill'")
         val directory = requireDirectory("quoted-skill")
-        val usage = collectSymbolRenameUsages(directory)
-            .filterIsInstance<SkillNameOccurrenceRenameUsage>()
-            .single()
-        val update = usage.modelUpdater.prepareModelUpdateBatch(listOf(usage)).single()
-        val document = PsiDocumentManager.getInstance(project).getDocument(file) ?: error("Expected document")
+        val usage = readAction {
+            collectSymbolRenameUsages(directory)
+                .filterIsInstance<SkillNameOccurrenceRenameUsage>()
+                .single()
+        }
+        val update = usage.prepareSingleModelUpdate()
+        val document = readAction {
+            PsiDocumentManager.getInstance(project).getDocument(file) ?: error("Expected document")
+        }
 
         WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel("renamed-quoted-skill")
@@ -182,138 +296,195 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
             document.insertString(document.textLength, "\n")
         }
 
-        assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
+        readAction {
+            assertTrue(file.text.contains("name: 'renamed-quoted-skill'"))
+        }
     }
 
-    fun `test directory rename updates skill frontmatter name`() {
+    @Test
+    suspend fun `directory rename updates skill frontmatter name`() {
         configureSkill("intellij-junit5-platform-testing")
         val directory = requireDirectory("intellij-junit5-platform-testing")
 
-        RenameProcessor(project, directory, "renamed-junit-skill", false, false).run()
+        @Suppress("UnstableApiUsage") writeIntentReadAction {
+            RenameProcessor(project, directory, "renamed-junit-skill", false, false).run()
+        }
 
-        val renamedDirectory = findDirectoryInTempDir("renamed-junit-skill")
-        assertNotNull(renamedDirectory)
-        assertEquals("renamed-junit-skill", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
+        val renamedDirectory = requireDirectory("renamed-junit-skill")
+        readAction {
+            assertEquals("renamed-junit-skill", requireSkillFile(renamedDirectory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test directory references search finds skill frontmatter name`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `directory references search finds skill frontmatter name`() {
+        val file = configureSkill(NAME)
+        val directory = requireDirectory(NAME)
 
-        val references = ReferencesSearch.search(directory).findAll()
+        val references = readAction { ReferencesSearch.search(directory).findAll() }
 
         assertEquals(1, references.size)
-        assertSame(directory, references.single().resolve())
-        assertSame(requireSkillNameScalar(file), references.single().element)
-        assertEquals("intellij-psi-vfs-safety", references.single().canonicalText)
+        readAction {
+            assertSame(directory, references.single().resolve())
+            assertSame(requireSkillNameScalar(file), references.single().element)
+        }
+        assertEquals(NAME, references.single().canonicalText)
     }
 
-    fun `test rename helper updates directory references`() {
-        configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `rename helper updates directory references`() {
+        configureSkill(NAME)
+        val directory = requireDirectory(NAME)
 
-        renameSkillDirectory(project, directory, "helper-renamed-skill")
+        @Suppress("UnstableApiUsage") writeIntentReadAction {
+            renameSkillDirectory(project, directory, "helper-renamed-skill")
+        }
 
-        val renamedDirectory = findDirectoryInTempDir("helper-renamed-skill")
-        assertNotNull(renamedDirectory)
-        assertEquals("helper-renamed-skill", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
+        val renamedDirectory = requireDirectory("helper-renamed-skill")
+        readAction {
+            assertEquals("helper-renamed-skill", requireSkillFile(renamedDirectory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test rename helper ignores invalid skill names`() {
-        configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `rename helper ignores invalid skill names`() {
+        configureSkill(NAME)
+        val directory = requireDirectory(NAME)
 
-        renameSkillDirectory(project, directory, "Invalid Skill Name")
+        @Suppress("UnstableApiUsage") writeIntentReadAction {
+            renameSkillDirectory(project, directory, "Invalid Skill Name")
+        }
 
-        assertSame(directory, requireDirectory("intellij-psi-vfs-safety"))
+        assertSame(directory, requireDirectory(NAME))
         assertNull(findDirectoryInTempDir("Invalid Skill Name"))
-        assertEquals("intellij-psi-vfs-safety", requireSkillFile(directory).skillNameScalar()?.textValue)
+        readAction {
+            assertEquals(NAME, requireSkillFile(directory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test rename helper defers refactoring outside write action`() {
-        configureSkill("intellij-psi-vfs-safety")
-        val directory = requireDirectory("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `rename helper defers refactoring outside write action`() {
+        configureSkill(NAME)
+        val directory = requireDirectory(NAME)
 
-        ApplicationManager.getApplication().runWriteAction {
+        writeAction {
             renameSkillDirectory(project, directory, "deferred-renamed-skill")
         }
 
         assertNull(findDirectoryInTempDir("deferred-renamed-skill"))
 
-        PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+        withContext(Dispatchers.EDT) {
+            PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+        }
 
-        val renamedDirectory = findDirectoryInTempDir("deferred-renamed-skill")
-        assertNotNull(renamedDirectory)
-        assertEquals("deferred-renamed-skill", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
+        val renamedDirectory = requireDirectory("deferred-renamed-skill")
+        readAction {
+            assertEquals("deferred-renamed-skill", requireSkillFile(renamedDirectory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test auto rename directory quick fix updates skill frontmatter name`() {
-        configureSkillWithName("directory-name", "metadata-name")
+    @Test
+    suspend fun `auto rename directory quick fix updates skill frontmatter name`() {
+        val file = configureSkillWithName("directory-name", "metadata-name")
 
-        launchQuickFix(SkillMdBundle.message("quickfix.auto.rename.dir", "metadata-name"))
+        launchQuickFix(file, SkillMdBundle.message("quickfix.auto.rename.dir", "metadata-name"))
 
-        val renamedDirectory = findDirectoryInTempDir("metadata-name")
-        assertNotNull(renamedDirectory)
-        assertEquals("metadata-name", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
+        val renamedDirectory = requireDirectory("metadata-name")
+        readAction {
+            assertEquals("metadata-name", requireSkillFile(renamedDirectory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test auto rename both quick fix updates through directory references`() {
-        configureSkillWithName("IntelliJ PSI VFS Safety", "IntelliJ PSI VFS Safety")
+    @Test
+    suspend fun `auto rename both quick fix updates through directory references`() {
+        val file = configureSkillWithName("IntelliJ PSI VFS Safety", "IntelliJ PSI VFS Safety")
 
-        launchQuickFix(SkillMdBundle.message("quickfix.auto.rename.both", "intellij-psi-vfs-safety"))
+        launchQuickFix(file, SkillMdBundle.message("quickfix.auto.rename.both", NAME))
 
-        val renamedDirectory = findDirectoryInTempDir("intellij-psi-vfs-safety")
-        assertNotNull(renamedDirectory)
-        assertEquals("intellij-psi-vfs-safety", requireSkillFile(renamedDirectory!!).skillNameScalar()?.textValue)
+        val renamedDirectory = requireDirectory(NAME)
+        readAction {
+            assertEquals(NAME, requireSkillFile(renamedDirectory).skillNameScalar()?.textValue)
+        }
     }
 
-    fun `test goto declaration from skill name returns parent directory`() {
-        val file = configureSkill("intellij-psi-vfs-safety")
+    @Test
+    suspend fun `goto declaration from skill name returns parent directory`() {
+        val file = configureSkill(NAME)
         moveCaretToName()
-        val source = file.findElementAt(myFixture.editor.caretModel.offset)
-        val targets = SkillNameGotoDeclarationHandler()
-            .getGotoDeclarationTargets(source, myFixture.editor.caretModel.offset, myFixture.editor)
 
-        assertNotNull(targets)
-        assertSame(requireDirectory("intellij-psi-vfs-safety"), targets!!.single())
+        readAction {
+            val offset = editor.caretModel.offset
+            val source = file.findElementAt(offset)
+            val targets = SkillNameGotoDeclarationHandler().getGotoDeclarationTargets(source, offset, editor)
+
+            assertNotNull(targets)
+            assertEquals(requireDirectory(NAME).virtualFile, (targets.single() as PsiDirectory).virtualFile)
+        }
     }
 
-    private fun configureSkill(name: String): MarkdownFile {
-        myFixture.copyDirectoryToProject("fixtures/mcp-sdk-skills/$name", name)
-        return myFixture.configureFromTempProjectFile("$name/$SKILL_MD_FILE_NAME") as MarkdownFile
+    private suspend fun configureSkill(name: String): MarkdownFile {
+        if (name == NAME) return file
+        return configureSkillWithName(name, name)
     }
 
-    private fun configureSkillWithName(directoryName: String, skillName: String): MarkdownFile {
-        myFixture.addFileToProject(
-            "$directoryName/$SKILL_MD_FILE_NAME",
-            """
-            ---
-            name: $skillName
-            description: Test skill
-            ---
-
-            # Test Skill
-            """.trimIndent(),
-        )
-        val file = myFixture.configureFromTempProjectFile("$directoryName/$SKILL_MD_FILE_NAME") as MarkdownFile
-        val offset = myFixture.editor.document.text.indexOf(skillName)
-        assertTrue("Expected skill name '$skillName' in editor text", offset >= 0)
-        myFixture.editor.caretModel.moveToOffset(offset)
-        return file
+    private suspend fun configureSkillWithName(directoryName: String, skillName: String): MarkdownFile {
+        val virtualFile = writeAction {
+            val skillDirectory = sourceRoot.virtualFile.findChild(directoryName)
+                ?: sourceRoot.virtualFile.createChildDirectory(this@SkillNameRenameTest, directoryName)
+            val skillFile = skillDirectory.findChild(SKILL_MD_FILE_NAME)
+                ?: skillDirectory.createChildData(this@SkillNameRenameTest, SKILL_MD_FILE_NAME)
+            VfsUtil.saveText(skillFile, skillFileContent(skillName))
+            skillFile
+        }
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+        return readAction {
+            PsiManager.getInstance(project).findFile(virtualFile) as? MarkdownFile
+                ?: error("Expected Markdown file $virtualFile")
+        }
     }
 
-    private fun launchQuickFix(text: String) {
-        myFixture.enableInspections(SkillNameInspection::class.java)
-        myFixture.doHighlighting()
-        val action = myFixture.findSingleIntention(text)
-        myFixture.launchAction(action)
+    private suspend fun launchQuickFix(file: MarkdownFile, text: String) {
+        val descriptor = readAction {
+            val problems = inspectionProblems(file)
+            problems.firstOrNull { problem ->
+                problem.fixes
+                    ?.filterIsInstance<LocalQuickFix>()
+                    ?.any { it.name == text } == true
+            } ?: error(
+                "Expected quick fix '$text', available: " +
+                        problems.flatMap { it.fixes?.filterIsInstance<LocalQuickFix>()?.map { fix -> fix.name }.orEmpty() },
+            )
+        }
+        val fix = descriptor.fixes
+            ?.filterIsInstance<LocalQuickFix>()
+            ?.singleOrNull { it.name == text }
+            ?: error("Expected quick fix '$text'")
+        if (fix.startInWriteAction()) {
+            writeAction {
+                fix.applyFix(project, descriptor)
+            }
+        } else {
+            @Suppress("UnstableApiUsage") writeIntentReadAction {
+                fix.applyFix(project, descriptor)
+            }
+        }
     }
 
-    private fun moveCaretToName() {
+    private fun inspectionProblems(file: MarkdownFile): List<ProblemDescriptor> {
+        val yamlFile = file.skillNameScalar()?.containingFile as? YAMLFile
+            ?: error("Expected injected YAML file in ${file.name}")
+        val holder = ProblemsHolder(InspectionManager.getInstance(project), yamlFile, true)
+        yamlFile.accept(SkillNameInspection().buildVisitor(holder, true))
+        return holder.results
+    }
+
+    private suspend fun moveCaretToName() {
         val fragment = "psi-vfs"
-        val offset = myFixture.editor.document.text.indexOf(fragment)
-        assertTrue("Expected fragment '$fragment' in editor text", offset >= 0)
-        myFixture.editor.caretModel.moveToOffset(offset)
+        val offset = editor.document.text.indexOf(fragment)
+        assertTrue(offset >= 0, "Expected fragment '$fragment' in editor text")
+        withContext(Dispatchers.EDT) {
+            editor.caretModel.moveToOffset(offset)
+        }
     }
 
     private fun requireSkillNameScalar(file: PsiFile): YAMLScalar =
@@ -322,9 +493,8 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     private fun requireDirectory(name: String): PsiDirectory =
         findDirectoryInTempDir(name) ?: error("Expected fixture directory $name")
 
-    private fun findDirectoryInTempDir(name: String): PsiDirectory? {
-        val virtualFile = myFixture.tempDirFixture.getFile(name) ?: return null
-        return PsiManager.getInstance(project).findDirectory(virtualFile)
+    private fun findDirectoryInTempDir(name: String): PsiDirectory? = runReadActionBlocking {
+        if (sourceRoot.name == name) sourceRoot else sourceRoot.findSubdirectory(name)
     }
 
     private fun requireSkillFile(directory: PsiDirectory): MarkdownFile =
@@ -359,17 +529,7 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     }
 
     private fun registerExtraDirectoryReference(reference: ExtraSkillDirectoryReference) {
-        val executor = object : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
-            override fun processQuery(
-                queryParameters: ReferencesSearch.SearchParameters,
-                consumer: Processor<in PsiReference>,
-            ) {
-                if (queryParameters.elementToSearch == reference.directory) {
-                    consumer.process(reference)
-                }
-            }
-        }
-        ExtensionTestUtil.addExtensions(ReferencesSearch.EP_NAME, listOf(executor), testRootDisposable)
+        extraDirectoryReferences += reference
     }
 
     private fun ModifiableRenameUsage.modifiesDirectoryNameTo(newName: String): Boolean {
@@ -380,12 +540,15 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     }
 
     private fun SkillNameOccurrenceRenameUsage.updateModelTo(newName: String) {
-        val update = modelUpdater.prepareModelUpdateBatch(listOf(this)).singleOrNull()
-            ?: error("Expected name occurrence model update")
+        val update = prepareSingleModelUpdate()
         WriteCommandAction.runWriteCommandAction(project) {
             update.updateModel(newName)
         }
     }
+
+    private fun SkillNameOccurrenceRenameUsage.prepareSingleModelUpdate() = runReadActionBlocking {
+        modelUpdater.prepareModelUpdateBatch(listOf(this@prepareSingleModelUpdate)).singleOrNull()
+    } ?: error("Expected name occurrence model update")
 
     private fun SkillNameOccurrenceRenameUsage.matchesReference(reference: PsiReference): Boolean =
         file == reference.element.containingFile &&
@@ -394,8 +557,17 @@ internal class SkillNameRenameTest : BasePlatformTestCase() {
     private class ExtraSkillDirectoryReference(
         element: YAMLScalar,
         val directory: PsiDirectory,
-    ) : PsiReferenceBase<YAMLScalar>(element, element.valueTextRangeInElement(), false) {
+    ) : PsiReferenceBase<YAMLScalar>(element, ElementManipulators.getValueTextRange(element), false) {
         override fun resolve(): PsiElement = directory
     }
-
 }
+
+private fun skillFileContent(skillName: String): String =
+    """
+    ---
+    name: $skillName
+    description: Test skill
+    ---
+
+    # Test Skill
+    """.trimIndent()
