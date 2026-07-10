@@ -14,6 +14,9 @@ dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
+        testBundledPlugin("org.jetbrains.kotlin")
+        testBundledPlugin("org.jetbrains.plugins.gradle")
+        testBundledPlugin("org.toml.lang")
     }
     implementation(project("ModelBuilderService"))
 }

@@ -7,15 +7,24 @@
 package dev.ghostflyby.typesafeconventions.gradle
 
 import com.intellij.openapi.application.backgroundWriteAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.platform.backend.observation.trackActivity
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.storage.entities
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.searches.ReferencesSearch
+import com.intellij.psi.util.parentOfType
+import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
-import com.intellij.testFramework.junit5.fixture.disposableFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import kotlinx.coroutines.CompletableDeferred
@@ -27,9 +36,10 @@ import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
 import org.jetbrains.plugins.gradle.service.project.ProjectResolverContext
 import org.jetbrains.plugins.gradle.service.project.open.linkAndSyncGradleProject
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncListener
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.toml.lang.psi.TomlKeySegment
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -43,17 +53,18 @@ internal class GradleTypesafeConventionsSyncTest {
     private val projectPathFixture = tempPathFixture()
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
-    private val disposable by disposableFixture()
 
-    @Test
-    suspend fun `kotlin dsl typesafe conventions buildSrc project contributes version catalog model`() {
+    @BeforeEach
+    suspend fun tearUp() {
         val future = CompletableDeferred<Unit>()
+        val disposable = Disposer.newDisposable()
         @Suppress("UnstableApiUsage")
         project.messageBus.connect(disposable).subscribe(
             GradleSyncListener.TOPIC,
             object : GradleSyncListener {
                 override fun onModelFetchCompleted(context: ProjectResolverContext) {
                     future.complete(Unit)
+                    disposable.dispose()
                 }
             },
         )
@@ -65,8 +76,14 @@ internal class GradleTypesafeConventionsSyncTest {
         project.trackActivity(ExternalSystemActivityKey) {
             linkAndSyncGradleProject(project, projectRoot.toString())
         }
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
         future.await()
+    }
 
+    @Test
+    suspend fun `kotlin dsl typesafe conventions buildSrc project contributes version catalog model`() {
+
+        val projectRoot = projectPathFixture.get()
         val buildSrcPath = projectRoot.resolve("buildSrc")
         val rootCatalog = findBuildCatalog(projectRoot, "libs")
         val buildSrcCatalog = findBuildCatalog(buildSrcPath, "libs")
@@ -105,6 +122,45 @@ internal class GradleTypesafeConventionsSyncTest {
                 it.name == name &&
                         it.build.url.url.toRealPath() == realBuildPath
             }
+    }
+
+    @Test
+    suspend fun assertBuildSrcVersionCatalogUsages() {
+        val projectRoot by projectPathFixture
+
+        val buildSrcScriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts")
+        val tomlPath = projectRoot.resolve("gradle/libs.versions.toml")
+        val tomlFile = requirePsiFile(tomlPath)
+        val target = readAction { findTomlKeyElement(tomlFile, "junit-jupiter") }
+
+        val usages = readAction {
+            ReferencesSearch.search(target, GlobalSearchScope.projectScope(project))
+                .findAll()
+                .mapNotNull { it.element.containingFile?.virtualFile?.toNioPath()?.toRealPath() }
+        }
+        assertTrue(
+            buildSrcScriptPath.realPath() in usages,
+            "Expected usages of TOML junit-jupiter entry to include the buildSrc convention plugin. usages=$usages",
+        )
+    }
+
+    private fun findTomlKeyElement(
+        file: PsiFile,
+        key: String,
+    ): PsiElement {
+        val offset = file.text.indexOf("$key =").takeIf { it >= 0 }
+            ?: error("Cannot find $key in ${file.virtualFile.url}")
+        return file.findElementAt(offset)?.parentOfType<TomlKeySegment>()
+            ?: error("Cannot find PSI element for $key in ${file.virtualFile.url}")
+    }
+
+    private suspend fun requirePsiFile(path: Path): PsiFile {
+        val virtualFile = withContext(Dispatchers.IO) {
+            LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
+        } ?: error("Cannot find ${path.realPath()}")
+        return readAction {
+            PsiManager.getInstance(project).findFile(virtualFile)
+        } ?: error("Cannot find PSI for ${virtualFile.url}")
     }
 
     private suspend fun configureProjectJdk(projectRoot: Path) {
@@ -196,6 +252,18 @@ internal class GradleTypesafeConventionsSyncTest {
                 }
             """.trimIndent(),
         )
+        val buildSrcSourceRoot = buildSrc.resolve("src/main/kotlin").createDirectories()
+        buildSrcSourceRoot.resolve("repo.intellij-lib.gradle.kts").writeText(
+            """
+                plugins {
+                    `java-library`
+                }
+
+                dependencies {
+                    testImplementation(libs.junit.jupiter)
+                }
+            """.trimIndent(),
+        )
     }
 
     private fun copyGradleWrapper(projectRoot: Path) {
@@ -236,4 +304,7 @@ internal class GradleTypesafeConventionsSyncTest {
 
     private fun String.toRealPath(): Path =
         Path.of(URI(this)).toRealPath()
+    private suspend fun Path.realPath() = withContext(Dispatchers.IO) {
+        toRealPath()
+    }
 }
