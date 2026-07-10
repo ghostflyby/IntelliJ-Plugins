@@ -23,10 +23,8 @@
         <syncContributor
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGradleSyncContributor"/>
     </extensions>
-    <extensions defaultExtensionNs="com.intellij">
-        <!--suppress PluginXmlValidity Experimental API usage -->
-        <externalWorkspaceDataService
-                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGradleModuleDataService"
-                order="last"/>
-    </extensions>
+    <projectListeners>
+        <listener class="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectDataImportListener"
+                  topic="com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener"/>
+    </projectListeners>
 </idea-plugin>

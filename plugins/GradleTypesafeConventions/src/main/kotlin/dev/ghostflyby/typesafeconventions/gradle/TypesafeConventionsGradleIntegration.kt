@@ -6,17 +6,15 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
+import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.externalSystem.model.DataNode
-import com.intellij.openapi.externalSystem.model.Key
-import com.intellij.openapi.externalSystem.model.ProjectKeys
-import com.intellij.openapi.externalSystem.model.project.ProjectData
-import com.intellij.openapi.externalSystem.service.project.manage.WorkspaceDataService
+import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.externalSystem.impl.workspaceModel.ExternalProjectEntityId
 import com.intellij.platform.workspace.jps.entities.ModuleEntity
-import com.intellij.platform.workspace.jps.entities.exModuleOptions
 import com.intellij.platform.workspace.jps.entities.modifyModuleEntity
 import com.intellij.platform.workspace.storage.*
 import org.jetbrains.plugins.gradle.model.projectModel.*
@@ -30,7 +28,6 @@ import org.jetbrains.plugins.gradle.service.syncAction.GradleEntitySource
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncContributor
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncPhase
 import org.jetbrains.plugins.gradle.service.syncAction.virtualFileUrl
-import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
@@ -46,7 +43,7 @@ internal class TypesafeConventionsProjectResolverExtension : AbstractProjectReso
 
 @Suppress("UnstableApiUsage")
 // GradleSyncContributor and Gradle workspace entities are experimental IntelliJ APIs.
-// This path is intentionally used instead of the internal GradleVersionCatalogHandler extension point.
+// This path keeps TOML support on Workspace Model data instead of private Gradle catalog extension points.
 internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor {
 
     override val phase: GradleSyncPhase = GradleSyncPhase.ADDITIONAL_MODEL_PHASE
@@ -56,8 +53,12 @@ internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor 
         storage: ImmutableEntityStorage,
     ): ImmutableEntityStorage {
         val builder = storage.toBuilder()
-        val entitySource = TypesafeConventionsEntitySource(context.projectPath, phase)
-        val enabledBuildUrls = mutableSetOf<String>()
+        val entitySource = TypesafeConventionsEntitySource(
+            projectPath = context.projectPath,
+            phase = phase,
+            kind = TypesafeConventionsEntityKind.CATALOG,
+        )
+        val enabledBuilds = mutableMapOf<String, String>()
         var changed = false
 
         for (buildModel in context.allBuilds) {
@@ -68,7 +69,7 @@ internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor 
             }
 
             val buildUrl = context.virtualFileUrl(buildModel.buildIdentifier.rootDir)
-            enabledBuildUrls += buildUrl.url
+            enabledBuilds[buildUrl.url] = context.projectPath
             val buildId = GradleBuildEntityId(ExternalProjectEntityId(context.externalProjectPath), buildUrl)
             val buildEntity = builder.resolve(buildId) ?: continue
             val existingNames = buildEntity.versionCatalogs.mapTo(mutableSetOf()) { it.name }
@@ -86,7 +87,7 @@ internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor 
                 changed = true
             }
         }
-        context.project.service<TypesafeConventionsGradleBuildState>().enabledBuildUrls = enabledBuildUrls
+        context.project.service<TypesafeConventionsGradleBuildState>().enabledBuilds = enabledBuilds
 
         return if (changed) builder.toSnapshot() else storage
     }
@@ -106,130 +107,118 @@ internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor 
     }
 }
 
-@Suppress("UnstableApiUsage")
-// WorkspaceDataService runs after legacy module import has created source-set modules.
-// It complements the sync contributor without using the internal GradleVersionCatalogHandler API.
-internal class TypesafeConventionsGradleModuleDataService :
-    WorkspaceDataService<TypesafeConventionsGradleModuleLinkData> {
-
-    override fun getTargetDataKey(): Key<TypesafeConventionsGradleModuleLinkData> =
-        TYPESAFE_CONVENTIONS_GRADLE_MODULE_LINK_KEY
-
-    override fun importData(
-        toImport: Collection<DataNode<TypesafeConventionsGradleModuleLinkData>>,
-        projectData: ProjectData?,
-        project: Project,
-        mutableStorage: MutableEntityStorage,
-    ) {
-        if (projectData?.owner != GradleConstants.SYSTEM_ID) {
-            return
-        }
-
-        val affectedProjectIds = mutableStorage.entities<GradleBuildEntity>()
-            .filter { build -> build.url.url in project.service<TypesafeConventionsGradleBuildState>().enabledBuildUrls }
-            .flatMapTo(mutableSetOf()) { build ->
-                build.projects.map { it.symbolicId }
-            }
-        if (affectedProjectIds.isEmpty()) {
-            return
-        }
-
-        linkSourceSetModulesToGradleProject(
-            builder = mutableStorage,
-            affectedProjectIds = affectedProjectIds,
-            entitySource = TypesafeConventionsEntitySource(
-                projectPath = projectData.linkedExternalProjectPath,
-                phase = GradleSyncPhase.ADDITIONAL_MODEL_PHASE,
-            ),
-        )
-    }
-}
-
 @Service(Service.Level.PROJECT)
 internal class TypesafeConventionsGradleBuildState {
     @Volatile
-    var enabledBuildUrls: Set<String> = emptySet()
+    var enabledBuilds: Map<String, String> = emptyMap()
 }
 
-internal class TypesafeConventionsGradleModuleLinkData
+internal class TypesafeConventionsProjectDataImportListener(private val project: Project) : ProjectDataImportListener {
+    override fun onImportFinished(projectPath: String?) {
+        repairTypesafeConventionsModuleLinks(project)
+    }
 
-private val TYPESAFE_CONVENTIONS_GRADLE_MODULE_LINK_KEY: Key<TypesafeConventionsGradleModuleLinkData> =
-    Key.create(
-        TypesafeConventionsGradleModuleLinkData::class.java,
-        ProjectKeys.MODULE.processingWeight + 2,
-    )
+    override fun onFinalTasksFinished(projectPath: String?) {
+        repairTypesafeConventionsModuleLinks(project)
+    }
+}
+
+private fun repairTypesafeConventionsModuleLinks(project: Project) {
+    val enabledBuilds = project.service<TypesafeConventionsGradleBuildState>().enabledBuilds
+    if (enabledBuilds.isEmpty()) {
+        return
+    }
+    refreshTypesafeConventionsCatalogFiles(project, enabledBuilds.keys)
+    runWriteAction {
+        project.workspaceModel.updateProjectModel("Link Gradle source-set modules for typesafe conventions catalogs") { builder ->
+            linkSourceSetModulesToGradleProject(
+                builder = builder,
+                affectedProjects = collectTypesafeConventionsGradleProjects(builder, enabledBuilds),
+            )
+        }
+    }
+}
+
+@Suppress("UnstableApiUsage")
+private fun refreshTypesafeConventionsCatalogFiles(
+    project: Project,
+    enabledBuildUrls: Set<String>,
+) {
+    val virtualFileManager = VirtualFileManager.getInstance()
+    project.workspaceModel.currentSnapshot.entities<GradleBuildEntity>()
+        .filter { it.url.url in enabledBuildUrls }
+        .flatMap { it.versionCatalogs }
+        .forEach { catalog ->
+            virtualFileManager.refreshAndFindFileByUrl(catalog.url.url)
+        }
+}
+
+@Suppress("UnstableApiUsage")
+private fun collectTypesafeConventionsGradleProjects(
+    builder: MutableEntityStorage,
+    enabledBuilds: Map<String, String>,
+): List<TypesafeConventionsGradleProjectLink> =
+    builder.entities<GradleBuildEntity>()
+        .flatMap { build ->
+            val projectPath = enabledBuilds[build.url.url]
+                ?: return@flatMap emptyList()
+            val linkSource = TypesafeConventionsEntitySource(
+                projectPath = projectPath,
+                phase = GradleSyncPhase.ADDITIONAL_MODEL_PHASE,
+                kind = TypesafeConventionsEntityKind.MODULE_LINK,
+            )
+            build.projects.map { TypesafeConventionsGradleProjectLink(it, linkSource) }
+        }
+        .toList()
 
 private fun linkSourceSetModulesToGradleProject(
     builder: MutableEntityStorage,
-    affectedProjectIds: Set<GradleProjectEntityId>,
-    entitySource: EntitySource,
+    affectedProjects: Collection<TypesafeConventionsGradleProjectLink>,
 ): Boolean {
-    val gradleProjectIdsByModule = builder.entities<ModuleEntity>()
-        .mapNotNull { module ->
-            val options = module.exModuleOptions ?: return@mapNotNull null
-            val gradleModuleEntity = module.gradleModuleEntity ?: return@mapNotNull null
-            if (gradleModuleEntity.gradleProjectId !in affectedProjectIds) {
-                return@mapNotNull null
-            }
-            createHolderModuleKey(
-                rootProjectPath = options.rootProjectPath,
-                linkedProjectPath = options.linkedProjectPath,
-                linkedProjectId = options.linkedProjectId,
-            )?.let { it to gradleModuleEntity.gradleProjectId }
-        }
-        .toMap()
+    @Suppress("UnstableApiUsage") val projects = affectedProjects
+        .sortedByDescending { it.project.url.url.length }
+        .toList()
+    if (projects.isEmpty()) {
+        return false
+    }
 
     var changed = false
     for (module in builder.entities<ModuleEntity>().toList()) {
         if (module.gradleModuleEntity != null) {
             continue
         }
-        val options = module.exModuleOptions ?: continue
-        if (options.externalSystemModuleType != GradleConstants.GRADLE_SOURCE_SET_MODULE_TYPE_KEY) {
-            continue
+        @Suppress("UnstableApiUsage") val projectLink = projects.firstOrNull { projectLink ->
+            module.contentRoots.any { contentRoot ->
+                contentRoot.url.url.isUnderOrEqual(projectLink.project.url.url)
+            }
         }
-        val linkedProjectId = options.linkedProjectId ?: continue
-        val ownerLinkedProjectId = linkedProjectId.substringBeforeLast(':', missingDelimiterValue = "")
-        if (ownerLinkedProjectId.isEmpty()) {
-            continue
-        }
-        val holderModuleKey = createHolderModuleKey(
-            rootProjectPath = options.rootProjectPath,
-            linkedProjectPath = options.linkedProjectPath,
-            linkedProjectId = ownerLinkedProjectId,
-        ) ?: continue
-        val gradleProjectId = gradleProjectIdsByModule[holderModuleKey] ?: continue
+            ?: continue
 
         builder.modifyModuleEntity(module) {
-            gradleModuleEntity = GradleModuleEntity(gradleProjectId, entitySource)
+            @Suppress("UnstableApiUsage")
+            gradleModuleEntity = GradleModuleEntity(projectLink.project.symbolicId, projectLink.entitySource)
         }
         changed = true
     }
     return changed
 }
 
-private fun createHolderModuleKey(
-    rootProjectPath: String?,
-    linkedProjectPath: String?,
-    linkedProjectId: String?,
-): HolderModuleKey? {
-    if (rootProjectPath == null || linkedProjectPath == null || linkedProjectId == null) {
-        return null
-    }
-    return HolderModuleKey(
-        rootProjectPath = rootProjectPath,
-        linkedProjectPath = linkedProjectPath,
-        linkedProjectId = linkedProjectId,
-    )
-}
+private fun String.isUnderOrEqual(rootUrl: String): Boolean =
+    this == rootUrl || startsWith(rootUrl.trimEnd('/') + "/")
 
-private data class HolderModuleKey(
-    val rootProjectPath: String,
-    val linkedProjectPath: String,
-    val linkedProjectId: String,
+private data class TypesafeConventionsGradleProjectLink(
+    @Suppress("UnstableApiUsage") val project: GradleProjectEntity,
+    val entitySource: EntitySource,
 )
 
+@Suppress("UnstableApiUsage")
 private data class TypesafeConventionsEntitySource(
     override val projectPath: String,
-    override val phase: GradleSyncPhase,
+    @Suppress("UnstableApiUsage") override val phase: GradleSyncPhase,
+    val kind: TypesafeConventionsEntityKind,
 ) : GradleEntitySource
+
+private enum class TypesafeConventionsEntityKind {
+    CATALOG,
+    MODULE_LINK,
+}

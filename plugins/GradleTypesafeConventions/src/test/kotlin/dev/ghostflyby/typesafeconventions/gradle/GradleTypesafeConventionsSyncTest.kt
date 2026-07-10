@@ -8,6 +8,7 @@ package dev.ghostflyby.typesafeconventions.gradle
 
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
@@ -15,22 +16,23 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.platform.backend.observation.trackActivity
 import com.intellij.platform.backend.workspace.workspaceModel
+import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.storage.entities
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
-import com.intellij.psi.search.GlobalSearchScope
-import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.parentOfType
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
+import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.kotlin.idea.gradle.versionCatalog.toml.KotlinGradleTomlVersionCatalogGotoDeclarationHandler
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
+import org.jetbrains.plugins.gradle.model.projectModel.gradleModuleEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
 import org.jetbrains.plugins.gradle.service.project.ProjectResolverContext
@@ -38,7 +40,6 @@ import org.jetbrains.plugins.gradle.service.project.open.linkAndSyncGradleProjec
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncListener
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.toml.lang.psi.TomlKeyValue
 import java.net.URI
@@ -60,13 +61,23 @@ internal class GradleTypesafeConventionsSyncTest {
         val projectRoot = projectPathFixture.get()
         createKotlinDslGradleProjectWithBuildSrc(projectRoot)
 
-        val future = CompletableDeferred<Unit>()
+        val modelFetchFuture = CompletableDeferred<Unit>()
         @Suppress("UnstableApiUsage")
         project.messageBus.connect(project).subscribe(
             GradleSyncListener.TOPIC,
             object : GradleSyncListener {
                 override fun onModelFetchCompleted(context: ProjectResolverContext) {
-                    future.complete(Unit)
+                    modelFetchFuture.complete(Unit)
+                }
+            },
+        )
+        val importFuture = CompletableDeferred<Unit>()
+        @Suppress("CAST_NEVER_SUCCEEDS")
+        project.messageBus.connect(project).subscribe(
+            ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
+            object : ProjectDataImportListener {
+                override fun onFinalTasksFinished(projectPath: String?) {
+                    importFuture.complete(Unit)
                 }
             },
         )
@@ -76,7 +87,8 @@ internal class GradleTypesafeConventionsSyncTest {
         project.trackActivity(ExternalSystemActivityKey) {
             linkAndSyncGradleProject(project, projectRoot.toString())
         }
-        future.await()
+        modelFetchFuture.await()
+        importFuture.await()
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -124,26 +136,6 @@ internal class GradleTypesafeConventionsSyncTest {
     }
 
     @Test
-    @Disabled("Raw ReferencesSearch does not model Gradle TOML find-usages alias normalization.")
-    suspend fun `version catalog library usages include buildSrc convention plugin`() {
-        val projectRoot = projectPathFixture.get()
-        val buildSrcScriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts")
-        val tomlPath = projectRoot.resolve("gradle/libs.versions.toml")
-        val tomlFile = requirePsiFile(tomlPath)
-        val target = readAction { findTomlKeyValue(tomlFile, "junit-jupiter") }
-
-        val usages = readAction {
-            ReferencesSearch.search(target, GlobalSearchScope.projectScope(project))
-                .findAll()
-                .mapNotNull { it.element.containingFile?.virtualFile?.toNioPath()?.toRealPath() }
-        }
-        assertTrue(
-            buildSrcScriptPath.realPath() in usages,
-            "Expected usages of TOML junit-jupiter entry to include the buildSrc convention plugin. usages=$usages",
-        )
-    }
-
-    @Test
     suspend fun `buildSrc catalog accessor goto declaration resolves to toml library entry`() {
         val projectRoot = projectPathFixture.get()
         val buildSrcScriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts")
@@ -161,7 +153,8 @@ internal class GradleTypesafeConventionsSyncTest {
 
         assertTrue(
             tomlPath in realResolvedPaths,
-            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. resolvedPaths=$realResolvedPaths",
+            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. " +
+                    "resolvedPaths=$realResolvedPaths ${workspaceModelState()} ${moduleGradleState()}",
         )
     }
 
@@ -223,6 +216,16 @@ internal class GradleTypesafeConventionsSyncTest {
         val catalogs = snapshot.entities<GradleVersionCatalogEntity>()
             .joinToString(prefix = "catalogs=[", postfix = "]") { "${it.name}:${it.url.url}" }
         return "$builds $catalogs"
+    }
+
+    private fun moduleGradleState(): String {
+        val snapshot = project.workspaceModel.currentSnapshot
+        return snapshot.entities<ModuleEntity>()
+            .filter { it.name.contains("buildSrc") }
+            .joinToString(prefix = "modules=[", postfix = "]") { module ->
+                val gradleProjectId = module.gradleModuleEntity?.gradleProjectId
+                "${module.name}:$gradleProjectId"
+            }
     }
 
     private fun createKotlinDslGradleProjectWithBuildSrc(projectRoot: Path) {
