@@ -40,10 +40,10 @@ import kotlin.io.path.writeText
 @TestApplication
 internal class GradleTypesafeConventionsSyncTest {
 
-    val projectPathFixture = tempPathFixture()
-    val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
-    val project by projectFixture
-    val disposable by disposableFixture()
+    private val projectPathFixture = tempPathFixture()
+    private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
+    private val project by projectFixture
+    private val disposable by disposableFixture()
 
     @Test
     suspend fun `kotlin dsl typesafe conventions buildSrc project contributes version catalog model`() {
@@ -58,7 +58,6 @@ internal class GradleTypesafeConventionsSyncTest {
             },
         )
 
-
         val projectRoot = projectPathFixture.get()
         createKotlinDslGradleProjectWithBuildSrc(projectRoot)
         configureProjectJdk(projectRoot)
@@ -68,19 +67,29 @@ internal class GradleTypesafeConventionsSyncTest {
         }
         future.await()
 
-
         val buildSrcPath = projectRoot.resolve("buildSrc")
-        val catalog = findBuildCatalog(buildSrcPath, "libs")
+        val rootCatalog = findBuildCatalog(projectRoot, "libs")
+        val buildSrcCatalog = findBuildCatalog(buildSrcPath, "libs")
 
         assertNotNull(
-            catalog,
+            rootCatalog,
+            "Expected Gradle sync to create the root libs version catalog entity. ${workspaceModelState()}",
+        )
+        assertNotNull(
+            buildSrcCatalog,
             "Expected Gradle sync to create the buildSrc libs version catalog entity. ${workspaceModelState()}",
         )
         assertEquals(
             withContext(Dispatchers.IO) {
                 projectRoot.resolve("gradle/libs.versions.toml").toRealPath()
             },
-            catalog?.url?.url?.toRealPath(),
+            rootCatalog?.url?.url?.toRealPath(),
+        )
+        assertEquals(
+            withContext(Dispatchers.IO) {
+                projectRoot.resolve("gradle/libs.versions.toml").toRealPath()
+            },
+            buildSrcCatalog?.url?.url?.toRealPath(),
         )
     }
 
@@ -89,11 +98,13 @@ internal class GradleTypesafeConventionsSyncTest {
         buildPath: Path,
         @Suppress("SameParameterValue") name: String,
     ): GradleVersionCatalogEntity? {
+        val realBuildPath = buildPath.toRealPath()
         return project.workspaceModel.currentSnapshot
-            .entities<GradleBuildEntity>()
-            .singleOrNull { it.url.url.toRealPath() == buildPath.toRealPath() }
-            ?.versionCatalogs
-            ?.singleOrNull { it.name == name }
+            .entities<GradleVersionCatalogEntity>()
+            .singleOrNull {
+                it.name == name &&
+                        it.build.url.url.toRealPath() == realBuildPath
+            }
     }
 
     private suspend fun configureProjectJdk(projectRoot: Path) {
