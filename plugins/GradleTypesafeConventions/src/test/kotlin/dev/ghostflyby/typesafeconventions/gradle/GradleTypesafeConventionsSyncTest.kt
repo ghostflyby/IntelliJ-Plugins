@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
-import org.toml.lang.psi.TomlKeySegment
+import org.toml.lang.psi.TomlKeyValue
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -124,13 +124,13 @@ internal class GradleTypesafeConventionsSyncTest {
     }
 
     @Test
-    @Disabled("Known failure: ReferencesSearch returns usages=[] for buildSrc typesafe-conventions catalog accessors.")
+    @Disabled("Raw ReferencesSearch does not model Gradle TOML find-usages alias normalization.")
     suspend fun `version catalog library usages include buildSrc convention plugin`() {
         val projectRoot = projectPathFixture.get()
         val buildSrcScriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts")
         val tomlPath = projectRoot.resolve("gradle/libs.versions.toml")
         val tomlFile = requirePsiFile(tomlPath)
-        val target = readAction { findTomlKeyElement(tomlFile, "junit-jupiter") }
+        val target = readAction { findTomlKeyValue(tomlFile, "junit-jupiter") }
 
         val usages = readAction {
             ReferencesSearch.search(target, GlobalSearchScope.projectScope(project))
@@ -156,11 +156,12 @@ internal class GradleTypesafeConventionsSyncTest {
                 .getGotoDeclarationTargets(sourceElement, offset, null)
                 .orEmpty()
                 .mapNotNull { it.containingFile?.virtualFile?.toNioPath() }
-        }.map { it.realPath() }
+        }
+        val realResolvedPaths = resolvedPaths.map { it.realPath() }
 
         assertTrue(
-            tomlPath in resolvedPaths,
-            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. resolvedPaths=$resolvedPaths",
+            tomlPath in realResolvedPaths,
+            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. resolvedPaths=$realResolvedPaths",
         )
     }
 
@@ -179,13 +180,13 @@ internal class GradleTypesafeConventionsSyncTest {
         return sourceElement to offset
     }
 
-    private fun findTomlKeyElement(
+    private fun findTomlKeyValue(
         file: PsiFile,
         key: String,
     ): PsiElement {
         val offset = file.text.indexOf("$key =").takeIf { it >= 0 }
             ?: error("Cannot find $key in ${file.virtualFile.url}")
-        return file.findElementAt(offset)?.parentOfType<TomlKeySegment>()
+        return file.findElementAt(offset)?.parentOfType<TomlKeyValue>()
             ?: error("Cannot find PSI element for $key in ${file.virtualFile.url}")
     }
 

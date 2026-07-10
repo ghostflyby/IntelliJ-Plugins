@@ -13,11 +13,20 @@
     <depends>org.jetbrains.kotlin</depends>
     <depends>org.jetbrains.plugins.gradle</depends>
     <depends>org.toml.lang</depends>
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <supportsKotlinPluginMode supportsK2="true"/>
+    </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <projectResolve
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectResolverExtension"/>
         <!--suppress PluginXmlValidity Experimental API usage -->
         <syncContributor
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGradleSyncContributor"/>
+    </extensions>
+    <extensions defaultExtensionNs="com.intellij">
+        <!--suppress PluginXmlValidity Experimental API usage -->
+        <externalWorkspaceDataService
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGradleModuleDataService"
+                order="last"/>
     </extensions>
 </idea-plugin>
