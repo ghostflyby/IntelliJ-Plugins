@@ -10,6 +10,9 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.java</depends>
     <depends>com.intellij.gradle</depends>
+    <depends>org.jetbrains.kotlin</depends>
+    <depends>org.jetbrains.plugins.gradle</depends>
+    <depends>org.toml.lang</depends>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <projectResolve
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectResolverExtension"/>
