@@ -29,6 +29,7 @@ import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.jetbrains.kotlin.idea.gradle.versionCatalog.toml.KotlinGradleTomlVersionCatalogGotoDeclarationHandler
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
@@ -140,6 +141,42 @@ internal class GradleTypesafeConventionsSyncTest {
             buildSrcScriptPath.realPath() in usages,
             "Expected usages of TOML junit-jupiter entry to include the buildSrc convention plugin. usages=$usages",
         )
+    }
+
+    @Test
+    suspend fun `buildSrc catalog accessor goto declaration resolves to toml library entry`() {
+        val projectRoot = projectPathFixture.get()
+        val buildSrcScriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts")
+        val tomlPath = projectRoot.resolve("gradle/libs.versions.toml").realPath()
+        val buildSrcScript = requirePsiFile(buildSrcScriptPath)
+
+        val resolvedPaths = readAction {
+            val (sourceElement, offset) = findElementAtText(buildSrcScript, "libs.junit.jupiter", "jupiter")
+            KotlinGradleTomlVersionCatalogGotoDeclarationHandler()
+                .getGotoDeclarationTargets(sourceElement, offset, null)
+                .orEmpty()
+                .mapNotNull { it.containingFile?.virtualFile?.toNioPath() }
+        }.map { it.realPath() }
+
+        assertTrue(
+            tomlPath in resolvedPaths,
+            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. resolvedPaths=$resolvedPaths",
+        )
+    }
+
+    private fun findElementAtText(
+        file: PsiFile,
+        text: String,
+        referenceText: String,
+    ): Pair<PsiElement, Int> {
+        val textOffset = file.text.indexOf(text).takeIf { it >= 0 }
+            ?: error("Cannot find $text in ${file.virtualFile.url}")
+        val referenceOffset = text.lastIndexOf(referenceText).takeIf { it >= 0 }
+            ?: error("Cannot find $referenceText in $text")
+        val offset = textOffset + referenceOffset + referenceText.length / 2
+        val sourceElement = file.findElementAt(offset)
+            ?: error("Cannot find PSI element for $referenceText in ${file.virtualFile.url}")
+        return sourceElement to offset
     }
 
     private fun findTomlKeyElement(
