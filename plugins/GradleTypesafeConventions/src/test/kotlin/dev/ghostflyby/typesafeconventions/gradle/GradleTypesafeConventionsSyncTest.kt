@@ -14,6 +14,7 @@ import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImp
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
+import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -41,9 +42,12 @@ import org.jetbrains.plugins.gradle.service.project.CommonGradleProjectResolverE
 import org.jetbrains.plugins.gradle.service.project.ProjectResolverContext
 import org.jetbrains.plugins.gradle.service.project.open.linkAndSyncGradleProject
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncListener
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.MethodSource
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -51,76 +55,113 @@ import java.nio.file.StandardCopyOption
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
 
+internal data class VersionCatalogCase(
+    val catalogName: String,
+    val catalogPath: String,
+) {
+    val expressionText: String
+        get() = "$catalogName.junit.jupiter"
+
+    override fun toString(): String = catalogName
+}
+
 @TestApplication
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal abstract class AbstractGradleTypesafeConventionsSyncTest {
 
     protected val projectPathFixture = tempPathFixture()
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
+    private var gradleProjectConfigured = false
+    private var currentProjectJdk: Sdk? = null
 
     @BeforeEach
     suspend fun setUp() {
         val projectRoot = projectPathFixture.get()
-        createGradleProjectWithBuildSrc(projectRoot)
-
-        val modelFetchFuture = CompletableDeferred<Unit>()
-        @Suppress("UnstableApiUsage")
-        project.messageBus.connect(project).subscribe(
-            GradleSyncListener.TOPIC,
-            object : GradleSyncListener {
-                override fun onModelFetchCompleted(context: ProjectResolverContext) {
-                    modelFetchFuture.complete(Unit)
-                }
-            },
-        )
-        val importFuture = CompletableDeferred<Unit>()
-        @Suppress("CAST_NEVER_SUCCEEDS")
-        project.messageBus.connect(project).subscribe(
-            ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
-            object : ProjectDataImportListener {
-                override fun onFinalTasksFinished(projectPath: String?) {
-                    importFuture.complete(Unit)
-                }
-            },
-        )
-
-        configureProjectJdk(projectRoot)
-        Registry.get(CommonGradleProjectResolverExtension.GRADLE_VERSION_CATALOGS_DYNAMIC_SUPPORT)
-            .setValue(true, project)
-
-        project.trackActivity(ExternalSystemActivityKey) {
-            linkAndSyncGradleProject(project, projectRoot.toString())
+        if (!gradleProjectConfigured) {
+            createGradleProjectWithBuildSrc(projectRoot)
         }
-        modelFetchFuture.await()
-        importFuture.await()
-        IndexingTestUtil.waitUntilIndexesAreReady(project)
+
+        val sdk = configureProjectJdk(projectRoot)
+        currentProjectJdk = sdk
+        if (gradleProjectConfigured) {
+            return
+        }
+
+        try {
+            val modelFetchFuture = CompletableDeferred<Unit>()
+            @Suppress("UnstableApiUsage")
+            project.messageBus.connect(project).subscribe(
+                GradleSyncListener.TOPIC,
+                object : GradleSyncListener {
+                    override fun onModelFetchCompleted(context: ProjectResolverContext) {
+                        modelFetchFuture.complete(Unit)
+                    }
+                },
+            )
+            val importFuture = CompletableDeferred<Unit>()
+            @Suppress("CAST_NEVER_SUCCEEDS")
+            project.messageBus.connect(project).subscribe(
+                ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
+                object : ProjectDataImportListener {
+                    override fun onFinalTasksFinished(projectPath: String?) {
+                        importFuture.complete(Unit)
+                    }
+                },
+            )
+
+            Registry.get(CommonGradleProjectResolverExtension.GRADLE_VERSION_CATALOGS_DYNAMIC_SUPPORT)
+                .setValue(true, project)
+
+            project.trackActivity(ExternalSystemActivityKey) {
+                linkAndSyncGradleProject(project, projectRoot.toString())
+            }
+            modelFetchFuture.await()
+            importFuture.await()
+            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            gradleProjectConfigured = true
+        } catch (throwable: Throwable) {
+            currentProjectJdk = null
+            cleanupProjectJdk(sdk)
+            throw throwable
+        }
+    }
+
+    @AfterEach
+    suspend fun tearDownProjectJdk() {
+        val sdk = currentProjectJdk ?: return
+        currentProjectJdk = null
+        cleanupProjectJdk(sdk)
     }
 
     protected abstract fun createGradleProjectWithBuildSrc(projectRoot: Path)
 
-    protected suspend fun assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel() {
+    protected suspend fun assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(
+        catalogName: String = "libs",
+        catalogPath: String = "gradle/libs.versions.toml",
+    ) {
         val projectRoot = projectPathFixture.get()
         val buildSrcPath = projectRoot.resolve("buildSrc")
-        val rootCatalog = findBuildCatalog(projectRoot, "libs")
-        val buildSrcCatalog = findBuildCatalog(buildSrcPath, "libs")
+        val rootCatalog = findBuildCatalog(projectRoot, catalogName)
+        val buildSrcCatalog = findBuildCatalog(buildSrcPath, catalogName)
 
         assertNotNull(
             rootCatalog,
-            "Expected Gradle sync to create the root libs version catalog entity. ${workspaceModelState()}",
+            "Expected Gradle sync to create the root $catalogName version catalog entity. ${workspaceModelState()}",
         )
         assertNotNull(
             buildSrcCatalog,
-            "Expected Gradle sync to create the buildSrc libs version catalog entity. ${workspaceModelState()}",
+            "Expected Gradle sync to create the buildSrc $catalogName version catalog entity. ${workspaceModelState()}",
         )
         assertEquals(
             withContext(Dispatchers.IO) {
-                projectRoot.resolve("gradle/libs.versions.toml").toRealPath()
+                projectRoot.resolve(catalogPath).toRealPath()
             },
             rootCatalog?.url?.url?.toRealPath(),
         )
         assertEquals(
             withContext(Dispatchers.IO) {
-                projectRoot.resolve("gradle/libs.versions.toml").toRealPath()
+                projectRoot.resolve(catalogPath).toRealPath()
             },
             buildSrcCatalog?.url?.url?.toRealPath(),
         )
@@ -129,7 +170,7 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
     @Suppress("UnstableApiUsage")
     private fun findBuildCatalog(
         buildPath: Path,
-        @Suppress("SameParameterValue") name: String,
+        name: String,
     ): GradleVersionCatalogEntity? {
         val realBuildPath = buildPath.toRealPath()
         return project.workspaceModel.currentSnapshot
@@ -142,12 +183,13 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
 
     protected suspend fun assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
         scriptPath: Path,
+        catalogPath: String = "gradle/libs.versions.toml",
         expressionText: String,
         referenceText: String,
         resolveTargets: (PsiElement, Int) -> Array<PsiElement>?,
     ) {
         val projectRoot = projectPathFixture.get()
-        val tomlPath = projectRoot.resolve("gradle/libs.versions.toml").realPath()
+        val tomlPath = projectRoot.resolve(catalogPath).realPath()
         val buildSrcScript = requirePsiFile(scriptPath)
 
         val resolvedPaths = readAction {
@@ -160,7 +202,7 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
 
         assertTrue(
             tomlPath in realResolvedPaths,
-            "Expected libs.junit.jupiter in buildSrc convention plugin to resolve to TOML. " +
+            "Expected $expressionText in buildSrc convention plugin to resolve to TOML. " +
                     "resolvedPaths=$realResolvedPaths ${workspaceModelState()} ${moduleGradleState()}",
         )
     }
@@ -202,7 +244,7 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
         } ?: error("Cannot find PSI for ${virtualFile.url}")
     }
 
-    private suspend fun configureProjectJdk(projectRoot: Path) {
+    private suspend fun configureProjectJdk(projectRoot: Path): Sdk {
         val javaHome = System.getProperty("java.home")
         val sdk =
             JavaSdk.getInstance().createJdk("typesafe-conventions-test-jdk-${projectRoot.fileName}", javaHome, false)
@@ -210,6 +252,16 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
         backgroundWriteAction {
             ProjectJdkTable.getInstance().addJdk(sdk, project)
             ProjectRootManager.getInstance(project).projectSdk = sdk
+        }
+        return sdk
+    }
+
+    private suspend fun cleanupProjectJdk(sdk: Sdk) {
+        backgroundWriteAction {
+            if (ProjectRootManager.getInstance(project).projectSdk == sdk) {
+                ProjectRootManager.getInstance(project).projectSdk = null
+            }
+            ProjectJdkTable.getInstance().removeJdk(sdk)
         }
     }
 
@@ -264,6 +316,19 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
         )
     }
 
+    protected fun writeJupiterCatalog(projectRoot: Path, catalogPath: String) {
+        projectRoot.resolve(catalogPath).parent.createDirectories()
+        projectRoot.resolve(catalogPath).writeText(
+            """
+                [versions]
+                junit-jupiter = "6.1.1"
+
+                [libraries]
+                junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
+            """.trimIndent(),
+        )
+    }
+
     private fun findRepositoryRoot(): Path {
         return generateSequence(Path.of("").toAbsolutePath()) { it.parent }
             .firstOrNull {
@@ -280,22 +345,39 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
     protected suspend fun Path.realPath() = withContext(Dispatchers.IO) {
         toRealPath()
     }
+
+    protected fun versionCatalogCases(): List<VersionCatalogCase> =
+        listOf(
+            VersionCatalogCase(
+                catalogName = "libs",
+                catalogPath = "gradle/libs.versions.toml",
+            ),
+            VersionCatalogCase(
+                catalogName = "customLibs",
+                catalogPath = "gradle/customLibs.versions.toml",
+            ),
+        )
 }
 
 @TestApplication
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesafeConventionsSyncTest() {
 
-    @Test
-    suspend fun `kotlin dsl typesafe conventions buildSrc project contributes version catalog model`() {
-        assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel()
-    }
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("versionCatalogCases")
+    suspend fun `kotlin dsl buildSrc catalog accessor contributes model and resolves to toml library entry`(
+        versionCatalog: VersionCatalogCase,
+    ) {
+        assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(
+            catalogName = versionCatalog.catalogName,
+            catalogPath = versionCatalog.catalogPath,
+        )
 
-    @Test
-    suspend fun `kotlin dsl buildSrc catalog accessor goto declaration resolves to toml library entry`() {
         val projectRoot = projectPathFixture.get()
         assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
             scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts"),
-            expressionText = "libs.junit.jupiter",
+            catalogPath = versionCatalog.catalogPath,
+            expressionText = versionCatalog.expressionText,
             referenceText = "jupiter",
         ) { sourceElement, offset ->
             KotlinGradleTomlVersionCatalogGotoDeclarationHandler()
@@ -318,6 +400,11 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
                     repositories {
                         mavenCentral()
                     }
+                    versionCatalogs {
+                        create("customLibs") {
+                            from(files("gradle/customLibs.versions.toml"))
+                        }
+                    }
                 }
 
                 rootProject.name = "typesafe-conventions-kts-test"
@@ -334,16 +421,8 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
                 }
             """.trimIndent(),
         )
-        projectRoot.resolve("gradle").createDirectories()
-        projectRoot.resolve("gradle/libs.versions.toml").writeText(
-            """
-                [versions]
-                junit-jupiter = "6.1.1"
-                
-                [libraries]
-                junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
-            """.trimIndent(),
-        )
+        writeJupiterCatalog(projectRoot, "gradle/libs.versions.toml")
+        writeJupiterCatalog(projectRoot, "gradle/customLibs.versions.toml")
         val buildSrc = projectRoot.resolve("buildSrc").createDirectories()
         buildSrc.resolve("settings.gradle.kts").writeText(
             """
@@ -375,6 +454,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
 
                 dependencies {
                     testImplementation(libs.junit.jupiter)
+                    testImplementation(customLibs.junit.jupiter)
                 }
             """.trimIndent(),
         )
@@ -382,20 +462,25 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
 }
 
 @TestApplication
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesafeConventionsSyncTest() {
 
-    @Test
-    suspend fun `groovy dsl typesafe conventions buildSrc project contributes version catalog model`() {
-        assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel()
-    }
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("versionCatalogCases")
+    suspend fun `groovy dsl buildSrc catalog accessor contributes model and resolves to toml file`(
+        versionCatalog: VersionCatalogCase,
+    ) {
+        assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(
+            catalogName = versionCatalog.catalogName,
+            catalogPath = versionCatalog.catalogPath,
+        )
 
-    @Test
-    suspend fun `groovy dsl buildSrc catalog accessor goto declaration resolves to toml file`() {
         val projectRoot = projectPathFixture.get()
         assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
             scriptPath = projectRoot.resolve("buildSrc/src/main/groovy/repo.intellij-lib.gradle"),
-            expressionText = "libs.junit.jupiter",
-            referenceText = "libs",
+            catalogPath = versionCatalog.catalogPath,
+            expressionText = versionCatalog.expressionText,
+            referenceText = versionCatalog.catalogName,
         ) { sourceElement, offset ->
             resolveTargetsWithRegisteredGotoDeclarationHandler(
                 handlerClassName = "com.intellij.gradle.java.groovy.toml.service.GradleVersionCatalogTomlAwareGotoDeclarationHandler",
@@ -420,6 +505,11 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
                     repositories {
                         mavenCentral()
                     }
+                    versionCatalogs {
+                        create('customLibs') {
+                            from(files('gradle/customLibs.versions.toml'))
+                        }
+                    }
                 }
 
                 rootProject.name = 'typesafe-conventions-groovy-test'
@@ -436,16 +526,8 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
                 }
             """.trimIndent(),
         )
-        projectRoot.resolve("gradle").createDirectories()
-        projectRoot.resolve("gradle/libs.versions.toml").writeText(
-            """
-                [versions]
-                junit-jupiter = "6.1.1"
-                
-                [libraries]
-                junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
-            """.trimIndent(),
-        )
+        writeJupiterCatalog(projectRoot, "gradle/libs.versions.toml")
+        writeJupiterCatalog(projectRoot, "gradle/customLibs.versions.toml")
         val buildSrc = projectRoot.resolve("buildSrc").createDirectories()
         buildSrc.resolve("settings.gradle").writeText(
             """
@@ -482,6 +564,7 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
 
                 dependencies {
                     testImplementation libs.junit.jupiter
+                    testImplementation customLibs.junit.jupiter
                 }
             """.trimIndent(),
         )
