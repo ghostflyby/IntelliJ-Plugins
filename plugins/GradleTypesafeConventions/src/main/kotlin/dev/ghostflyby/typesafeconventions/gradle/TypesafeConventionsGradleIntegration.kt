@@ -21,7 +21,6 @@ import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.backend.workspace.workspaceModel
-import com.intellij.platform.externalSystem.impl.workspaceModel.ExternalProjectEntityId
 import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.jps.entities.modifyModuleEntity
 import com.intellij.platform.workspace.storage.*
@@ -54,11 +53,13 @@ internal class TypesafeConventionsProjectResolverExtension : AbstractProjectReso
         setOf(TypesafeConventionsCatalogModelBuilder::class.java)
 }
 
-@Suppress("UnstableApiUsage")
 // GradleSyncContributor and Gradle workspace entities are experimental IntelliJ APIs.
 // This path keeps TOML support on Workspace Model data instead of private Gradle catalog extension points.
-internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor {
+internal class TypesafeConventionsGradleSyncContributor :
+    @Suppress("UnstableApiUsage")
+    GradleSyncContributor {
 
+    @Suppress("UnstableApiUsage")
     override val phase: GradleSyncPhase = GradleSyncPhase.ADDITIONAL_MODEL_PHASE
 
     override suspend fun createProjectModel(
@@ -83,8 +84,10 @@ internal class TypesafeConventionsGradleSyncContributor : GradleSyncContributor 
 
             val buildUrl = context.virtualFileUrl(buildModel.buildIdentifier.rootDir)
             enabledBuilds[buildUrl.url] = context.projectPath
-            val buildId = GradleBuildEntityId(ExternalProjectEntityId(context.externalProjectPath), buildUrl)
-            val buildEntity = builder.resolve(buildId) ?: continue
+            val buildEntity = builder.entities<@Suppress("UnstableApiUsage") GradleBuildEntity>().firstOrNull {
+                @Suppress("UnstableApiUsage")
+                it.url == buildUrl
+            } ?: continue
             val existingNames = buildEntity.versionCatalogs.mapTo(mutableSetOf()) { it.name }
             val newCatalogs = model.catalogs.mapNotNull { (catalogName, catalogPath) ->
                 if (catalogName in existingNames) {
@@ -159,14 +162,17 @@ private fun repairTypesafeConventionsModuleLinks(project: Project) {
     repairTypesafeConventionsExternalSystemModuleOptions(project, sourceSetModuleLinks)
 }
 
-@Suppress("UnstableApiUsage")
 private fun refreshTypesafeConventionsCatalogFiles(
     project: Project,
     enabledBuildUrls: Set<String>,
 ) {
     val virtualFileManager = VirtualFileManager.getInstance()
+    @Suppress("UnstableApiUsage")
     project.workspaceModel.currentSnapshot.entities<GradleBuildEntity>()
-        .filter { it.url.url in enabledBuildUrls }
+        .filter {
+            @Suppress("UnstableApiUsage")
+            it.url.url in enabledBuildUrls
+        }
         .flatMap { it.versionCatalogs }
         .forEach { catalog ->
             virtualFileManager.refreshAndFindFileByUrl(catalog.url.url)
@@ -368,12 +374,11 @@ private data class TypesafeConventionsGradleProjectData(
     val sourceSets: Collection<DataNode<GradleSourceSetData>>,
 )
 
-@Suppress("UnstableApiUsage")
 private data class TypesafeConventionsEntitySource(
     override val projectPath: String,
     @Suppress("UnstableApiUsage") override val phase: GradleSyncPhase,
     val kind: TypesafeConventionsEntityKind,
-) : GradleEntitySource
+) : @Suppress("UnstableApiUsage") GradleEntitySource
 
 private enum class TypesafeConventionsEntityKind {
     CATALOG,
