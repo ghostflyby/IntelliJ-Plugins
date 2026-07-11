@@ -208,17 +208,17 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
     }
 
     @Suppress("CAST_NEVER_SUCCEEDS")
-    protected fun resolveTargetsWithRegisteredGotoDeclarationHandler(
-        handlerClassName: String,
+    protected fun resolveTargetsWithRegisteredGotoDeclarationHandlers(
         sourceElement: PsiElement,
         offset: Int,
-    ): Array<PsiElement>? {
-        val handler = (GotoDeclarationHandler.EP_NAME as ExtensionPointName<GotoDeclarationHandler>)
+    ): Array<PsiElement>? =
+        (GotoDeclarationHandler.EP_NAME as ExtensionPointName<GotoDeclarationHandler>)
             .extensionList
-            .singleOrNull { it.javaClass.name == handlerClassName }
-            ?: error("Cannot find registered goto declaration handler $handlerClassName")
-        return handler.getGotoDeclarationTargets(sourceElement, offset, null)
-    }
+            .flatMap { handler ->
+                handler.getGotoDeclarationTargets(sourceElement, offset, null).orEmpty().asIterable()
+            }
+            .toTypedArray()
+            .takeIf { it.isNotEmpty() }
 
     private fun findElementAtText(
         file: PsiFile,
@@ -482,11 +482,7 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
             expressionText = versionCatalog.expressionText,
             referenceText = versionCatalog.catalogName,
         ) { sourceElement, offset ->
-            resolveTargetsWithRegisteredGotoDeclarationHandler(
-                handlerClassName = "com.intellij.gradle.java.groovy.toml.service.GradleVersionCatalogTomlAwareGotoDeclarationHandler",
-                sourceElement = sourceElement,
-                offset = offset,
-            )
+            resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
     }
 

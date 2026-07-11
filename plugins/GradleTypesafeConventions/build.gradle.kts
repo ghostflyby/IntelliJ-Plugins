@@ -14,6 +14,8 @@ dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.java")
         bundledPlugin("com.intellij.gradle")
+        bundledPlugin("org.intellij.groovy")
+        bundledPlugin("org.toml.lang")
         testBundledPlugin("org.jetbrains.kotlin")
         testBundledPlugin("org.jetbrains.plugins.gradle")
         testBundledPlugin("org.intellij.groovy")

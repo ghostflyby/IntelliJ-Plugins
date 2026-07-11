@@ -13,6 +13,7 @@
     <depends>org.jetbrains.kotlin</depends>
     <depends>org.jetbrains.plugins.gradle</depends>
     <depends>org.toml.lang</depends>
+    <depends optional="true" config-file="gradle-typesafe-conventions-groovy.xml">org.intellij.groovy</depends>
     <extensions defaultExtensionNs="org.jetbrains.kotlin">
         <supportsKotlinPluginMode supportsK2="true"/>
     </extensions>
