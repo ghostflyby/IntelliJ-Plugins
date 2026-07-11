@@ -16,6 +16,7 @@ dependencies {
         bundledPlugin("com.intellij.gradle")
         testBundledPlugin("org.jetbrains.kotlin")
         testBundledPlugin("org.jetbrains.plugins.gradle")
+        testBundledPlugin("org.intellij.groovy")
         testBundledPlugin("org.toml.lang")
         testBundledPlugin("com.intellij.properties")
         testBundledPlugin("org.jetbrains.idea.reposearch")
