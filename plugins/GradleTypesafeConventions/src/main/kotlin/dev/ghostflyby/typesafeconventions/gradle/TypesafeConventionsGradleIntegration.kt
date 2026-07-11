@@ -9,7 +9,14 @@ package dev.ghostflyby.typesafeconventions.gradle
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.externalSystem.ExternalSystemModulePropertyManager
+import com.intellij.openapi.externalSystem.model.DataNode
+import com.intellij.openapi.externalSystem.model.ProjectKeys
+import com.intellij.openapi.externalSystem.model.project.ProjectData
+import com.intellij.openapi.externalSystem.service.project.ProjectDataManager
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
+import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
+import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.backend.workspace.workspaceModel
@@ -17,6 +24,7 @@ import com.intellij.platform.externalSystem.impl.workspaceModel.ExternalProjectE
 import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.jps.entities.modifyModuleEntity
 import com.intellij.platform.workspace.storage.*
+import org.jetbrains.plugins.gradle.model.data.GradleSourceSetData
 import org.jetbrains.plugins.gradle.model.projectModel.*
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntityBuilder
@@ -28,6 +36,10 @@ import org.jetbrains.plugins.gradle.service.syncAction.GradleEntitySource
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncContributor
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncPhase
 import org.jetbrains.plugins.gradle.service.syncAction.virtualFileUrl
+import org.jetbrains.plugins.gradle.util.GradleConstants
+import org.jetbrains.plugins.gradle.util.gradleIdentityPathOrNull
+import java.io.IOException
+import java.net.URI
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
@@ -129,14 +141,21 @@ private fun repairTypesafeConventionsModuleLinks(project: Project) {
         return
     }
     refreshTypesafeConventionsCatalogFiles(project, enabledBuilds.keys)
+    var sourceSetModuleLinks = emptyList<TypesafeConventionsSourceSetModuleLink>()
     runWriteAction {
         project.workspaceModel.updateProjectModel("Link Gradle source-set modules for typesafe conventions catalogs") { builder ->
+            val affectedProjects = collectTypesafeConventionsGradleProjects(builder, enabledBuilds)
+            sourceSetModuleLinks = collectSourceSetModuleLinks(
+                builder = builder,
+                affectedProjects = affectedProjects,
+            )
             linkSourceSetModulesToGradleProject(
                 builder = builder,
-                affectedProjects = collectTypesafeConventionsGradleProjects(builder, enabledBuilds),
+                affectedProjects = affectedProjects,
             )
         }
     }
+    repairTypesafeConventionsExternalSystemModuleOptions(project, sourceSetModuleLinks)
 }
 
 @Suppress("UnstableApiUsage")
@@ -203,12 +222,149 @@ private fun linkSourceSetModulesToGradleProject(
     return changed
 }
 
+private fun collectSourceSetModuleLinks(
+    builder: MutableEntityStorage,
+    affectedProjects: Collection<TypesafeConventionsGradleProjectLink>,
+): List<TypesafeConventionsSourceSetModuleLink> {
+    @Suppress("UnstableApiUsage") val projects = affectedProjects
+        .sortedByDescending { it.project.url.url.length }
+        .toList()
+    if (projects.isEmpty()) {
+        return emptyList()
+    }
+
+    return builder.entities<ModuleEntity>()
+        .mapNotNull { module ->
+            @Suppress("UnstableApiUsage") val projectLink = projects.firstOrNull { projectLink ->
+                module.contentRoots.any { contentRoot ->
+                    contentRoot.url.url.isUnderOrEqual(projectLink.project.url.url)
+                }
+            }
+                ?: return@mapNotNull null
+            val sourceSetName = module.name.substringAfterLast('.', missingDelimiterValue = "")
+                .takeIf { it.isNotEmpty() }
+                ?: return@mapNotNull null
+            @Suppress("UnstableApiUsage")
+            TypesafeConventionsSourceSetModuleLink(
+                moduleName = module.name,
+                sourceSetName = sourceSetName,
+                gradleProjectIdentityPath = projectLink.project.identityPath,
+                gradleProjectPath = projectLink.project.url.url.toRealFilePathString() ?: return@mapNotNull null,
+            )
+        }
+        .toList()
+}
+
+private fun repairTypesafeConventionsExternalSystemModuleOptions(
+    project: Project,
+    sourceSetModuleLinks: Collection<TypesafeConventionsSourceSetModuleLink>,
+) {
+    if (sourceSetModuleLinks.isEmpty()) {
+        return
+    }
+    val gradleProjects = collectGradleProjectData(project)
+    if (gradleProjects.isEmpty()) {
+        return
+    }
+
+    val moduleManager = ModuleManager.getInstance(project)
+    for (link in sourceSetModuleLinks) {
+        val module = moduleManager.findModuleByName(link.moduleName)
+            ?: continue
+        val gradleProjectData = gradleProjects.firstOrNull {
+            it.identityPath == link.gradleProjectIdentityPath &&
+                    it.projectPath == link.gradleProjectPath
+        }
+            ?: continue
+        val sourceSetData = gradleProjectData.sourceSets.firstOrNull {
+            it.data.id.toGradleIdentityPath(trimSourceSet = true) == link.gradleProjectIdentityPath &&
+                    it.data.id.substringAfterLast(':') == link.sourceSetName
+        }
+            ?: continue
+
+        val propertyManager = ExternalSystemModulePropertyManager.getInstance(module)
+        if (
+            propertyManager.getExternalSystemId() == GradleConstants.SYSTEM_ID.id &&
+            propertyManager.getLinkedProjectId() == sourceSetData.data.id &&
+            propertyManager.getLinkedProjectPath() == sourceSetData.data.linkedExternalProjectPath &&
+            propertyManager.getRootProjectPath() == gradleProjectData.projectData.linkedExternalProjectPath &&
+            propertyManager.getExternalModuleType() == GradleConstants.GRADLE_SOURCE_SET_MODULE_TYPE_KEY
+        ) {
+            continue
+        }
+
+        propertyManager.setExternalOptions(GradleConstants.SYSTEM_ID, sourceSetData.data, gradleProjectData.projectData)
+        propertyManager.setExternalModuleType(GradleConstants.GRADLE_SOURCE_SET_MODULE_TYPE_KEY)
+    }
+}
+
+private fun collectGradleProjectData(project: Project): List<TypesafeConventionsGradleProjectData> =
+    ProjectDataManager.getInstance()
+        .getExternalProjectsData(project, GradleConstants.SYSTEM_ID)
+        .mapNotNull { it.externalProjectStructure }
+        .flatMap { projectDataNode ->
+            ExternalSystemApiUtil.findAll<TypesafeConventionsGradleProjectData>(projectDataNode, ProjectKeys.MODULE)
+                .mapNotNull { moduleNode ->
+                    val moduleData = moduleNode.data
+                    val identityPath: String = moduleData.gradleIdentityPathOrNull ?: return@mapNotNull null
+                    TypesafeConventionsGradleProjectData(
+                        projectData = projectDataNode.data,
+                        identityPath = identityPath,
+                        projectPath = moduleData.linkedExternalProjectPath.toRealPathString() ?: return@mapNotNull null,
+                        sourceSets = ExternalSystemApiUtil.getChildren(moduleNode, GradleSourceSetData.KEY),
+                    )
+                }
+        }
+
 private fun String.isUnderOrEqual(rootUrl: String): Boolean =
     this == rootUrl || startsWith(rootUrl.trimEnd('/') + "/")
+
+private fun String.toRealFilePathString(): String? =
+    try {
+        Path.of(URI(this)).toRealPath().toString()
+    } catch (_: IllegalArgumentException) {
+        null
+    } catch (_: IOException) {
+        null
+    }
+
+private fun String.toRealPathString(): String? =
+    try {
+        Path.of(this).toRealPath().toString()
+    } catch (_: InvalidPathException) {
+        null
+    } catch (_: IOException) {
+        null
+    }
+
+private fun String.toGradleIdentityPath(trimSourceSet: Boolean): String {
+    var pathParts = split(':').filter { it.isNotEmpty() }
+    if (!startsWith(":") && pathParts.isNotEmpty()) {
+        pathParts = pathParts.drop(1)
+    }
+    if (trimSourceSet && pathParts.isNotEmpty()) {
+        pathParts = pathParts.dropLast(1)
+    }
+    return if (pathParts.isEmpty()) ":" else pathParts.joinToString(prefix = ":", separator = ":")
+}
 
 private data class TypesafeConventionsGradleProjectLink(
     @Suppress("UnstableApiUsage") val project: GradleProjectEntity,
     val entitySource: EntitySource,
+)
+
+private data class TypesafeConventionsSourceSetModuleLink(
+    val moduleName: String,
+    val sourceSetName: String,
+    val gradleProjectIdentityPath: String,
+    val gradleProjectPath: String,
+)
+
+private data class TypesafeConventionsGradleProjectData(
+    val projectData: ProjectData,
+    val identityPath: String,
+    val projectPath: String,
+    val sourceSets: Collection<DataNode<GradleSourceSetData>>,
 )
 
 @Suppress("UnstableApiUsage")

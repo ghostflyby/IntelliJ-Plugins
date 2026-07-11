@@ -19,6 +19,7 @@ dependencies {
         testBundledPlugin("org.intellij.groovy")
         testBundledPlugin("org.toml.lang")
         testBundledPlugin("com.intellij.properties")
+        testBundledPlugin("org.jetbrains.idea.gradle.dsl")
         testBundledPlugin("org.jetbrains.idea.reposearch")
     }
     implementation(project("ModelBuilderService"))

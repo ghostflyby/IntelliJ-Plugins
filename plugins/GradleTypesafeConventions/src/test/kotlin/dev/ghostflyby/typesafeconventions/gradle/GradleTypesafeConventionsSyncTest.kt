@@ -28,6 +28,7 @@ import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
+import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,8 +74,9 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
             },
         )
         val importFuture = CompletableDeferred<Unit>()
+        @Suppress("CAST_NEVER_SUCCEEDS")
         project.messageBus.connect(project).subscribe(
-            ProjectDataImportListener.TOPIC,
+            ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
             object : ProjectDataImportListener {
                 override fun onFinalTasksFinished(projectPath: String?) {
                     importFuture.complete(Unit)
