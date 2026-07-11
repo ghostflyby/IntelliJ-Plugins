@@ -12,6 +12,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.externalSystem.ExternalSystemModulePropertyManager
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.ProjectKeys
+import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.ProjectDataManager
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
@@ -303,7 +304,7 @@ private fun collectGradleProjectData(project: Project): List<TypesafeConventions
         .getExternalProjectsData(project, GradleConstants.SYSTEM_ID)
         .mapNotNull { it.externalProjectStructure }
         .flatMap { projectDataNode ->
-            ExternalSystemApiUtil.findAll<TypesafeConventionsGradleProjectData>(projectDataNode, ProjectKeys.MODULE)
+            ExternalSystemApiUtil.findAll<ModuleData>(projectDataNode, ProjectKeys.MODULE)
                 .mapNotNull { moduleNode ->
                     val moduleData = moduleNode.data
                     val identityPath: String = moduleData.gradleIdentityPathOrNull ?: return@mapNotNull null
