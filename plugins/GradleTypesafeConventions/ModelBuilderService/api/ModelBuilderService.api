@@ -1,0 +1,11 @@
+public abstract interface class dev/ghostflyby/typesafeconventions/gradle/TypesafeConventionsCatalogModel : java/io/Serializable {
+	public abstract fun getCatalogs ()Ljava/util/Map;
+	public abstract fun getEnabled ()Z
+}
+
+public final class dev/ghostflyby/typesafeconventions/gradle/TypesafeConventionsCatalogModelBuilder : org/jetbrains/plugins/gradle/tooling/ModelBuilderService {
+	public fun <init> ()V
+	public fun buildAll (Ljava/lang/String;Lorg/gradle/api/Project;)Ljava/lang/Object;
+	public fun canBuild (Ljava/lang/String;)Z
+}
+
