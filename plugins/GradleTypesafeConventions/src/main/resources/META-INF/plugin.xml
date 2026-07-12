@@ -11,6 +11,7 @@
     <depends>com.intellij.java</depends>
     <depends>com.intellij.gradle</depends>
     <depends>org.jetbrains.kotlin</depends>
+    <depends>com.intellij.modules.kotlin.k2</depends>
     <depends>org.jetbrains.plugins.gradle</depends>
     <depends>org.toml.lang</depends>
     <depends optional="true" config-file="gradle-typesafe-conventions-groovy.xml">org.intellij.groovy</depends>
