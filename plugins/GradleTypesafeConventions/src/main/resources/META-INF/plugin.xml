@@ -19,10 +19,6 @@
         <psiReferenceProvider
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor"/>
     </extensions>
-    <extensions defaultExtensionNs="com.intellij">
-        <gotoDeclarationHandler
-                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogGotoDeclarationHandler"/>
-    </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <projectResolve
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectResolverExtension"/>

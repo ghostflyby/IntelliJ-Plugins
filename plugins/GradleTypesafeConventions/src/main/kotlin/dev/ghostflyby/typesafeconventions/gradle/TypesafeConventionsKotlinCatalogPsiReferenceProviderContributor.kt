@@ -6,12 +6,10 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiReferenceBase
+import org.jetbrains.kotlin.idea.gradle.versionCatalog.toml.KtTomlVersionCatalogReference
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.references.KotlinPsiReferenceProviderContributor
-import org.toml.lang.psi.TomlFile
 
 internal class TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor :
     KotlinPsiReferenceProviderContributor<KtDotQualifiedExpression> {
@@ -30,20 +28,9 @@ internal class TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor :
                 }
             }
             listOfNotNull(
-                tomlFile?.let { TypesafeConventionsKotlinCatalogReference(dotExpression, it) },
+                tomlFile?.let { KtTomlVersionCatalogReference(dotExpression, it) },
             )
         }
-}
-
-private class TypesafeConventionsKotlinCatalogReference(
-    element: KtDotQualifiedExpression,
-    private val tomlFile: TomlFile,
-) : PsiReferenceBase<KtDotQualifiedExpression>(element) {
-
-    override fun resolve(): PsiElement? {
-        val declarationPath = element.text.substringAfter(".")
-        return findTypesafeConventionsTomlCatalogKey(tomlFile, declarationPath)
-    }
 }
 
 private fun KtDotQualifiedExpression.matchesTopmostCatalogReferencePattern(): Boolean =
