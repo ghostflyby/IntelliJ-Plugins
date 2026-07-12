@@ -65,15 +65,30 @@ internal data class VersionCatalogCase(
     override fun toString(): String = catalogName
 }
 
+internal data class ConventionBuildCase(
+    val name: String,
+    val buildPath: String,
+    val scriptPath: String,
+) {
+    override fun toString(): String = name
+}
+
+internal data class VersionCatalogInConventionBuildCase(
+    val versionCatalog: VersionCatalogCase,
+    val conventionBuild: ConventionBuildCase,
+) {
+    override fun toString(): String = "${conventionBuild.name}: ${versionCatalog.catalogName}"
+}
+
 private class GradleTypesafeConventionsSyncedProject(
     private val project: Project,
     private val projectRoot: Path,
-    private val createGradleProjectWithBuildSrc: (Path) -> Unit,
+    private val createGradleProject: (Path) -> Unit,
 ) {
     private var projectJdk: Sdk? = null
 
     suspend fun setUp() {
-        createGradleProjectWithBuildSrc(projectRoot)
+        createGradleProject(projectRoot)
         val sdk = configureProjectJdk()
         projectJdk = sdk
 
@@ -121,12 +136,13 @@ private class GradleTypesafeConventionsSyncedProject(
         cleanupProjectJdk(sdk)
     }
 
-    suspend fun assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(
+    suspend fun assertTypesafeConventionsConventionBuildContributesVersionCatalogModel(
         versionCatalog: VersionCatalogCase,
+        conventionBuild: ConventionBuildCase,
     ) {
-        val buildSrcPath = projectRoot.resolve("buildSrc")
+        val conventionBuildPath = projectRoot.resolve(conventionBuild.buildPath)
         val rootCatalog = findBuildCatalog(projectRoot, versionCatalog.catalogName)
-        val buildSrcCatalog = findBuildCatalog(buildSrcPath, versionCatalog.catalogName)
+        val conventionBuildCatalog = findBuildCatalog(conventionBuildPath, versionCatalog.catalogName)
 
         assertNotNull(
             rootCatalog,
@@ -134,12 +150,13 @@ private class GradleTypesafeConventionsSyncedProject(
                     workspaceModelState(),
         )
         assertNotNull(
-            buildSrcCatalog,
-            "Expected Gradle sync to create the buildSrc ${versionCatalog.catalogName} version catalog entity. " +
+            conventionBuildCatalog,
+            "Expected Gradle sync to create the ${conventionBuild.name} ${versionCatalog.catalogName} " +
+                    "version catalog entity. " +
                     workspaceModelState(),
         )
         assertNotPluginOwnedEntitySource(rootCatalog)
-        assertNotPluginOwnedEntitySource(buildSrcCatalog)
+        assertNotPluginOwnedEntitySource(conventionBuildCatalog)
         assertEquals(
             withContext(Dispatchers.IO) {
                 projectRoot.resolve(versionCatalog.catalogPath).toRealPath()
@@ -150,7 +167,7 @@ private class GradleTypesafeConventionsSyncedProject(
             withContext(Dispatchers.IO) {
                 projectRoot.resolve(versionCatalog.catalogPath).toRealPath()
             },
-            buildSrcCatalog?.url?.url?.toRealPath(),
+            conventionBuildCatalog?.url?.url?.toRealPath(),
         )
     }
 
@@ -177,18 +194,18 @@ private class GradleTypesafeConventionsSyncedProject(
         )
     }
 
-    suspend fun assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
+    suspend fun assertConventionBuildCatalogAccessorGotoDeclarationResolvesToToml(
         scriptPath: Path,
         versionCatalog: VersionCatalogCase,
         referenceText: String,
         resolveTargets: (PsiElement, Int) -> Array<PsiElement>?,
     ) {
         val tomlPath = projectRoot.resolve(versionCatalog.catalogPath).realPath()
-        val buildSrcScript = requirePsiFile(scriptPath)
+        val conventionBuildScript = requirePsiFile(scriptPath)
 
         val resolvedPaths = readAction {
             val (sourceElement, offset) = findElementAtText(
-                buildSrcScript,
+                conventionBuildScript,
                 versionCatalog.expressionText,
                 referenceText,
             )
@@ -200,12 +217,12 @@ private class GradleTypesafeConventionsSyncedProject(
 
         assertTrue(
             tomlPath in realResolvedPaths,
-            "Expected ${versionCatalog.expressionText} in buildSrc convention plugin to resolve to TOML. " +
+            "Expected ${versionCatalog.expressionText} in convention plugin to resolve to TOML. " +
                     "resolvedPaths=$realResolvedPaths ${workspaceModelState()} ${moduleGradleState()}",
         )
     }
 
-    suspend fun assertBuildSrcCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+    suspend fun assertConventionBuildCatalogAccessorGotoDeclarationResolvesToTomlEntry(
         scriptPath: Path,
         versionCatalog: VersionCatalogCase,
         referenceText: String,
@@ -213,11 +230,11 @@ private class GradleTypesafeConventionsSyncedProject(
         resolveTargets: (PsiElement, Int) -> Array<PsiElement>?,
     ) {
         val tomlPath = projectRoot.resolve(versionCatalog.catalogPath).realPath()
-        val buildSrcScript = requirePsiFile(scriptPath)
+        val conventionBuildScript = requirePsiFile(scriptPath)
 
         val resolvedTargets = readAction {
             val (sourceElement, offset) = findElementAtText(
-                buildSrcScript,
+                conventionBuildScript,
                 versionCatalog.expressionText,
                 referenceText,
             )
@@ -312,7 +329,7 @@ private class GradleTypesafeConventionsSyncedProject(
     private fun moduleGradleState(): String {
         val snapshot = project.workspaceModel.currentSnapshot
         return snapshot.entities<ModuleEntity>()
-            .filter { it.name.contains("buildSrc") }
+            .filter { it.name.contains("buildSrc") || it.name.contains("build-logic") }
             .joinToString(prefix = "modules=[", postfix = "]") { module ->
                 val gradleProjectId = module.gradleModuleEntity?.gradleProjectId
                 "${module.name}:$gradleProjectId"
@@ -341,7 +358,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         syncedProject = GradleTypesafeConventionsSyncedProject(
             project = project,
             projectRoot = projectPathFixture.get(),
-            createGradleProjectWithBuildSrc = ::createGradleProjectWithBuildSrc,
+            createGradleProject = ::createGradleProjectWithConventionBuilds,
         )
         syncedProject.setUp()
     }
@@ -352,29 +369,32 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("versionCatalogCases")
-    suspend fun `kotlin dsl buildSrc contributes version catalog model`(
-        versionCatalog: VersionCatalogCase,
+    @MethodSource("versionCatalogInConventionBuildCases")
+    suspend fun `kotlin dsl convention build contributes version catalog model`(
+        testCase: VersionCatalogInConventionBuildCase,
     ) {
-        syncedProject.assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(versionCatalog)
+        syncedProject.assertTypesafeConventionsConventionBuildContributesVersionCatalogModel(
+            versionCatalog = testCase.versionCatalog,
+            conventionBuild = testCase.conventionBuild,
+        )
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("versionCatalogCases")
-    suspend fun `kotlin dsl buildSrc catalog accessor goto resolves to toml library entry`(
-        versionCatalog: VersionCatalogCase,
+    @MethodSource("versionCatalogInConventionBuildCases")
+    suspend fun `kotlin dsl convention build catalog accessor goto resolves to toml library entry`(
+        testCase: VersionCatalogInConventionBuildCase,
     ) {
         val projectRoot = projectPathFixture.get()
-        syncedProject.assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
-            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts"),
-            versionCatalog = versionCatalog,
+        syncedProject.assertConventionBuildCatalogAccessorGotoDeclarationResolvesToToml(
+            scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath),
+            versionCatalog = testCase.versionCatalog,
             referenceText = "jupiter",
         ) { sourceElement, offset ->
             syncedProject.resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
     }
 
-    private fun createGradleProjectWithBuildSrc(projectRoot: Path) {
+    private fun createGradleProjectWithConventionBuilds(projectRoot: Path) {
         copyGradleWrapper(projectRoot)
         projectRoot.resolve("settings.gradle.kts").writeText(
             """
@@ -396,6 +416,8 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
                     }
                 }
 
+                includeBuild("build-logic")
+
                 rootProject.name = "typesafe-conventions-kts-test"
             """.trimIndent(),
         )
@@ -412,44 +434,12 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         )
         writeJupiterCatalog(projectRoot, "gradle/libs.versions.toml")
         writeJupiterCatalog(projectRoot, "gradle/customLibs.versions.toml")
-        val buildSrc = projectRoot.resolve("buildSrc").createDirectories()
-        buildSrc.resolve("settings.gradle.kts").writeText(
-            """
-                dependencyResolutionManagement {
-                    @Suppress("UnstableApiUsage")
-                    repositories {
-                        gradlePluginPortal()
-                        mavenCentral()
-                    }
-                }
-                plugins {
-                    id("dev.panuszewski.typesafe-conventions") version "0.11.1"
-                }
-            """.trimIndent(),
-        )
-        buildSrc.resolve("build.gradle.kts").writeText(
-            """
-                plugins {
-                    `kotlin-dsl`
-                }
-            """.trimIndent(),
-        )
-        val buildSrcSourceRoot = buildSrc.resolve("src/main/kotlin").createDirectories()
-        buildSrcSourceRoot.resolve("repo.intellij-lib.gradle.kts").writeText(
-            """
-                plugins {
-                    `java-library`
-                }
-
-                dependencies {
-                    testImplementation(libs.junit.jupiter)
-                    testImplementation(customLibs.junit.jupiter)
-                }
-            """.trimIndent(),
-        )
+        writeKotlinDslConventionBuild(projectRoot.resolve("buildSrc"), rootProjectName = null)
+        writeKotlinDslConventionBuild(projectRoot.resolve("build-logic"), rootProjectName = "build-logic")
     }
 
-    fun versionCatalogCases(): List<VersionCatalogCase> = versionCatalogCasesForTypesafeConventions()
+    fun versionCatalogInConventionBuildCases(): List<VersionCatalogInConventionBuildCase> =
+        kotlinDslVersionCatalogInConventionBuildCases()
 }
 
 @TestApplication
@@ -466,7 +456,7 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest {
         syncedProject = GradleTypesafeConventionsSyncedProject(
             project = project,
             projectRoot = projectPathFixture.get(),
-            createGradleProjectWithBuildSrc = ::createGradleProjectWithBuildSrc,
+            createGradleProject = ::createGradleProjectWithConventionBuilds,
         )
         syncedProject.setUp()
     }
@@ -477,37 +467,40 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest {
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("versionCatalogCases")
-    suspend fun `groovy dsl buildSrc contributes version catalog model`(
-        versionCatalog: VersionCatalogCase,
+    @MethodSource("versionCatalogInConventionBuildCases")
+    suspend fun `groovy dsl convention build contributes version catalog model`(
+        testCase: VersionCatalogInConventionBuildCase,
     ) {
-        syncedProject.assertTypesafeConventionsBuildSrcProjectContributesVersionCatalogModel(versionCatalog)
+        syncedProject.assertTypesafeConventionsConventionBuildContributesVersionCatalogModel(
+            versionCatalog = testCase.versionCatalog,
+            conventionBuild = testCase.conventionBuild,
+        )
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("versionCatalogCases")
-    suspend fun `groovy dsl buildSrc catalog root goto resolves to toml file`(
-        versionCatalog: VersionCatalogCase,
+    @MethodSource("versionCatalogInConventionBuildCases")
+    suspend fun `groovy dsl convention build catalog root goto resolves to toml file`(
+        testCase: VersionCatalogInConventionBuildCase,
     ) {
         val projectRoot = projectPathFixture.get()
-        syncedProject.assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
-            scriptPath = projectRoot.resolve("buildSrc/src/main/groovy/repo.intellij-lib.gradle"),
-            versionCatalog = versionCatalog,
-            referenceText = versionCatalog.catalogName,
+        syncedProject.assertConventionBuildCatalogAccessorGotoDeclarationResolvesToToml(
+            scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath),
+            versionCatalog = testCase.versionCatalog,
+            referenceText = testCase.versionCatalog.catalogName,
         ) { sourceElement, offset ->
             syncedProject.resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
     }
 
     @ParameterizedTest(name = "{0}")
-    @MethodSource("versionCatalogCases")
-    suspend fun `groovy dsl buildSrc catalog accessor goto resolves to toml library entry`(
-        versionCatalog: VersionCatalogCase,
+    @MethodSource("versionCatalogInConventionBuildCases")
+    suspend fun `groovy dsl convention build catalog accessor goto resolves to toml library entry`(
+        testCase: VersionCatalogInConventionBuildCase,
     ) {
         val projectRoot = projectPathFixture.get()
-        syncedProject.assertBuildSrcCatalogAccessorGotoDeclarationResolvesToTomlEntry(
-            scriptPath = projectRoot.resolve("buildSrc/src/main/groovy/repo.intellij-lib.gradle"),
-            versionCatalog = versionCatalog,
+        syncedProject.assertConventionBuildCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+            scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath),
+            versionCatalog = testCase.versionCatalog,
             referenceText = "jupiter",
             expectedEntryText = "junit-jupiter",
         ) { sourceElement, offset ->
@@ -515,7 +508,7 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest {
         }
     }
 
-    private fun createGradleProjectWithBuildSrc(projectRoot: Path) {
+    private fun createGradleProjectWithConventionBuilds(projectRoot: Path) {
         copyGradleWrapper(projectRoot)
         projectRoot.resolve("settings.gradle").writeText(
             """
@@ -537,6 +530,8 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest {
                     }
                 }
 
+                includeBuild('build-logic')
+
                 rootProject.name = 'typesafe-conventions-groovy-test'
             """.trimIndent(),
         )
@@ -553,50 +548,55 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest {
         )
         writeJupiterCatalog(projectRoot, "gradle/libs.versions.toml")
         writeJupiterCatalog(projectRoot, "gradle/customLibs.versions.toml")
-        val buildSrc = projectRoot.resolve("buildSrc").createDirectories()
-        buildSrc.resolve("settings.gradle").writeText(
-            """
-                pluginManagement {
-                    repositories {
-                        gradlePluginPortal()
-                        mavenCentral()
-                    }
-                }
-                plugins {
-                    id 'dev.panuszewski.typesafe-conventions' version '0.11.1'
-                }
-                dependencyResolutionManagement {
-                    repositories {
-                        gradlePluginPortal()
-                        mavenCentral()
-                    }
-                }
-            """.trimIndent(),
-        )
-        buildSrc.resolve("build.gradle").writeText(
-            """
-                plugins {
-                    id 'groovy-gradle-plugin'
-                }
-            """.trimIndent(),
-        )
-        val buildSrcSourceRoot = buildSrc.resolve("src/main/groovy").createDirectories()
-        buildSrcSourceRoot.resolve("repo.intellij-lib.gradle").writeText(
-            """
-                plugins {
-                    id 'java-library'
-                }
-
-                dependencies {
-                    testImplementation libs.junit.jupiter
-                    testImplementation customLibs.junit.jupiter
-                }
-            """.trimIndent(),
-        )
+        writeGroovyDslConventionBuild(projectRoot.resolve("buildSrc"), rootProjectName = null)
+        writeGroovyDslConventionBuild(projectRoot.resolve("build-logic"), rootProjectName = "build-logic")
     }
 
-    fun versionCatalogCases(): List<VersionCatalogCase> = versionCatalogCasesForTypesafeConventions()
+    fun versionCatalogInConventionBuildCases(): List<VersionCatalogInConventionBuildCase> =
+        groovyDslVersionCatalogInConventionBuildCases()
 }
+
+private fun kotlinDslVersionCatalogInConventionBuildCases(): List<VersionCatalogInConventionBuildCase> =
+    versionCatalogInConventionBuildCases(
+        buildSrcScriptPath = "buildSrc/src/main/kotlin/repo.intellij-lib.gradle.kts",
+        buildLogicScriptPath = "build-logic/src/main/kotlin/repo.intellij-lib.gradle.kts",
+    )
+
+private fun groovyDslVersionCatalogInConventionBuildCases(): List<VersionCatalogInConventionBuildCase> =
+    versionCatalogInConventionBuildCases(
+        buildSrcScriptPath = "buildSrc/src/main/groovy/repo.intellij-lib.gradle",
+        buildLogicScriptPath = "build-logic/src/main/groovy/repo.intellij-lib.gradle",
+    )
+
+private fun versionCatalogInConventionBuildCases(
+    buildSrcScriptPath: String,
+    buildLogicScriptPath: String,
+): List<VersionCatalogInConventionBuildCase> =
+    conventionBuildCases(buildSrcScriptPath, buildLogicScriptPath).flatMap { conventionBuild ->
+        versionCatalogCasesForTypesafeConventions().map { versionCatalog ->
+            VersionCatalogInConventionBuildCase(
+                versionCatalog = versionCatalog,
+                conventionBuild = conventionBuild,
+            )
+        }
+    }
+
+private fun conventionBuildCases(
+    buildSrcScriptPath: String,
+    buildLogicScriptPath: String,
+): List<ConventionBuildCase> =
+    listOf(
+        ConventionBuildCase(
+            name = "buildSrc",
+            buildPath = "buildSrc",
+            scriptPath = buildSrcScriptPath,
+        ),
+        ConventionBuildCase(
+            name = "build-logic",
+            buildPath = "build-logic",
+            scriptPath = buildLogicScriptPath,
+        ),
+    )
 
 private fun versionCatalogCasesForTypesafeConventions(): List<VersionCatalogCase> =
     listOf(
@@ -609,6 +609,105 @@ private fun versionCatalogCasesForTypesafeConventions(): List<VersionCatalogCase
             catalogPath = "gradle/customLibs.versions.toml",
         ),
     )
+
+private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: String?) {
+    buildRoot.createDirectories()
+    buildRoot.resolve("settings.gradle.kts").writeText(
+        buildString {
+            appendLine(
+                """
+                    dependencyResolutionManagement {
+                        @Suppress("UnstableApiUsage")
+                        repositories {
+                            gradlePluginPortal()
+                            mavenCentral()
+                        }
+                    }
+                    plugins {
+                        id("dev.panuszewski.typesafe-conventions") version "0.11.1"
+                    }
+                """.trimIndent(),
+            )
+            if (rootProjectName != null) {
+                appendLine()
+                appendLine("""rootProject.name = "$rootProjectName"""")
+            }
+        },
+    )
+    buildRoot.resolve("build.gradle.kts").writeText(
+        """
+            plugins {
+                `kotlin-dsl`
+            }
+        """.trimIndent(),
+    )
+    buildRoot.resolve("src/main/kotlin").createDirectories()
+        .resolve("repo.intellij-lib.gradle.kts")
+        .writeText(
+            """
+                plugins {
+                    `java-library`
+                }
+
+                dependencies {
+                    testImplementation(libs.junit.jupiter)
+                    testImplementation(customLibs.junit.jupiter)
+                }
+            """.trimIndent(),
+        )
+}
+
+private fun writeGroovyDslConventionBuild(buildRoot: Path, rootProjectName: String?) {
+    buildRoot.createDirectories()
+    buildRoot.resolve("settings.gradle").writeText(
+        buildString {
+            appendLine(
+                """
+                    pluginManagement {
+                        repositories {
+                            gradlePluginPortal()
+                            mavenCentral()
+                        }
+                    }
+                    plugins {
+                        id 'dev.panuszewski.typesafe-conventions' version '0.11.1'
+                    }
+                    dependencyResolutionManagement {
+                        repositories {
+                            gradlePluginPortal()
+                            mavenCentral()
+                        }
+                    }
+                """.trimIndent(),
+            )
+            if (rootProjectName != null) {
+                appendLine()
+                appendLine("rootProject.name = '$rootProjectName'")
+            }
+        },
+    )
+    buildRoot.resolve("build.gradle").writeText(
+        """
+            plugins {
+                id 'groovy-gradle-plugin'
+            }
+        """.trimIndent(),
+    )
+    buildRoot.resolve("src/main/groovy").createDirectories()
+        .resolve("repo.intellij-lib.gradle")
+        .writeText(
+            """
+                plugins {
+                    id 'java-library'
+                }
+
+                dependencies {
+                    testImplementation libs.junit.jupiter
+                    testImplementation customLibs.junit.jupiter
+                }
+            """.trimIndent(),
+        )
+}
 
 private fun copyGradleWrapper(projectRoot: Path) {
     val repositoryRoot = findRepositoryRoot()
