@@ -217,6 +217,35 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
         )
     }
 
+    protected suspend fun assertBuildSrcCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+        scriptPath: Path,
+        catalogPath: String,
+        expressionText: String,
+        referenceText: String,
+        expectedEntryText: String,
+        resolveTargets: (PsiElement, Int) -> Array<PsiElement>?,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        val tomlPath = projectRoot.resolve(catalogPath).realPath()
+        val buildSrcScript = requirePsiFile(scriptPath)
+
+        val resolvedTargets = readAction {
+            val (sourceElement, offset) = findElementAtText(buildSrcScript, expressionText, referenceText)
+            resolveTargets(sourceElement, offset)
+                .orEmpty()
+                .mapNotNull { target ->
+                    target.containingFile?.virtualFile?.toNioPath()?.let { path -> path to target.text }
+                }
+        }
+        val realResolvedTargets = resolvedTargets.map { (path, text) -> path.realPath() to text }
+
+        assertTrue(
+            realResolvedTargets.any { (path, text) -> path == tomlPath && text.startsWith(expectedEntryText) },
+            "Expected $referenceText in $expressionText to resolve to TOML entry $expectedEntryText. " +
+                    "resolvedTargets=$realResolvedTargets ${workspaceModelState()} ${moduleGradleState()}",
+        )
+    }
+
     @Suppress("CAST_NEVER_SUCCEEDS")
     protected fun resolveTargetsWithRegisteredGotoDeclarationHandlers(
         sourceElement: PsiElement,
@@ -490,6 +519,15 @@ internal class GroovyDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
             catalogPath = versionCatalog.catalogPath,
             expressionText = versionCatalog.expressionText,
             referenceText = versionCatalog.catalogName,
+        ) { sourceElement, offset ->
+            resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
+        }
+        assertBuildSrcCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/groovy/repo.intellij-lib.gradle"),
+            catalogPath = versionCatalog.catalogPath,
+            expressionText = versionCatalog.expressionText,
+            referenceText = "jupiter",
+            expectedEntryText = "junit-jupiter",
         ) { sourceElement, offset ->
             resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
