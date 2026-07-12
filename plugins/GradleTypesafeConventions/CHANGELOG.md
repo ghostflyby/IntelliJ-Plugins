@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Avoid blocking dynamic plugin unload by reusing Gradle-owned Workspace Model
+  entity sources instead of plugin-owned sources.
 - Restored Groovy DSL goto declaration for custom version catalog roots such as
   `customLibs` in `buildSrc` convention plugins.
 

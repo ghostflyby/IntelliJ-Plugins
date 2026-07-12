@@ -33,7 +33,6 @@ import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.jetbrains.kotlin.idea.gradle.versionCatalog.toml.KotlinGradleTomlVersionCatalogGotoDeclarationHandler
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.projectModel.gradleModuleEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
@@ -153,6 +152,8 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
             buildSrcCatalog,
             "Expected Gradle sync to create the buildSrc $catalogName version catalog entity. ${workspaceModelState()}",
         )
+        assertNotPluginOwnedEntitySource(rootCatalog)
+        assertNotPluginOwnedEntitySource(buildSrcCatalog)
         assertEquals(
             withContext(Dispatchers.IO) {
                 projectRoot.resolve(catalogPath).toRealPath()
@@ -179,6 +180,15 @@ internal abstract class AbstractGradleTypesafeConventionsSyncTest {
                 it.name == name &&
                         it.build.url.url.toRealPath() == realBuildPath
             }
+    }
+
+    private fun assertNotPluginOwnedEntitySource(entity: GradleVersionCatalogEntity?) {
+        val entitySourceClassName = entity?.entitySource?.javaClass?.name
+        assertFalse(
+            entitySourceClassName?.startsWith("dev.ghostflyby.typesafeconventions.") == true,
+            "Expected version catalog entity source to be owned by the Gradle platform, " +
+                    "not by the dynamically unloadable plugin. entitySource=$entitySourceClassName",
+        )
     }
 
     protected suspend fun assertBuildSrcCatalogAccessorGotoDeclarationResolvesToToml(
@@ -380,8 +390,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest : AbstractGradleTypesa
             expressionText = versionCatalog.expressionText,
             referenceText = "jupiter",
         ) { sourceElement, offset ->
-            KotlinGradleTomlVersionCatalogGotoDeclarationHandler()
-                .getGotoDeclarationTargets(sourceElement, offset, null)
+            resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
     }
 

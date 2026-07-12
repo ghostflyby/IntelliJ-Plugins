@@ -16,6 +16,12 @@
     <depends optional="true" config-file="gradle-typesafe-conventions-groovy.xml">org.intellij.groovy</depends>
     <extensions defaultExtensionNs="org.jetbrains.kotlin">
         <supportsKotlinPluginMode supportsK2="true"/>
+        <psiReferenceProvider
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor"/>
+    </extensions>
+    <extensions defaultExtensionNs="com.intellij">
+        <gotoDeclarationHandler
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogGotoDeclarationHandler"/>
     </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <projectResolve
