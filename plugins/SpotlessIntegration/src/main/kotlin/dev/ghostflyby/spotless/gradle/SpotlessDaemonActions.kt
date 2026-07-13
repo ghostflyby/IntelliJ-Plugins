@@ -13,6 +13,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.NlsContexts
 import dev.ghostflyby.spotless.SpotlessProjectService
 import dev.ghostflyby.spotless.spotlessNotificationGroupId
 
@@ -55,7 +56,7 @@ internal abstract class SpotlessDaemonLifecycleAction : DumbAwareAction() {
 
     protected fun notify(
         project: Project,
-        message: String,
+        message: @NlsContexts.NotificationContent String,
     ) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup(spotlessNotificationGroupId)
