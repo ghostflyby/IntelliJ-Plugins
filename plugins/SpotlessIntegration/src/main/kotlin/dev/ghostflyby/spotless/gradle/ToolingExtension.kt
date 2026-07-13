@@ -17,6 +17,7 @@ import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsPr
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.util.NlsSafe
 import dev.ghostflyby.spotless.SpotlessProjectService
+import kotlinx.serialization.Serializable
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
@@ -89,7 +90,7 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
 @Service(Service.Level.PROJECT)
 @State(
     name = "SpotlessGradleIntegration",
-    storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
+    storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)],
 )
 internal class SpotlessGradleSettings
     : SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
@@ -125,10 +126,11 @@ internal class SpotlessGradleSettings
             }
         }
 
+    @Serializable
     internal data class State(
-        @JvmField val paths: Set<String> = emptySet(),
-        @JvmField val gradleDaemonVersion: String = "",
-        @JvmField val gradleDaemonJar: String = "",
+        val paths: Set<String> = emptySet(),
+        val gradleDaemonVersion: String = "",
+        val gradleDaemonJar: String = "",
     )
 }
 
