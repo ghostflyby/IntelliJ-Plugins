@@ -12,13 +12,12 @@
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
         <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
     </extensions>
-    <actions>
-        <group id="dev.ghostflyby.spotless.actions" text="Spotless" popup="true">
+    <actions resource-bundle="messages.Bundle">
+        <group id="dev.ghostflyby.spotless.actions" popup="true">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="dev.ghostflyby.spotless.stopDaemons"
-                    class="dev.ghostflyby.spotless.gradle.StopSpotlessDaemonsAction"
-                    text="Stop Spotless Daemons"
-                    description="Stop all running Spotless daemon processes for this project."/>
+                    class="dev.ghostflyby.spotless.gradle.StopSpotlessDaemonsAction"/>
         </group>
     </actions>
+    <resource-bundle>messages.Bundle</resource-bundle>
 </idea-plugin>
