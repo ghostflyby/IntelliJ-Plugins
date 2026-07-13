@@ -2,31 +2,16 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
+import dev.ghostflyby.spotless.Spotless
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import dev.ghostflyby.spotless.SpotlessDaemonProvider
 import kotlinx.coroutines.Dispatchers
@@ -35,11 +20,13 @@ import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.Path
 import kotlin.io.path.div
 
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private val logger = logger<SpotlessGradleExtension>()
+    private val daemonProcesses = ConcurrentHashMap<SpotlessDaemonHost.Unix, SpotlessGradleDaemonProcess>()
 
     override fun isApplicableTo(
         project: Project,
@@ -58,13 +45,33 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         }
         val unixSocketPath = workingDirectory / "spotless-daemon.sock"
         val host = SpotlessDaemonHost.Unix(unixSocketPath, workingDirectory)
-        runGradleSpotlessDaemon(
-            project,
-            externalProject,
-            unixSocketPath,
-            host,
-        )
-        project.service<SpotlessGradleStateHolder>().daemons.add(host)
+        val holder = project.service<SpotlessGradleStateHolder>()
+        var process: SpotlessGradleDaemonProcess? = null
+        try {
+            process = withContext(Dispatchers.IO) {
+                startGradleSpotlessDaemon(
+                    project,
+                    externalProject,
+                    unixSocketPath,
+                    host,
+                ) {
+                    holder.daemons.remove(host)
+                    daemonProcesses.remove(host)
+                    service<Spotless>().releaseDaemon(host)
+                }
+            }
+            daemonProcesses[host] = process
+            holder.daemons.add(host)
+            process.start()
+        } catch (error: Throwable) {
+            daemonProcesses.remove(host)
+            holder.daemons.remove(host)
+            withContext(Dispatchers.IO) {
+                cleanupGradleDaemonProcess(process)
+                workingDirectory.toFile().deleteRecursively()
+            }
+            throw error
+        }
         return host
     }
 
@@ -90,6 +97,8 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     ) {
         if (daemon !is SpotlessDaemonHost.Unix) return
         runCatching {
+            val process = daemonProcesses.remove(daemon)
+            cleanupGradleDaemonProcess(process)
             val deleted = daemon.workingDirectory.toFile().deleteRecursively()
             if (!deleted && Files.exists(daemon.workingDirectory)) {
                 logger.warn("Failed to delete daemon temp directory after stop ($reason): ${daemon.workingDirectory}")

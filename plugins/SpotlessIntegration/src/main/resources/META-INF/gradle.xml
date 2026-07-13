@@ -1,4 +1,5 @@
-<!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2025-2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
@@ -12,4 +13,17 @@
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
         <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
     </extensions>
+    <actions>
+        <group id="dev.ghostflyby.spotless.actions" text="Spotless" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="dev.ghostflyby.spotless.stopDaemons"
+                    class="dev.ghostflyby.spotless.gradle.StopSpotlessDaemonsAction"
+                    text="Stop Spotless Daemons"
+                    description="Stop all running Spotless daemon processes for this project."/>
+            <action id="dev.ghostflyby.spotless.restartDaemons"
+                    class="dev.ghostflyby.spotless.gradle.RestartSpotlessDaemonsAction"
+                    text="Restart Spotless Daemons"
+                    description="Stop running Spotless daemon processes so they restart on the next format request."/>
+        </group>
+    </actions>
 </idea-plugin>

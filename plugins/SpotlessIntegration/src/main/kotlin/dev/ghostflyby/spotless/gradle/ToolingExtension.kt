@@ -2,52 +2,29 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.execution.executors.DefaultRunExecutor
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
 import com.intellij.openapi.externalSystem.model.ProjectSystemId
-import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExecutionSettings
 import com.intellij.openapi.externalSystem.model.project.ExternalEntityData
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
-import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
-import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.NlsSafe
 import dev.ghostflyby.spotless.Spotless
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
+import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
-import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
@@ -131,6 +108,18 @@ internal class SpotlessGradleStateHolder
 
     val daemons: MutableSet<SpotlessDaemonHost> = ConcurrentHashMap.newKeySet()
 
+    fun hasRunningDaemons(): Boolean = daemons.isNotEmpty()
+
+    fun releaseAllDaemons(): Int {
+        val runningDaemons = daemons.toList()
+        val spotless = service<Spotless>()
+        runningDaemons.forEach { daemon ->
+            daemons.remove(daemon)
+            spotless.releaseDaemon(daemon)
+        }
+        return runningDaemons.size
+    }
+
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
         updateState { state ->
             state.copy(
@@ -141,12 +130,7 @@ internal class SpotlessGradleStateHolder
             )
         }
         nodes.forEach { it.clear(true) }
-        val runningDaemons = daemons.toList()
-        daemons.clear()
-        val spotless = service<Spotless>()
-        runningDaemons.forEach { daemon ->
-            spotless.releaseDaemon(daemon)
-        }
+        releaseAllDaemons()
     }
 
     var gradleDaemonVersion: @NlsSafe String
@@ -172,38 +156,33 @@ internal class SpotlessGradleStateHolder
     )
 }
 
-internal fun runGradleSpotlessDaemon(
-    project: com.intellij.openapi.project.Project,
-    externalProject: Path,
-    unixSocketPath: Path,
-    host: SpotlessDaemonHost.Unix,
-) {
-    val settings = ExternalSystemTaskExecutionSettings().apply {
-        externalSystemIdString = GradleConstants.SYSTEM_ID.id
-        externalProjectPath = externalProject.toString()
-        taskNames = listOf(":spotlessDaemon")
-        scriptParameters = "-Pdev.ghostflyby.spotless.daemon.unixsocket=${unixSocketPath.toAbsolutePath()}"
-    }
-    val exe = TaskExecutionSpec.create()
-        .withProgressExecutionMode(ProgressExecutionMode.NO_PROGRESS_ASYNC)
-        .withProject(project)
-        .withSettings(settings)
-        .withSystemId(GradleConstants.SYSTEM_ID)
-        .withListener(
-            object : ExternalSystemTaskNotificationListener {
-                override fun onEnd(projectPath: String, id: ExternalSystemTaskId) {
-                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
-                    service<Spotless>().releaseDaemon(host)
+internal fun spotlessDaemonInitScript(
+    daemonVersion: String,
+    daemonJar: String,
+): String {
+    val script = @Suppress("SpellCheckingInspection")
+    $$"""
+        gradle.allprojects { proj ->
+            proj.buildscript {
+                repositories {
+                    gradlePluginPortal()
                 }
-
-                override fun onCancel(projectPath: String, id: ExternalSystemTaskId) {
-                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
-                    service<Spotless>().releaseDaemon(host)
+                dependencies {
+                    def daemonJar = $${daemonJar.toGroovyStringLiteral()}
+                    def daemonVersion = $${daemonVersion.toGroovyStringLiteral()}
+                    if (daemonJar) {
+                        classpath files(daemonJar)
+                    } else {
+                        def resolved = daemonVersion ? daemonVersion : '0.5.4'
+                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:$resolved"
+                    }
                 }
+            }
 
-            },
-        )
-        .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)
-        .build()
-    ExternalSystemUtil.runTask(exe)
+            proj.pluginManager.withPlugin("com.diffplug.spotless") {
+                proj.apply plugin: "dev.ghostflyby.spotless.daemon"
+            }
+        }
+    """.trimIndent()
+    return script
 }
