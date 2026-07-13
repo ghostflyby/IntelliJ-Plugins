@@ -1,7 +1,3 @@
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHandle {
-	public abstract fun getHost ()Ldev/ghostflyby/spotless/SpotlessDaemonHost;
-}
-
 public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonHost {
 }
 
