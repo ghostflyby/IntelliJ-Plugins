@@ -136,7 +136,7 @@ private fun findGradleProjectSettings(
     return GradleSettings.getInstance(project).linkedProjectsSettings
         .firstOrNull { settings ->
             settings.externalProjectPath?.let { Path.of(it).toAbsolutePath().normalize() == normalized } == true
-        }
+        } as? GradleProjectSettings
 }
 
 private fun gradleHomeFromIde(project: Project, externalProject: Path): Path? {
