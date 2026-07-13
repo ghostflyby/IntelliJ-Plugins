@@ -9,6 +9,7 @@ package dev.ghostflyby.spotless.gradle
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.BoundConfigurable
+import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.Align
@@ -17,7 +18,7 @@ import com.intellij.ui.dsl.builder.panel
 import dev.ghostflyby.spotless.Bundle
 
 internal class SpotlessGradleConfigurable(private val project: Project) :
-    BoundConfigurable(Bundle.message("spotless.configuration.title.workspace")) {
+    BoundConfigurable(Bundle.message("spotless.configuration.title.workspace")), Configurable {
 
     private val model = SettingsModel()
 
@@ -55,7 +56,7 @@ internal class SpotlessGradleConfigurable(private val project: Project) :
 
     override fun reset() {
         resetModel()
-        super.reset()
+        super<BoundConfigurable>.reset()
     }
 
     private fun resetModel() {
