@@ -17,8 +17,6 @@
                              instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
                              key="spotless.configuration.title.workspace"
                              parentId="build"/>
-        <projectService serviceInterface="dev.ghostflyby.spotless.SpotlessDaemonControl"
-                        serviceImplementation="dev.ghostflyby.spotless.SpotlessProjectService"/>
     </extensions>
 
     <extensionPoints>

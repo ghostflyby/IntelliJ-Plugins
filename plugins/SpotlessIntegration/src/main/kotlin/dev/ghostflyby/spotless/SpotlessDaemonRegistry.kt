@@ -32,6 +32,7 @@ internal class SpotlessDaemonRegistry(
     private data class DaemonEntry(
         val provider: SpotlessDaemonProvider,
         val handle: SpotlessDaemonHandle,
+        val daemonScope: CoroutineScope,
     )
 
     private val entries = ConcurrentHashMap<RegistryKey, DaemonEntry>()
@@ -46,28 +47,29 @@ internal class SpotlessDaemonRegistry(
             if (current.provider === provider) {
                 return current.handle.host
             }
-            if (entries.remove(key, current)) {
-                capabilityCache.invalidateExternalProject(key.externalProjectPath)
-                scheduleStop(current, "provider switched")
-            }
+            releaseEntry(key, current, "provider switched")
         }
 
-        val handle = provider.startDaemon(project, externalProject)
-        val newEntry = DaemonEntry(provider, handle)
+        val daemonJob = SupervisorJob(scope.coroutineContext[Job])
+        val daemonScope = CoroutineScope(scope.coroutineContext + daemonJob)
+        val handle = try {
+            provider.startDaemon(project, externalProject, daemonScope)
+        } catch (error: Throwable) {
+            daemonScope.cancel("Spotless daemon failed to start", error)
+            throw error
+        }
+        val newEntry = DaemonEntry(provider, handle, daemonScope)
         val raceEntry = entries.putIfAbsent(key, newEntry)
         if (raceEntry != null) {
             scheduleStop(newEntry, "daemon race lost")
             return raceEntry.handle.host
         }
-        return handle.host
-    }
-
-    fun releaseDaemon(host: SpotlessDaemonHost) {
-        val removed = removeEntries { it.handle.host == host }
-        removed.forEach { (key, entry) ->
-            capabilityCache.invalidateExternalProject(key.externalProjectPath)
-            scheduleStop(entry, "external release")
+        daemonJob.invokeOnCompletion {
+            if (entries.remove(key, newEntry)) {
+                capabilityCache.invalidateExternalProject(key.externalProjectPath)
+            }
         }
+        return handle.host
     }
 
     fun releaseAllDaemons(): Int {
@@ -114,16 +116,20 @@ internal class SpotlessDaemonRegistry(
         }
     }
 
+    private suspend fun releaseEntry(key: RegistryKey, entry: DaemonEntry, reason: String) {
+        if (!entries.remove(key, entry)) {
+            return
+        }
+        capabilityCache.invalidateExternalProject(key.externalProjectPath)
+        stopDaemonEntry(entry, reason)
+    }
+
     private suspend fun stopDaemonEntry(entry: DaemonEntry, reason: String) {
         val host = entry.handle.host
         val stopFailure = runCatching {
             clientProvider().stop(host)
         }.exceptionOrNull()
-        runCatching {
-            entry.handle.cleanup(reason)
-        }.onFailure { error ->
-            logger.warn("Provider daemon cleanup failed ($reason): $host", error)
-        }
+        entry.daemonScope.cancel("Spotless daemon released: $reason")
         if (stopFailure != null) {
             logger.warn("Failed to stop daemon ($reason): $host", stopFailure)
         }

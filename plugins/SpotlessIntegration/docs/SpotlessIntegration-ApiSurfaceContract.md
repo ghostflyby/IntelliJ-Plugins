@@ -20,7 +20,12 @@ Contract notes:
 
 - `isApplicableTo(project)` is a cheap readiness/applicability check.
 - `findTarget(project, virtualFile)` maps an IntelliJ file to an external project and daemon-side file path.
-- `startDaemon(project, externalProject)` starts provider-owned daemon resources and returns a `SpotlessDaemonHandle`.
+- `startDaemon(project, externalProject, daemonScope)` starts provider-owned daemon resources and returns a
+  `SpotlessDaemonHandle`.
+- Provider-owned runtime resources must be bound to `daemonScope`; the core registry owns that scope and completes it
+  when the daemon is released or when the project service is disposed.
+- If a provider observes natural daemon process termination, it should cancel `daemonScope`. The registry observes
+  scope completion and removes the daemon entry without using a public project-service callback.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonHandle`
 
@@ -29,15 +34,7 @@ Contract notes:
 Contract notes:
 
 - `host` describes the daemon HTTP endpoint.
-- `cleanup(reason)` releases provider-owned resources after the core service has attempted the fixed HTTP stop request.
-- `cleanup(reason)` must be best-effort and idempotent.
-
-### `dev.ghostflyby.spotless.SpotlessDaemonControl`
-
-`SpotlessDaemonControl` is public because provider-owned process listeners need a stable project-service callback.
-
-Provider implementations should call `project.service<SpotlessDaemonControl>().releaseDaemon(host)` when a daemon
-process exits or otherwise becomes unusable.
+- Provider cleanup is not a handle callback. Providers bind cleanup to `daemonScope` completion.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonHost`
 
@@ -66,5 +63,8 @@ The following are intentionally internal and are not part of the public ABI:
 
 This phase intentionally removes the old public `Spotless` formatter service and public `SpotlessFormatResult`.
 
-Only provider/control APIs remain public. This is a breaking change for consumers that called the old formatter service
-directly, but it keeps the extension-point use case while allowing lifecycle, cache, and daemon state to stay internal.
+Only provider APIs remain public. This is a breaking change for consumers that called the old formatter service
+directly,
+or used the temporary daemon-control callback, but it keeps the extension-point use case while allowing lifecycle,
+cache,
+and daemon state to stay internal.

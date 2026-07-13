@@ -32,6 +32,7 @@ internal class SpotlessGradleConfigurable(private val project: Project) :
                     .align(Align.FILL)
 
             }.rowComment(Bundle.message("spotless.configuration.daemonVersion.comment"))
+            // TODO: 自定义jar是否真的必要，或者是不是应该作为隐藏选项，因为实际上最初用途是用于覆盖测试的，
             row(Bundle.message("spotless.configuration.daemonJar.label")) {
                 @Suppress("UnstableApiUsage")
                 textFieldWithBrowseButton(

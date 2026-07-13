@@ -25,7 +25,7 @@ internal const val spotlessNotificationGroupId = "Spotless Notifications"
 internal class SpotlessProjectService(
     private val project: Project,
     private val scope: CoroutineScope,
-) : SpotlessDaemonControl, Disposable.Default {
+) : Disposable.Default {
     private val logger = logger<SpotlessProjectService>()
     private val capabilityCache = project.service<SpotlessCapabilityCache>()
     private val registry = project.service<SpotlessDaemonRegistry>()
@@ -40,10 +40,6 @@ internal class SpotlessProjectService(
 
     init {
         registry.clientProvider = { client }
-    }
-
-    override fun releaseDaemon(host: SpotlessDaemonHost) {
-        registry.releaseDaemon(host)
     }
 
     internal fun releaseAllDaemons(): Int =

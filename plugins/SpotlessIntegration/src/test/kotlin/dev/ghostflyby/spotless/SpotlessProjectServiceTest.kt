@@ -17,8 +17,8 @@ import kotlinx.coroutines.*
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
@@ -162,6 +162,7 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     }
 
     fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
+        val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
                 healthCheck = { DaemonResponse(HttpStatusCode.OK) },
@@ -171,6 +172,10 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
                     } else {
                         DaemonResponse(HttpStatusCode.OK, "formatted-content")
                     }
+                },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
                 },
             ),
         )
@@ -183,12 +188,110 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
 
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
-        spotless.releaseDaemon(provider.host)
+        assertEquals(1, spotless.releaseAllDaemons())
+        spotless.daemonProviderLookup = { null }
         assertFalse(spotless.canFormatSync(virtualFile))
-        assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+        assertTrue(waitUntil { provider.completionCount.get() == 1 })
+        assertEquals(1, stopCount.get())
+        spotless.daemonProviderLookup = { provider }
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
         releaseDaemon(provider)
+    }
+
+    fun testProviderProcessTerminationRemovesDaemonAndInvalidatesCachedCanFormatSyncResult() {
+        val stopCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("src/NaturalExit.kt", "content")
+
+        assertTrue(runBlocking { spotless.canFormat(virtualFile) })
+
+        provider.terminate()
+
+        assertTrue(waitUntil { !spotless.hasRunningDaemons() })
+        assertTrue(waitUntil { provider.completionCount.get() == 1 })
+        assertEquals(0, stopCount.get())
+        assertFalse(spotless.canFormatSync(virtualFile))
+    }
+
+    fun testProviderSwitchStopsOldDaemonBeforeNewHandleWins() {
+        val stopCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
+            ),
+        )
+        val oldProvider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        val newProvider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25253),
+        )
+        val currentProvider = AtomicReference<SpotlessDaemonProvider>(oldProvider)
+        spotless.daemonProviderLookup = { currentProvider.get() }
+        val virtualFile = createProjectFile("src/ProviderSwitch.kt", "content")
+
+        assertTrue(runBlocking { spotless.canFormat(virtualFile) })
+
+        currentProvider.set(newProvider)
+        assertEquals(SpotlessFormatResult.Clean, runBlocking { spotless.format(virtualFile, "content") })
+
+        assertEquals(1, oldProvider.startCount)
+        assertTrue(waitUntil { oldProvider.completionCount.get() == 1 })
+        assertEquals(1, stopCount.get())
+        assertEquals(1, newProvider.startCount)
+
+        releaseDaemon(newProvider)
+    }
+
+    fun testProjectDisposeStopsRunningDaemonsAndCancelsDaemonScopes() {
+        val stopCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("src/Dispose.kt", "content")
+
+        assertTrue(runBlocking { spotless.canFormat(virtualFile) })
+
+        spotless.dispose()
+
+        assertTrue(waitUntil { provider.completionCount.get() == 1 })
+        assertEquals(1, stopCount.get())
+        assertFalse(spotless.hasRunningDaemons())
+        spotless = SpotlessProjectService(project, scope)
     }
 
     fun testCanFormatReturnsFalseWhenFileIsNotCovered() {
@@ -238,10 +341,15 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     }
 
     fun testReleaseAllDaemonsStopsProjectDaemons() {
+        val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
                 healthCheck = { DaemonResponse(HttpStatusCode.OK) },
                 format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
             ),
         )
         val provider = TestDaemonProvider(
@@ -251,10 +359,11 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/ReleaseAll.kt", "content")
 
-        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
+        assertTrue(runBlocking { spotless.canFormat(virtualFile) })
 
         assertEquals(1, spotless.releaseAllDaemons())
-        assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+        assertTrue(waitUntil { provider.completionCount.get() == 1 })
+        assertEquals(1, stopCount.get())
         assertFalse(spotless.hasRunningDaemons())
     }
 
@@ -270,8 +379,9 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     private fun projectBasePath(): Path = Path.of(requireNotNull(project.basePath))
 
     private fun releaseDaemon(provider: TestDaemonProvider) {
-        spotless.releaseDaemon(provider.host)
-        assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+        val expectedCompletions = provider.startCount
+        assertEquals(1, spotless.releaseAllDaemons())
+        assertTrue(waitUntil { provider.completionCount.get() >= expectedCompletions })
     }
 
     private fun waitUntil(condition: () -> Boolean): Boolean {
@@ -288,6 +398,7 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     private fun testHttpClient(
         healthCheck: () -> DaemonResponse,
         format: (query: String) -> DaemonResponse,
+        stop: () -> DaemonResponse = { DaemonResponse(HttpStatusCode.OK) },
     ): HttpClient = HttpClient(MockEngine) {
         engine {
             addHandler { request ->
@@ -298,7 +409,7 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
                     HttpMethod.Post ->
                         when (request.url.encodedPath) {
                             "/" -> format(request.url.encodedQuery)
-                            "/stop" -> DaemonResponse(HttpStatusCode.OK)
+                            "/stop" -> stop()
                             else -> DaemonResponse(HttpStatusCode.MethodNotAllowed)
                         }
 
@@ -319,13 +430,18 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     )
 
     private class TestDaemonProvider(
-        private val projectPath: Path,
+        private var projectPath: Path,
         val host: SpotlessDaemonHost,
     ) : SpotlessDaemonProvider {
         var startCount: Int = 0
             private set
 
-        val stopped = CountDownLatch(1)
+        val completionCount = AtomicInteger()
+        private val lastDaemonScope = AtomicReference<CoroutineScope>()
+
+        fun terminate() {
+            lastDaemonScope.get()?.cancel("test daemon process terminated")
+        }
 
         override fun isApplicableTo(project: Project): Boolean = true
 
@@ -335,14 +451,15 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         override suspend fun startDaemon(
             project: Project,
             externalProject: Path,
+            daemonScope: CoroutineScope,
         ): SpotlessDaemonHandle {
             startCount += 1
+            lastDaemonScope.set(daemonScope)
+            daemonScope.coroutineContext.job.invokeOnCompletion {
+                completionCount.incrementAndGet()
+            }
             return object : SpotlessDaemonHandle {
                 override val host: SpotlessDaemonHost = this@TestDaemonProvider.host
-
-                override suspend fun cleanup(reason: String) {
-                    stopped.countDown()
-                }
             }
         }
     }

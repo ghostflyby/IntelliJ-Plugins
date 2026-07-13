@@ -11,13 +11,16 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import dev.ghostflyby.spotless.SpotlessDaemonHandle
+import dev.ghostflyby.spotless.SpotlessDaemonHost
+import dev.ghostflyby.spotless.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.SpotlessDaemonTarget
+import kotlinx.coroutines.*
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.io.path.Path
 import kotlin.io.path.div
 
@@ -35,6 +38,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override suspend fun startDaemon(
         project: Project,
         externalProject: Path,
+        daemonScope: CoroutineScope,
     ): SpotlessDaemonHandle {
         val workingDirectory: Path = withContext(Dispatchers.IO) {
             Files.createTempDirectory(null)
@@ -42,6 +46,10 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         val unixSocketPath = workingDirectory / "spotless-daemon.sock"
         val host = SpotlessDaemonHost.Unix(unixSocketPath, workingDirectory)
         var process: SpotlessGradleDaemonProcess? = null
+        val cleanupOnce = AtomicBoolean(false)
+        val completionHandle = daemonScope.coroutineContext.job.invokeOnCompletion {
+            cleanup(host, process, "daemon scope completed", cleanupOnce)
+        }
         try {
             process = withContext(Dispatchers.IO) {
                 startGradleSpotlessDaemon(
@@ -50,24 +58,20 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
                     unixSocketPath,
                     host,
                 ) {
-                    project.service<SpotlessDaemonControl>().releaseDaemon(host)
+                    daemonScope.cancel("Spotless daemon process terminated")
                 }
             }
             process.start()
         } catch (error: Throwable) {
+            completionHandle.dispose()
+            daemonScope.cancel("Spotless daemon failed to start", error)
             withContext(Dispatchers.IO) {
-                cleanupGradleDaemonProcess(process)
-                workingDirectory.toFile().deleteRecursively()
+                cleanup(host, process, "daemon start failed", cleanupOnce)
             }
             throw error
         }
-        val startedProcess = process
         return object : SpotlessDaemonHandle {
             override val host: SpotlessDaemonHost = host
-
-            override suspend fun cleanup(reason: String) {
-                cleanup(host, startedProcess, reason)
-            }
         }
     }
 
@@ -93,7 +97,11 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         host: SpotlessDaemonHost.Unix,
         process: SpotlessGradleDaemonProcess?,
         reason: String,
+        cleanupOnce: AtomicBoolean,
     ) {
+        if (!cleanupOnce.compareAndSet(false, true)) {
+            return
+        }
         cleanupGradleDaemonProcess(process)
         val deleted = host.workingDirectory.toFile().deleteRecursively()
         if (!deleted && Files.exists(host.workingDirectory)) {

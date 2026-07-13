@@ -4,7 +4,6 @@
 
 <idea-plugin>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
-        <taskManager implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleTaskManagerExtension"/>
         <projectResolve implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleProjectResolverExtension"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij">
