@@ -42,8 +42,9 @@ internal class SpotlessProjectService(
 
     init {
         registry.clientProvider = { client }
-        EP_NAME.addExtensionPointListener(
+        EP_NAME.point.addExtensionPointListener(
             scope,
+            false,
             object : ExtensionPointListener<SpotlessDaemonProvider> {
                 override fun extensionRemoved(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
                     registry.releaseDaemonsForProviderSynchronously(extension)
