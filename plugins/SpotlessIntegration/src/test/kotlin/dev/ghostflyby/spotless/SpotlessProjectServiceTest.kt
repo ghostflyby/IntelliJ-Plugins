@@ -452,15 +452,13 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
             project: Project,
             externalProject: Path,
             daemonScope: CoroutineScope,
-        ): SpotlessDaemonHandle {
+        ): SpotlessDaemonHost {
             startCount += 1
             lastDaemonScope.set(daemonScope)
             daemonScope.coroutineContext.job.invokeOnCompletion {
                 completionCount.incrementAndGet()
             }
-            return object : SpotlessDaemonHandle {
-                override val host: SpotlessDaemonHost = this@TestDaemonProvider.host
-            }
+            return host
         }
     }
 }

@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.SpotlessDaemonHandle
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import dev.ghostflyby.spotless.SpotlessDaemonProvider
 import dev.ghostflyby.spotless.SpotlessDaemonTarget
@@ -39,7 +38,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         project: Project,
         externalProject: Path,
         daemonScope: CoroutineScope,
-    ): SpotlessDaemonHandle {
+    ): SpotlessDaemonHost {
         val workingDirectory: Path = withContext(Dispatchers.IO) {
             Files.createTempDirectory(null)
         }
@@ -70,9 +69,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
             }
             throw error
         }
-        return object : SpotlessDaemonHandle {
-            override val host: SpotlessDaemonHost = host
-        }
+        return host
     }
 
     override fun findTarget(

@@ -43,14 +43,10 @@ public interface SpotlessDaemonProvider {
         project: Project,
         externalProject: Path,
         daemonScope: CoroutineScope,
-    ): SpotlessDaemonHandle
+    ): SpotlessDaemonHost
 }
 
 public data class SpotlessDaemonTarget(
     public val externalProject: Path,
     public val file: Path,
 )
-
-public interface SpotlessDaemonHandle {
-    public val host: SpotlessDaemonHost
-}

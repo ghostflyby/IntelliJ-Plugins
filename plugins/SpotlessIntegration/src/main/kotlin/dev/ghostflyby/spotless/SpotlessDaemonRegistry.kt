@@ -31,7 +31,7 @@ internal class SpotlessDaemonRegistry(
 
     private data class DaemonEntry(
         val provider: SpotlessDaemonProvider,
-        val handle: SpotlessDaemonHandle,
+        val handle: SpotlessDaemonHost,
         val daemonScope: CoroutineScope,
     )
 
@@ -45,7 +45,7 @@ internal class SpotlessDaemonRegistry(
         val current = entries[key]
         if (current != null) {
             if (current.provider === provider) {
-                return current.handle.host
+                return current.handle
             }
             releaseEntry(key, current, "provider switched")
         }
@@ -62,14 +62,14 @@ internal class SpotlessDaemonRegistry(
         val raceEntry = entries.putIfAbsent(key, newEntry)
         if (raceEntry != null) {
             scheduleStop(newEntry, "daemon race lost")
-            return raceEntry.handle.host
+            return raceEntry.handle
         }
         daemonJob.invokeOnCompletion {
             if (entries.remove(key, newEntry)) {
                 capabilityCache.invalidateExternalProject(key.externalProjectPath)
             }
         }
-        return handle.host
+        return handle
     }
 
     fun releaseAllDaemons(): Int {
@@ -125,7 +125,7 @@ internal class SpotlessDaemonRegistry(
     }
 
     private suspend fun stopDaemonEntry(entry: DaemonEntry, reason: String) {
-        val host = entry.handle.host
+        val host = entry.handle
         val stopFailure = runCatching {
             clientProvider().stop(host)
         }.exceptionOrNull()
