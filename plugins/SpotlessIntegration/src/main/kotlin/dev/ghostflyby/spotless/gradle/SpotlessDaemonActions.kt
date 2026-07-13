@@ -14,6 +14,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsContexts
+import dev.ghostflyby.spotless.Bundle
 import dev.ghostflyby.spotless.SpotlessProjectService
 import dev.ghostflyby.spotless.spotlessNotificationGroupId
 
@@ -29,7 +30,7 @@ internal class StopSpotlessDaemonsAction : DumbAwareAction() {
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         project.service<SpotlessProjectService>().releaseAllDaemonsAsync { count ->
-            notify(project, "Stopped $count Spotless daemon(s).")
+            notify(project, Bundle.message("notification.content.stopped.spotless.daemons", count))
         }
     }
 

@@ -47,7 +47,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         val host = SpotlessDaemonHost.Unix(unixSocketPath, workingDirectory)
         var process: SpotlessGradleDaemonProcess? = null
         lifecycle.onClose {
-            cleanup(host, process, "daemon detached")
+            cleanup(host, process)
         }
         try {
             process = withContext(Dispatchers.IO) {
@@ -89,12 +89,11 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private fun cleanup(
         host: SpotlessDaemonHost.Unix,
         process: SpotlessGradleDaemonProcess?,
-        reason: String,
     ) {
         cleanupGradleDaemonProcess(process)
         val deleted = host.workingDirectory.toFile().deleteRecursively()
         if (!deleted && Files.exists(host.workingDirectory)) {
-            logger.warn("Failed to delete daemon temp directory after stop ($reason): ${host.workingDirectory}")
+            logger.warn("Failed to delete daemon temp directory after stop (daemon detached): ${host.workingDirectory}")
         }
     }
 }
