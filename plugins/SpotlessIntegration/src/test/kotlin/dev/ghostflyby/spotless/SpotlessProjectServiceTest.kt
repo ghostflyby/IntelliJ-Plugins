@@ -2,27 +2,10 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless
 
-import com.intellij.mock.MockProjectEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
@@ -36,15 +19,16 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
-internal class SpotlessImplTest : BasePlatformTestCase() {
+internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     private lateinit var scope: CoroutineScope
-    private lateinit var spotless: SpotlessImpl
+    private lateinit var spotless: SpotlessProjectService
 
     override fun setUp() {
         super.setUp()
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        spotless = SpotlessImpl(scope)
+        spotless = SpotlessProjectService(project, scope)
     }
 
     override fun tearDown() {
@@ -59,15 +43,17 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
     }
 
     fun testCanFormatAndFormatUseSpotlessDaemonResponses() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { query ->
-                if (query.contains("dryrun=")) {
-                    DaemonResponse(HttpStatusCode.OK)
-                } else {
-                    DaemonResponse(HttpStatusCode.OK, "formatted-content")
-                }
-            },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { query ->
+                    if (query.contains("dryrun=")) {
+                        DaemonResponse(HttpStatusCode.OK)
+                    } else {
+                        DaemonResponse(HttpStatusCode.OK, "formatted-content")
+                    }
+                },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
@@ -76,82 +62,78 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/Test.kt", "unformatted-content")
 
-        assertFalse(spotless.canFormatSync(project, virtualFile))
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
-        assertTrue(runBlocking { spotless.canFormat(project, virtualFile) })
+        assertFalse(spotless.canFormatSync(virtualFile))
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
+        assertTrue(runBlocking { spotless.canFormat(virtualFile) })
         assertEquals(
             SpotlessFormatResult.Dirty("formatted-content"),
-            runBlocking { spotless.format(project, virtualFile, "unformatted-content") },
+            runBlocking { spotless.format(virtualFile, "unformatted-content") },
         )
-        assertTrue(spotless.canFormatSync(project, virtualFile))
+        assertTrue(spotless.canFormatSync(virtualFile))
         assertEquals(1, provider.startCount)
 
         releaseDaemon(provider)
     }
 
     fun testCanFormatSyncRefreshesRetryableMissesWithoutFileEdits() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { DaemonResponse(HttpStatusCode.OK) },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
             host = SpotlessDaemonHost.Localhost(25252),
         )
-        var currentProvider: SpotlessDaemonProvider? = null
-        spotless.daemonProviderLookup = { currentProvider }
+        val currentProvider = AtomicReference<SpotlessDaemonProvider?>()
+        spotless.daemonProviderLookup = { currentProvider.get() }
         val virtualFile = createProjectFile("src/RetryableMiss.kt", "content")
 
-        assertFalse(spotless.canFormatSync(project, virtualFile))
+        assertFalse(spotless.canFormatSync(virtualFile))
 
         Thread.sleep(100)
-        currentProvider = provider
+        currentProvider.set(provider)
+        spotless.canFormatSync(virtualFile)
 
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
         releaseDaemon(provider)
     }
 
-    fun testCanFormatSyncCacheIsScopedPerProject() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { DaemonResponse(HttpStatusCode.OK) },
-        )
+    fun testCanFormatSyncCacheIsScopedPerFile() {
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
             host = SpotlessDaemonHost.Localhost(25252),
         )
-        val otherProject = object : MockProjectEx(testRootDisposable) {
-            override fun getLocationHash(): String = "spotless-other-project"
-
-            override fun getName(): String = "spotless-other-project"
-
-            override fun getBasePath(): String? = project.basePath
-        }
-        spotless.daemonProviderLookup = { currentProject ->
-            when (currentProject) {
-                project -> provider
-                else -> null
-            }
-        }
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/ScopedCache.kt", "content")
+        val otherVirtualFile = createProjectFile("src/OtherScopedCache.kt", "content")
 
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
-        assertFalse(spotless.canFormatSync(otherProject, virtualFile))
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
+        assertFalse(spotless.canFormatSync(otherVirtualFile))
 
         releaseDaemon(provider)
     }
 
     fun testCanFormatSyncRevalidatesCachedTrueAfterDaemonFailure() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { query ->
-                if (query.contains("dryrun=")) {
-                    DaemonResponse(HttpStatusCode.OK)
-                } else {
-                    DaemonResponse(HttpStatusCode.OK, "formatted-content")
-                }
-            },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { query ->
+                    if (query.contains("dryrun=")) {
+                        DaemonResponse(HttpStatusCode.OK)
+                    } else {
+                        DaemonResponse(HttpStatusCode.OK, "formatted-content")
+                    }
+                },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
@@ -160,33 +142,37 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/Revalidate.kt", "content")
 
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
-        spotless.http = testHttpClient(
-            healthCheck = { throw IOException("connection refused") },
-            format = { DaemonResponse(HttpStatusCode.OK, "formatted-content") },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { throw IOException("connection refused") },
+                format = { DaemonResponse(HttpStatusCode.OK, "formatted-content") },
+            ),
         )
 
-        assertTrue(spotless.canFormatSync(project, virtualFile))
+        assertTrue(spotless.canFormatSync(virtualFile))
         assertEquals(
             SpotlessFormatResult.Error("Spotless Daemon is not responding"),
-            runBlocking { spotless.format(project, virtualFile, "content") },
+            runBlocking { spotless.format(virtualFile, "content") },
         )
-        assertTrue(waitUntil { !spotless.canFormatSync(project, virtualFile) })
+        assertTrue(waitUntil { !spotless.canFormatSync(virtualFile) })
 
         releaseDaemon(provider)
     }
 
     fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { query ->
-                if (query.contains("dryrun=")) {
-                    DaemonResponse(HttpStatusCode.OK)
-                } else {
-                    DaemonResponse(HttpStatusCode.OK, "formatted-content")
-                }
-            },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { query ->
+                    if (query.contains("dryrun=")) {
+                        DaemonResponse(HttpStatusCode.OK)
+                    } else {
+                        DaemonResponse(HttpStatusCode.OK, "formatted-content")
+                    }
+                },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
@@ -195,20 +181,22 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/Cached.kt", "content")
 
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
         spotless.releaseDaemon(provider.host)
-        assertFalse(spotless.canFormatSync(project, virtualFile))
+        assertFalse(spotless.canFormatSync(virtualFile))
         assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
-        assertTrue(waitUntil { spotless.canFormatSync(project, virtualFile) })
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
         releaseDaemon(provider)
     }
 
     fun testCanFormatReturnsFalseWhenFileIsNotCovered() {
-        spotless.http = testHttpClient(
-            healthCheck = { DaemonResponse(HttpStatusCode.OK) },
-            format = { DaemonResponse(HttpStatusCode.NotFound) },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.NotFound) },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
@@ -217,19 +205,21 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
         spotless.daemonProviderLookup = { provider }
         val virtualFile = createProjectFile("src/NotCovered.kt", "content")
 
-        assertFalse(runBlocking { spotless.canFormat(project, virtualFile) })
+        assertFalse(runBlocking { spotless.canFormat(virtualFile) })
         assertEquals(
             SpotlessFormatResult.NotCovered,
-            runBlocking { spotless.format(project, virtualFile, "content") },
+            runBlocking { spotless.format(virtualFile, "content") },
         )
 
         releaseDaemon(provider)
     }
 
     fun testFormatReturnsErrorWhenDaemonHealthCheckFails() {
-        spotless.http = testHttpClient(
-            healthCheck = { throw IOException("connection refused") },
-            format = { DaemonResponse(HttpStatusCode.OK) },
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { throw IOException("connection refused") },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectBasePath(),
@@ -240,11 +230,32 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
 
         assertEquals(
             SpotlessFormatResult.Error("Spotless Daemon is not responding"),
-            runBlocking { spotless.format(project, virtualFile, "content") },
+            runBlocking { spotless.format(virtualFile, "content") },
         )
-        assertFalse(runBlocking { spotless.canFormat(project, virtualFile) })
+        assertFalse(runBlocking { spotless.canFormat(virtualFile) })
 
         releaseDaemon(provider)
+    }
+
+    fun testReleaseAllDaemonsStopsProjectDaemons() {
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectBasePath(),
+            host = SpotlessDaemonHost.Localhost(25252),
+        )
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("src/ReleaseAll.kt", "content")
+
+        assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
+
+        assertEquals(1, spotless.releaseAllDaemons())
+        assertTrue(provider.stopped.await(5, TimeUnit.SECONDS))
+        assertFalse(spotless.hasRunningDaemons())
     }
 
     private fun createProjectFile(relativePath: String, content: String): VirtualFile {
@@ -318,21 +329,21 @@ internal class SpotlessImplTest : BasePlatformTestCase() {
 
         override fun isApplicableTo(project: Project): Boolean = true
 
+        override fun findTarget(project: Project, virtualFile: VirtualFile): SpotlessDaemonTarget =
+            SpotlessDaemonTarget(projectPath, requireNotNull(virtualFile.toNioPath()))
+
         override suspend fun startDaemon(
             project: Project,
             externalProject: Path,
-        ): SpotlessDaemonHost {
+        ): SpotlessDaemonHandle {
             startCount += 1
-            return host
-        }
+            return object : SpotlessDaemonHandle {
+                override val host: SpotlessDaemonHost = this@TestDaemonProvider.host
 
-        override fun findExternalProjectPath(project: Project, virtualFile: VirtualFile): Path = projectPath
-
-        override suspend fun afterDaemonStopped(
-            daemon: SpotlessDaemonHost,
-            reason: String,
-        ) {
-            stopped.countDown()
+                override suspend fun cleanup(reason: String) {
+                    stopped.countDown()
+                }
+            }
         }
     }
 }

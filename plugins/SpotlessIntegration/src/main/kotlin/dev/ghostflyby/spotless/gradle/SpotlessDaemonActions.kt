@@ -13,6 +13,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.spotless.SpotlessProjectService
 import dev.ghostflyby.spotless.spotlessNotificationGroupId
 
 internal class StopSpotlessDaemonsAction : SpotlessDaemonLifecycleAction() {
@@ -21,9 +22,9 @@ internal class StopSpotlessDaemonsAction : SpotlessDaemonLifecycleAction() {
     }
 }
 
-internal class RestartSpotlessDaemonsAction : SpotlessDaemonLifecycleAction() {
+internal class RestartSpotlessDaemonsOnNextFormatAction : SpotlessDaemonLifecycleAction() {
     override fun notify(project: Project, count: Int) {
-        notify(project, count, "Restarted")
+        notify(project, "Stopped $count Spotless daemon(s). They will restart on the next format request.")
     }
 }
 
@@ -33,12 +34,12 @@ internal abstract class SpotlessDaemonLifecycleAction : DumbAwareAction() {
     override fun update(event: AnActionEvent) {
         val project = event.project
         event.presentation.isEnabledAndVisible =
-            project != null && project.service<SpotlessGradleStateHolder>().hasRunningDaemons()
+            project != null && project.service<SpotlessProjectService>().hasRunningDaemons()
     }
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val count = project.service<SpotlessGradleStateHolder>().releaseAllDaemons()
+        val count = project.service<SpotlessProjectService>().releaseAllDaemons()
         notify(project, count)
     }
 
@@ -49,9 +50,16 @@ internal abstract class SpotlessDaemonLifecycleAction : DumbAwareAction() {
         count: Int,
         verb: String,
     ) {
+        notify(project, "$verb $count Spotless daemon(s).")
+    }
+
+    protected fun notify(
+        project: Project,
+        message: String,
+    ) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup(spotlessNotificationGroupId)
-            .createNotification("$verb $count Spotless daemon(s).", NotificationType.INFORMATION)
+            .createNotification(message, NotificationType.INFORMATION)
             .notify(project)
     }
 }

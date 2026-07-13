@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 ghostflyby -->
 <!-- SPDX-FileCopyrightText: 2025-2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
@@ -16,8 +17,8 @@
                              instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
                              key="spotless.configuration.title.workspace"
                              parentId="build"/>
-        <applicationService serviceInterface="dev.ghostflyby.spotless.Spotless"
-                            serviceImplementation="dev.ghostflyby.spotless.SpotlessImpl"/>
+        <projectService serviceInterface="dev.ghostflyby.spotless.SpotlessDaemonControl"
+                        serviceImplementation="dev.ghostflyby.spotless.SpotlessProjectService"/>
     </extensions>
 
     <extensionPoints>

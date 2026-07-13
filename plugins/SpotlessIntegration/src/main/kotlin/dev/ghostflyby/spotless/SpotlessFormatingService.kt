@@ -2,22 +2,6 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless
@@ -26,25 +10,28 @@ import com.intellij.formatting.service.AsyncDocumentFormattingService
 import com.intellij.formatting.service.AsyncFormattingRequest
 import com.intellij.formatting.service.FormattingService
 import com.intellij.openapi.components.service
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 
 internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
         val project = formattingRequest.context.project
         val virtualFile = formattingRequest.context.virtualFile ?: return null
-        return SpotlessFormattingTask(project, virtualFile, formattingRequest)
+        return SpotlessFormattingTask(
+            service = project.service<SpotlessProjectService>(),
+            virtualFile = virtualFile,
+            formattingRequest = formattingRequest,
+        )
     }
 
     private class SpotlessFormattingTask(
-        val project: Project,
-        val virtualFile: VirtualFile,
-        val formattingRequest: AsyncFormattingRequest,
+        private val service: SpotlessProjectService,
+        private val virtualFile: VirtualFile,
+        private val formattingRequest: AsyncFormattingRequest,
     ) : FormattingTask {
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private var job: Job? = null
 
         override fun cancel(): Boolean {
@@ -53,18 +40,14 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
         }
 
         override fun run() {
-            val spotless = service<Spotless>()
-            job = scope.launch {
-                try {
-                    val result = spotless.format(
-                        project,
-                        virtualFile,
-                        formattingRequest.documentText,
-                    )
+            job = service.formatAsync(
+                virtualFile = virtualFile,
+                content = formattingRequest.documentText,
+                onResult = { result ->
                     when (result) {
-                        SpotlessFormatResult.Clean, SpotlessFormatResult.NotCovered -> formattingRequest.onTextReady(
-                            null,
-                        )
+                        SpotlessFormatResult.Clean,
+                        SpotlessFormatResult.NotCovered,
+                            -> formattingRequest.onTextReady(null)
 
                         is SpotlessFormatResult.Dirty -> formattingRequest.onTextReady(result.content)
                         is SpotlessFormatResult.Error -> formattingRequest.onError(
@@ -72,15 +55,16 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
                             result.message,
                         )
                     }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Throwable) {
-                    formattingRequest.onError(
-                        Bundle.message("spotless.format.notification.error.title"),
-                        error.message ?: error.javaClass.simpleName,
-                    )
-                }
-            }
+                },
+                onError = { error ->
+                    if (error !is CancellationException) {
+                        formattingRequest.onError(
+                            Bundle.message("spotless.format.notification.error.title"),
+                            error.message ?: error.javaClass.simpleName,
+                        )
+                    }
+                },
+            )
         }
     }
 
@@ -96,6 +80,6 @@ internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
 
     override fun canFormat(file: PsiFile): Boolean {
         val virtualFile = file.viewProvider.virtualFile
-        return service<Spotless>().canFormatSync(file.project, virtualFile)
+        return file.project.service<SpotlessProjectService>().canFormatSync(virtualFile)
     }
 }

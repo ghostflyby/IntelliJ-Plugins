@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
@@ -16,17 +15,14 @@ import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.NlsSafe
-import dev.ghostflyby.spotless.Spotless
-import dev.ghostflyby.spotless.SpotlessDaemonHost
+import dev.ghostflyby.spotless.SpotlessProjectService
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
 
@@ -55,18 +51,13 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
     ) {
         val myModel = resolverCtx.getExtraProject(gradleModule, SpotlessGradleStateModel::class.java)
         if (myModel != null) {
-            val re = ideModule.createChild(
+            ideModule.createChild(
                 SpotlessGradleStateData.KEY,
                 SpotlessGradleStateData(
                     gradleModule.gradleProject.projectDirectory.toPath().absolute(),
                     myModel.spotless,
                 ),
             )
-            (service<Spotless>() as? Disposable)?.let {
-                Disposer.register(it) {
-                    re.clear(true)
-                }
-            }
         }
         nextResolver.populateModuleExtraModels(gradleModule, ideModule)
     }
@@ -89,35 +80,21 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
         project: com.intellij.openapi.project.Project,
         modelsProvider: IdeModifiableModelsProvider,
     ) {
-        val holder = project.service<SpotlessGradleStateHolder>()
-        holder.updateFrom(toImport)
+        val settings = project.service<SpotlessGradleSettings>()
+        settings.updateFrom(toImport)
+        project.service<SpotlessProjectService>().releaseAllDaemons()
     }
 }
-
 
 @Service(Service.Level.PROJECT)
 @State(
     name = "SpotlessGradleIntegration",
     storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
 )
-internal class SpotlessGradleStateHolder
-    : SerializablePersistentStateComponent<SpotlessGradleStateHolder.State>(State()) {
+internal class SpotlessGradleSettings
+    : SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
     fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
         return state.paths.contains(path.absolutePathString())
-    }
-
-    val daemons: MutableSet<SpotlessDaemonHost> = ConcurrentHashMap.newKeySet()
-
-    fun hasRunningDaemons(): Boolean = daemons.isNotEmpty()
-
-    fun releaseAllDaemons(): Int {
-        val runningDaemons = daemons.toList()
-        val spotless = service<Spotless>()
-        runningDaemons.forEach { daemon ->
-            daemons.remove(daemon)
-            spotless.releaseDaemon(daemon)
-        }
-        return runningDaemons.size
     }
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
@@ -130,7 +107,6 @@ internal class SpotlessGradleStateHolder
             )
         }
         nodes.forEach { it.clear(true) }
-        releaseAllDaemons()
     }
 
     var gradleDaemonVersion: @NlsSafe String
@@ -160,7 +136,7 @@ internal fun spotlessDaemonInitScript(
     daemonVersion: String,
     daemonJar: String,
 ): String {
-    val script = @Suppress("SpellCheckingInspection")
+    val script =
     $$"""
         gradle.allprojects { proj ->
             proj.buildscript {

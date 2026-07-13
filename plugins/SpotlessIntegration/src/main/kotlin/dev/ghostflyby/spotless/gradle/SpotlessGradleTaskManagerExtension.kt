@@ -13,7 +13,7 @@ import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
 import kotlin.io.path.Path
 
-
+// Keep regular Gradle task execution aligned with the dedicated daemon launcher.
 internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
     override fun configureTasks(
         projectPath: String,
@@ -21,8 +21,8 @@ internal class SpotlessGradleTaskManagerExtension : GradleTaskManagerExtension {
         settings: GradleExecutionSettings,
         gradleVersion: GradleVersion?,
     ) {
-        id.project.service<SpotlessGradleStateHolder>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
-        val persistent = id.project.service<SpotlessGradleStateHolder>()
+        id.project.service<SpotlessGradleSettings>().isSpotlessEnabledForProjectDir(Path(projectPath)) || return
+        val persistent = id.project.service<SpotlessGradleSettings>()
         val daemonVersion = persistent.gradleDaemonVersion.trim()
         val daemonJar = persistent.gradleDaemonJar.trim()
 

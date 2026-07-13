@@ -2,64 +2,69 @@
 
 ## Scope
 
-This note records the intentionally public API surface of `SpotlessIntegration` after the async lifecycle refactor work.
+This note records the intentionally public API surface after the provider lifecycle refactor.
 
-The goal of this phase is not to minimize visibility at any cost. The goal is to keep only the types that must cross
-plugin
-boundaries public, document why they remain public, and avoid accidental ABI drift.
+The plugin keeps a public daemon-provider extension point, but the formatter orchestration,
+capability cache, daemon registry, and SpotlessDaemon HTTP client are internal implementation
+details. The external SpotlessDaemon HTTP API is owned outside this project and must remain
+unchanged by this plugin.
 
 ## Public Types Kept Intentionally
 
-### `dev.ghostflyby.spotless.Spotless`
-
-`Spotless` remains public because it is exposed as an application service interface from `plugin.xml`.
-
-Contract notes:
-
-- `format(...)` is the main integration entry point and returns `SpotlessFormatResult`.
-- `canFormat(...)` is a strict daemon-backed dry-run check.
-- `canFormatSync(...)` is a conservative synchronous bridge:
-  it returns cached strict results when available and otherwise schedules a bounded async probe, returning `false`
-  until that probe completes.
-- `releaseDaemon(...)` remains public for provider implementations that need explicit daemon cleanup.
-
 ### `dev.ghostflyby.spotless.SpotlessDaemonProvider`
 
-`SpotlessDaemonProvider` remains public because it is the interface of a public extension point declared in
-`plugin.xml`.
+`SpotlessDaemonProvider` remains public because it is the interface of the public
+`dev.ghostflyby.spotless.spotlessDaemonProvider` extension point.
 
 Contract notes:
 
-- implementors own daemon startup and external-project resolution;
-- `afterDaemonStopped(...)` is a best-effort lifecycle callback after the core HTTP stop contract runs.
+- `isApplicableTo(project)` is a cheap readiness/applicability check.
+- `findTarget(project, virtualFile)` maps an IntelliJ file to an external project and daemon-side file path.
+- `startDaemon(project, externalProject)` starts provider-owned daemon resources and returns a `SpotlessDaemonHandle`.
+
+### `dev.ghostflyby.spotless.SpotlessDaemonHandle`
+
+`SpotlessDaemonHandle` is public because provider implementations return it to the core daemon registry.
+
+Contract notes:
+
+- `host` describes the daemon HTTP endpoint.
+- `cleanup(reason)` releases provider-owned resources after the core service has attempted the fixed HTTP stop request.
+- `cleanup(reason)` must be best-effort and idempotent.
+
+### `dev.ghostflyby.spotless.SpotlessDaemonControl`
+
+`SpotlessDaemonControl` is public because provider-owned process listeners need a stable project-service callback.
+
+Provider implementations should call `project.service<SpotlessDaemonControl>().releaseDaemon(host)` when a daemon
+process exits or otherwise becomes unusable.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonHost`
 
-`SpotlessDaemonHost` remains public because provider implementations return it and the `Spotless` service consumes it.
+`SpotlessDaemonHost` remains public because it crosses the provider/core boundary.
 
-The concrete `Localhost` and `Unix` variants are part of that contract and therefore stay public as well.
+The concrete `Localhost` and `Unix` variants are part of that contract and therefore stay public.
 
-### `dev.ghostflyby.spotless.SpotlessFormatResult`
+### `dev.ghostflyby.spotless.SpotlessDaemonTarget`
 
-`SpotlessFormatResult` remains public because it is returned by the public `Spotless.format(...)` API.
+`SpotlessDaemonTarget` is public because providers return it from `findTarget(...)`.
 
-## Internal-Only Hooks
+It contains the external project path used for daemon ownership and the concrete file path sent to the daemon.
 
-The following members are intentionally internal and are not part of the public ABI:
+## Internal-Only Surface
 
-- `SpotlessImpl.http`
-- `SpotlessImpl.daemonProviderLookup`
+The following are intentionally internal and are not part of the public ABI:
 
-They exist only to support focused tests for daemon health checks and failure handling without widening the public
-service
-constructor or relying on internal IntelliJ formatter APIs.
+- formatter orchestration through `SpotlessProjectService`;
+- `SpotlessFormatResult`;
+- `SpotlessDaemonClient`;
+- `SpotlessDaemonRegistry`;
+- `SpotlessCapabilityCache`;
+- Gradle settings/runtime implementation details.
 
 ## ABI Decision
 
-No public type was removed or narrowed in this phase.
+This phase intentionally removes the old public `Spotless` formatter service and public `SpotlessFormatResult`.
 
-This is intentional:
-
-- the current public surface is required by the service and extension-point contracts;
-- the compatibility risk of shrinking it now is higher than the benefit;
-- behavior semantics were clarified in code docs and regression tests instead.
+Only provider/control APIs remain public. This is a breaking change for consumers that called the old formatter service
+directly, but it keeps the extension-point use case while allowing lifecycle, cache, and daemon state to stay internal.

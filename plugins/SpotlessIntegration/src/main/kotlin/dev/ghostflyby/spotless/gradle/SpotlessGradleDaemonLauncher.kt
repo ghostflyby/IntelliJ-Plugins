@@ -54,12 +54,12 @@ internal fun startGradleSpotlessDaemon(
     host: SpotlessDaemonHost.Unix,
     onProcessTerminated: () -> Unit,
 ): SpotlessGradleDaemonProcess {
-    val holder = project.service<SpotlessGradleStateHolder>()
+    val settings = project.service<SpotlessGradleSettings>()
     val initScript = host.workingDirectory.resolve("spotless-daemon.init.gradle")
     initScript.writeText(
         spotlessDaemonInitScript(
-            daemonVersion = holder.gradleDaemonVersion.trim(),
-            daemonJar = holder.gradleDaemonJar.trim(),
+            daemonVersion = settings.gradleDaemonVersion.trim(),
+            daemonJar = settings.gradleDaemonJar.trim(),
         ),
     )
 
