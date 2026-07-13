@@ -19,10 +19,6 @@
                     class="dev.ghostflyby.spotless.gradle.StopSpotlessDaemonsAction"
                     text="Stop Spotless Daemons"
                     description="Stop all running Spotless daemon processes for this project."/>
-            <action id="dev.ghostflyby.spotless.restartDaemons"
-                    class="dev.ghostflyby.spotless.gradle.RestartSpotlessDaemonsOnNextFormatAction"
-                    text="Restart Spotless Daemons on Next Format"
-                    description="Stop running Spotless daemon processes so they restart on the next format request."/>
         </group>
     </actions>
 </idea-plugin>

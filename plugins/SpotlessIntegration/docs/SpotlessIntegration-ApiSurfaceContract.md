@@ -20,21 +20,25 @@ Contract notes:
 
 - `isApplicableTo(project)` is a cheap readiness/applicability check.
 - `findTarget(project, virtualFile)` maps an IntelliJ file to an external project and daemon-side file path.
-- `startDaemon(project, externalProject, daemonScope)` starts provider-owned daemon resources and returns a
-  `SpotlessDaemonHandle`.
-- Provider-owned runtime resources must be bound to `daemonScope`; the core registry owns that scope and completes it
-  when the daemon is released or when the project service is disposed.
-- If a provider observes natural daemon process termination, it should cancel `daemonScope`. The registry observes
-  scope completion and removes the daemon entry without using a public project-service callback.
+- `startDaemon(project, externalProject, lifecycle)` starts provider-owned daemon resources and returns a
+  `SpotlessDaemonHost`.
+- Provider-owned runtime resources must be registered through `lifecycle.onClose`. Provider-owned asynchronous work
+  remains owned by the provider's own plugin/project scope and must be synchronously cancelled from its cleanup.
+- If a provider observes natural daemon process termination, it should call `lifecycle.requestClose(reason)`. The core
+  registry removes the daemon entry without using a public project-service callback.
 
-### `dev.ghostflyby.spotless.SpotlessDaemonHandle`
+### `dev.ghostflyby.spotless.SpotlessDaemonLifecycle`
 
-`SpotlessDaemonHandle` is public because provider implementations return it to the core daemon registry.
+`SpotlessDaemonLifecycle` is public because the core registry passes it to provider implementations.
 
 Contract notes:
 
-- `host` describes the daemon HTTP endpoint.
-- Provider cleanup is not a handle callback. Providers bind cleanup to `daemonScope` completion.
+- `requestClose(reason)` asks the core registry to detach this daemon. Natural process termination should use this path.
+- `onClose(cleanup)` registers synchronous provider-owned cleanup. Cleanup is LIFO, exactly once, and best-effort;
+  providers should keep it fast and idempotent.
+- Providers must not call project services or mutate registry state directly for daemon release.
+- The lifecycle intentionally exposes neither a `CoroutineScope` nor a `Job`: providers cannot bypass registry detach,
+  capability-cache invalidation, or HTTP stop ordering.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonHost`
 

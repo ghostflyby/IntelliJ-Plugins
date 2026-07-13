@@ -10,7 +10,9 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.ExtensionPointName
+import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import dev.ghostflyby.spotless.SpotlessFormatResult.Error
@@ -27,8 +29,8 @@ internal class SpotlessProjectService(
     private val scope: CoroutineScope,
 ) : Disposable.Default {
     private val logger = logger<SpotlessProjectService>()
-    private val capabilityCache = project.service<SpotlessCapabilityCache>()
-    private val registry = project.service<SpotlessDaemonRegistry>()
+    private val capabilityCache get() = project.service<SpotlessCapabilityCache>()
+    private val registry get() = project.service<SpotlessDaemonRegistry>()
 
     internal var client: SpotlessDaemonClient = SpotlessDaemonClient()
         set(value) {
@@ -40,10 +42,23 @@ internal class SpotlessProjectService(
 
     init {
         registry.clientProvider = { client }
+        EP_NAME.addExtensionPointListener(
+            scope,
+            object : ExtensionPointListener<SpotlessDaemonProvider> {
+                override fun extensionRemoved(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
+                    registry.releaseDaemonsForProviderSynchronously(extension)
+                }
+            },
+        )
     }
 
-    internal fun releaseAllDaemons(): Int =
+    internal suspend fun releaseAllDaemons(): Int =
         registry.releaseAllDaemons()
+
+    internal fun releaseAllDaemonsAsync(onReleased: (Int) -> Unit = {}): Job =
+        scope.launch(Dispatchers.IO) {
+            onReleased(releaseAllDaemons())
+        }
 
     internal fun hasRunningDaemons(): Boolean =
         registry.hasRunningDaemons()

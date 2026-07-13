@@ -8,7 +8,6 @@ package dev.ghostflyby.spotless
 
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import kotlinx.coroutines.CoroutineScope
 import java.nio.file.Path
 
 /**
@@ -33,8 +32,8 @@ public interface SpotlessDaemonProvider {
     /**
      * Start a Spotless daemon for [externalProject].
      *
-     * Provider-specific process resources must be bound to [daemonScope]. The core service owns
-     * that scope and completes it when the daemon is released.
+     * Provider-specific process resources must be bound to [lifecycle]. The core registry owns
+     * that lifecycle and closes it when the daemon is released.
      *
      * @param externalProject The external project path as returned by [findTarget]
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
@@ -42,8 +41,21 @@ public interface SpotlessDaemonProvider {
     public suspend fun startDaemon(
         project: Project,
         externalProject: Path,
-        daemonScope: CoroutineScope,
+        lifecycle: SpotlessDaemonLifecycle,
     ): SpotlessDaemonHost
+}
+
+public interface SpotlessDaemonLifecycle {
+    /** Ask the core registry to detach this daemon after natural process termination. */
+    public fun requestClose(reason: String)
+
+    /**
+     * Register synchronous provider-owned cleanup.
+     *
+     * Cleanups run in LIFO order exactly once after core state has been detached. They must
+     * promptly cancel or destroy provider-owned resources and must not perform long-running work.
+     */
+    public fun onClose(cleanup: () -> Unit)
 }
 
 public data class SpotlessDaemonTarget(

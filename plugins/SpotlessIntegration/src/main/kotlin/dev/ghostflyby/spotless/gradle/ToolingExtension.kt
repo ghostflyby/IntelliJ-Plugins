@@ -82,7 +82,7 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     ) {
         val settings = project.service<SpotlessGradleSettings>()
         settings.updateFrom(toImport)
-        project.service<SpotlessProjectService>().releaseAllDaemons()
+        project.service<SpotlessProjectService>().releaseAllDaemonsAsync()
     }
 }
 

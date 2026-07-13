@@ -17,19 +17,7 @@ import com.intellij.openapi.util.NlsContexts
 import dev.ghostflyby.spotless.SpotlessProjectService
 import dev.ghostflyby.spotless.spotlessNotificationGroupId
 
-internal class StopSpotlessDaemonsAction : SpotlessDaemonLifecycleAction() {
-    override fun notify(project: Project, count: Int) {
-        notify(project, count, "Stopped")
-    }
-}
-
-internal class RestartSpotlessDaemonsOnNextFormatAction : SpotlessDaemonLifecycleAction() {
-    override fun notify(project: Project, count: Int) {
-        notify(project, "Stopped $count Spotless daemon(s). They will restart on the next format request.")
-    }
-}
-
-internal abstract class SpotlessDaemonLifecycleAction : DumbAwareAction() {
+internal class StopSpotlessDaemonsAction : DumbAwareAction() {
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {
@@ -40,21 +28,12 @@ internal abstract class SpotlessDaemonLifecycleAction : DumbAwareAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val count = project.service<SpotlessProjectService>().releaseAllDaemons()
-        notify(project, count)
+        project.service<SpotlessProjectService>().releaseAllDaemonsAsync { count ->
+            notify(project, "Stopped $count Spotless daemon(s).")
+        }
     }
 
-    protected abstract fun notify(project: Project, count: Int)
-
-    protected fun notify(
-        project: Project,
-        count: Int,
-        verb: String,
-    ) {
-        notify(project, "$verb $count Spotless daemon(s).")
-    }
-
-    protected fun notify(
+    private fun notify(
         project: Project,
         message: @NlsContexts.NotificationContent String,
     ) {

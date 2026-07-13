@@ -25,10 +25,15 @@ public final class dev/ghostflyby/spotless/SpotlessDaemonHost$Unix : dev/ghostfl
 	public fun toString ()Ljava/lang/String;
 }
 
+public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonLifecycle {
+	public abstract fun onClose (Lkotlin/jvm/functions/Function0;)V
+	public abstract fun requestClose (Ljava/lang/String;)V
+}
+
 public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonProvider {
 	public abstract fun findTarget (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ldev/ghostflyby/spotless/SpotlessDaemonTarget;
 	public abstract fun isApplicableTo (Lcom/intellij/openapi/project/Project;)Z
-	public abstract fun startDaemon (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;Lkotlinx/coroutines/CoroutineScope;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun startDaemon (Lcom/intellij/openapi/project/Project;Ljava/nio/file/Path;Ldev/ghostflyby/spotless/SpotlessDaemonLifecycle;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/ghostflyby/spotless/SpotlessDaemonTarget {
