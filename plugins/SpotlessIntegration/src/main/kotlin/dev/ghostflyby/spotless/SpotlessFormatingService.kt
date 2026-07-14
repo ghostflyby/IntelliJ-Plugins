@@ -16,7 +16,7 @@ import com.intellij.psi.PsiFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 
-internal class SpotlessFormatingService : AsyncDocumentFormattingService() {
+internal open class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
         val project = formattingRequest.context.project
         val virtualFile = formattingRequest.context.virtualFile ?: return null
