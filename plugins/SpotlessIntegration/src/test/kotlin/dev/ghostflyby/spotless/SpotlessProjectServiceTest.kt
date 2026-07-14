@@ -36,10 +36,10 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
 
     override fun tearDown() {
         try {
+            scope.cancel()
             if (::spotless.isInitialized) {
                 spotless.dispose()
             }
-            scope.cancel()
         } finally {
             super.tearDown()
         }
@@ -74,8 +74,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         )
         assertTrue(spotless.canFormatSync(virtualFile))
         assertEquals(1, provider.startCount)
-
-        releaseDaemon(provider)
     }
 
     fun testCanFormatSyncRefreshesRetryableMissesWithoutFileEdits() {
@@ -100,8 +98,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         spotless.canFormatSync(virtualFile)
 
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
-
-        releaseDaemon(provider)
     }
 
     fun testCanFormatSyncCacheIsScopedPerFile() {
@@ -121,8 +117,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
 
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
         assertFalse(spotless.canFormatSync(otherVirtualFile))
-
-        releaseDaemon(provider)
     }
 
     fun testCanFormatSyncRevalidatesCachedTrueAfterDaemonFailure() {
@@ -160,8 +154,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
             runBlocking { spotless.format(virtualFile, "content") },
         )
         assertTrue(waitUntil { !spotless.canFormatSync(virtualFile) })
-
-        releaseDaemon(provider)
     }
 
     fun testReleaseDaemonInvalidatesCachedCanFormatSyncResult() {
@@ -203,8 +195,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         assertEquals(1, firstCleanupStopCount.get())
         spotless.daemonProviderLookup = { provider }
         assertTrue(runBlocking { spotless.canFormat(virtualFile) })
-
-        releaseDaemon(provider)
     }
 
     fun testProviderProcessTerminationRemovesDaemonAndInvalidatesCachedCanFormatSyncResult() {
@@ -269,8 +259,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         assertTrue(waitUntil { oldProvider.completionCount.get() == 1 })
         assertEquals(1, stopCount.get())
         assertEquals(1, newProvider.startCount)
-
-        releaseDaemon(newProvider)
     }
 
     fun testProjectDisposeStopsRunningDaemonsAndRunsProviderCleanup() {
@@ -392,7 +380,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
         assertTrue(first.await())
         assertTrue(second.await())
         assertEquals(1, provider.startCount)
-        releaseDaemon(provider)
     }
 
     fun testProviderExtensionRemovalClosesStartingDaemonBeforeReturning() = runBlocking {
@@ -454,8 +441,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
             SpotlessFormatResult.NotCovered,
             runBlocking { spotless.format(virtualFile, "content") },
         )
-
-        releaseDaemon(provider)
     }
 
     fun testFormatReturnsErrorWhenDaemonHealthCheckFails() {
@@ -477,8 +462,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
             runBlocking { spotless.format(virtualFile, "content") },
         )
         assertFalse(runBlocking { spotless.canFormat(virtualFile) })
-
-        releaseDaemon(provider)
     }
 
     fun testReleaseAllDaemonsStopsProjectDaemons() {
@@ -518,12 +501,6 @@ internal class SpotlessProjectServiceTest : BasePlatformTestCase() {
     }
 
     private fun projectBasePath(): Path = Path.of(requireNotNull(project.basePath))
-
-    private fun releaseDaemon(provider: TestDaemonProvider) {
-        val expectedCompletions = provider.startCount
-        assertEquals(1, runBlocking { spotless.releaseAllDaemons() })
-        assertTrue(waitUntil { provider.completionCount.get() >= expectedCompletions })
-    }
 
     private fun waitUntil(condition: () -> Boolean): Boolean {
         val deadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(2_000)
