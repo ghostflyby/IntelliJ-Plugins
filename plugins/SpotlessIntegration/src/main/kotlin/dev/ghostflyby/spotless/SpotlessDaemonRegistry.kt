@@ -109,7 +109,7 @@ internal class SpotlessDaemonRegistry(
     }
 
     suspend fun releaseAllDaemons(): Int {
-        val detached = detachEntries({ true }, "project release", stopHttp = true)
+        val detached = detachEntries({ true }, "project release")
         detached.forEach(::scheduleClose)
         return detached.size
     }
@@ -120,7 +120,6 @@ internal class SpotlessDaemonRegistry(
                 val detached = detachEntries(
                     predicate = { it.provider === provider },
                     reason = "provider extension removed",
-                    stopHttp = true,
                 )
                 detached.map { entry ->
                     async { closeDetached(entry, providerRemovalStopTimeout) }
@@ -134,7 +133,7 @@ internal class SpotlessDaemonRegistry(
     fun dispose() {
         runBlocking(Dispatchers.IO) {
             withContext(NonCancellable) {
-                val detached = detachEntries({ true }, "service disposed", stopHttp = true)
+                val detached = detachEntries({ true }, "service disposed")
                 capabilityCache.clear()
                 detached.map { entry ->
                     async { closeDetached(entry) }
@@ -151,7 +150,13 @@ internal class SpotlessDaemonRegistry(
         val host = try {
             entry.provider.startDaemon(project, externalProject, entry.attachment)
         } catch (error: Throwable) {
-            detachCurrent(key, entry, "daemon start failed", stopHttp = false)?.let { detached ->
+            entriesMutex.withLock {
+                if (entries[key] === entry) {
+                    detachLocked(key, entry, "daemon start failed", false)
+                } else {
+                    null
+                }
+            }?.let { detached ->
                 closeDetached(detached)
             }
             entry.result.completeExceptionally(error)
@@ -183,26 +188,12 @@ internal class SpotlessDaemonRegistry(
     private suspend fun detachEntries(
         predicate: (DaemonEntry) -> Boolean,
         reason: String,
-        stopHttp: Boolean,
     ): List<DetachedDaemonEntry> = entriesMutex.withLock {
         entries.entries
             .filter { predicate(it.value) }
             .mapNotNull { (key, entry) ->
-                if (entries[key] === entry) detachLocked(key, entry, reason, stopHttp) else null
+                if (entries[key] === entry) detachLocked(key, entry, reason, true) else null
             }
-    }
-
-    private suspend fun detachCurrent(
-        key: RegistryKey,
-        expected: DaemonEntry,
-        reason: String,
-        stopHttp: Boolean,
-    ): DetachedDaemonEntry? = entriesMutex.withLock {
-        if (entries[key] === expected) {
-            detachLocked(key, expected, reason, stopHttp)
-        } else {
-            null
-        }
     }
 
     private fun detachLocked(
