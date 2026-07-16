@@ -69,9 +69,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Test.kt", "unformatted-content")
 
         assertFalse(spotless.canFormatSync(virtualFile))
@@ -86,6 +86,31 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
+    suspend fun `provider lookup continues when an earlier provider does not cover the file`() {
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        val skippedProvider = TestDaemonProvider(
+            projectPath = projectPathFixture.get(),
+            host = SpotlessDaemonEndpoint.Localhost(25251),
+            targetResolver = { null },
+        )
+        val selectedProvider = TestDaemonProvider(
+            projectPath = projectPathFixture.get(),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
+        )
+        spotless.daemonProvidersLookup = { listOf(skippedProvider, selectedProvider) }
+        val virtualFile = createProjectFile("ProviderFallback.kt", "content")
+
+        assertTrue(spotless.canFormat(virtualFile))
+        assertEquals(0, skippedProvider.startCount)
+        assertEquals(1, selectedProvider.startCount)
+    }
+
+    @Test
     suspend fun `formatting preprocessor receives the PSI target and skips matching daemon steps`() {
         val stepPaths = mutableListOf<String?>()
         val formatBodies = mutableListOf<String>()
@@ -96,7 +121,6 @@ internal class SpotlessProjectServiceTest {
                 applicableFiles += psiFile.name
                 psiFile.name == "ImportSteps.java"
             },
-            isTriggered = { steps -> "expandWildcardImports" in steps },
             process = {
                 SpotlessFormattingPreprocessResult(
                     content = "optimized-imports",
@@ -119,8 +143,8 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("ImportSteps.java", "class ImportSteps {}")
 
         assertEquals(
@@ -138,14 +162,22 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `Java wildcard import preprocessor recognizes Java PSI and matching steps`() {
+    suspend fun `Java wildcard import preprocessor recognizes Java PSI and ignores unrelated steps`() {
         val psiFile = createProjectFile("UnusedImport.java", "class UnusedImport {}")
         val preprocessor = JavaWildcardImportPreprocessor()
+        readAction {
+            assertTrue(preprocessor.isApplicableTo(psiFile))
+        }
 
-        assertTrue(readAction { preprocessor.isApplicableTo(psiFile) })
-        assertTrue(preprocessor.isTriggeredBy(listOf("expandWildcardImports")))
-        assertTrue(preprocessor.isTriggeredBy(listOf("forbidWildcardImports")))
-        assertFalse(preprocessor.isTriggeredBy(listOf("googleJavaFormat")))
+        assertNull(
+            preprocessor.preprocess(
+                TestFormattingPreprocessContext(
+                    psiFile = psiFile,
+                    content = "class UnusedImport {}",
+                    daemonSteps = listOf("googleJavaFormat"),
+                ),
+            ),
+        )
     }
 
     @Test
@@ -163,8 +195,8 @@ internal class SpotlessProjectServiceTest {
                 format = { DaemonResponse(HttpStatusCode.OK) },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("NoPreprocessor.java", "class NoPreprocessor {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "content"))
@@ -179,8 +211,10 @@ internal class SpotlessProjectServiceTest {
         val formatSkipSteps = mutableListOf<List<String>>()
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { false },
-            process = { error("Preprocessor must not run") },
+            process = { context ->
+                assertEquals(listOf("googleJavaFormat"), context.daemonSteps)
+                null
+            },
         )
         maskPreprocessors(preprocessor)
         spotless.client = SpotlessDaemonClient(
@@ -194,12 +228,12 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("NoMatchingSteps.java", "class NoMatchingSteps {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
-        assertEquals(0, preprocessor.processCount)
+        assertEquals(1, preprocessor.processCount)
         assertEquals(listOf("original-content"), formatBodies)
         assertEquals(listOf(emptyList<String>()), formatSkipSteps)
     }
@@ -209,7 +243,6 @@ internal class SpotlessProjectServiceTest {
         val stepsCount = AtomicInteger()
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { psiFile -> psiFile.name.endsWith(".java") },
-            isTriggered = { true },
             process = { SpotlessFormattingPreprocessResult("optimized-imports") },
         )
         maskPreprocessors(preprocessor)
@@ -223,8 +256,8 @@ internal class SpotlessProjectServiceTest {
                 format = { DaemonResponse(HttpStatusCode.OK) },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val kotlinFile = createProjectFile("NoImportSteps.kt", "fun main() = Unit")
         val javaFile = createProjectFile("DryRun.java", "class DryRun {}")
 
@@ -240,7 +273,6 @@ internal class SpotlessProjectServiceTest {
         val formatSkipSteps = mutableListOf<List<String>>()
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { null },
         )
         maskPreprocessors(preprocessor)
@@ -255,8 +287,8 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Unavailable.java", "class Unavailable {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
@@ -271,7 +303,6 @@ internal class SpotlessProjectServiceTest {
         val formatSkipSteps = mutableListOf<List<String>>()
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { error("preprocessing failed") },
         )
         maskPreprocessors(preprocessor)
@@ -286,8 +317,8 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("FailingPreprocessor.java", "class FailingPreprocessor {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
@@ -301,7 +332,6 @@ internal class SpotlessProjectServiceTest {
         val formatSkipSteps = mutableListOf<List<String>>()
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { SpotlessFormattingPreprocessResult("optimized-imports") },
         )
         maskPreprocessors(preprocessor)
@@ -315,8 +345,8 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("StepFailure.java", "class StepFailure {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
@@ -326,20 +356,18 @@ internal class SpotlessProjectServiceTest {
 
     @Test
     suspend fun `formatting preprocessors run in extension order and preserve daemon step order`() {
-        val inputs = mutableListOf<String>()
+        val inputs = mutableListOf<CharSequence>()
         val first = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { request ->
-                inputs += request.content.toString()
+                inputs += request.content
                 SpotlessFormattingPreprocessResult("first", setOf("forbidWildcardImports"))
             },
         )
         val second = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { request ->
-                inputs += request.content.toString()
+                inputs += request.content
                 SpotlessFormattingPreprocessResult("second", setOf("expandWildcardImports", "notConfigured"))
             },
         )
@@ -362,8 +390,8 @@ internal class SpotlessProjectServiceTest {
                 },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Pipeline.java", "class Pipeline {}")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original"))
@@ -379,7 +407,6 @@ internal class SpotlessProjectServiceTest {
     suspend fun `disposed formatting preprocessor is not invoked again`() {
         val preprocessor = TestFormattingPreprocessor(
             isApplicable = { true },
-            isTriggered = { true },
             process = { SpotlessFormattingPreprocessResult("processed") },
         )
         val preprocessorDisposable = maskPreprocessors(preprocessor)
@@ -394,8 +421,8 @@ internal class SpotlessProjectServiceTest {
                 format = { DaemonResponse(HttpStatusCode.OK) },
             ),
         )
-        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
-        spotless.daemonProviderLookup = { provider }
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonEndpoint.Localhost(25252))
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Dynamic.kt", "fun dynamic() = Unit")
 
         assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original"))
@@ -416,10 +443,10 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
         val currentProvider = AtomicReference<SpotlessDaemonProvider?>()
-        spotless.daemonProviderLookup = { currentProvider.get() }
+        spotless.daemonProvidersLookup = { listOfNotNull(currentProvider.get()) }
         val virtualFile = createProjectFile("RetryableMiss.kt", "content")
 
         assertFalse(spotless.canFormatSync(virtualFile))
@@ -434,7 +461,7 @@ internal class SpotlessProjectServiceTest {
     suspend fun `can format sync cache is scoped per file`() {
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
@@ -442,7 +469,7 @@ internal class SpotlessProjectServiceTest {
                 format = { DaemonResponse(HttpStatusCode.OK) },
             ),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("ScopedCache.kt", "content")
         val otherVirtualFile = createProjectFile("OtherScopedCache.kt", "content")
 
@@ -466,9 +493,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Revalidate.kt", "content")
 
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
@@ -510,23 +537,23 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
             onCleanup = {
                 firstCleanupStopCount.compareAndSet(-1, stopCount.get())
             },
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Cached.kt", "content")
 
         assertTrue(waitUntil { spotless.canFormatSync(virtualFile) })
 
         assertEquals(1, spotless.releaseAllDaemons())
-        spotless.daemonProviderLookup = { null }
+        spotless.daemonProvidersLookup = { emptyList() }
         assertFalse(spotless.canFormatSync(virtualFile))
         assertTrue(waitUntil { provider.completionCount.get() == 1 })
         assertEquals(1, stopCount.get())
         assertEquals(1, firstCleanupStopCount.get())
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         assertTrue(spotless.canFormat(virtualFile))
     }
 
@@ -545,9 +572,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("NaturalExit.kt", "content")
 
         assertTrue(spotless.canFormat(virtualFile))
@@ -575,14 +602,14 @@ internal class SpotlessProjectServiceTest {
         )
         val oldProvider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
         val newProvider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25253),
+            host = SpotlessDaemonEndpoint.Localhost(25253),
         )
         val currentProvider = AtomicReference<SpotlessDaemonProvider>(oldProvider)
-        spotless.daemonProviderLookup = { currentProvider.get() }
+        spotless.daemonProvidersLookup = { listOf(currentProvider.get()) }
         val virtualFile = createProjectFile("ProviderSwitch.kt", "content")
 
         assertTrue(spotless.canFormat(virtualFile))
@@ -611,9 +638,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("Dispose.kt", "content")
 
         assertTrue(spotless.canFormat(virtualFile))
@@ -640,9 +667,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val providerDisposable = registerProvider(provider, "SpotlessProjectServiceTest.provider")
         val virtualFile = createProjectFile("ProviderRemoved.kt", "content")
 
@@ -666,17 +693,17 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
             lifecycleSetup = { lifecycle ->
-                lifecycle.onClose { cleanupOrder.add("first") }
-                lifecycle.onClose {
+                lifecycle.registerCleanup { cleanupOrder.add("first") }
+                lifecycle.registerCleanup {
                     cleanupOrder.add("second")
                     throw IOException("cleanup failure")
                 }
-                lifecycle.onClose { cleanupOrder.add("third") }
+                lifecycle.registerCleanup { cleanupOrder.add("third") }
             },
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("LifoCleanup.kt", "content")
 
         assertTrue(spotless.canFormat(virtualFile))
@@ -698,10 +725,10 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
             startGate = startGate,
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("ConcurrentStart.kt", "content")
 
         val first = async(Dispatchers.Default) { spotless.canFormat(virtualFile) }
@@ -717,7 +744,7 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `provider extension removal closes starting daemon before returning`() = supervisorScope {
+    suspend fun `provider extension removal cancels starting daemon before returning`() = supervisorScope {
         val startGate = CompletableDeferred<Unit>()
         val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
@@ -732,13 +759,13 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
             startGate = startGate,
             lifecycleSetup = { lifecycle ->
-                lifecycle.onClose { startGate.complete(Unit) }
+                lifecycle.registerCleanup { startGate.complete(Unit) }
             },
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val providerDisposable = registerProvider(provider, "SpotlessProjectServiceTest.startingProvider")
         val virtualFile = createProjectFile("ProviderRemovedDuringStart.kt", "content")
 
@@ -749,8 +776,9 @@ internal class SpotlessProjectServiceTest {
 
         assertEquals(1, provider.completionCount.get())
         assertFalse(spotless.hasRunningDaemons())
+        assertTrue(formatting.isCompleted)
         assertTrue(runCatching { formatting.await() }.isFailure)
-        assertTrue(waitUntil { stopCount.get() == 1 })
+        assertEquals(0, stopCount.get())
     }
 
     @Test
@@ -763,9 +791,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("NotCovered.kt", "content")
 
         assertFalse(spotless.canFormat(virtualFile))
@@ -785,9 +813,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("HealthCheck.kt", "content")
 
         assertEquals(
@@ -812,9 +840,9 @@ internal class SpotlessProjectServiceTest {
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
-            host = SpotlessDaemonHost.Localhost(25252),
+            host = SpotlessDaemonEndpoint.Localhost(25252),
         )
-        spotless.daemonProviderLookup = { provider }
+        spotless.daemonProvidersLookup = { listOf(provider) }
         val virtualFile = createProjectFile("ReleaseAll.kt", "content")
 
         assertTrue(spotless.canFormat(virtualFile))
@@ -915,14 +943,11 @@ internal class SpotlessProjectServiceTest {
 
     private class TestFormattingPreprocessor(
         private val isApplicable: (PsiFile) -> Boolean = { true },
-        private val isTriggered: (List<String>) -> Boolean = { true },
-        private val process: suspend (SpotlessFormattingPreprocessRequest) -> SpotlessFormattingPreprocessResult? = {
+        private val process: suspend (SpotlessFormattingPreprocessContext) -> SpotlessFormattingPreprocessResult? = {
             null
         },
     ) : SpotlessFormattingPreprocessor {
         var applicabilityCount = 0
-            private set
-        var triggerCount = 0
             private set
         var processCount = 0
             private set
@@ -932,25 +957,29 @@ internal class SpotlessProjectServiceTest {
             return isApplicable(psiFile)
         }
 
-        override fun isTriggeredBy(daemonSteps: List<String>): Boolean {
-            triggerCount++
-            return isTriggered(daemonSteps)
-        }
-
         override suspend fun preprocess(
-            request: SpotlessFormattingPreprocessRequest,
+            context: SpotlessFormattingPreprocessContext,
         ): SpotlessFormattingPreprocessResult? {
             processCount++
-            return process(request)
+            return process(context)
         }
     }
 
+    private data class TestFormattingPreprocessContext(
+        override val psiFile: PsiFile,
+        override val content: CharSequence,
+        override val daemonSteps: List<String>,
+    ) : SpotlessFormattingPreprocessContext
+
     private class TestDaemonProvider(
         private val projectPath: Path,
-        val host: SpotlessDaemonHost,
+        val host: SpotlessDaemonEndpoint,
         private val onCleanup: (() -> Unit)? = null,
         private val lifecycleSetup: (SpotlessDaemonLifecycle) -> Unit = {},
         private val startGate: CompletableDeferred<Unit>? = null,
+        private val targetResolver: (VirtualFile) -> SpotlessDaemonTarget? = { file ->
+            SpotlessDaemonTarget(projectPath, requireNotNull(file.toNioPath()))
+        },
     ) : SpotlessDaemonProvider {
         private val startCounter = AtomicInteger()
 
@@ -964,23 +993,17 @@ internal class SpotlessProjectServiceTest {
             lastLifecycle.get()?.requestClose("test daemon process terminated")
         }
 
-        override fun isApplicableTo(project: Project): Boolean = true
+        override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget? =
+            targetResolver(file)
 
-        override fun findTarget(project: Project, virtualFile: VirtualFile): SpotlessDaemonTarget =
-            SpotlessDaemonTarget(projectPath, requireNotNull(virtualFile.toNioPath()))
-
-        override suspend fun startDaemon(
-            project: Project,
-            externalProject: Path,
-            lifecycle: SpotlessDaemonLifecycle,
-        ): SpotlessDaemonHost {
+        override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonEndpoint {
             startCounter.incrementAndGet()
-            lastLifecycle.set(lifecycle)
-            lifecycle.onClose {
+            lastLifecycle.set(context.lifecycle)
+            context.lifecycle.registerCleanup {
                 onCleanup?.invoke()
                 completionCount.incrementAndGet()
             }
-            lifecycleSetup(lifecycle)
+            lifecycleSetup(context.lifecycle)
             startGate?.await()
             return host
         }

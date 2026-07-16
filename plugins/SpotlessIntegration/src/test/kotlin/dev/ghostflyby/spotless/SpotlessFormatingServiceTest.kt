@@ -41,7 +41,7 @@ internal class SpotlessFormatingServiceTest {
 
     @Test
     suspend fun `run reports thrown format failures via on error`() {
-        project.service<SpotlessProjectService>().daemonProviderLookup = {
+        project.service<SpotlessProjectService>().daemonProvidersLookup = {
             throw IOException("transport failed")
         }
         val context = readAction {

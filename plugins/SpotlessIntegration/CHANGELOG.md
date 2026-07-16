@@ -10,6 +10,9 @@
 
 ### Changed
 
+- redesigned the public daemon-provider and formatting-preprocessor extension contracts around file-specific target
+  resolution, core-owned invocation contexts, and connection-only daemon endpoints.
+
 ### Deprecated
 
 ### Removed

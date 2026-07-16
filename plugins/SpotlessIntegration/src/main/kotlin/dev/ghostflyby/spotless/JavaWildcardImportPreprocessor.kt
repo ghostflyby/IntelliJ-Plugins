@@ -20,26 +20,23 @@ internal class JavaWildcardImportPreprocessor : SpotlessFormattingPreprocessor {
     override fun isApplicableTo(psiFile: PsiFile): Boolean =
         psiFile.fileType == JavaFileType.INSTANCE
 
-    override fun isTriggeredBy(daemonSteps: List<String>): Boolean =
-        daemonSteps.any { step -> step in wildcardImportSteps }
-
     override suspend fun preprocess(
-        request: SpotlessFormattingPreprocessRequest,
+        context: SpotlessFormattingPreprocessContext,
     ): SpotlessFormattingPreprocessResult? {
-        val project = request.psiFile.project
-        if (DumbService.isDumb(project)) {
-            return null
-        }
-        val skippedSteps = request.daemonSteps.filterTo(linkedSetOf()) { step -> step in wildcardImportSteps }
+        val skippedSteps = context.daemonSteps.filterTo(linkedSetOf()) { step -> step in wildcardImportSteps }
         if (skippedSteps.isEmpty()) {
             return null
         }
+        val project = context.psiFile.project
+        if (DumbService.isDumb(project)) {
+            return null
+        }
         return withContext(Dispatchers.EDT) {
-            if (DumbService.isDumb(project) || !request.psiFile.isValid) {
+            if (DumbService.isDumb(project) || !context.psiFile.isValid) {
                 return@withContext null
             }
-            OptimizeImportsProcessor(project, request.psiFile).run()
-            val document = FileDocumentManager.getInstance().getDocument(request.psiFile.virtualFile)
+            OptimizeImportsProcessor(project, context.psiFile).run()
+            val document = FileDocumentManager.getInstance().getDocument(context.psiFile.virtualFile)
                 ?: return@withContext null
             PsiDocumentManager.getInstance(project).apply {
                 doPostponedOperationsAndUnblockDocument(document)

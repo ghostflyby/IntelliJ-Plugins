@@ -21,11 +21,11 @@ private val HTTP_POST: HttpMethod = HttpMethod.parse("POST")
 internal class SpotlessDaemonClient(
     internal var http: HttpClient = HttpClient(CIO),
 ) {
-    suspend fun healthCheck(host: SpotlessDaemonHost): Boolean =
+    suspend fun healthCheck(endpoint: SpotlessDaemonEndpoint): Boolean =
         runCatching {
             http.request {
                 method = HTTP_GET
-                configureHost(host)
+                configureEndpoint(endpoint)
                 url {
                     protocol = URLProtocol.HTTP
                     encodedPath = "/"
@@ -35,10 +35,10 @@ internal class SpotlessDaemonClient(
             response.status == HttpStatusCode.OK
         }.getOrElse { false }
 
-    suspend fun stop(host: SpotlessDaemonHost) {
+    suspend fun stop(endpoint: SpotlessDaemonEndpoint) {
         http.request {
             method = HTTP_POST
-            configureHost(host)
+            configureEndpoint(endpoint)
             url {
                 protocol = URLProtocol.HTTP
                 encodedPath = "/stop"
@@ -47,12 +47,12 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun steps(
-        host: SpotlessDaemonHost,
+        endpoint: SpotlessDaemonEndpoint,
         path: Path,
     ): List<String>? {
         val response = http.request {
             method = HTTP_GET
-            configureHost(host)
+            configureEndpoint(endpoint)
             url {
                 protocol = URLProtocol.HTTP
                 encodedPath = "/steps"
@@ -72,14 +72,14 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun format(
-        host: SpotlessDaemonHost,
+        endpoint: SpotlessDaemonEndpoint,
         path: Path,
         content: CharSequence,
         skipSteps: List<String> = emptyList(),
     ): SpotlessFormatResult {
         val response = http.request {
             method = HTTP_POST
-            configureHost(host)
+            configureEndpoint(endpoint)
             url {
                 protocol = URLProtocol.HTTP
                 encodedPath = "/"
@@ -114,14 +114,14 @@ internal class SpotlessDaemonClient(
         http.close()
     }
 
-    private fun HttpRequestBuilder.configureHost(endpoint: SpotlessDaemonHost) {
+    private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonEndpoint) {
         when (endpoint) {
-            is SpotlessDaemonHost.Localhost -> {
+            is SpotlessDaemonEndpoint.Localhost -> {
                 url.host = "localhost"
                 url.port = endpoint.port
             }
 
-            is SpotlessDaemonHost.Unix -> unixSocket(endpoint.path.toString())
+            is SpotlessDaemonEndpoint.UnixSocket -> unixSocket(endpoint.path.toString())
         }
     }
 }

@@ -16,37 +16,43 @@ import java.nio.file.Path
  * The daemon HTTP API is owned by SpotlessDaemon and is not part of this contract.
  */
 public interface SpotlessDaemonProvider {
-
     /**
-     * Check if Spotless is applicable to the given project, called before calling [startDaemon]
-     * Note: return false if you are not sure yet, the external system sync may not have completed yet
-     * @return `true` if Spotless can be used for the given project, `false` otherwise or the external system sync has not yet completed
-     */
-    public fun isApplicableTo(project: Project): Boolean
-
-    /**
-     * Find the external project and daemon-side file path for [virtualFile].
-     */
-    public fun findTarget(project: Project, virtualFile: VirtualFile): SpotlessDaemonTarget?
-
-    /**
-     * Start a Spotless daemon for [externalProject].
+     * Resolve the daemon ownership and daemon-side path for [file].
      *
-     * Provider-specific process resources must be bound to [lifecycle]. The core registry owns
-     * that lifecycle and closes it when the daemon is released.
+     * This method must be cheap and must return `null` when this provider cannot currently handle
+     * the file. The core tries later providers when a provider returns `null`.
+     */
+    public fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget?
+
+    /**
+     * Start a Spotless daemon for [SpotlessDaemonStartContext.externalProjectRoot].
      *
-     * @param externalProject The external project path as returned by [findTarget]
+     * Provider-specific process resources must be bound to
+     * [SpotlessDaemonStartContext.lifecycle]. The core registry owns that lifecycle and closes it
+     * when the daemon is released. HTTP readiness checks remain the core's responsibility.
+     * This function must cooperate with coroutine cancellation: provider removal, replacement, or
+     * project disposal can cancel an in-progress start. Register each resource as soon as it is
+     * created so partial startup can be cleaned safely.
+     *
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
-    public suspend fun startDaemon(
-        project: Project,
-        externalProject: Path,
-        lifecycle: SpotlessDaemonLifecycle,
-    ): SpotlessDaemonHost
+    public suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonEndpoint
+}
+
+/** Invocation-scoped context supplied by the core when starting a provider daemon. */
+public interface SpotlessDaemonStartContext {
+    public val project: Project
+    public val externalProjectRoot: Path
+    public val lifecycle: SpotlessDaemonLifecycle
 }
 
 public interface SpotlessDaemonLifecycle {
-    /** Ask the core registry to detach this daemon after natural process termination. */
+    /**
+     * Ask the core registry to detach this daemon after natural process termination.
+     *
+     * This method is non-blocking. Provider cleanup runs asynchronously after the daemon has been
+     * removed from core state.
+     */
     public fun requestClose(reason: String)
 
     /**
@@ -54,8 +60,9 @@ public interface SpotlessDaemonLifecycle {
      *
      * Cleanups run in LIFO order exactly once after core state has been detached. They must
      * promptly cancel or destroy provider-owned resources and must not perform long-running work.
+     * If the lifecycle is already closed, [cleanup] runs synchronously before this method returns.
      */
-    public fun onClose(cleanup: () -> Unit)
+    public fun registerCleanup(cleanup: () -> Unit)
 }
 
 public data class SpotlessDaemonTarget(

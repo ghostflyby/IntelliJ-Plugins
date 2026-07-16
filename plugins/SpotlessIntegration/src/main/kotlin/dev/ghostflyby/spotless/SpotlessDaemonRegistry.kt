@@ -42,13 +42,14 @@ internal class SpotlessDaemonRegistry(
     private data class StartingDaemonEntry(
         override val provider: SpotlessDaemonProvider,
         override val attachment: SpotlessDaemonAttachment,
-        val result: CompletableDeferred<SpotlessDaemonHost>,
+        val result: CompletableDeferred<SpotlessDaemonEndpoint>,
+        val startupJob: Job,
     ) : DaemonEntry
 
     private data class RunningDaemonEntry(
         override val provider: SpotlessDaemonProvider,
         override val attachment: SpotlessDaemonAttachment,
-        val host: SpotlessDaemonHost,
+        val endpoint: SpotlessDaemonEndpoint,
     ) : DaemonEntry
 
     private data class DetachedDaemonEntry(
@@ -59,8 +60,8 @@ internal class SpotlessDaemonRegistry(
 
     private sealed interface DaemonResolution {
         data class Start(val entry: StartingDaemonEntry) : DaemonResolution
-        data class Await(val result: Deferred<SpotlessDaemonHost>) : DaemonResolution
-        data class Return(val host: SpotlessDaemonHost) : DaemonResolution
+        data class Await(val result: Deferred<SpotlessDaemonEndpoint>) : DaemonResolution
+        data class Return(val endpoint: SpotlessDaemonEndpoint) : DaemonResolution
         data class Replace(val detached: DetachedDaemonEntry) : DaemonResolution
     }
 
@@ -71,14 +72,20 @@ internal class SpotlessDaemonRegistry(
     suspend fun getDaemon(
         provider: SpotlessDaemonProvider,
         externalProject: Path,
-    ): SpotlessDaemonHost {
+    ): SpotlessDaemonEndpoint {
         val key = key(externalProject)
+        val requesterJob = currentCoroutineContext().job
         while (true) {
             when (val resolution = entriesMutex.withLock {
                 when (val current = entries[key]) {
                     null -> {
                         val attachment = SpotlessDaemonAttachment(key)
-                        val entry = StartingDaemonEntry(provider, attachment, CompletableDeferred())
+                        val entry = StartingDaemonEntry(
+                            provider,
+                            attachment,
+                            CompletableDeferred(),
+                            requesterJob,
+                        )
                         entries[key] = entry
                         DaemonResolution.Start(entry)
                     }
@@ -93,7 +100,7 @@ internal class SpotlessDaemonRegistry(
 
                     is RunningDaemonEntry -> {
                         if (current.provider === provider) {
-                            DaemonResolution.Return(current.host)
+                            DaemonResolution.Return(current.endpoint)
                         } else {
                             DaemonResolution.Replace(detachLocked(key, current, "provider switched", stopHttp = true))
                         }
@@ -101,7 +108,7 @@ internal class SpotlessDaemonRegistry(
                 }
             }) {
                 is DaemonResolution.Await -> return resolution.result.await()
-                is DaemonResolution.Return -> return resolution.host
+                is DaemonResolution.Return -> return resolution.endpoint
                 is DaemonResolution.Start -> return startDaemon(key, resolution.entry, externalProject)
                 is DaemonResolution.Replace -> closeDetached(resolution.detached)
             }
@@ -146,41 +153,50 @@ internal class SpotlessDaemonRegistry(
         key: RegistryKey,
         entry: StartingDaemonEntry,
         externalProject: Path,
-    ): SpotlessDaemonHost {
-        val host = try {
-            entry.provider.startDaemon(project, externalProject, entry.attachment)
+    ): SpotlessDaemonEndpoint {
+        val endpoint = try {
+            entry.provider.startDaemon(
+                DaemonStartContext(project, externalProject, entry.attachment),
+            )
         } catch (error: Throwable) {
-            entriesMutex.withLock {
-                if (entries[key] === entry) {
-                    detachLocked(key, entry, "daemon start failed", false)
-                } else {
-                    null
+            val detached = withContext(NonCancellable) {
+                entriesMutex.withLock {
+                    if (entries[key] === entry) {
+                        detachLocked(key, entry, "daemon start failed", false)
+                    } else {
+                        null
+                    }
                 }
-            }?.let { detached ->
+            }
+            detached?.let {
                 closeDetached(detached)
             }
             entry.result.completeExceptionally(error)
             throw error
         }
 
-        val published = entriesMutex.withLock {
-            if (entries[key] === entry && entry.attachment.isOpen()) {
-                entries[key] = RunningDaemonEntry(entry.provider, entry.attachment, host)
-                entry.result.complete(host)
-                true
-            } else {
-                entry.result.completeExceptionally(
-                    CancellationException("Spotless daemon was detached while starting"),
-                )
-                false
+        val published = withContext(NonCancellable) {
+            entriesMutex.withLock {
+                if (entries[key] === entry && entry.attachment.isOpen()) {
+                    entries[key] = RunningDaemonEntry(entry.provider, entry.attachment, endpoint)
+                    entry.result.complete(endpoint)
+                    true
+                } else {
+                    entry.result.completeExceptionally(
+                        CancellationException("Spotless daemon was detached while starting"),
+                    )
+                    false
+                }
             }
         }
         if (published) {
-            return host
+            return endpoint
         }
 
-        if (entry.attachment.shouldStopReturnedHost()) {
-            stopHost(host, "daemon detached while starting", null)
+        if (entry.attachment.shouldStopReturnedEndpoint()) {
+            withContext(NonCancellable) {
+                stopEndpoint(endpoint, "daemon detached while starting", null)
+            }
         }
         throw CancellationException("Spotless daemon was detached while starting")
     }
@@ -206,7 +222,9 @@ internal class SpotlessDaemonRegistry(
         capabilityCache.invalidateExternalProject(key.externalProjectPath)
         val cleanups = entry.attachment.beginClose(reason, stopHttp)
         if (entry is StartingDaemonEntry) {
-            entry.result.completeExceptionally(CancellationException("Spotless daemon detached: $reason"))
+            val cancellation = CancellationException("Spotless daemon detached: $reason")
+            entry.startupJob.cancel(cancellation)
+            entry.result.completeExceptionally(cancellation)
         }
         return DetachedDaemonEntry(entry, cleanups, stopHttp)
     }
@@ -221,36 +239,41 @@ internal class SpotlessDaemonRegistry(
         detached: DetachedDaemonEntry,
         stopTimeout: Duration? = null,
     ) {
+        val callerJob = currentCoroutineContext().job
         withContext(NonCancellable) {
-            val host = (detached.entry as? RunningDaemonEntry)?.host
-            if (detached.stopHttp && host != null) {
-                stopHost(host, detached.entry.attachment.closeReason(), stopTimeout)
+            val endpoint = (detached.entry as? RunningDaemonEntry)?.endpoint
+            if (detached.stopHttp && endpoint != null) {
+                stopEndpoint(endpoint, detached.entry.attachment.closeReason(), stopTimeout)
             }
             detached.entry.attachment.runCleanups(detached.cleanups)
+            val startupJob = (detached.entry as? StartingDaemonEntry)?.startupJob
+            if (startupJob != null && startupJob !== callerJob) {
+                startupJob.join()
+            }
         }
     }
 
-    private suspend fun stopHost(
-        host: SpotlessDaemonHost,
+    private suspend fun stopEndpoint(
+        endpoint: SpotlessDaemonEndpoint,
         reason: String,
         timeout: Duration?,
     ) {
         val stopped = runCatching {
             if (timeout == null) {
-                clientProvider().stop(host)
+                clientProvider().stop(endpoint)
                 true
             } else {
                 withTimeoutOrNull(timeout) {
-                    clientProvider().stop(host)
+                    clientProvider().stop(endpoint)
                     true
                 } ?: false
             }
         }
         stopped.exceptionOrNull()?.let { error ->
-            logger.warn("Failed to stop daemon ($reason): $host", error)
+            logger.warn("Failed to stop daemon ($reason): $endpoint", error)
         }
         if (stopped.getOrNull() == false) {
-            logger.warn("Timed out stopping daemon ($reason): $host")
+            logger.warn("Timed out stopping daemon ($reason): $endpoint")
         }
     }
 
@@ -264,25 +287,23 @@ internal class SpotlessDaemonRegistry(
         private val cleanups = ArrayDeque<() -> Unit>()
         private var open = true
         private var closeReason = "daemon detached"
-        private var stopReturnedHost = false
+        private var stopReturnedEndpoint = false
 
         override fun requestClose(reason: String) {
-            val detached = runBlocking {
-                entriesMutex.withLock {
+            scope.launch(Dispatchers.IO) {
+                val detached = entriesMutex.withLock {
                     val entry = entries[key]
                     if (entry?.attachment === this@SpotlessDaemonAttachment) {
                         detachLocked(key, entry, reason, stopHttp = false)
                     } else {
                         null
                     }
-                }
-            } ?: return
-            runBlocking(Dispatchers.IO) {
+                } ?: return@launch
                 closeDetached(detached)
             }
         }
 
-        override fun onClose(cleanup: () -> Unit) {
+        override fun registerCleanup(cleanup: () -> Unit) {
             val runImmediately = synchronized(cleanupLock) {
                 if (open) {
                     cleanups.addFirst(cleanup)
@@ -300,7 +321,7 @@ internal class SpotlessDaemonRegistry(
             } else {
                 open = false
                 closeReason = reason
-                stopReturnedHost = stopHttp
+                stopReturnedEndpoint = stopHttp
                 val snapshot = cleanups.toList()
                 cleanups.clear()
                 snapshot
@@ -309,7 +330,7 @@ internal class SpotlessDaemonRegistry(
 
         fun isOpen(): Boolean = synchronized(cleanupLock) { open }
 
-        fun shouldStopReturnedHost(): Boolean = synchronized(cleanupLock) { stopReturnedHost }
+        fun shouldStopReturnedEndpoint(): Boolean = synchronized(cleanupLock) { stopReturnedEndpoint }
 
         fun closeReason(): String = synchronized(cleanupLock) { closeReason }
 
@@ -327,4 +348,10 @@ internal class SpotlessDaemonRegistry(
     private companion object {
         val providerRemovalStopTimeout: Duration = 2.seconds
     }
+
+    private data class DaemonStartContext(
+        override val project: Project,
+        override val externalProjectRoot: Path,
+        override val lifecycle: SpotlessDaemonLifecycle,
+    ) : SpotlessDaemonStartContext
 }

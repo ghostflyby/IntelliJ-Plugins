@@ -14,7 +14,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.util.system.OS
-import dev.ghostflyby.spotless.SpotlessDaemonHost
 import org.jetbrains.plugins.gradle.service.GradleInstallationManager
 import org.jetbrains.plugins.gradle.settings.DistributionType
 import org.jetbrains.plugins.gradle.settings.GradleProjectSettings
@@ -31,7 +30,6 @@ private const val spotlessDaemonUnixSocketProperty = "dev.ghostflyby.spotless.da
 private val logger = logger<SpotlessGradleDaemonProcess>()
 
 internal data class SpotlessGradleDaemonProcess(
-    val host: SpotlessDaemonHost.Unix,
     val handler: KillableColoredProcessHandler,
     val initScript: Path,
 ) {
@@ -51,11 +49,11 @@ internal fun startGradleSpotlessDaemon(
     project: Project,
     externalProject: Path,
     unixSocketPath: Path,
-    host: SpotlessDaemonHost.Unix,
+    workingDirectory: Path,
     onProcessTerminated: () -> Unit,
 ): SpotlessGradleDaemonProcess {
     val settings = project.service<SpotlessGradleSettings>()
-    val initScript = host.workingDirectory.resolve("spotless-daemon.init.gradle")
+    val initScript = workingDirectory.resolve("spotless-daemon.init.gradle")
     initScript.writeText(
         spotlessDaemonInitScript(
             daemonVersion = settings.gradleDaemonVersion.trim(),
@@ -77,7 +75,7 @@ internal fun startGradleSpotlessDaemon(
             }
         },
     )
-    return SpotlessGradleDaemonProcess(host, handler, initScript)
+    return SpotlessGradleDaemonProcess(handler, initScript)
 }
 
 private fun createGradleSpotlessDaemonCommandLine(
@@ -136,7 +134,7 @@ private fun findGradleProjectSettings(
     return GradleSettings.getInstance(project).linkedProjectsSettings
         .firstOrNull { settings ->
             settings.externalProjectPath?.let { Path.of(it).toAbsolutePath().normalize() == normalized } == true
-        } as? GradleProjectSettings
+        }
 }
 
 private fun gradleHomeFromIde(project: Project, externalProject: Path): Path? {

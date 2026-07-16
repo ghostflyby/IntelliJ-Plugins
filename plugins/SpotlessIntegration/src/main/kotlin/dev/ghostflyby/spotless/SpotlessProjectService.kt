@@ -15,6 +15,7 @@ import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import dev.ghostflyby.spotless.SpotlessFormatResult.Error
 import dev.ghostflyby.spotless.SpotlessFormatResult.NotCovered
@@ -39,8 +40,8 @@ internal class SpotlessProjectService(
             field = value
             registry.clientProvider = { field }
         }
-    internal var daemonProviderLookup: (Project) -> SpotlessDaemonProvider? =
-        { currentProject -> EP_NAME.findFirstSafe { it.isApplicableTo(currentProject) } }
+    internal var daemonProvidersLookup: (Project) -> List<SpotlessDaemonProvider> =
+        { EP_NAME.extensionList }
 
     init {
         registry.clientProvider = { client }
@@ -84,9 +85,8 @@ internal class SpotlessProjectService(
         psiFile: PsiFile,
         content: CharSequence,
     ): SpotlessFormatResult {
-        val provider = daemonProviderLookup(project)
-        val target = provider?.findTarget(project, psiFile.virtualFile)
-        if (provider == null || target == null) {
+        val providerTarget = resolveProviderTarget(psiFile.virtualFile)
+        if (providerTarget == null) {
             capabilityCache.update(
                 psiFile.virtualFile,
                 externalProject = null,
@@ -95,6 +95,7 @@ internal class SpotlessProjectService(
             )
             return NotCovered
         }
+        val (provider, target) = providerTarget
 
         val daemon = registry.getDaemon(provider, target.externalProject)
         val result = if (!client.healthCheck(daemon)) {
@@ -161,7 +162,7 @@ internal class SpotlessProjectService(
     }
 
     private suspend fun preprocessFormatRequest(
-        daemon: SpotlessDaemonHost,
+        daemon: SpotlessDaemonEndpoint,
         path: Path,
         psiFile: PsiFile,
         content: CharSequence,
@@ -175,22 +176,12 @@ internal class SpotlessProjectService(
         }.onFailure { error ->
             logger.debug("Failed to inspect Spotless formatter steps", error)
         }.getOrNull() ?: return FormatRequest(content)
-        val preprocessors = target.preprocessors.filter { preprocessor ->
-            runCatching {
-                preprocessor.isTriggeredBy(daemonSteps)
-            }.onFailure { error ->
-                logger.debug("Failed to check Spotless formatting preprocessor trigger", error)
-            }.getOrDefault(false)
-        }
-        if (preprocessors.isEmpty()) {
-            return FormatRequest(content)
-        }
         var processedContent = content
         val skippedSteps = linkedSetOf<String>()
-        preprocessors.forEach { preprocessor ->
+        target.preprocessors.forEach { preprocessor ->
             val result = runCatching {
                 preprocessor.preprocess(
-                    SpotlessFormattingPreprocessRequest(target.psiFile, processedContent, daemonSteps),
+                    FormattingPreprocessContext(target.psiFile, processedContent, daemonSteps),
                 )
             }.onFailure { error ->
                 logger.debug("Failed to preprocess Spotless formatting request", error)
@@ -221,10 +212,35 @@ internal class SpotlessProjectService(
         val skipSteps: List<String> = emptyList(),
     )
 
+    private data class ProviderTarget(
+        val provider: SpotlessDaemonProvider,
+        val target: SpotlessDaemonTarget,
+    )
+
+    private data class FormattingPreprocessContext(
+        override val psiFile: PsiFile,
+        override val content: CharSequence,
+        override val daemonSteps: List<String>,
+    ) : SpotlessFormattingPreprocessContext
+
     private data class PreprocessingTarget(
         val psiFile: PsiFile,
         val preprocessors: List<SpotlessFormattingPreprocessor>,
     )
+
+    private fun resolveProviderTarget(file: VirtualFile): ProviderTarget? {
+        daemonProvidersLookup(project).forEach { provider ->
+            val target = runCatching {
+                provider.resolveTarget(project, file)
+            }.onFailure { error ->
+                logger.debug("Failed to resolve Spotless daemon target", error)
+            }.getOrNull()
+            if (target != null) {
+                return ProviderTarget(provider, target)
+            }
+        }
+        return null
+    }
 
     private companion object {
         @JvmStatic
