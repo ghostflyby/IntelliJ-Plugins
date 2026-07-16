@@ -49,3 +49,38 @@ public final class dev/ghostflyby/spotless/SpotlessDaemonTarget {
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class dev/ghostflyby/spotless/SpotlessFormattingPreprocessRequest {
+	public fun <init> (Lcom/intellij/psi/PsiFile;Ljava/lang/CharSequence;Ljava/util/List;)V
+	public final fun component1 ()Lcom/intellij/psi/PsiFile;
+	public final fun component2 ()Ljava/lang/CharSequence;
+	public final fun component3 ()Ljava/util/List;
+	public final fun copy (Lcom/intellij/psi/PsiFile;Ljava/lang/CharSequence;Ljava/util/List;)Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessRequest;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessRequest;Lcom/intellij/psi/PsiFile;Ljava/lang/CharSequence;Ljava/util/List;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessRequest;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/CharSequence;
+	public final fun getDaemonSteps ()Ljava/util/List;
+	public final fun getPsiFile ()Lcom/intellij/psi/PsiFile;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/spotless/SpotlessFormattingPreprocessResult {
+	public fun <init> (Ljava/lang/CharSequence;Ljava/util/Set;)V
+	public synthetic fun <init> (Ljava/lang/CharSequence;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/CharSequence;
+	public final fun component2 ()Ljava/util/Set;
+	public final fun copy (Ljava/lang/CharSequence;Ljava/util/Set;)Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessResult;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessResult;Ljava/lang/CharSequence;Ljava/util/Set;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessResult;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getContent ()Ljava/lang/CharSequence;
+	public final fun getSkippedSteps ()Ljava/util/Set;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public abstract interface class dev/ghostflyby/spotless/SpotlessFormattingPreprocessor {
+	public abstract fun isApplicableTo (Lcom/intellij/psi/PsiFile;)Z
+	public abstract fun isTriggeredBy (Ljava/util/List;)Z
+	public abstract fun preprocess (Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessRequest;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+

@@ -6,6 +6,8 @@
 
 ### Added
 
+- optimize Java imports before formatting when the Spotless configuration expands or forbids wildcard imports.
+
 ### Changed
 
 ### Deprecated

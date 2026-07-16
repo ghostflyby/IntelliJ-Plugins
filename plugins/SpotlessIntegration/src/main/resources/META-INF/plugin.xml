@@ -18,9 +18,14 @@
                              key="spotless.configuration.title.workspace"
                              parentId="build"/>
     </extensions>
+    <extensions defaultExtensionNs="dev.ghostflyby.spotless">
+        <spotlessFormattingPreprocessor implementation="dev.ghostflyby.spotless.JavaWildcardImportPreprocessor"/>
+    </extensions>
 
     <extensionPoints>
         <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.SpotlessDaemonProvider"
                         dynamic="true"/>
+        <extensionPoint name="spotlessFormattingPreprocessor"
+                        interface="dev.ghostflyby.spotless.SpotlessFormattingPreprocessor" dynamic="true"/>
     </extensionPoints>
 </idea-plugin>

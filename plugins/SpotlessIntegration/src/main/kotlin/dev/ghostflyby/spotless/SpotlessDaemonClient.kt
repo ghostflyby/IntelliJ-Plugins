@@ -43,10 +43,36 @@ internal class SpotlessDaemonClient(
         }
     }
 
+    suspend fun steps(
+        host: SpotlessDaemonHost,
+        path: Path,
+    ): List<String>? {
+        val response = http.request {
+            method = HttpMethod.Get
+            configureHost(host)
+            url {
+                protocol = URLProtocol.HTTP
+                encodedPath = "/steps"
+            }
+            parameter("path", path.normalize().absolutePathString())
+        }
+        return when (response.status) {
+            HttpStatusCode.OK -> response.bodyAsText()
+                .lineSequence()
+                .map(String::trim)
+                .filter(String::isNotEmpty)
+                .toList()
+
+            HttpStatusCode.NotFound -> null
+            else -> error("Unexpected steps response status: ${response.status}\n${response.bodyAsText()}")
+        }
+    }
+
     suspend fun format(
         host: SpotlessDaemonHost,
         path: Path,
         content: CharSequence,
+        skipSteps: List<String> = emptyList(),
     ): SpotlessFormatResult {
         val response = http.request {
             method = HttpMethod.Post
@@ -58,6 +84,9 @@ internal class SpotlessDaemonClient(
             parameter("path", path.normalize().absolutePathString())
             if (content.isEmpty()) {
                 parameter("dryrun", "")
+            }
+            skipSteps.forEach { step ->
+                parameter("skipStep", step)
             }
             contentType(ContentType.Text.Plain)
             setBody(content)

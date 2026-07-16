@@ -6,16 +6,23 @@
 
 package dev.ghostflyby.spotless
 
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.backgroundWriteAction
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiManager
+import com.intellij.testFramework.ExtensionTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
+import io.ktor.client.request.*
 import io.ktor.http.*
+import io.ktor.http.content.*
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -37,13 +44,14 @@ internal class SpotlessProjectServiceTest {
         .sourceRootFixture(
             pathFixture = projectFixture.pathInProjectFixture(Path.of("src")),
         )
-    private val sourceRoot by sourceRootFixture
     private val spotlessServiceFixture = projectFixture.spotlessServiceFixture()
     private val spotlessHarness by spotlessServiceFixture
     private val spotless: SpotlessProjectService
         get() = spotlessHarness.service
     private val providerParentDisposableFixture = disposableFixture()
     private val providerParentDisposable by providerParentDisposableFixture
+    private val preprocessorParentDisposableFixture = disposableFixture()
+    private val preprocessorParentDisposable by preprocessorParentDisposableFixture
 
     @Test
     suspend fun `can format and format use spotless daemon responses`() {
@@ -75,6 +83,327 @@ internal class SpotlessProjectServiceTest {
         )
         assertTrue(spotless.canFormatSync(virtualFile))
         assertEquals(1, provider.startCount)
+    }
+
+    @Test
+    suspend fun `formatting preprocessor receives the PSI target and skips matching daemon steps`() {
+        val stepPaths = mutableListOf<String?>()
+        val formatBodies = mutableListOf<String>()
+        val formatSkipSteps = mutableListOf<List<String>>()
+        val applicableFiles = mutableListOf<String>()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { psiFile ->
+                applicableFiles += psiFile.name
+                psiFile.name == "ImportSteps.java"
+            },
+            isTriggered = { steps -> "expandWildcardImports" in steps },
+            process = {
+                SpotlessFormattingPreprocessResult(
+                    content = "optimized-imports",
+                    skippedSteps = setOf("forbidWildcardImports", "expandWildcardImports"),
+                )
+            },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = { request ->
+                    stepPaths += request.url.parameters["path"]
+                    DaemonResponse(HttpStatusCode.OK, "expandWildcardImports\nforbidWildcardImports\n")
+                },
+                format = { DaemonResponse(HttpStatusCode.OK, "formatted-content") },
+                onFormat = { request ->
+                    formatBodies += request.bodyText()
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("ImportSteps.java", "class ImportSteps {}")
+
+        assertEquals(
+            SpotlessFormatResult.Dirty("formatted-content"),
+            spotless.format(virtualFile, "original-content"),
+        )
+        assertEquals(listOf("ImportSteps.java"), applicableFiles)
+        assertEquals(1, preprocessor.processCount)
+        assertEquals(listOf(virtualFile.virtualFile.path), stepPaths)
+        assertEquals(listOf("optimized-imports"), formatBodies)
+        assertEquals(
+            listOf(listOf("expandWildcardImports", "forbidWildcardImports")),
+            formatSkipSteps,
+        )
+    }
+
+    @Test
+    suspend fun `Java wildcard import preprocessor recognizes Java PSI and matching steps`() {
+        val psiFile = createProjectFile("UnusedImport.java", "class UnusedImport {}")
+        val preprocessor = JavaWildcardImportPreprocessor()
+
+        assertTrue(readAction { preprocessor.isApplicableTo(psiFile) })
+        assertTrue(preprocessor.isTriggeredBy(listOf("expandWildcardImports")))
+        assertTrue(preprocessor.isTriggeredBy(listOf("forbidWildcardImports")))
+        assertFalse(preprocessor.isTriggeredBy(listOf("googleJavaFormat")))
+    }
+
+    @Test
+    suspend fun `no applicable preprocessor does not inspect daemon steps`() {
+        val stepsCount = AtomicInteger()
+        val preprocessor = TestFormattingPreprocessor(isApplicable = { false })
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = {
+                    stepsCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK, "expandWildcardImports\n")
+                },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("NoPreprocessor.java", "class NoPreprocessor {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "content"))
+        assertEquals(1, preprocessor.applicabilityCount)
+        assertEquals(0, stepsCount.get())
+        assertEquals(0, preprocessor.processCount)
+    }
+
+    @Test
+    suspend fun `preprocessor without matching steps does not transform formatting content`() {
+        val formatBodies = mutableListOf<String>()
+        val formatSkipSteps = mutableListOf<List<String>>()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { false },
+            process = { error("Preprocessor must not run") },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = { DaemonResponse(HttpStatusCode.OK, "googleJavaFormat\n") },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                onFormat = { request ->
+                    formatBodies += request.bodyText()
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("NoMatchingSteps.java", "class NoMatchingSteps {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
+        assertEquals(0, preprocessor.processCount)
+        assertEquals(listOf("original-content"), formatBodies)
+        assertEquals(listOf(emptyList<String>()), formatSkipSteps)
+    }
+
+    @Test
+    suspend fun `non Java and dry run formatting do not inspect Java import steps`() {
+        val stepsCount = AtomicInteger()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { psiFile -> psiFile.name.endsWith(".java") },
+            isTriggered = { true },
+            process = { SpotlessFormattingPreprocessResult("optimized-imports") },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = {
+                    stepsCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK, "expandWildcardImports")
+                },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val kotlinFile = createProjectFile("NoImportSteps.kt", "fun main() = Unit")
+        val javaFile = createProjectFile("DryRun.java", "class DryRun {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(kotlinFile, "content"))
+        assertTrue(spotless.canFormat(javaFile))
+        assertEquals(0, stepsCount.get())
+        assertEquals(0, preprocessor.processCount)
+    }
+
+    @Test
+    suspend fun `unavailable formatting preprocessing falls back to normal daemon formatting`() {
+        val formatBodies = mutableListOf<String>()
+        val formatSkipSteps = mutableListOf<List<String>>()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { null },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = { DaemonResponse(HttpStatusCode.OK, "expandWildcardImports") },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                onFormat = { request ->
+                    formatBodies += request.bodyText()
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("Unavailable.java", "class Unavailable {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
+        assertEquals(1, preprocessor.processCount)
+        assertEquals(listOf("original-content"), formatBodies)
+        assertEquals(listOf(emptyList<String>()), formatSkipSteps)
+    }
+
+    @Test
+    suspend fun `failing formatting preprocessing falls back to normal daemon formatting`() {
+        val formatBodies = mutableListOf<String>()
+        val formatSkipSteps = mutableListOf<List<String>>()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { error("preprocessing failed") },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = { DaemonResponse(HttpStatusCode.OK, "expandWildcardImports") },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                onFormat = { request ->
+                    formatBodies += request.bodyText()
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("FailingPreprocessor.java", "class FailingPreprocessor {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
+        assertEquals(1, preprocessor.processCount)
+        assertEquals(listOf("original-content"), formatBodies)
+        assertEquals(listOf(emptyList<String>()), formatSkipSteps)
+    }
+
+    @Test
+    suspend fun `formatting preprocessor step lookup failure falls back to normal daemon formatting`() {
+        val formatSkipSteps = mutableListOf<List<String>>()
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { SpotlessFormattingPreprocessResult("optimized-imports") },
+        )
+        maskPreprocessors(preprocessor)
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = { throw IOException("steps unavailable") },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                onFormat = { request ->
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("StepFailure.java", "class StepFailure {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original-content"))
+        assertEquals(0, preprocessor.processCount)
+        assertEquals(listOf(emptyList<String>()), formatSkipSteps)
+    }
+
+    @Test
+    suspend fun `formatting preprocessors run in extension order and preserve daemon step order`() {
+        val inputs = mutableListOf<String>()
+        val first = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { request ->
+                inputs += request.content.toString()
+                SpotlessFormattingPreprocessResult("first", setOf("forbidWildcardImports"))
+            },
+        )
+        val second = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { request ->
+                inputs += request.content.toString()
+                SpotlessFormattingPreprocessResult("second", setOf("expandWildcardImports", "notConfigured"))
+            },
+        )
+        maskPreprocessors(first, second)
+        val formatBodies = mutableListOf<String>()
+        val formatSkipSteps = mutableListOf<List<String>>()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = {
+                    DaemonResponse(
+                        HttpStatusCode.OK,
+                        "expandWildcardImports\ngoogleJavaFormat\nforbidWildcardImports\n",
+                    )
+                },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                onFormat = { request ->
+                    formatBodies += request.bodyText()
+                    formatSkipSteps += request.url.parameters.getAll("skipStep").orEmpty()
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("Pipeline.java", "class Pipeline {}")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original"))
+        assertEquals(listOf("original", "first"), inputs)
+        assertEquals(listOf("second"), formatBodies)
+        assertEquals(
+            listOf(listOf("expandWildcardImports", "forbidWildcardImports")),
+            formatSkipSteps,
+        )
+    }
+
+    @Test
+    suspend fun `disposed formatting preprocessor is not invoked again`() {
+        val preprocessor = TestFormattingPreprocessor(
+            isApplicable = { true },
+            isTriggered = { true },
+            process = { SpotlessFormattingPreprocessResult("processed") },
+        )
+        val preprocessorDisposable = maskPreprocessors(preprocessor)
+        val stepsCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                steps = {
+                    stepsCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK, "expandWildcardImports")
+                },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+            ),
+        )
+        val provider = TestDaemonProvider(projectPathFixture.get(), SpotlessDaemonHost.Localhost(25252))
+        spotless.daemonProviderLookup = { provider }
+        val virtualFile = createProjectFile("Dynamic.kt", "fun dynamic() = Unit")
+
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original"))
+        Disposer.dispose(preprocessorDisposable)
+        assertEquals(SpotlessFormatResult.Clean, spotless.format(virtualFile, "original"))
+
+        assertEquals(1, preprocessor.processCount)
+        assertEquals(1, stepsCount.get())
     }
 
     @Test
@@ -496,11 +825,16 @@ internal class SpotlessProjectServiceTest {
         assertFalse(spotless.hasRunningDaemons())
     }
 
-    private suspend fun createProjectFile(name: String, content: String): VirtualFile = backgroundWriteAction {
-        val sourceRoot = sourceRoot.virtualFile
-        val file = sourceRoot.findChild(name) ?: sourceRoot.createChildData(this, name)
-        file.setBinaryContent(content.toByteArray(StandardCharsets.UTF_8))
-        file
+    private suspend fun createProjectFile(name: String, content: String): PsiFile {
+        val virtualFile = backgroundWriteAction {
+            val sourceRoot = sourceRootFixture.get().virtualFile
+            val file = sourceRoot.findChild(name) ?: sourceRoot.createChildData(this, name)
+            file.setBinaryContent(content.toByteArray(StandardCharsets.UTF_8))
+            file
+        }
+        return readAction {
+            requireNotNull(PsiManager.getInstance(projectFixture.get()).findFile(virtualFile))
+        }
     }
 
     private suspend fun waitUntil(condition: () -> Boolean): Boolean =
@@ -522,20 +856,39 @@ internal class SpotlessProjectServiceTest {
             .registerExtension(provider, providerDisposable)
     }
 
+    private fun maskPreprocessors(vararg preprocessors: SpotlessFormattingPreprocessor): Disposable =
+        Disposer.newDisposable("test formatting preprocessors").also { preprocessorDisposable ->
+            Disposer.register(preprocessorParentDisposable, preprocessorDisposable)
+            ExtensionTestUtil.maskExtensions(
+                ExtensionPointName.create("dev.ghostflyby.spotless.spotlessFormattingPreprocessor"),
+                preprocessors.toList(),
+                preprocessorDisposable,
+            )
+        }
+
     private fun testHttpClient(
         healthCheck: () -> DaemonResponse,
         format: (query: String) -> DaemonResponse,
+        steps: (HttpRequestData) -> DaemonResponse = { DaemonResponse(HttpStatusCode.NotFound) },
         stop: () -> DaemonResponse = { DaemonResponse(HttpStatusCode.OK) },
+        onFormat: (HttpRequestData) -> Unit = {},
     ): HttpClient = HttpClient(MockEngine) {
         engine {
             addHandler { request ->
                 val response = when (request.method) {
                     HttpMethod.Get ->
-                        if (request.url.encodedPath == "/") healthCheck() else DaemonResponse(HttpStatusCode.MethodNotAllowed)
+                        when (request.url.encodedPath) {
+                            "/" -> healthCheck()
+                            "/steps" -> steps(request)
+                            else -> DaemonResponse(HttpStatusCode.MethodNotAllowed)
+                        }
 
                     HttpMethod.Post ->
                         when (request.url.encodedPath) {
-                            "/" -> format(request.url.encodedQuery)
+                            "/" -> {
+                                onFormat(request)
+                                format(request.url.encodedQuery)
+                            }
                             "/stop" -> stop()
                             else -> DaemonResponse(HttpStatusCode.MethodNotAllowed)
                         }
@@ -555,6 +908,42 @@ internal class SpotlessProjectServiceTest {
         val status: HttpStatusCode,
         val body: String = "",
     )
+
+    private fun HttpRequestData.bodyText(): String =
+        (body as? OutgoingContent.ByteArrayContent)?.bytes()?.decodeToString()
+            ?: error("Expected a byte-array request body")
+
+    private class TestFormattingPreprocessor(
+        private val isApplicable: (PsiFile) -> Boolean = { true },
+        private val isTriggered: (List<String>) -> Boolean = { true },
+        private val process: suspend (SpotlessFormattingPreprocessRequest) -> SpotlessFormattingPreprocessResult? = {
+            null
+        },
+    ) : SpotlessFormattingPreprocessor {
+        var applicabilityCount = 0
+            private set
+        var triggerCount = 0
+            private set
+        var processCount = 0
+            private set
+
+        override fun isApplicableTo(psiFile: PsiFile): Boolean {
+            applicabilityCount++
+            return isApplicable(psiFile)
+        }
+
+        override fun isTriggeredBy(daemonSteps: List<String>): Boolean {
+            triggerCount++
+            return isTriggered(daemonSteps)
+        }
+
+        override suspend fun preprocess(
+            request: SpotlessFormattingPreprocessRequest,
+        ): SpotlessFormattingPreprocessResult? {
+            processCount++
+            return process(request)
+        }
+    }
 
     private class TestDaemonProvider(
         private val projectPath: Path,

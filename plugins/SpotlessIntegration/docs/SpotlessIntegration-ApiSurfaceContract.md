@@ -2,9 +2,10 @@
 
 ## Scope
 
-This note records the intentionally public API surface after the provider lifecycle refactor.
+This note records the intentionally public API surface after the provider lifecycle and formatting-preprocessor
+refactors.
 
-The plugin keeps a public daemon-provider extension point, but the formatter orchestration,
+The plugin keeps public daemon-provider and formatting-preprocessor extension points, but the formatter orchestration,
 capability cache, daemon registry, and SpotlessDaemon HTTP client are internal implementation
 details. The external SpotlessDaemon HTTP API is owned outside this project and must remain
 unchanged by this plugin.
@@ -52,6 +53,28 @@ The concrete `Localhost` and `Unix` variants are part of that contract and there
 
 It contains the external project path used for daemon ownership and the concrete file path sent to the daemon.
 
+### `dev.ghostflyby.spotless.SpotlessFormattingPreprocessor`
+
+`SpotlessFormattingPreprocessor` is the interface of the public, dynamic
+`dev.ghostflyby.spotless.spotlessFormattingPreprocessor` extension point.
+
+Contract notes:
+
+- `isApplicableTo(psiFile)` runs against the actual formatting target under read access and must be cheap.
+- `isTriggeredBy(daemonSteps)` decides whether the daemon configuration requires the preprocessor.
+- `preprocess(request)` may transform request text and return daemon step names to skip. Returning `null` leaves the
+  request unchanged.
+- The supplied `PsiFile` is invocation-scoped. Implementations must not retain it and must follow IntelliJ PSI and
+  Document threading rules for every access.
+- The core validates returned step names against daemon configuration, de-duplicates them, and preserves daemon step
+  order when sending repeated `skipStep` query parameters.
+
+### `SpotlessFormattingPreprocessRequest` and `SpotlessFormattingPreprocessResult`
+
+These public data types carry the invocation-scoped PSI target, current request text, daemon step list, transformed
+text, and requested skipped step names. They do not expose the daemon host, HTTP client, daemon lifecycle, or formatter
+result.
+
 ## Internal-Only Surface
 
 The following are intentionally internal and are not part of the public ABI:
@@ -67,8 +90,7 @@ The following are intentionally internal and are not part of the public ABI:
 
 This phase intentionally removes the old public `Spotless` formatter service and public `SpotlessFormatResult`.
 
-Only provider APIs remain public. This is a breaking change for consumers that called the old formatter service
-directly,
-or used the temporary daemon-control callback, but it keeps the extension-point use case while allowing lifecycle,
-cache,
-and daemon state to stay internal.
+Only daemon-provider and formatting-preprocessor APIs remain public. This is a breaking change for consumers that called
+the old formatter service directly, or used the temporary daemon-control callback, but it keeps supported
+extension-point
+use cases while allowing lifecycle, cache, daemon state, and formatter orchestration to stay internal.

@@ -11,7 +11,6 @@ import com.intellij.formatting.service.AsyncFormattingRequest
 import com.intellij.formatting.service.FormattingService
 import com.intellij.openapi.components.service
 import com.intellij.openapi.util.NlsSafe
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -19,17 +18,14 @@ import kotlinx.coroutines.Job
 internal open class SpotlessFormatingService : AsyncDocumentFormattingService() {
     override fun createFormattingTask(formattingRequest: AsyncFormattingRequest): FormattingTask? {
         val project = formattingRequest.context.project
-        val virtualFile = formattingRequest.context.virtualFile ?: return null
         return SpotlessFormattingTask(
             service = project.service<SpotlessProjectService>(),
-            virtualFile = virtualFile,
             formattingRequest = formattingRequest,
         )
     }
 
     private class SpotlessFormattingTask(
         private val service: SpotlessProjectService,
-        private val virtualFile: VirtualFile,
         private val formattingRequest: AsyncFormattingRequest,
     ) : FormattingTask {
         private var job: Job? = null
@@ -41,7 +37,7 @@ internal open class SpotlessFormatingService : AsyncDocumentFormattingService() 
 
         override fun run() {
             job = service.formatAsync(
-                virtualFile = virtualFile,
+                psiFile = formattingRequest.context.containingFile,
                 content = formattingRequest.documentText,
                 onResult = { result ->
                     when (result) {
@@ -79,7 +75,6 @@ internal open class SpotlessFormatingService : AsyncDocumentFormattingService() 
     override fun getFeatures(): Set<FormattingService.Feature?> = emptySet()
 
     override fun canFormat(file: PsiFile): Boolean {
-        val virtualFile = file.viewProvider.virtualFile
-        return file.project.service<SpotlessProjectService>().canFormatSync(virtualFile)
+        return file.project.service<SpotlessProjectService>().canFormatSync(file)
     }
 }
