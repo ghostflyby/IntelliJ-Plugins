@@ -18,14 +18,8 @@ dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.gradle")
         bundledPlugin("org.jetbrains.idea.maven")
-        bundledLibrary("kotlinx.serialization.core")
     }
     implementation(project("ModelBuilderService"))
-    implementation(libs.ktor.client.cio) {
-        excludeCoroutines()
-        excludeKotlinStdlib()
-        exclude(group = "org.slf4j", module = "slf4j-api")
-    }
     testImplementation("io.ktor:ktor-client-mock:${libs.versions.ktor.get()}") {
         excludeCoroutines()
         excludeKotlinStdlib()
