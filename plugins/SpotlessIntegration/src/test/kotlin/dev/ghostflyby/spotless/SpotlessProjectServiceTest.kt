@@ -153,7 +153,7 @@ internal class SpotlessProjectServiceTest {
         )
         assertEquals(listOf("ImportSteps.java"), applicableFiles)
         assertEquals(1, preprocessor.processCount)
-        assertEquals(listOf(virtualFile.virtualFile.path), stepPaths)
+        assertEquals(listOf(virtualFile.viewProvider.virtualFile.path), stepPaths)
         assertEquals(listOf("optimized-imports"), formatBodies)
         assertEquals(
             listOf(listOf("expandWildcardImports", "forbidWildcardImports")),

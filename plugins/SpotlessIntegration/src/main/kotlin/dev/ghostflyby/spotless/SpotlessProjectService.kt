@@ -85,10 +85,10 @@ internal class SpotlessProjectService(
         psiFile: PsiFile,
         content: CharSequence,
     ): SpotlessFormatResult {
-        val providerTarget = resolveProviderTarget(psiFile.virtualFile)
+        val providerTarget = resolveProviderTarget(psiFile.viewProvider.virtualFile)
         if (providerTarget == null) {
             capabilityCache.update(
-                psiFile.virtualFile,
+                psiFile.viewProvider.virtualFile,
                 externalProject = null,
                 result = NotCovered,
                 strictProbe = content.isEmpty(),
@@ -105,10 +105,10 @@ internal class SpotlessProjectService(
             client.format(daemon, target.file, request.content, request.skipSteps)
         }
         if (!content.isEmpty() && result is Error) {
-            capabilityCache.invalidate(psiFile.virtualFile)
+            capabilityCache.invalidate(psiFile.viewProvider.virtualFile)
         }
         capabilityCache.update(
-            psiFile.virtualFile,
+            psiFile.viewProvider.virtualFile,
             target.externalProject,
             result,
             strictProbe = content.isEmpty(),
@@ -123,7 +123,7 @@ internal class SpotlessProjectService(
         psiFile: PsiFile,
         timeout: Duration = 500.milliseconds,
     ): Boolean {
-        val cached = capabilityCache.cachedCanFormat(psiFile.virtualFile)
+        val cached = capabilityCache.cachedCanFormat(psiFile.viewProvider.virtualFile)
         if (cached != null) {
             if (cached.shouldRefresh) {
                 scheduleCanFormatRefresh(psiFile, timeout)
@@ -147,7 +147,7 @@ internal class SpotlessProjectService(
         psiFile: PsiFile,
         timeout: Duration,
     ) {
-        if (!capabilityCache.tryStartRefresh(psiFile.virtualFile)) {
+        if (!capabilityCache.tryStartRefresh(psiFile.viewProvider.virtualFile)) {
             return
         }
         scope.launch(Dispatchers.IO) {
@@ -156,7 +156,7 @@ internal class SpotlessProjectService(
                     format(psiFile, "")
                 }
             } finally {
-                capabilityCache.finishRefresh(psiFile.virtualFile)
+                capabilityCache.finishRefresh(psiFile.viewProvider.virtualFile)
             }
         }
     }

@@ -36,7 +36,7 @@ internal class JavaWildcardImportPreprocessor : SpotlessFormattingPreprocessor {
                 return@withContext null
             }
             OptimizeImportsProcessor(project, context.psiFile).run()
-            val document = FileDocumentManager.getInstance().getDocument(context.psiFile.virtualFile)
+            val document = FileDocumentManager.getInstance().getDocument(context.psiFile.viewProvider.virtualFile)
                 ?: return@withContext null
             PsiDocumentManager.getInstance(project).apply {
                 doPostponedOperationsAndUnblockDocument(document)
