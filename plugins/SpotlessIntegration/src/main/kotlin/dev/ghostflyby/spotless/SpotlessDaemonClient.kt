@@ -15,13 +15,16 @@ import io.ktor.http.*
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 
+private val HTTP_GET: HttpMethod = HttpMethod.parse("GET")
+private val HTTP_POST: HttpMethod = HttpMethod.parse("POST")
+
 internal class SpotlessDaemonClient(
     internal var http: HttpClient = HttpClient(CIO),
 ) {
     suspend fun healthCheck(host: SpotlessDaemonHost): Boolean =
         runCatching {
             http.request {
-                method = HttpMethod.Get
+                method = HTTP_GET
                 configureHost(host)
                 url {
                     protocol = URLProtocol.HTTP
@@ -34,7 +37,7 @@ internal class SpotlessDaemonClient(
 
     suspend fun stop(host: SpotlessDaemonHost) {
         http.request {
-            method = HttpMethod.Post
+            method = HTTP_POST
             configureHost(host)
             url {
                 protocol = URLProtocol.HTTP
@@ -48,7 +51,7 @@ internal class SpotlessDaemonClient(
         path: Path,
     ): List<String>? {
         val response = http.request {
-            method = HttpMethod.Get
+            method = HTTP_GET
             configureHost(host)
             url {
                 protocol = URLProtocol.HTTP
@@ -75,7 +78,7 @@ internal class SpotlessDaemonClient(
         skipSteps: List<String> = emptyList(),
     ): SpotlessFormatResult {
         val response = http.request {
-            method = HttpMethod.Post
+            method = HTTP_POST
             configureHost(host)
             url {
                 protocol = URLProtocol.HTTP
