@@ -13,7 +13,7 @@ import com.intellij.execution.process.ProcessListener
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.SystemInfo
+import com.intellij.util.system.OS
 import dev.ghostflyby.spotless.SpotlessDaemonHost
 import org.jetbrains.plugins.gradle.service.GradleInstallationManager
 import org.jetbrains.plugins.gradle.settings.DistributionType
@@ -157,7 +157,7 @@ private fun pathGradleExecutable(): String {
 }
 
 private fun gradleStartScriptName(baseName: String): String {
-    return if (SystemInfo.isWindows) "$baseName.bat" else baseName
+    return if (OS.CURRENT == OS.Windows) "$baseName.bat" else baseName
 }
 
 internal fun cleanupGradleDaemonProcess(process: SpotlessGradleDaemonProcess?) {
