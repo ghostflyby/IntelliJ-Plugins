@@ -9,7 +9,6 @@ package dev.ghostflyby.spotless
 import com.intellij.codeInsight.actions.OptimizeImportsProcessor
 import com.intellij.ide.highlighter.JavaFileType
 import com.intellij.openapi.application.EDT
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.psi.PsiDocumentManager
@@ -47,7 +46,7 @@ internal class JavaWildcardImportPreprocessor : SpotlessFormattingPreprocessor {
                 commitDocument(document)
             }
             SpotlessFormattingPreprocessResult(
-                content = readAction { document.immutableCharSequence.toString() },
+                content = document.immutableCharSequence,
                 skippedSteps = skippedSteps,
             )
         }
