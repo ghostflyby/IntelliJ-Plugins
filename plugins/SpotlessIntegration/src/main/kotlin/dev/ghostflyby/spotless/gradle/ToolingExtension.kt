@@ -151,7 +151,7 @@ internal fun spotlessDaemonInitScript(
                     if (daemonJar) {
                         classpath files(daemonJar)
                     } else {
-                        def resolved = daemonVersion ? daemonVersion : '0.5.4'
+                        def resolved = daemonVersion ? daemonVersion : '0.7.0'
                         classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:$resolved"
                     }
                 }
