@@ -92,7 +92,7 @@ internal class SpotlessDaemonClient(
                 parameter("skipStep", step)
             }
             contentType(ContentType.Text.Plain)
-            setBody(content)
+            setBody(content.toString())
         }
         return when (response.status) {
             HttpStatusCode.OK -> {
