@@ -14,7 +14,7 @@ changelog = "2.5.0"
 intelliJPlatform = "2.17.0"
 kotlin = "2.4.0"
 ksp = "2.3.9"
-kover = "0.9.8"
+kover = "0.9.9"
 
 [libraries]
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
