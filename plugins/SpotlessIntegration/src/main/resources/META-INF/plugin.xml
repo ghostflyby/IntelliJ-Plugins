@@ -12,20 +12,19 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
-        <!--        <fileEncodingProvider implementation="dev.ghostflyby.spotless.SpotlessFileEncodingProvider"/>-->
-        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.spotless.workspace"
-                             instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
-                             key="spotless.configuration.title.workspace"
-                             parentId="build"/>
+        <statusBarWidgetFactory id="dev.ghostflyby.spotless.statusBar"
+                                implementation="dev.ghostflyby.spotless.SpotlessStatusBarWidgetFactory"
+                                order="before ReadOnlyAttribute"/>
+        <postStartupActivity implementation="dev.ghostflyby.spotless.SpotlessStatusBarWidgetActivity"/>
     </extensions>
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
         <spotlessFormattingPreprocessor implementation="dev.ghostflyby.spotless.JavaWildcardImportPreprocessor"/>
     </extensions>
 
     <extensionPoints>
-        <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.SpotlessDaemonProvider"
+        <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.api.SpotlessDaemonProvider"
                         dynamic="true"/>
         <extensionPoint name="spotlessFormattingPreprocessor"
-                        interface="dev.ghostflyby.spotless.SpotlessFormattingPreprocessor" dynamic="true"/>
+                        interface="dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor" dynamic="true"/>
     </extensionPoints>
 </idea-plugin>

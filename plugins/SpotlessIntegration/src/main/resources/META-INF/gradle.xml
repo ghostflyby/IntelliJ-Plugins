@@ -8,6 +8,10 @@
     </extensions>
     <extensions defaultExtensionNs="com.intellij">
         <externalProjectDataService implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleStateDataService"/>
+        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.spotless.workspace"
+                             instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
+                             key="spotless.configuration.title.workspace"
+                             parentId="build"/>
     </extensions>
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
         <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>

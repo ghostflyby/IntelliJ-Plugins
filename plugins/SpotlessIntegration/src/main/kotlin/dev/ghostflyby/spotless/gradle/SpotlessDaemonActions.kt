@@ -23,8 +23,9 @@ internal class StopSpotlessDaemonsAction : DumbAwareAction() {
 
     override fun update(event: AnActionEvent) {
         val project = event.project
-        event.presentation.isEnabledAndVisible =
-            project != null && project.service<SpotlessProjectService>().hasRunningDaemons()
+        event.presentation.isVisible = project != null
+        event.presentation.isEnabled =
+            project?.service<SpotlessProjectService>()?.hasRunningDaemons() == true
     }
 
     override fun actionPerformed(event: AnActionEvent) {

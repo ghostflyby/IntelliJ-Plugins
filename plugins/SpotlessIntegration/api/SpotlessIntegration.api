@@ -1,50 +1,61 @@
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonEndpoint {
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint {
 }
 
-public final class dev/ghostflyby/spotless/SpotlessDaemonEndpoint$Localhost : dev/ghostflyby/spotless/SpotlessDaemonEndpoint {
+public final class dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$Localhost : dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint {
 	public fun <init> (I)V
 	public final fun component1 ()I
-	public final fun copy (I)Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$Localhost;
-	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$Localhost;IILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$Localhost;
+	public final fun copy (I)Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$Localhost;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$Localhost;IILjava/lang/Object;)Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$Localhost;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPort ()I
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class dev/ghostflyby/spotless/SpotlessDaemonEndpoint$UnixSocket : dev/ghostflyby/spotless/SpotlessDaemonEndpoint {
+public final class dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$UnixSocket : dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint {
 	public fun <init> (Ljava/nio/file/Path;)V
 	public final fun component1 ()Ljava/nio/file/Path;
-	public final fun copy (Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$UnixSocket;
-	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$UnixSocket;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonEndpoint$UnixSocket;
+	public final fun copy (Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$UnixSocket;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$UnixSocket;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$UnixSocket;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getPath ()Ljava/nio/file/Path;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonLifecycle {
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonLifecycle {
 	public abstract fun registerCleanup (Lkotlin/jvm/functions/Function0;)V
 	public abstract fun requestClose (Ljava/lang/String;)V
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonProvider {
-	public abstract fun resolveTarget (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ldev/ghostflyby/spotless/SpotlessDaemonTarget;
-	public abstract fun startDaemon (Ldev/ghostflyby/spotless/SpotlessDaemonStartContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonProvider {
+	public static final field Companion Ldev/ghostflyby/spotless/api/SpotlessDaemonProvider$Companion;
+	public static final field EP_NAME Lcom/intellij/openapi/extensions/ExtensionPointName;
+	public abstract fun getPresentableName ()Ljava/lang/String;
+	public abstract fun resolveTarget (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ldev/ghostflyby/spotless/api/SpotlessDaemonTarget;
+	public abstract fun startDaemon (Ldev/ghostflyby/spotless/api/SpotlessDaemonStartContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun state (Lcom/intellij/openapi/project/Project;)Lkotlinx/coroutines/flow/StateFlow;
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessDaemonStartContext {
+public final class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$Companion {
+}
+
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonProviderState {
+	public abstract fun getExternalProjects ()Ljava/util/List;
+}
+
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonStartContext {
 	public abstract fun getExternalProjectRoot ()Ljava/nio/file/Path;
-	public abstract fun getLifecycle ()Ldev/ghostflyby/spotless/SpotlessDaemonLifecycle;
+	public abstract fun getLifecycle ()Ldev/ghostflyby/spotless/api/SpotlessDaemonLifecycle;
 	public abstract fun getProject ()Lcom/intellij/openapi/project/Project;
 }
 
-public final class dev/ghostflyby/spotless/SpotlessDaemonTarget {
+public final class dev/ghostflyby/spotless/api/SpotlessDaemonTarget {
 	public fun <init> (Ljava/nio/file/Path;Ljava/nio/file/Path;)V
 	public final fun component1 ()Ljava/nio/file/Path;
 	public final fun component2 ()Ljava/nio/file/Path;
-	public final fun copy (Ljava/nio/file/Path;Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/SpotlessDaemonTarget;
-	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/SpotlessDaemonTarget;Ljava/nio/file/Path;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/SpotlessDaemonTarget;
+	public final fun copy (Ljava/nio/file/Path;Ljava/nio/file/Path;)Ldev/ghostflyby/spotless/api/SpotlessDaemonTarget;
+	public static synthetic fun copy$default (Ldev/ghostflyby/spotless/api/SpotlessDaemonTarget;Ljava/nio/file/Path;Ljava/nio/file/Path;ILjava/lang/Object;)Ldev/ghostflyby/spotless/api/SpotlessDaemonTarget;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getExternalProject ()Ljava/nio/file/Path;
 	public final fun getFile ()Ljava/nio/file/Path;
@@ -52,21 +63,26 @@ public final class dev/ghostflyby/spotless/SpotlessDaemonTarget {
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract interface class dev/ghostflyby/spotless/SpotlessFormattingPreprocessContext {
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor {
+	public static final field Companion Ldev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor$Companion;
+	public static final field EP_NAME Lcom/intellij/openapi/extensions/ExtensionPointName;
+	public abstract fun isApplicableTo (Lcom/intellij/psi/PsiFile;)Z
+	public abstract fun preprocess (Ldev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor$Context;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class dev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor$Companion {
+}
+
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor$Context {
 	public abstract fun getContent ()Ljava/lang/CharSequence;
 	public abstract fun getDaemonSteps ()Ljava/util/List;
 	public abstract fun getPsiFile ()Lcom/intellij/psi/PsiFile;
 }
 
-public final class dev/ghostflyby/spotless/SpotlessFormattingPreprocessResult {
+public final class dev/ghostflyby/spotless/api/SpotlessFormattingPreprocessor$Result {
 	public fun <init> (Ljava/lang/CharSequence;Ljava/util/Set;)V
 	public synthetic fun <init> (Ljava/lang/CharSequence;Ljava/util/Set;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getContent ()Ljava/lang/CharSequence;
 	public final fun getSkippedSteps ()Ljava/util/Set;
-}
-
-public abstract interface class dev/ghostflyby/spotless/SpotlessFormattingPreprocessor {
-	public abstract fun isApplicableTo (Lcom/intellij/psi/PsiFile;)Z
-	public abstract fun preprocess (Ldev/ghostflyby/spotless/SpotlessFormattingPreprocessContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

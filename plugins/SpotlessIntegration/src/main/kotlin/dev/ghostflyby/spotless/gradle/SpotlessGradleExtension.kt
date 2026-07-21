@@ -11,21 +11,26 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.SpotlessDaemonProvider
-import dev.ghostflyby.spotless.SpotlessDaemonStartContext
-import dev.ghostflyby.spotless.SpotlessDaemonTarget
+import dev.ghostflyby.spotless.Bundle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
 import kotlinx.coroutines.*
-import org.jetbrains.plugins.gradle.settings.GradleSettings
+import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.Path
 import kotlin.io.path.div
 
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private val logger = logger<SpotlessGradleExtension>()
 
-    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonEndpoint {
+    override val presentableName: String
+        get() = Bundle.message("spotless.provider.gradle.presentable.name")
+
+    override fun state(project: Project): StateFlow<SpotlessDaemonProvider.State> =
+        project.service<SpotlessGradleSettings>().providerState
+
+    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
         val project = context.project
         val lifecycle = context.lifecycle
         val workingDirectory: Path = withContext(Dispatchers.IO + NonCancellable) {
@@ -36,7 +41,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
             }
         }
         val unixSocketPath = workingDirectory / "spotless-daemon.sock"
-        val endpoint = SpotlessDaemonEndpoint.UnixSocket(unixSocketPath)
+        val endpoint = SpotlessDaemonProvider.Endpoint.UnixSocket(unixSocketPath)
         try {
             val process = withContext(Dispatchers.IO + NonCancellable) {
                 startGradleSpotlessDaemon(
@@ -67,14 +72,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     ): SpotlessDaemonTarget? {
         val ioPath = file.toNioPathOrNull() ?: return null
         val abs = ioPath.toAbsolutePath().normalize()
-        val settings = project.service<SpotlessGradleSettings>()
-
-        val rootDirs = GradleSettings.getInstance(project).linkedProjectsSettings
-            .mapNotNull { it.externalProjectPath }
-            .map { Path(it).toAbsolutePath().normalize() }
-            .filter(settings::isSpotlessEnabledForProjectDir)
-
-        val externalProject = rootDirs
+        val externalProject = state(project).value.externalProjects
             .filter { abs.startsWith(it) }
             .maxByOrNull { it.nameCount }
             ?: return null

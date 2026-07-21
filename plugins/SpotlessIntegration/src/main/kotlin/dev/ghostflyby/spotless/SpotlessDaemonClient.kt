@@ -7,6 +7,7 @@
 package dev.ghostflyby.spotless
 
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
@@ -21,7 +22,7 @@ private val HTTP_POST: HttpMethod = HttpMethod.parse("POST")
 internal class SpotlessDaemonClient(
     internal var http: HttpClient = HttpClient(CIO),
 ) {
-    suspend fun healthCheck(endpoint: SpotlessDaemonEndpoint): Boolean =
+    suspend fun healthCheck(endpoint: SpotlessDaemonProvider.Endpoint): Boolean =
         runCatching {
             http.request {
                 method = HTTP_GET
@@ -35,7 +36,7 @@ internal class SpotlessDaemonClient(
             response.status == HttpStatusCode.OK
         }.getOrElse { false }
 
-    suspend fun stop(endpoint: SpotlessDaemonEndpoint) {
+    suspend fun stop(endpoint: SpotlessDaemonProvider.Endpoint) {
         http.request {
             method = HTTP_POST
             configureEndpoint(endpoint)
@@ -47,7 +48,7 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun steps(
-        endpoint: SpotlessDaemonEndpoint,
+        endpoint: SpotlessDaemonProvider.Endpoint,
         path: Path,
     ): List<String>? {
         val response = http.request {
@@ -72,7 +73,7 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun format(
-        endpoint: SpotlessDaemonEndpoint,
+        endpoint: SpotlessDaemonProvider.Endpoint,
         path: Path,
         content: CharSequence,
         skipSteps: List<String> = emptyList(),
@@ -114,14 +115,14 @@ internal class SpotlessDaemonClient(
         http.close()
     }
 
-    private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonEndpoint) {
+    private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonProvider.Endpoint) {
         when (endpoint) {
-            is SpotlessDaemonEndpoint.Localhost -> {
+            is SpotlessDaemonProvider.Endpoint.Localhost -> {
                 url.host = "localhost"
-                url.port = endpoint.port
+                url.port = endpoint.port.toInt()
             }
 
-            is SpotlessDaemonEndpoint.UnixSocket -> unixSocket(endpoint.path.toString())
+            is SpotlessDaemonProvider.Endpoint.UnixSocket -> unixSocket(endpoint.path.toString())
         }
     }
 }

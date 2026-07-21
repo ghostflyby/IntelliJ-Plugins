@@ -13,6 +13,7 @@ import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFile
+import dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,8 +22,8 @@ internal class JavaWildcardImportPreprocessor : SpotlessFormattingPreprocessor {
         psiFile.fileType == JavaFileType.INSTANCE
 
     override suspend fun preprocess(
-        context: SpotlessFormattingPreprocessContext,
-    ): SpotlessFormattingPreprocessResult? {
+        context: SpotlessFormattingPreprocessor.Context,
+    ): SpotlessFormattingPreprocessor.Result? {
         val skippedSteps = context.daemonSteps.filterTo(linkedSetOf()) { step -> step in wildcardImportSteps }
         if (skippedSteps.isEmpty()) {
             return null
@@ -42,7 +43,7 @@ internal class JavaWildcardImportPreprocessor : SpotlessFormattingPreprocessor {
                 doPostponedOperationsAndUnblockDocument(document)
                 commitDocument(document)
             }
-            SpotlessFormattingPreprocessResult(
+            SpotlessFormattingPreprocessor.Result(
                 content = document.immutableCharSequence,
                 skippedSteps = skippedSteps,
             )

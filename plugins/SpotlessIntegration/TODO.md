@@ -1,24 +1,19 @@
 # SpotlessIntegration TODO
 
-Status: In Progress
-Last Updated: 2026-03-18
+Status: Ready Last Updated: 2026-07-20
 
-## Refactor Plan
+## Next Steps
 
-1. ✅ Remove production `runBlocking` usage and migrate to coroutine-native async flows.
-2. ✅ Replace unfinished `TODO()` production stubs with implemented behavior or remove dead extension wiring.
-3. ✅ Reworked daemon lifecycle shutdown to avoid blocking dispose paths.
-4. ✅ Revisit API surface visibility (`public` vs `internal`) and keep ABI updates explicit.
-5. ✅ Add integration tests for format/canFormat behavior, daemon startup health checks, and failure handling.
+1. Add UI-enabled integration coverage for status-bar availability changes and popup inline actions.
+2. Add a second provider fixture to exercise the public daemon-provider EP independently of Gradle.
+3. Re-check the isolated `StatusBarWidgetsManager` dependency when updating the IntelliJ Platform baseline.
 
 ## Done Criteria
 
-1. ✅ No blocking coroutine bridges in production formatting path.
-2. ✅ No unresolved `TODO()` in active production code.
-3. Daemon lifecycle is unload-safe and non-blocking.
-4. ✅ ABI and visibility changes are intentional and documented.
+1. Status widget creation, removal, and root action rendering are covered in a real IDE-frame test.
+2. Provider-neutral behavior is validated with two independent provider implementations.
+3. The status-bar availability adapter remains the only dependency on the platform implementation package.
 
-## Post-Implementation Archive
+## Completed Work
 
-Move this file content into:
-`plugins/SpotlessIntegration/docs/SpotlessIntegration-AsyncLifecycleRefactor.md`
+See `docs/SpotlessIntegration-AsyncLifecycleRefactor.md`.

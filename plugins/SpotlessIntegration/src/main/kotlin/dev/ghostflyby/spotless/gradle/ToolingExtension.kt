@@ -16,13 +16,16 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.util.NlsSafe
-import dev.ghostflyby.spotless.SpotlessProjectService
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
+import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Path
 import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
@@ -83,9 +86,15 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     ) {
         val settings = project.service<SpotlessGradleSettings>()
         settings.updateFrom(toImport)
-        project.service<SpotlessProjectService>().releaseAllDaemonsAsync()
     }
 }
+
+private data class SpotlessGradleProviderState(
+    override val externalProjects: List<Path>,
+    val gradleDaemonVersion: String,
+    val gradleDaemonJar: String,
+    val syncGeneration: Long,
+) : SpotlessDaemonProvider.State
 
 @Service(Service.Level.PROJECT)
 @State(
@@ -93,13 +102,19 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)],
 )
 internal class SpotlessGradleSettings
-    : SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
-    fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
-        return state.paths.contains(path.absolutePathString())
+    (private val project: com.intellij.openapi.project.Project) :
+    SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
+    private val providerStateLock = Any()
+    private var syncGeneration = 0L
+    private val mutableProviderState: MutableStateFlow<SpotlessGradleProviderState> by lazy {
+        MutableStateFlow(createProviderState())
     }
 
+    val providerState: StateFlow<SpotlessDaemonProvider.State>
+        get() = mutableProviderState
+
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
-        updateState { state ->
+        updateStateAndPublish(force = true) { state ->
             state.copy(
                 paths = nodes.asSequence()
                     .filter { it.data.spotless }
@@ -113,7 +128,7 @@ internal class SpotlessGradleSettings
     var gradleDaemonVersion: @NlsSafe String
         get() = state.gradleDaemonVersion
         set(value) {
-            updateState {
+            updateStateAndPublish {
                 it.copy(gradleDaemonVersion = value)
             }
         }
@@ -121,10 +136,44 @@ internal class SpotlessGradleSettings
     var gradleDaemonJar: @NlsSafe String
         get() = state.gradleDaemonJar
         set(value) {
-            updateState {
+            updateStateAndPublish {
                 it.copy(gradleDaemonJar = value)
             }
         }
+
+    private fun updateStateAndPublish(
+        force: Boolean = false,
+        transform: (State) -> State,
+    ) {
+        synchronized(providerStateLock) {
+            val previous = state
+            updateState(transform)
+            if (force || state != previous) {
+                if (force) {
+                    syncGeneration++
+                }
+                mutableProviderState.value = createProviderState()
+            }
+        }
+    }
+
+    private fun createProviderState(): SpotlessGradleProviderState {
+        val current = state
+        val externalProjects = GradleSettings.getInstance(project).linkedProjectsSettings
+            .asSequence()
+            .mapNotNull { it.externalProjectPath }
+            .map { Path.of(it).toAbsolutePath().normalize() }
+            .filter { it.absolutePathString() in current.paths }
+            .distinct()
+            .sortedBy(Path::toString)
+            .toList()
+        return SpotlessGradleProviderState(
+            externalProjects = externalProjects,
+            gradleDaemonVersion = current.gradleDaemonVersion,
+            gradleDaemonJar = current.gradleDaemonJar,
+            syncGeneration = syncGeneration,
+        )
+    }
 
     @Serializable
     internal data class State(
@@ -139,7 +188,7 @@ internal fun spotlessDaemonInitScript(
     daemonJar: String,
 ): String {
     val script =
-    $$"""
+        $$"""
         gradle.allprojects { proj ->
             proj.buildscript {
                 repositories {

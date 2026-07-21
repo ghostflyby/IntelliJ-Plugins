@@ -1,0 +1,294 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
+package dev.ghostflyby.spotless
+
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.actionSystem.ex.ActionUtil
+import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.testFramework.ExtensionTestUtil
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.disposableFixture
+import com.intellij.testFramework.junit5.fixture.projectFixture
+import com.intellij.testFramework.junit5.fixture.tempPathFixture
+import dev.ghostflyby.spotless.api.SpotlessDaemonLifecycle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeout
+import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+
+@Suppress("OverrideOnly")
+@TestApplication
+internal class SpotlessStatusBarWidgetTest {
+    private val projectPathFixture = tempPathFixture()
+    private val projectFixture = projectFixture(
+        pathFixture = projectPathFixture,
+        openAfterCreation = true,
+    )
+    private val providerDisposableFixture = disposableFixture()
+    private val providerDisposable by providerDisposableFixture
+
+    @Test
+    fun `widget is unavailable when providers have not detected Spotless`() {
+        maskProviders(TestStatusProvider(emptyList()))
+
+        assertFalse(SpotlessStatusBarWidgetFactory().isAvailable(projectFixture.get()))
+    }
+
+    @Test
+    fun `widget is available from a non Gradle provider`() {
+        val root = projectPathFixture.get().resolve("external-project")
+        maskProviders(TestStatusProvider(listOf(root), "Test Build Spotless"))
+
+        val project = projectFixture.get()
+        val snapshot = project.service<SpotlessProjectService>().daemonStatus.value
+
+        assertTrue(SpotlessStatusBarWidgetFactory().isAvailable(project))
+        assertEquals("Test Build Spotless", snapshot.providers.single().presentableName)
+        assertEquals(listOf(root.toAbsolutePath().normalize()), snapshot.providers.single().externalProjects)
+    }
+
+    @Test
+    suspend fun `provider state refreshes widget availability`() {
+        val provider = TestStatusProvider(emptyList())
+        maskProviders(provider)
+        val project = projectFixture.get()
+        val service = project.service<SpotlessProjectService>()
+        assertTrue(service.daemonStatus.value.providers.isEmpty())
+
+        provider.updateProjects(listOf(projectPathFixture.get().resolve("detected")))
+
+        withTimeout(5.seconds) {
+            while (service.daemonStatus.value.providers.size != 1) {
+                delay(10.milliseconds)
+            }
+        }
+    }
+
+    @Test
+    suspend fun `provider extension removal cancels its state collector`() {
+        val project = projectFixture.get()
+        val service = project.service<SpotlessProjectService>()
+        val provider = TestStatusProvider(listOf(projectPathFixture.get().resolve("detected")))
+        val providerDisposable = registerProvider(provider)
+
+        withTimeout(5.seconds) {
+            while (!provider.hasSubscriber()) {
+                delay(10.milliseconds)
+            }
+        }
+        assertTrue(service.daemonStatus.value.providers.any { it.provider === provider })
+
+        Disposer.dispose(providerDisposable)
+
+        withTimeout(5.seconds) {
+            while (provider.hasSubscriber()) {
+                delay(10.milliseconds)
+            }
+        }
+        assertFalse(service.daemonStatus.value.providers.any { it.provider === provider })
+    }
+
+    @Test
+    suspend fun `runtime states are grouped by provider identity`() {
+        val firstRoot = projectPathFixture.get().resolve("first")
+        val secondRoot = projectPathFixture.get().resolve("second")
+        val firstProvider = TestStatusProvider(
+            listOf(firstRoot),
+            presentableName = "First Spotless",
+            equalToOtherTestProviders = true,
+        )
+        val secondProvider = TestStatusProvider(
+            listOf(secondRoot),
+            presentableName = "Second Spotless",
+            equalToOtherTestProviders = true,
+        )
+        maskProviders(firstProvider, secondProvider)
+        val project = projectFixture.get()
+        val service = project.service<SpotlessProjectService>()
+
+        service.daemonManager.getDaemon(firstProvider, firstRoot)
+
+        withTimeout(5.seconds) {
+            while (service.daemonStatus.value.providers
+                    .single { it.provider === firstProvider }
+                    .runtimeStates
+                    .isEmpty()
+            ) {
+                delay(10.milliseconds)
+            }
+        }
+
+        val firstStatus = service.daemonStatus.value.providers.single { it.provider === firstProvider }
+        val secondStatus = service.daemonStatus.value.providers.single { it.provider === secondProvider }
+        assertEquals(
+            mapOf(firstRoot.toAbsolutePath().normalize() to SpotlessDaemonRuntimeState.Running),
+            firstStatus.runtimeStates,
+        )
+        assertTrue(secondStatus.runtimeStates.isEmpty())
+
+        firstProvider.requestClose()
+        withTimeout(5.seconds) {
+            while (service.daemonStatus.value.providers.any { it.runtimeStates.isNotEmpty() }) {
+                delay(10.milliseconds)
+            }
+        }
+    }
+
+    @Test
+    fun `external project paths omit their common parent`() {
+        val root = projectPathFixture.get().toAbsolutePath().normalize()
+        val paths = listOf(root.resolve("application"), root.resolve("included/library"))
+
+        assertEquals(
+            listOf("application", "included/library"),
+            abbreviatedExternalProjectPaths(paths).map(Pair<Path, String>::second),
+        )
+    }
+
+    @Test
+    fun `popup uses provider separators and root inline actions`() {
+        val root = projectPathFixture.get().toAbsolutePath().normalize()
+        val first = root.resolve("application")
+        val second = root.resolve("included/library")
+        val provider = TestStatusProvider(listOf(first, second), "Test Build Spotless")
+        maskProviders(provider)
+        val service = projectFixture.get().service<SpotlessProjectService>()
+
+        val actions = createSpotlessDaemonPopupActionGroup(
+            spotlessService = service,
+            snapshot = service.daemonStatus.value,
+        ).getChildren(null).toList()
+
+        assertEquals("Test Build Spotless", (actions[0] as Separator).text)
+        assertEquals(
+            listOf("application", "included/library"),
+            actions.subList(1, 3).map { it.templatePresentation.text },
+        )
+        actions.subList(1, 3).forEach { action ->
+            assertEquals(2, action.templatePresentation.getClientProperty(ActionUtil.INLINE_ACTIONS)?.size)
+        }
+        assertTrue(actions[3] is Separator)
+        assertEquals(Bundle.message("status.bar.widget.action.refresh"), actions[4].templatePresentation.text)
+    }
+
+    @Test
+    suspend fun `stop inline action follows root runtime state`() {
+        val root = projectPathFixture.get().resolve("external-project")
+        val provider = TestStatusProvider(listOf(root))
+        maskProviders(provider)
+        val service = projectFixture.get().service<SpotlessProjectService>()
+        val rootAction = createSpotlessDaemonPopupActionGroup(
+            spotlessService = service,
+            snapshot = service.daemonStatus.value,
+        ).getChildren(null).first { action ->
+            action !is Separator && action.templatePresentation.getClientProperty(ActionUtil.INLINE_ACTIONS) != null
+        }
+        val stopAction = requireNotNull(rootAction.templatePresentation.getClientProperty(ActionUtil.INLINE_ACTIONS))
+            .single { it.templatePresentation.text == Bundle.message("status.bar.widget.action.stop.daemon") }
+
+        assertFalse(stopAction.updatedPresentation().isVisible)
+
+        service.daemonManager.getDaemon(provider, root)
+        withTimeout(5.seconds) {
+            while (!stopAction.updatedPresentation().isEnabledAndVisible) {
+                delay(10.milliseconds)
+            }
+        }
+
+        service.releaseDaemon(provider, root).join()
+        withTimeout(5.seconds) {
+            while (stopAction.updatedPresentation().isVisible) {
+                delay(10.milliseconds)
+            }
+        }
+    }
+
+    private fun maskProviders(vararg providers: SpotlessDaemonProvider) {
+        ExtensionTestUtil.maskExtensions(
+            SpotlessDaemonProvider.EP_NAME,
+            providers.toList(),
+            providerDisposable,
+        )
+    }
+
+    private fun registerProvider(provider: SpotlessDaemonProvider): Disposable =
+        Disposer.newDisposable("SpotlessStatusBarWidgetTest.provider").also { disposable ->
+            Disposer.register(providerDisposable, disposable)
+            SpotlessDaemonProvider.EP_NAME.point.registerExtension(provider, disposable)
+        }
+
+    private fun AnAction.updatedPresentation() = AnActionEvent.createEvent(
+        this,
+        DataContext.EMPTY_CONTEXT,
+        null,
+        ActionPlaces.POPUP,
+        ActionUiKind.POPUP,
+        null,
+    ).also(::update).presentation
+
+    private data class TestProviderState(
+        override val externalProjects: List<Path>,
+        val revision: Long = 0,
+    ) : SpotlessDaemonProvider.State
+
+    private class TestStatusProvider(
+        projects: List<Path>,
+        override val presentableName: String = "Test Spotless",
+        private val equalToOtherTestProviders: Boolean = false,
+    ) : SpotlessDaemonProvider {
+        private val mutableState = MutableStateFlow(
+            TestProviderState(projects),
+        )
+        private var lifecycle: SpotlessDaemonLifecycle? = null
+
+        override fun state(project: Project): StateFlow<SpotlessDaemonProvider.State> = mutableState
+
+        override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget? = null
+
+        override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
+            lifecycle = context.lifecycle
+            return SpotlessDaemonProvider.Endpoint.Localhost(25252U)
+        }
+
+        fun updateProjects(projects: List<Path>) {
+            mutableState.update { state ->
+                state.copy(
+                    externalProjects = projects,
+                    revision = state.revision + 1,
+                )
+            }
+        }
+
+        fun hasSubscriber(): Boolean = mutableState.subscriptionCount.value > 0
+
+        fun requestClose() {
+            lifecycle?.requestClose("test daemon terminated")
+        }
+
+        override fun equals(other: Any?): Boolean =
+            this === other ||
+                    equalToOtherTestProviders &&
+                    other is TestStatusProvider &&
+                    other.equalToOtherTestProviders
+
+        override fun hashCode(): Int =
+            if (equalToOtherTestProviders) 0 else System.identityHashCode(this)
+    }
+}

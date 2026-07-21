@@ -19,9 +19,26 @@ unchanged by this plugin.
 
 Contract notes:
 
+- `EP_NAME` is the public, JVM-static extension-point handle for discovery and dynamic registration.
+- `presentableName` identifies the provider source in project-level UI. It should describe the integration, not a daemon
+  process version.
+- `state(project)` returns the stable, project-owned `StateFlow` that is the provider's single source of truth. Every
+  value must be immutable and structurally comparable.
+- `SpotlessDaemonProviderState.externalProjects` contains the external-project roots where the provider has positively
+  detected Spotless. The core copies and normalizes these paths and uses an empty result to hide provider UI.
+- Provider state equality must cover `externalProjects` and every provider-specific input that can affect target
+  resolution or daemon startup. `StateFlow` suppresses equal values; the initial value initializes core state without
+  restarting anything, while each subsequent distinct emission restarts currently active daemons whose roots remain
+  valid and stops daemons for removed roots.
+- Providers may include a private revision or event counter in their state implementation when an external event must
+  invalidate active daemons even though the derived roots and configuration are unchanged. Such markers are provider
+  implementation details and are not part of the public state interface.
+- The flow producer must be owned by a project-level service. The core collects it in a provider-specific child scope,
+  which is cancelled before a dynamically removed provider extension is released.
 - `resolveTarget(project, file)` performs cheap, file-specific resolution. Returning `null` lets the core try the next
-  provider instead of claiming the whole project.
-- `startDaemon(context)` receives a core-owned `SpotlessDaemonStartContext` and returns a `SpotlessDaemonEndpoint`.
+  provider instead of claiming the whole project. The target's external-project root must be present in the current
+  provider state; the core rejects mismatched targets.
+- `startDaemon(context)` receives a core-owned `SpotlessDaemonStartContext` and returns a `Endpoint`.
 - The start context exposes the IntelliJ project, external project root, and daemon lifecycle without exposing mutable
   core state. Providers consume the context but do not construct or retain it after startup.
 - Provider-owned runtime resources must be registered through `lifecycle.registerCleanup`. Provider-owned asynchronous
@@ -32,6 +49,21 @@ Contract notes:
   registry removes the daemon entry without using a public project-service callback.
 - Providers start the process and return its address; daemon HTTP readiness checks and the external HTTP protocol remain
   core responsibilities.
+
+### `dev.ghostflyby.spotless.SpotlessDaemonProviderState`
+
+`State` is public because it is the value contract transported by the public provider state flow. It is an interface so
+providers can keep configuration and invalidation details private.
+
+Contract notes:
+
+- `externalProjects` is the complete current set of positively detected external-project roots.
+- Implementations must be immutable and implement structural `equals`/`hashCode` semantics covering all state that can
+  affect `resolveTarget(...)` or `startDaemon(...)`.
+- The core intentionally reads only `externalProjects`; provider-specific fields exist solely to make state equality
+  reflect configuration or invalidation changes.
+- The Gradle provider keeps a private synchronization generation in its implementation so every completed project
+  synchronization emits a distinct state without exposing that mechanism as public API.
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonLifecycle`
 
@@ -52,7 +84,7 @@ Contract notes:
 
 ### `dev.ghostflyby.spotless.SpotlessDaemonEndpoint`
 
-`SpotlessDaemonEndpoint` remains public because it crosses the provider/core boundary.
+`Endpoint` remains public because it crosses the provider/core boundary.
 
 The concrete `Localhost` and `UnixSocket` variants are part of that contract and therefore stay public. Endpoint values
 contain only connection information; provider-private temp directories and process resources must stay in registered
@@ -62,7 +94,8 @@ cleanup closures.
 
 `SpotlessDaemonTarget` is public because providers return it from `resolveTarget(...)`.
 
-It contains the external project path used for daemon ownership and the concrete file path sent to the daemon.
+It contains the external project path used for daemon ownership and the concrete file path sent to the daemon. The
+external project must be one currently reported by the same provider through its current state.
 
 ### `dev.ghostflyby.spotless.SpotlessFormattingPreprocessor`
 
@@ -71,6 +104,7 @@ It contains the external project path used for daemon ownership and the concrete
 
 Contract notes:
 
+- `EP_NAME` is the public, JVM-static extension-point handle for discovery and dynamic registration.
 - `isApplicableTo(psiFile)` runs against the actual formatting target under read access and must be cheap.
 - `preprocess(context)` receives the current content and daemon steps, decides whether work is needed, and may return
   transformed text plus daemon step names to skip. Returning `null` leaves the
@@ -82,7 +116,7 @@ Contract notes:
 - The core validates returned step names against daemon configuration, de-duplicates them, and preserves daemon step
   order when sending repeated `skipStep` query parameters.
 
-### `SpotlessFormattingPreprocessContext` and `SpotlessFormattingPreprocessResult`
+### `Context` and `Result`
 
 The core-owned context interface carries the invocation-scoped PSI target, current request text, and daemon step list.
 The result carries transformed text and requested skipped step names. Neither type exposes the
@@ -96,6 +130,7 @@ The following are intentionally internal and are not part of the public ABI:
 - `SpotlessFormatResult`;
 - `SpotlessDaemonClient`;
 - `SpotlessDaemonRegistry`;
+- `SpotlessProviderCatalog` and `SpotlessDaemonManager`;
 - `SpotlessCapabilityCache`;
 - Gradle settings/runtime implementation details.
 

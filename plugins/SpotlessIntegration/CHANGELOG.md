@@ -7,11 +7,14 @@
 ### Added
 
 - optimize Java imports before formatting when the Spotless configuration expands or forbids wildcard imports.
+- show a provider-neutral Spotless status bar widget with per-external-project daemon status, restart, and stop
+  controls.
 
 ### Changed
 
 - redesigned the public daemon-provider and formatting-preprocessor extension contracts around file-specific target
-  resolution, core-owned invocation contexts, and connection-only daemon endpoints.
+  resolution, project-scoped state flows, core-owned invocation contexts, and connection-only daemon endpoints.
+- restart active Gradle Spotless daemons after every Gradle project synchronization or daemon configuration change.
 
 ### Deprecated
 

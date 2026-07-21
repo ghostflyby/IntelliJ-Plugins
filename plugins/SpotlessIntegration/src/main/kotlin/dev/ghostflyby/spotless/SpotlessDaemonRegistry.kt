@@ -6,11 +6,16 @@
 
 package dev.ghostflyby.spotless
 
-import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.spotless.api.SpotlessDaemonLifecycle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.nio.file.Path
@@ -20,13 +25,26 @@ import kotlin.io.path.absolutePathString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-@Service(Service.Level.PROJECT)
+internal enum class SpotlessDaemonRuntimeState {
+    Starting,
+    Running,
+}
+
+internal data class SpotlessDaemonRuntimeEntry(
+    val provider: SpotlessProviderHandle,
+    val externalProject: Path,
+    val state: SpotlessDaemonRuntimeState,
+)
+
+internal data class SpotlessDaemonRuntimeSnapshot(
+    val entries: List<SpotlessDaemonRuntimeEntry> = emptyList(),
+)
+
 internal class SpotlessDaemonRegistry(
     private val project: Project,
     private val scope: CoroutineScope,
+    private val clientProvider: () -> SpotlessDaemonClient,
 ) {
-    internal var clientProvider: () -> SpotlessDaemonClient = { SpotlessDaemonClient() }
-
     private val capabilityCache = project.service<SpotlessCapabilityCache>()
     private val logger = logger<SpotlessDaemonRegistry>()
 
@@ -35,21 +53,21 @@ internal class SpotlessDaemonRegistry(
     )
 
     private sealed interface DaemonEntry {
-        val provider: SpotlessDaemonProvider
+        val provider: SpotlessProviderHandle
         val attachment: SpotlessDaemonAttachment
     }
 
     private data class StartingDaemonEntry(
-        override val provider: SpotlessDaemonProvider,
+        override val provider: SpotlessProviderHandle,
         override val attachment: SpotlessDaemonAttachment,
-        val result: CompletableDeferred<SpotlessDaemonEndpoint>,
+        val result: CompletableDeferred<SpotlessDaemonProvider.Endpoint>,
         val startupJob: Job,
     ) : DaemonEntry
 
     private data class RunningDaemonEntry(
-        override val provider: SpotlessDaemonProvider,
+        override val provider: SpotlessProviderHandle,
         override val attachment: SpotlessDaemonAttachment,
-        val endpoint: SpotlessDaemonEndpoint,
+        val endpoint: SpotlessDaemonProvider.Endpoint,
     ) : DaemonEntry
 
     private data class DetachedDaemonEntry(
@@ -60,23 +78,30 @@ internal class SpotlessDaemonRegistry(
 
     private sealed interface DaemonResolution {
         data class Start(val entry: StartingDaemonEntry) : DaemonResolution
-        data class Await(val result: Deferred<SpotlessDaemonEndpoint>) : DaemonResolution
-        data class Return(val endpoint: SpotlessDaemonEndpoint) : DaemonResolution
+        data class Await(val result: Deferred<SpotlessDaemonProvider.Endpoint>) : DaemonResolution
+        data class Return(val endpoint: SpotlessDaemonProvider.Endpoint) : DaemonResolution
         data class Replace(val detached: DetachedDaemonEntry) : DaemonResolution
     }
 
     /* The concurrent map makes cheap visibility checks safe; all mutations use entriesMutex. */
     private val entries = ConcurrentHashMap<RegistryKey, DaemonEntry>()
     private val entriesMutex = Mutex()
+    private val mutableRuntimeState = MutableStateFlow(SpotlessDaemonRuntimeSnapshot())
+
+    val runtimeState: StateFlow<SpotlessDaemonRuntimeSnapshot> = mutableRuntimeState.asStateFlow()
 
     suspend fun getDaemon(
-        provider: SpotlessDaemonProvider,
+        provider: SpotlessProviderHandle,
         externalProject: Path,
-    ): SpotlessDaemonEndpoint {
+    ): SpotlessDaemonProvider.Endpoint {
+        currentCoroutineContext().ensureActive()
         val key = key(externalProject)
         val requesterJob = currentCoroutineContext().job
         while (true) {
             when (val resolution = entriesMutex.withLock {
+                if (!provider.isAttached) {
+                    throw CancellationException("Spotless provider was detached")
+                }
                 when (val current = entries[key]) {
                     null -> {
                         val attachment = SpotlessDaemonAttachment(key)
@@ -109,8 +134,15 @@ internal class SpotlessDaemonRegistry(
             }) {
                 is DaemonResolution.Await -> return resolution.result.await()
                 is DaemonResolution.Return -> return resolution.endpoint
-                is DaemonResolution.Start -> return startDaemon(key, resolution.entry, externalProject)
-                is DaemonResolution.Replace -> closeDetached(resolution.detached)
+                is DaemonResolution.Start -> {
+                    publishRuntimeState()
+                    return startDaemon(key, resolution.entry, externalProject)
+                }
+
+                is DaemonResolution.Replace -> {
+                    publishRuntimeState()
+                    closeDetached(resolution.detached)
+                }
             }
         }
     }
@@ -121,13 +153,74 @@ internal class SpotlessDaemonRegistry(
         return detached.size
     }
 
-    fun releaseDaemonsForProviderSynchronously(provider: SpotlessDaemonProvider): Int =
+    suspend fun releaseDaemonsForProvider(provider: SpotlessProviderHandle): Int {
+        val detached = detachEntries(
+            predicate = { it.provider === provider },
+            reason = "provider release",
+        )
+        detached.forEach(::scheduleClose)
+        return detached.size
+    }
+
+    suspend fun restartDaemonsForProvider(
+        provider: SpotlessProviderHandle,
+        externalProjects: Collection<Path>,
+    ): Int {
+        val restartKeys = externalProjects.map(::key).toSet()
+        val detached = detachEntries(
+            predicate = { it.provider === provider },
+            reason = "provider state changed",
+        )
+        for (entry in detached) {
+            closeDetached(entry)
+        }
+        detached.asSequence()
+            .map { it.entry.attachment.key }
+            .filter(restartKeys::contains)
+            .distinct()
+            .forEach { restartKey ->
+                val externalProject = Path.of(restartKey.externalProjectPath)
+                try {
+                    getDaemon(provider, externalProject)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Throwable) {
+                    logger.warn(
+                        "Failed to restart Spotless daemon after provider state change: $externalProject",
+                        error,
+                    )
+                }
+            }
+        return detached.size
+    }
+
+    suspend fun releaseDaemon(
+        provider: SpotlessProviderHandle,
+        externalProject: Path,
+    ): Boolean {
+        val targetKey = key(externalProject)
+        val detached = detachEntries(
+            predicate = { entry ->
+                entry.provider === provider && entry.attachment.key == targetKey
+            },
+            reason = "external project release",
+        )
+        detached.forEach { entry -> closeDetached(entry) }
+        return detached.isNotEmpty()
+    }
+
+    fun releaseDaemonsForProviderSynchronously(provider: SpotlessProviderHandle): Int =
         runBlocking(Dispatchers.IO) {
             withContext(NonCancellable) {
-                val detached = detachEntries(
-                    predicate = { it.provider === provider },
-                    reason = "provider extension removed",
-                )
+                val detached = entriesMutex.withLock {
+                    detachEntriesLocked(
+                        predicate = { it.provider === provider },
+                        reason = "provider extension removed",
+                    )
+                }
+                if (detached.isNotEmpty()) {
+                    publishRuntimeState()
+                }
                 detached.map { entry ->
                     async { closeDetached(entry, providerRemovalStopTimeout) }
                 }.awaitAll()
@@ -153,9 +246,9 @@ internal class SpotlessDaemonRegistry(
         key: RegistryKey,
         entry: StartingDaemonEntry,
         externalProject: Path,
-    ): SpotlessDaemonEndpoint {
+    ): SpotlessDaemonProvider.Endpoint {
         val endpoint = try {
-            entry.provider.startDaemon(
+            entry.provider.provider.startDaemon(
                 DaemonStartContext(project, externalProject, entry.attachment),
             )
         } catch (error: Throwable) {
@@ -169,6 +262,7 @@ internal class SpotlessDaemonRegistry(
                 }
             }
             detached?.let {
+                publishRuntimeState()
                 closeDetached(detached)
             }
             entry.result.completeExceptionally(error)
@@ -190,6 +284,7 @@ internal class SpotlessDaemonRegistry(
             }
         }
         if (published) {
+            publishRuntimeState()
             return endpoint
         }
 
@@ -204,13 +299,24 @@ internal class SpotlessDaemonRegistry(
     private suspend fun detachEntries(
         predicate: (DaemonEntry) -> Boolean,
         reason: String,
-    ): List<DetachedDaemonEntry> = entriesMutex.withLock {
-        entries.entries
-            .filter { predicate(it.value) }
-            .mapNotNull { (key, entry) ->
-                if (entries[key] === entry) detachLocked(key, entry, reason, true) else null
-            }
+    ): List<DetachedDaemonEntry> {
+        val detached = entriesMutex.withLock {
+            detachEntriesLocked(predicate, reason)
+        }
+        if (detached.isNotEmpty()) {
+            publishRuntimeState()
+        }
+        return detached
     }
+
+    private fun detachEntriesLocked(
+        predicate: (DaemonEntry) -> Boolean,
+        reason: String,
+    ): List<DetachedDaemonEntry> = entries.entries
+        .filter { predicate(it.value) }
+        .mapNotNull { (key, entry) ->
+            if (entries[key] === entry) detachLocked(key, entry, reason, true) else null
+        }
 
     private fun detachLocked(
         key: RegistryKey,
@@ -254,7 +360,7 @@ internal class SpotlessDaemonRegistry(
     }
 
     private suspend fun stopEndpoint(
-        endpoint: SpotlessDaemonEndpoint,
+        endpoint: SpotlessDaemonProvider.Endpoint,
         reason: String,
         timeout: Duration?,
     ) {
@@ -281,7 +387,7 @@ internal class SpotlessDaemonRegistry(
         RegistryKey(externalProject.normalize().absolutePathString())
 
     private inner class SpotlessDaemonAttachment(
-        private val key: RegistryKey,
+        val key: RegistryKey,
     ) : SpotlessDaemonLifecycle {
         private val cleanupLock = Any()
         private val cleanups = ArrayDeque<() -> Unit>()
@@ -299,6 +405,7 @@ internal class SpotlessDaemonRegistry(
                         null
                     }
                 } ?: return@launch
+                publishRuntimeState()
                 closeDetached(detached)
             }
         }
@@ -347,6 +454,23 @@ internal class SpotlessDaemonRegistry(
 
     private companion object {
         val providerRemovalStopTimeout: Duration = 2.seconds
+    }
+
+    private fun publishRuntimeState() {
+        mutableRuntimeState.value = SpotlessDaemonRuntimeSnapshot(
+            entries.entries
+                .map { (key, entry) ->
+                    SpotlessDaemonRuntimeEntry(
+                        provider = entry.provider,
+                        externalProject = Path.of(key.externalProjectPath),
+                        state = when (entry) {
+                            is StartingDaemonEntry -> SpotlessDaemonRuntimeState.Starting
+                            is RunningDaemonEntry -> SpotlessDaemonRuntimeState.Running
+                        },
+                    )
+                }
+                .sortedBy { entry -> entry.externalProject.toString() },
+        )
     }
 
     private data class DaemonStartContext(

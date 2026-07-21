@@ -10,8 +10,10 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
+import kotlinx.coroutines.Job
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.path.absolutePathString
 
 @Service(Service.Level.PROJECT)
@@ -38,7 +40,10 @@ internal class SpotlessCapabilityCache {
     )
 
     private val cache = ConcurrentHashMap<CacheKey, CachedCapability>()
-    private val refreshes = ConcurrentHashMap.newKeySet<CacheKey>()
+    private val refreshJobs = ConcurrentHashMap<CacheKey, Job>()
+    private val revision = AtomicLong()
+
+    fun currentRevision(): Long = revision.get()
 
     fun cachedCanFormat(virtualFile: VirtualFile): CachedCanFormat? {
         val key = key(virtualFile) ?: return CachedCanFormat(canFormat = false, shouldRefresh = false)
@@ -53,13 +58,13 @@ internal class SpotlessCapabilityCache {
         }
     }
 
-    fun tryStartRefresh(virtualFile: VirtualFile): Boolean {
+    fun tryStartRefresh(virtualFile: VirtualFile, job: Job): Boolean {
         val key = key(virtualFile) ?: return false
-        return refreshes.add(key)
+        return refreshJobs.putIfAbsent(key, job) == null
     }
 
-    fun finishRefresh(virtualFile: VirtualFile) {
-        key(virtualFile)?.let(refreshes::remove)
+    fun finishRefresh(virtualFile: VirtualFile, job: Job) {
+        key(virtualFile)?.let { key -> refreshJobs.remove(key, job) }
     }
 
     fun update(
@@ -67,8 +72,9 @@ internal class SpotlessCapabilityCache {
         externalProject: Path?,
         result: SpotlessFormatResult,
         strictProbe: Boolean,
+        expectedRevision: Long? = null,
     ) {
-        if (!strictProbe) {
+        if (!strictProbe || expectedRevision != null && expectedRevision != revision.get()) {
             return
         }
         val key = key(virtualFile) ?: return
@@ -98,11 +104,15 @@ internal class SpotlessCapabilityCache {
 
     fun invalidate(virtualFile: VirtualFile) {
         val key = key(virtualFile) ?: return
+        revision.incrementAndGet()
+        refreshJobs.remove(key)?.cancel()
         cache.remove(key)
-        refreshes.remove(key)
     }
 
     fun invalidateExternalProject(externalProjectPath: String) {
+        revision.incrementAndGet()
+        refreshJobs.values.forEach(Job::cancel)
+        refreshJobs.clear()
         val keys = cache.entries
             .filter { (_, cached) ->
                 cached.externalProjectPath == externalProjectPath
@@ -110,13 +120,14 @@ internal class SpotlessCapabilityCache {
             .map { it.key }
         keys.forEach { key ->
             cache.remove(key)
-            refreshes.remove(key)
         }
     }
 
     fun clear() {
+        revision.incrementAndGet()
         cache.clear()
-        refreshes.clear()
+        refreshJobs.values.forEach(Job::cancel)
+        refreshJobs.clear()
     }
 
     private fun key(virtualFile: VirtualFile): CacheKey? {

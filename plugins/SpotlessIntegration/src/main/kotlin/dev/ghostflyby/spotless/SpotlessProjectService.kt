@@ -11,15 +11,14 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.extensions.ExtensionPointListener
-import com.intellij.openapi.extensions.ExtensionPointName
-import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiFile
 import dev.ghostflyby.spotless.SpotlessFormatResult.Error
 import dev.ghostflyby.spotless.SpotlessFormatResult.NotCovered
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -30,42 +29,46 @@ internal const val spotlessNotificationGroupId = "Spotless Notifications"
 internal class SpotlessProjectService(
     private val project: Project,
     private val scope: CoroutineScope,
-) : Disposable.Default {
+) : Disposable {
     private val logger = logger<SpotlessProjectService>()
     private val capabilityCache get() = project.service<SpotlessCapabilityCache>()
-    private val registry get() = project.service<SpotlessDaemonRegistry>()
 
     internal var client: SpotlessDaemonClient = SpotlessDaemonClient()
+    internal val daemonManager = SpotlessDaemonManager(project, scope) { client }
+    internal var daemonProvidersLookup: (Project) -> List<SpotlessDaemonProvider>
+        get() = daemonManager.providersLookup
         set(value) {
-            field = value
-            registry.clientProvider = { field }
+            daemonManager.providersLookup = value
         }
-    internal var daemonProvidersLookup: (Project) -> List<SpotlessDaemonProvider> =
-        { EP_NAME.extensionList }
 
-    init {
-        registry.clientProvider = { client }
-        EP_NAME.point.addExtensionPointListener(
-            scope,
-            false,
-            object : ExtensionPointListener<SpotlessDaemonProvider> {
-                override fun extensionRemoved(extension: SpotlessDaemonProvider, pluginDescriptor: PluginDescriptor) {
-                    registry.releaseDaemonsForProviderSynchronously(extension)
-                }
-            },
-        )
+    internal val daemonStatus: StateFlow<SpotlessDaemonStatusSnapshot>
+        get() = daemonManager.snapshot
+
+    internal fun refreshDaemonProviders() {
+        daemonManager.refresh()
     }
 
     internal suspend fun releaseAllDaemons(): Int =
-        registry.releaseAllDaemons()
+        daemonManager.releaseAllDaemons()
 
     internal fun releaseAllDaemonsAsync(onReleased: (Int) -> Unit = {}): Job =
-        scope.launch(Dispatchers.IO) {
-            onReleased(releaseAllDaemons())
-        }
+        daemonManager.releaseAllDaemonsAsync(onReleased)
+
+    internal fun releaseDaemons(provider: SpotlessDaemonProvider): Job =
+        daemonManager.releaseDaemons(provider)
+
+    internal fun releaseDaemon(
+        provider: SpotlessDaemonProvider,
+        externalProject: Path,
+    ): Job = daemonManager.releaseDaemon(provider, externalProject)
+
+    internal fun restartDaemon(
+        provider: SpotlessDaemonProvider,
+        externalProject: Path,
+    ): Job = daemonManager.restartDaemon(provider, externalProject)
 
     internal fun hasRunningDaemons(): Boolean =
-        registry.hasRunningDaemons()
+        daemonManager.hasRunningDaemons()
 
     internal fun formatAsync(
         psiFile: PsiFile,
@@ -84,27 +87,34 @@ internal class SpotlessProjectService(
     internal suspend fun format(
         psiFile: PsiFile,
         content: CharSequence,
+    ): SpotlessFormatResult = format(psiFile, content, expectedCacheRevision = null)
+
+    private suspend fun format(
+        psiFile: PsiFile,
+        content: CharSequence,
+        expectedCacheRevision: Long?,
     ): SpotlessFormatResult {
-        val providerTarget = resolveProviderTarget(psiFile.viewProvider.virtualFile)
+        val providerTarget = daemonManager.resolveTarget(psiFile.viewProvider.virtualFile)
         if (providerTarget == null) {
             capabilityCache.update(
                 psiFile.viewProvider.virtualFile,
                 externalProject = null,
                 result = NotCovered,
                 strictProbe = content.isEmpty(),
+                expectedRevision = expectedCacheRevision,
             )
             return NotCovered
         }
-        val (provider, target) = providerTarget
+        val target = providerTarget.target
 
-        val daemon = registry.getDaemon(provider, target.externalProject)
+        val daemon = daemonManager.getDaemon(providerTarget)
         val result = if (!client.healthCheck(daemon)) {
             Error("Spotless Daemon is not responding")
         } else {
             val request = preprocessFormatRequest(daemon, target.file, psiFile, content)
             client.format(daemon, target.file, request.content, request.skipSteps)
         }
-        if (!content.isEmpty() && result is Error) {
+        if (content.isNotEmpty() && result is Error) {
             capabilityCache.invalidate(psiFile.viewProvider.virtualFile)
         }
         capabilityCache.update(
@@ -112,6 +122,7 @@ internal class SpotlessProjectService(
             target.externalProject,
             result,
             strictProbe = content.isEmpty(),
+            expectedRevision = expectedCacheRevision,
         )
         return result
     }
@@ -135,7 +146,7 @@ internal class SpotlessProjectService(
     }
 
     override fun dispose() {
-        registry.dispose()
+        daemonManager.dispose()
         runCatching {
             client.close()
         }.onFailure { error ->
@@ -147,22 +158,27 @@ internal class SpotlessProjectService(
         psiFile: PsiFile,
         timeout: Duration,
     ) {
-        if (!capabilityCache.tryStartRefresh(psiFile.viewProvider.virtualFile)) {
-            return
-        }
-        scope.launch(Dispatchers.IO) {
+        val cacheRevision = capabilityCache.currentRevision()
+        val virtualFile = psiFile.viewProvider.virtualFile
+        val refreshJob = scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            val job = currentCoroutineContext().job
             try {
                 withTimeoutOrNull(timeout) {
-                    format(psiFile, "")
+                    format(psiFile, "", expectedCacheRevision = cacheRevision)
                 }
             } finally {
-                capabilityCache.finishRefresh(psiFile.viewProvider.virtualFile)
+                capabilityCache.finishRefresh(virtualFile, job)
             }
         }
+        if (!capabilityCache.tryStartRefresh(virtualFile, refreshJob)) {
+            refreshJob.cancel()
+            return
+        }
+        refreshJob.start()
     }
 
     private suspend fun preprocessFormatRequest(
-        daemon: SpotlessDaemonEndpoint,
+        daemon: SpotlessDaemonProvider.Endpoint,
         path: Path,
         psiFile: PsiFile,
         content: CharSequence,
@@ -196,7 +212,7 @@ internal class SpotlessProjectService(
     }
 
     private suspend fun findPreprocessingTarget(psiFile: PsiFile): PreprocessingTarget? = readAction {
-        val preprocessors = PREPROCESSOR_EP.extensionList.filter { preprocessor ->
+        val preprocessors = SpotlessFormattingPreprocessor.EP_NAME.extensionList.filter { preprocessor ->
             runCatching {
                 preprocessor.isApplicableTo(psiFile)
             }.onFailure { error ->
@@ -212,43 +228,14 @@ internal class SpotlessProjectService(
         val skipSteps: List<String> = emptyList(),
     )
 
-    private data class ProviderTarget(
-        val provider: SpotlessDaemonProvider,
-        val target: SpotlessDaemonTarget,
-    )
-
     private data class FormattingPreprocessContext(
         override val psiFile: PsiFile,
         override val content: CharSequence,
         override val daemonSteps: List<String>,
-    ) : SpotlessFormattingPreprocessContext
+    ) : SpotlessFormattingPreprocessor.Context
 
     private data class PreprocessingTarget(
         val psiFile: PsiFile,
         val preprocessors: List<SpotlessFormattingPreprocessor>,
     )
-
-    private fun resolveProviderTarget(file: VirtualFile): ProviderTarget? {
-        daemonProvidersLookup(project).forEach { provider ->
-            val target = runCatching {
-                provider.resolveTarget(project, file)
-            }.onFailure { error ->
-                logger.debug("Failed to resolve Spotless daemon target", error)
-            }.getOrNull()
-            if (target != null) {
-                return ProviderTarget(provider, target)
-            }
-        }
-        return null
-    }
-
-    private companion object {
-        @JvmStatic
-        val EP_NAME: ExtensionPointName<SpotlessDaemonProvider> =
-            ExtensionPointName.create("dev.ghostflyby.spotless.spotlessDaemonProvider")
-
-        @JvmStatic
-        val PREPROCESSOR_EP: ExtensionPointName<SpotlessFormattingPreprocessor> =
-            ExtensionPointName.create("dev.ghostflyby.spotless.spotlessFormattingPreprocessor")
-    }
 }

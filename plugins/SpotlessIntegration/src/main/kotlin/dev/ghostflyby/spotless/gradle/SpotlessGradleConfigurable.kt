@@ -36,7 +36,7 @@ internal class SpotlessGradleConfigurable(private val project: Project) :
                 @Suppress("UnstableApiUsage")
                 textFieldWithBrowseButton(
                     project = project,
-                    fileChooserDescriptor = FileChooserDescriptorFactory.singleFile()
+                    fileChooserDescriptor = FileChooserDescriptorFactory.singleFile().withExtensionFilter("jar")
                         .withTitle(Bundle.message("spotless.configuration.daemonJar.title")),
                 )
                     .bindText(model::gradleDaemonJar)
