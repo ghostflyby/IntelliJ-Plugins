@@ -11,6 +11,7 @@ import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
 import dev.ghostflyby.spotless.api.SpotlessDaemonProviderState
 import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
@@ -20,6 +21,7 @@ import java.nio.file.Path
 import java.util.*
 
 internal class ProviderSession(
+    val id: String,
     val provider: SpotlessDaemonProvider,
     val scope: CoroutineScope,
     initialSnapshot: ProviderSnapshot,
@@ -40,7 +42,7 @@ internal data class ProviderSnapshot(
 
 internal data class ProviderDescriptor(
     val session: ProviderSession,
-    val presentableName: String,
+    val providerId: String,
     val snapshot: ProviderSnapshot,
 )
 
@@ -55,14 +57,10 @@ internal data class ProviderTarget(
 )
 
 internal data class SpotlessProviderStatus(
-    val session: ProviderSession,
-    val presentableName: String,
+    val providerId: String,
     val externalProjects: List<Path>,
     val runtimeStates: Map<Path, SpotlessDaemonRuntimeState>,
-) {
-    val provider: SpotlessDaemonProvider
-        get() = session.provider
-}
+)
 
 internal data class SpotlessDaemonStatusSnapshot(
     val providers: List<SpotlessProviderStatus> = emptyList(),
@@ -77,6 +75,7 @@ internal class SpotlessDaemonCoordinator(
     private val registry = SpotlessDaemonRegistry(project, scope, clientProvider)
     private val providerLock = Any()
     private val sessions = IdentityHashMap<SpotlessDaemonProvider, ProviderSession>()
+    private val sessionsById = mutableMapOf<String, ProviderSession>()
     private var orderedSessions: List<ProviderSession> = emptyList()
     private val mutableProviders = MutableStateFlow(ProvidersSnapshot())
 
@@ -113,7 +112,7 @@ internal class SpotlessDaemonCoordinator(
                     extension: SpotlessDaemonProvider,
                     pluginDescriptor: PluginDescriptor,
                 ) {
-                    detachProvider(extension)
+                    refresh()
                 }
             },
         )
@@ -123,14 +122,19 @@ internal class SpotlessDaemonCoordinator(
     fun refresh() {
         val providers = currentProviders()
         val detached = synchronized(providerLock) {
-            sessions.keys
-                .filter { registered -> providers.none { it === registered } }
+            sessions.entries
+                .filter { (registered, session) ->
+                    providers.none { candidate ->
+                        candidate.provider === registered && candidate.id == session.id
+                    }
+                }
+                .map(Map.Entry<SpotlessDaemonProvider, ProviderSession>::key)
                 .toList()
         }
         detached.forEach(::detachProvider)
         providers.forEach(::attachProvider)
         synchronized(providerLock) {
-            orderedSessions = providers.mapNotNull(sessions::get)
+            orderedSessions = providers.mapNotNull { candidate -> sessions[candidate.provider] }
         }
         publishProviders()
     }
@@ -155,7 +159,7 @@ internal class SpotlessDaemonCoordinator(
             }
             logger.warn(
                 "Spotless provider returned a target outside its detected external projects: " +
-                        "${provider.javaClass.name}: $externalProject",
+                        "${descriptor.providerId}: $externalProject",
             )
         }
         return null
@@ -173,7 +177,7 @@ internal class SpotlessDaemonCoordinator(
     }
 
     internal inner class DaemonConnection internal constructor(
-        private val endpoint: SpotlessDaemonProvider.Endpoint,
+        private val endpoint: SpotlessDaemonEndpoint,
     ) {
         suspend fun steps(path: Path): List<String>? =
             clientProvider().steps(endpoint, path)
@@ -192,22 +196,22 @@ internal class SpotlessDaemonCoordinator(
             onReleased(releaseAllDaemons())
         }
 
-    fun releaseDaemons(provider: SpotlessDaemonProvider): Job =
-        launchProviderCommand(provider) { session ->
+    fun releaseDaemons(providerId: String): Job =
+        launchProviderCommand(providerId) { session ->
             registry.releaseDaemonsForSession(session)
         }
 
     fun releaseDaemon(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         externalProject: Path,
-    ): Job = launchProviderCommand(provider, externalProject) { session, normalizedExternalProject, _ ->
+    ): Job = launchProviderCommand(providerId, externalProject) { session, normalizedExternalProject, _ ->
         registry.releaseDaemon(session, normalizedExternalProject)
     }
 
     fun restartDaemon(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         externalProject: Path,
-    ): Job = launchProviderCommand(provider, externalProject) { session, normalizedExternalProject, generation ->
+    ): Job = launchProviderCommand(providerId, externalProject) { session, normalizedExternalProject, generation ->
         registry.restartDaemon(session, normalizedExternalProject, generation)
     }
 
@@ -217,6 +221,7 @@ internal class SpotlessDaemonCoordinator(
         val detachedSessions = synchronized(providerLock) {
             sessions.values.toList().also {
                 sessions.clear()
+                sessionsById.clear()
                 orderedSessions = emptyList()
             }
         }
@@ -225,15 +230,24 @@ internal class SpotlessDaemonCoordinator(
         registry.dispose()
     }
 
-    private fun currentProviders(): List<SpotlessDaemonProvider> = buildList {
+    private fun currentProviders(): List<ProviderCandidate> = buildList {
+        val providers = Collections.newSetFromMap(IdentityHashMap<SpotlessDaemonProvider, Boolean>())
+        val providerIds = mutableSetOf<String>()
         providersLookup(project).forEach { provider ->
-            if (none { it === provider }) {
-                add(provider)
+            if (!providers.add(provider)) {
+                return@forEach
             }
+            val providerId = providerId(provider) ?: return@forEach
+            if (!providerIds.add(providerId)) {
+                logger.warn("Ignoring duplicate Spotless daemon provider id: $providerId")
+                return@forEach
+            }
+            add(ProviderCandidate(providerId, provider))
         }
     }
 
-    private fun attachProvider(provider: SpotlessDaemonProvider) {
+    private fun attachProvider(candidate: ProviderCandidate) {
+        val provider = candidate.provider
         synchronized(providerLock) {
             if (sessions.containsKey(provider)) {
                 return
@@ -247,15 +261,18 @@ internal class SpotlessDaemonCoordinator(
         val providerJob = SupervisorJob(scope.coroutineContext[Job])
         val providerScope = CoroutineScope(scope.coroutineContext + providerJob)
         val session = ProviderSession(
+            id = candidate.id,
             provider = provider,
             scope = providerScope,
             initialSnapshot = normalizeProviderState(state.value),
         )
         val attached = synchronized(providerLock) {
-            if (sessions.containsKey(provider)) {
+            !sessions.containsKey(provider) && if (sessionsById.containsKey(candidate.id)) {
+                logger.warn("Ignoring duplicate Spotless daemon provider id: ${candidate.id}")
                 false
             } else {
                 sessions[provider] = session
+                sessionsById[candidate.id] = session
                 orderedSessions = orderedSessions + session
                 true
             }
@@ -272,6 +289,7 @@ internal class SpotlessDaemonCoordinator(
     private fun detachProvider(provider: SpotlessDaemonProvider) {
         val session = synchronized(providerLock) {
             sessions.remove(provider)?.also { removed ->
+                sessionsById.remove(removed.id, removed)
                 orderedSessions = orderedSessions.filterNot { it === removed }
             }
         } ?: return
@@ -307,11 +325,11 @@ internal class SpotlessDaemonCoordinator(
     }
 
     private fun launchProviderCommand(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         command: suspend (ProviderSession) -> Unit,
     ): Job {
         val session = synchronized(providerLock) {
-            sessions[provider]
+            sessionsById[providerId]
         } ?: return completedJob()
         return session.scope.launch(Dispatchers.IO) {
             command(session)
@@ -319,13 +337,13 @@ internal class SpotlessDaemonCoordinator(
     }
 
     private fun launchProviderCommand(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         externalProject: Path,
         command: suspend (ProviderSession, Path, Long) -> Unit,
     ): Job {
         val normalizedExternalProject = externalProject.toAbsolutePath().normalize()
         val session = synchronized(providerLock) {
-            sessions[provider]
+            sessionsById[providerId]
         } ?: return completedJob()
         val generation = session.snapshot.generations[normalizedExternalProject] ?: return completedJob()
         return session.scope.launch(Dispatchers.IO) {
@@ -341,7 +359,7 @@ internal class SpotlessDaemonCoordinator(
             sessions.map { session ->
                 ProviderDescriptor(
                     session = session,
-                    presentableName = providerPresentableName(session.provider),
+                    providerId = session.id,
                     snapshot = session.snapshot,
                 )
             },
@@ -369,11 +387,15 @@ internal class SpotlessDaemonCoordinator(
         )
     }
 
-    private fun providerPresentableName(provider: SpotlessDaemonProvider): String = runCatching {
-        provider.presentableName.takeIf(String::isNotBlank)
+    private fun providerId(provider: SpotlessDaemonProvider): String? = runCatching {
+        provider.id.takeIf(providerIdPattern::matches)
     }.onFailure { error ->
-        logger.warn("Failed to get Spotless provider name", error)
-    }.getOrNull() ?: provider.javaClass.simpleName
+        logger.warn("Failed to get Spotless daemon provider id", error)
+    }.getOrNull().also { providerId ->
+        if (providerId == null) {
+            logger.warn("Ignoring Spotless daemon provider with invalid id: ${provider.javaClass.name}")
+        }
+    }
 
     private fun createStatusSnapshot(
         providerSnapshot: ProvidersSnapshot,
@@ -390,8 +412,7 @@ internal class SpotlessDaemonCoordinator(
                     .associate { entry -> entry.externalProject to entry.state }
                     .filterKeys(externalProjects::contains)
                 SpotlessProviderStatus(
-                    session = provider.session,
-                    presentableName = provider.presentableName,
+                    providerId = provider.providerId,
                     externalProjects = externalProjects,
                     runtimeStates = runtimeStates,
                 )
@@ -400,4 +421,13 @@ internal class SpotlessDaemonCoordinator(
     }
 
     private fun completedJob(): Job = Job().apply { complete() }
+
+    private data class ProviderCandidate(
+        val id: String,
+        val provider: SpotlessDaemonProvider,
+    )
+
+    private companion object {
+        val providerIdPattern: Regex = Regex("[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+")
+    }
 }

@@ -11,7 +11,6 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.Bundle
 import dev.ghostflyby.spotless.api.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
@@ -22,42 +21,19 @@ import kotlin.io.path.div
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private val logger = logger<SpotlessGradleExtension>()
 
-    override val presentableName: String
-        get() = Bundle.message("spotless.provider.gradle.presentable.name")
+    override val id: String = "dev.ghostflyby.spotless.gradle"
 
     override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> =
         project.service<SpotlessGradleSettings>().providerState
 
-    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
-        val project = context.project
-        val lifecycle = context.lifecycle
-        val workingDirectory: Path = withContext(Dispatchers.IO + NonCancellable) {
-            Files.createTempDirectory(null).also { directory ->
-                lifecycle.registerCleanup {
-                    cleanupWorkingDirectory(directory)
-                }
-            }
-        }
-        val unixSocketPath = workingDirectory / "spotless-daemon.sock"
-        val endpoint = SpotlessDaemonProvider.Endpoint.UnixSocket(unixSocketPath)
-        val process = withContext(Dispatchers.IO + NonCancellable) {
-            startGradleSpotlessDaemon(
-                project,
-                context.externalProjectRoot,
-                unixSocketPath,
-                workingDirectory,
-            ) {
-                lifecycle.requestClose("Spotless daemon process terminated")
-            }.also { daemonProcess ->
-                lifecycle.registerCleanup {
-                    cleanupGradleDaemonProcess(daemonProcess)
-                }
-            }
-        }
-        currentCoroutineContext().ensureActive()
-        process.start()
-        return endpoint
-    }
+    override suspend fun runDaemon(context: SpotlessDaemonRunContext) =
+        runSpotlessGradleDaemonLifetime(
+            context = context,
+            createWorkingDirectory = { Files.createTempDirectory(null) },
+            startProcess = ::startGradleSpotlessDaemon,
+            cleanupProcess = ::cleanupGradleDaemonProcess,
+            cleanupDirectory = ::cleanupWorkingDirectory,
+        )
 
     override fun resolveTarget(
         project: Project,
@@ -77,6 +53,46 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         val deleted = workingDirectory.toFile().deleteRecursively()
         if (!deleted && Files.exists(workingDirectory)) {
             logger.warn("Failed to delete daemon temp directory after stop (daemon detached): $workingDirectory")
+        }
+    }
+}
+
+internal suspend fun runSpotlessGradleDaemonLifetime(
+    context: SpotlessDaemonRunContext,
+    createWorkingDirectory: () -> Path,
+    startProcess: (Project, Path, Path, Path, () -> Unit) -> SpotlessGradleDaemonProcess,
+    cleanupProcess: (SpotlessGradleDaemonProcess?) -> Unit,
+    cleanupDirectory: (Path) -> Unit,
+) {
+    val terminated = CompletableDeferred<Unit>()
+    var workingDirectory: Path? = null
+    var process: SpotlessGradleDaemonProcess? = null
+    try {
+        withContext(Dispatchers.IO) {
+            workingDirectory = createWorkingDirectory()
+        }
+        currentCoroutineContext().ensureActive()
+        val directory = checkNotNull(workingDirectory)
+        val unixSocketPath = directory / "spotless-daemon.sock"
+        withContext(Dispatchers.IO) {
+            process = startProcess(
+                context.project,
+                context.externalProjectRoot,
+                unixSocketPath,
+                directory,
+            ) {
+                terminated.complete(Unit)
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        checkNotNull(process).start()
+        currentCoroutineContext().ensureActive()
+        context.publishEndpoint(SpotlessDaemonEndpoint.UnixSocket(unixSocketPath))
+        terminated.await()
+    } finally {
+        withContext(NonCancellable + Dispatchers.IO) {
+            cleanupProcess(process)
+            workingDirectory?.let(cleanupDirectory)
         }
     }
 }

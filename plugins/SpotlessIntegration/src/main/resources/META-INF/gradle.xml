@@ -17,6 +17,8 @@
         <spotlessDaemonProvider id="dev.ghostflyby.spotless.gradle"
                                 order="last"
                                 implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
+        <spotlessDaemonProviderPresentation
+                implementation="dev.ghostflyby.spotless.gradle.frontend.SpotlessGradlePresentation"/>
     </extensions>
     <actions resource-bundle="messages.Bundle">
         <group id="dev.ghostflyby.spotless.actions" popup="true">

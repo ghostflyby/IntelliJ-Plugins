@@ -25,7 +25,7 @@ import com.intellij.openapi.wm.impl.status.TextPanel
 import com.intellij.openapi.wm.impl.status.widget.StatusBarWidgetsManager
 import com.intellij.ui.NewUI
 import com.intellij.util.ui.JBDimension
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -148,12 +148,12 @@ internal fun createSpotlessDaemonPopupActionGroup(
     snapshot: SpotlessDaemonStatusSnapshot,
 ): ActionGroup = DefaultActionGroup().apply {
     snapshot.providers.forEach { providerStatus ->
-        addSeparator(providerStatus.presentableName)
+        addSeparator(providerPresentableName(providerStatus.providerId))
         abbreviatedExternalProjectPaths(providerStatus.externalProjects).forEach { (externalProject, text) ->
             add(
                 createExternalProjectAction(
                     spotlessService = spotlessService,
-                    provider = providerStatus.provider,
+                    providerId = providerStatus.providerId,
                     externalProject = externalProject,
                     text = text,
                 ),
@@ -166,16 +166,16 @@ internal fun createSpotlessDaemonPopupActionGroup(
 
 private fun createExternalProjectAction(
     spotlessService: SpotlessProjectService,
-    provider: SpotlessDaemonProvider,
+    providerId: String,
     externalProject: Path,
     text: String,
 ): AnAction {
-    val restartAction = RestartSpotlessDaemonAction(spotlessService, provider, externalProject)
-    val stopAction = StopSpotlessDaemonAction(spotlessService, provider, externalProject)
+    val restartAction = RestartSpotlessDaemonAction(spotlessService, providerId, externalProject)
+    val stopAction = StopSpotlessDaemonAction(spotlessService, providerId, externalProject)
     if (NewUI.isEnabled()) {
         return SpotlessExternalProjectAction(
             spotlessService = spotlessService,
-            provider = provider,
+            providerId = providerId,
             externalProject = externalProject,
             text = text,
             inlineActions = listOf(restartAction, stopAction),
@@ -194,14 +194,14 @@ private fun createExternalProjectAction(
 
         override fun update(event: AnActionEvent) {
             event.presentation.isEnabledAndVisible =
-                spotlessService.findProviderStatus(provider, externalProject) != null
+                spotlessService.findProviderStatus(providerId, externalProject) != null
         }
     }
 }
 
 private class SpotlessExternalProjectAction(
     private val spotlessService: SpotlessProjectService,
-    private val provider: SpotlessDaemonProvider,
+    private val providerId: String,
     private val externalProject: Path,
     text: String,
     inlineActions: List<AnAction>,
@@ -213,7 +213,7 @@ private class SpotlessExternalProjectAction(
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {
-        val providerStatus = spotlessService.findProviderStatus(provider, externalProject)
+        val providerStatus = spotlessService.findProviderStatus(providerId, externalProject)
         event.presentation.isEnabledAndVisible = providerStatus != null
         event.presentation.putClientProperty(ActionUtil.TOOLTIP_TEXT, externalProject.toString())
         event.presentation.putClientProperty(
@@ -223,13 +223,13 @@ private class SpotlessExternalProjectAction(
     }
 
     override fun actionPerformed(event: AnActionEvent) {
-        spotlessService.restartDaemon(provider, externalProject)
+        spotlessService.restartDaemon(providerId, externalProject)
     }
 }
 
 private class RestartSpotlessDaemonAction(
     private val spotlessService: SpotlessProjectService,
-    private val provider: SpotlessDaemonProvider,
+    private val providerId: String,
     private val externalProject: Path,
 ) : DumbAwareAction(
     Bundle.message("status.bar.widget.action.restart.daemon"),
@@ -239,17 +239,17 @@ private class RestartSpotlessDaemonAction(
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {
-        event.presentation.isEnabledAndVisible = spotlessService.findProviderStatus(provider, externalProject) != null
+        event.presentation.isEnabledAndVisible = spotlessService.findProviderStatus(providerId, externalProject) != null
     }
 
     override fun actionPerformed(event: AnActionEvent) {
-        spotlessService.restartDaemon(provider, externalProject)
+        spotlessService.restartDaemon(providerId, externalProject)
     }
 }
 
 private class StopSpotlessDaemonAction(
     private val spotlessService: SpotlessProjectService,
-    private val provider: SpotlessDaemonProvider,
+    private val providerId: String,
     private val externalProject: Path,
 ) : DumbAwareAction(
     Bundle.message("status.bar.widget.action.stop.daemon"),
@@ -259,14 +259,14 @@ private class StopSpotlessDaemonAction(
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
     override fun update(event: AnActionEvent) {
-        val runtimeState = spotlessService.findProviderStatus(provider, externalProject)
+        val runtimeState = spotlessService.findProviderStatus(providerId, externalProject)
             ?.runtimeStates
             ?.get(externalProject)
         event.presentation.isEnabledAndVisible = runtimeState != null
     }
 
     override fun actionPerformed(event: AnActionEvent) {
-        spotlessService.releaseDaemon(provider, externalProject)
+        spotlessService.releaseDaemon(providerId, externalProject)
     }
 }
 
@@ -283,10 +283,19 @@ private class RefreshSpotlessProvidersAction(
 }
 
 private fun SpotlessProjectService.findProviderStatus(
-    provider: SpotlessDaemonProvider,
+    providerId: String,
     externalProject: Path,
 ): SpotlessProviderStatus? = daemonStatus.value.providers.firstOrNull { providerStatus ->
-    providerStatus.provider === provider && externalProject in providerStatus.externalProjects
+    providerStatus.providerId == providerId && externalProject in providerStatus.externalProjects
+}
+
+internal fun providerPresentableName(providerId: String): String {
+    val presentation = SpotlessDaemonProviderPresentation.EP_NAME.extensionList.firstOrNull { candidate ->
+        runCatching { candidate.providerId == providerId }.getOrDefault(false)
+    } ?: return providerId
+    return runCatching {
+        presentation.presentableName.takeIf(String::isNotBlank)
+    }.getOrNull() ?: providerId
 }
 
 private fun SpotlessDaemonRuntimeState?.presentableText(): String = when (this) {

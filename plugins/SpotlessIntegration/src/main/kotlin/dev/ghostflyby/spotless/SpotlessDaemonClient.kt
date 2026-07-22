@@ -7,7 +7,7 @@
 package dev.ghostflyby.spotless
 
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
@@ -24,14 +24,14 @@ private val HTTP_POST: HttpMethod = HttpMethod.parse("POST")
 
 internal class SpotlessDaemonTransportException(
     operation: String,
-    endpoint: SpotlessDaemonProvider.Endpoint,
+    endpoint: SpotlessDaemonEndpoint,
     cause: Throwable? = null,
 ) : RuntimeException("Spotless daemon $operation failed: $endpoint", cause)
 
 internal class SpotlessDaemonClient(
     internal var http: HttpClient = HttpClient(CIO),
 ) {
-    suspend fun healthCheck(endpoint: SpotlessDaemonProvider.Endpoint): Boolean = try {
+    suspend fun healthCheck(endpoint: SpotlessDaemonEndpoint): Boolean = try {
         val response = http.request {
             method = HTTP_GET
             configureEndpoint(endpoint)
@@ -48,7 +48,7 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun awaitReady(
-        endpoint: SpotlessDaemonProvider.Endpoint,
+        endpoint: SpotlessDaemonEndpoint,
         timeout: Duration,
     ) {
         val ready = withTimeoutOrNull(timeout) {
@@ -63,7 +63,7 @@ internal class SpotlessDaemonClient(
         }
     }
 
-    suspend fun stop(endpoint: SpotlessDaemonProvider.Endpoint) {
+    suspend fun stop(endpoint: SpotlessDaemonEndpoint) {
         http.request {
             method = HTTP_POST
             configureEndpoint(endpoint)
@@ -75,7 +75,7 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun steps(
-        endpoint: SpotlessDaemonProvider.Endpoint,
+        endpoint: SpotlessDaemonEndpoint,
         path: Path,
     ): List<String>? {
         val response = requestOrThrow("steps request", endpoint) {
@@ -103,7 +103,7 @@ internal class SpotlessDaemonClient(
     }
 
     suspend fun format(
-        endpoint: SpotlessDaemonProvider.Endpoint,
+        endpoint: SpotlessDaemonEndpoint,
         path: Path,
         content: CharSequence,
         skipSteps: List<String> = emptyList(),
@@ -150,7 +150,7 @@ internal class SpotlessDaemonClient(
 
     private suspend fun requestOrThrow(
         operation: String,
-        endpoint: SpotlessDaemonProvider.Endpoint,
+        endpoint: SpotlessDaemonEndpoint,
         block: HttpRequestBuilder.() -> Unit,
     ): HttpResponse = try {
         http.request(block)
@@ -162,7 +162,7 @@ internal class SpotlessDaemonClient(
 
     private suspend fun HttpResponse.bodyAsTextOrThrow(
         operation: String,
-        endpoint: SpotlessDaemonProvider.Endpoint,
+        endpoint: SpotlessDaemonEndpoint,
     ): String = try {
         bodyAsText()
     } catch (error: CancellationException) {
@@ -171,14 +171,14 @@ internal class SpotlessDaemonClient(
         throw SpotlessDaemonTransportException(operation, endpoint, error)
     }
 
-    private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonProvider.Endpoint) {
+    private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonEndpoint) {
         when (endpoint) {
-            is SpotlessDaemonProvider.Endpoint.Localhost -> {
+            is SpotlessDaemonEndpoint.Localhost -> {
                 url.host = "localhost"
                 url.port = endpoint.port.toInt()
             }
 
-            is SpotlessDaemonProvider.Endpoint.UnixSocket -> unixSocket(endpoint.path.toString())
+            is SpotlessDaemonEndpoint.UnixSocket -> unixSocket(endpoint.path.toString())
         }
     }
 

@@ -19,9 +19,11 @@ import com.intellij.testFramework.junit5.fixture.disposableFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import dev.ghostflyby.spotless.api.*
+import dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +31,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -66,7 +69,7 @@ internal class SpotlessStatusBarWidgetTest {
         val snapshot = service.daemonStatus.value
 
         assertTrue(SpotlessStatusBarWidgetFactory().isAvailable(project))
-        assertEquals("Test Build Spotless", snapshot.providers.single().presentableName)
+        assertEquals(providerId("Test Build Spotless"), snapshot.providers.single().providerId)
         assertEquals(listOf(root.toAbsolutePath().normalize()), snapshot.providers.single().externalProjects)
     }
 
@@ -99,7 +102,7 @@ internal class SpotlessStatusBarWidgetTest {
                 delay(10.milliseconds)
             }
         }
-        assertTrue(service.daemonStatus.value.providers.any { it.provider === provider })
+        assertTrue(service.daemonStatus.value.providers.any { it.providerId == provider.id })
 
         Disposer.dispose(providerDisposable)
 
@@ -108,7 +111,7 @@ internal class SpotlessStatusBarWidgetTest {
                 delay(10.milliseconds)
             }
         }
-        assertFalse(service.daemonStatus.value.providers.any { it.provider === provider })
+        assertFalse(service.daemonStatus.value.providers.any { it.providerId == provider.id })
     }
 
     @Test
@@ -117,12 +120,12 @@ internal class SpotlessStatusBarWidgetTest {
         val secondRoot = projectPathFixture.get().resolve("second")
         val firstProvider = TestStatusProvider(
             listOf(firstRoot),
-            presentableName = "First Spotless",
+            presentationName = "First Spotless",
             equalToOtherTestProviders = true,
         )
         val secondProvider = TestStatusProvider(
             listOf(secondRoot),
-            presentableName = "Second Spotless",
+            presentationName = "Second Spotless",
             equalToOtherTestProviders = true,
         )
         maskProviders(firstProvider, secondProvider)
@@ -130,11 +133,11 @@ internal class SpotlessStatusBarWidgetTest {
         val service = project.service<SpotlessProjectService>()
         service.client = readyClient()
 
-        service.restartDaemon(firstProvider, firstRoot).join()
+        service.restartDaemon(firstProvider.id, firstRoot).join()
 
         withTimeout(5.seconds) {
             while (service.daemonStatus.value.providers
-                    .single { it.provider === firstProvider }
+                    .single { it.providerId == firstProvider.id }
                     .runtimeStates
                     .isEmpty()
             ) {
@@ -142,8 +145,8 @@ internal class SpotlessStatusBarWidgetTest {
             }
         }
 
-        val firstStatus = service.daemonStatus.value.providers.single { it.provider === firstProvider }
-        val secondStatus = service.daemonStatus.value.providers.single { it.provider === secondProvider }
+        val firstStatus = service.daemonStatus.value.providers.single { it.providerId == firstProvider.id }
+        val secondStatus = service.daemonStatus.value.providers.single { it.providerId == secondProvider.id }
         assertEquals(
             mapOf(firstRoot.toAbsolutePath().normalize() to SpotlessDaemonRuntimeState.Ready),
             firstStatus.runtimeStates,
@@ -202,6 +205,41 @@ internal class SpotlessStatusBarWidgetTest {
     }
 
     @Test
+    fun `presentation follows EP order and promotes successor after removal`() {
+        val providerId = "dev.ghostflyby.spotless.test.presentation"
+        val firstDisposable = registerPresentation(
+            TestProviderPresentation(providerId, "First presentation"),
+        )
+        registerPresentation(TestProviderPresentation(providerId, "Second presentation"))
+
+        assertEquals("First presentation", providerPresentableName(providerId))
+
+        Disposer.dispose(firstDisposable)
+
+        assertEquals("Second presentation", providerPresentableName(providerId))
+    }
+
+    @Test
+    fun `presentation falls back to provider id for missing blank and throwing names`() {
+        val missingId = "dev.ghostflyby.spotless.test.missing.presentation"
+        assertEquals(missingId, providerPresentableName(missingId))
+
+        val blankId = "dev.ghostflyby.spotless.test.blank.presentation"
+        registerPresentation(TestProviderPresentation(blankId, ""))
+        assertEquals(blankId, providerPresentableName(blankId))
+
+        val throwingId = "dev.ghostflyby.spotless.test.throwing.presentation"
+        registerPresentation(
+            object : SpotlessDaemonProviderPresentation {
+                override val providerId: String = throwingId
+                override val presentableName: String
+                    get() = throw IllegalStateException("presentation failed")
+            },
+        )
+        assertEquals(throwingId, providerPresentableName(throwingId))
+    }
+
+    @Test
     suspend fun `stop inline action follows root runtime state`() {
         val root = projectPathFixture.get().resolve("external-project")
         val provider = TestStatusProvider(listOf(root))
@@ -225,14 +263,14 @@ internal class SpotlessStatusBarWidgetTest {
 
         assertFalse(stopAction.updatedPresentation().isVisible)
 
-        service.restartDaemon(provider, root).join()
+        service.restartDaemon(provider.id, root).join()
         withTimeout(5.seconds) {
             while (!stopAction.updatedPresentation().isEnabledAndVisible) {
                 delay(10.milliseconds)
             }
         }
 
-        service.releaseDaemon(provider, root).join()
+        service.releaseDaemon(provider.id, root).join()
         withTimeout(5.seconds) {
             while (stopAction.updatedPresentation().isVisible) {
                 delay(10.milliseconds)
@@ -246,12 +284,25 @@ internal class SpotlessStatusBarWidgetTest {
             providers.toList(),
             providerDisposable,
         )
+        ExtensionTestUtil.maskExtensions(
+            SpotlessDaemonProviderPresentation.EP_NAME,
+            providers.filterIsInstance<TestStatusProvider>().map { provider ->
+                TestProviderPresentation(provider.id, provider.presentationName)
+            },
+            providerDisposable,
+        )
     }
 
     private fun registerProvider(provider: SpotlessDaemonProvider): Disposable =
         Disposer.newDisposable("SpotlessStatusBarWidgetTest.provider").also { disposable ->
             Disposer.register(providerDisposable, disposable)
             SpotlessDaemonProvider.EP_NAME.point.registerExtension(provider, disposable)
+        }
+
+    private fun registerPresentation(presentation: SpotlessDaemonProviderPresentation): Disposable =
+        Disposer.newDisposable("SpotlessStatusBarWidgetTest.presentation").also { disposable ->
+            Disposer.register(providerDisposable, disposable)
+            SpotlessDaemonProviderPresentation.EP_NAME.point.registerExtension(presentation, disposable)
         }
 
     private fun AnAction.updatedPresentation() = AnActionEvent.createEvent(
@@ -265,22 +316,29 @@ internal class SpotlessStatusBarWidgetTest {
 
     private class TestStatusProvider(
         projects: List<Path>,
-        override val presentableName: String = "Test Spotless",
+        val presentationName: String = "Test Spotless",
         private val equalToOtherTestProviders: Boolean = false,
     ) : SpotlessDaemonProvider {
+        override val id: String = providerId(presentationName)
         private var generation = 0L
         private val mutableState = MutableStateFlow(
             providerState(projects, generation),
         )
-        private var lifecycle: SpotlessDaemonLifecycle? = null
+        private val termination = AtomicReference<CompletableDeferred<Unit>>()
 
         override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> = mutableState
 
         override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget? = null
 
-        override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
-            lifecycle = context.lifecycle
-            return SpotlessDaemonProvider.Endpoint.Localhost(25252U)
+        override suspend fun runDaemon(context: SpotlessDaemonRunContext) {
+            val currentTermination = CompletableDeferred<Unit>()
+            termination.set(currentTermination)
+            try {
+                context.publishEndpoint(SpotlessDaemonEndpoint.Localhost(25252U))
+                currentTermination.await()
+            } finally {
+                termination.compareAndSet(currentTermination, null)
+            }
         }
 
         fun updateProjects(projects: List<Path>) {
@@ -291,7 +349,7 @@ internal class SpotlessStatusBarWidgetTest {
         fun hasSubscriber(): Boolean = mutableState.subscriptionCount.value > 0
 
         fun requestClose() {
-            lifecycle?.requestClose("test daemon terminated")
+            termination.get()?.complete(Unit)
         }
 
         override fun equals(other: Any?): Boolean =
@@ -304,11 +362,19 @@ internal class SpotlessStatusBarWidgetTest {
             if (equalToOtherTestProviders) 0 else System.identityHashCode(this)
     }
 
+    private data class TestProviderPresentation(
+        override val providerId: String,
+        override val presentableName: String,
+    ) : SpotlessDaemonProviderPresentation
+
     private fun readyClient(): SpotlessDaemonClient = SpotlessDaemonClient(
         HttpClient(MockEngine { respond("", HttpStatusCode.OK) }),
     )
 
     private companion object {
+        fun providerId(name: String): String =
+            "dev.ghostflyby.spotless.test.${name.lowercase().replace(' ', '.')}"
+
         fun providerState(
             projects: List<Path>,
             generation: Long,

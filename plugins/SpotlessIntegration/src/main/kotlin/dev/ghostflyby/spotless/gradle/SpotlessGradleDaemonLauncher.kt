@@ -27,17 +27,25 @@ import kotlin.io.path.writeText
 private const val spotlessDaemonTaskName = ":spotlessDaemon"
 private const val spotlessDaemonUnixSocketProperty = "dev.ghostflyby.spotless.daemon.unixsocket"
 
-private val logger = logger<SpotlessGradleDaemonProcess>()
+private val logger = logger<DefaultSpotlessGradleDaemonProcess>()
 
-internal data class SpotlessGradleDaemonProcess(
-    val handler: KillableColoredProcessHandler,
-    val initScript: Path,
-) {
-    fun start() {
+internal interface SpotlessGradleDaemonProcess {
+    val initScript: Path
+
+    fun start()
+
+    fun destroyProcess()
+}
+
+private class DefaultSpotlessGradleDaemonProcess(
+    private val handler: KillableColoredProcessHandler,
+    override val initScript: Path,
+) : SpotlessGradleDaemonProcess {
+    override fun start() {
         handler.startNotify()
     }
 
-    fun destroyProcess() {
+    override fun destroyProcess() {
         if (handler.isProcessTerminated || handler.isProcessTerminating) {
             return
         }
@@ -75,7 +83,7 @@ internal fun startGradleSpotlessDaemon(
             }
         },
     )
-    return SpotlessGradleDaemonProcess(handler, initScript)
+    return DefaultSpotlessGradleDaemonProcess(handler, initScript)
 }
 
 private fun createGradleSpotlessDaemonCommandLine(

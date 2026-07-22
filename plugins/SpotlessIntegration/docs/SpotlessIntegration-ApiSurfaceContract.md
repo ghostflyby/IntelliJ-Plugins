@@ -2,114 +2,98 @@
 
 ## Scope
 
-This note records the intentionally public API after the provider lifecycle and formatting-preprocessor refactor. The
-daemon-provider and formatting-preprocessor extension points remain public. Coordinator, Registry, formatting
-orchestration, runtime state, capability cache, and HTTP client details remain internal. The external SpotlessDaemon
-HTTP protocol is owned outside this plugin and is unchanged.
+The daemon-provider, frontend-presentation, and formatting-preprocessor extension points are intentionally public.
+Coordinator, Registry, runtime snapshots, commands, capability caching, and HTTP client details remain internal. The
+external SpotlessDaemon HTTP protocol is unchanged.
 
-## Public Types Kept Intentionally
+This is the final intentional breaking revision of the provider ABI before future split-mode module movement. Split mode
+is not enabled in this phase, and no RPC contract is introduced.
+
+## Provider API
 
 ### `dev.ghostflyby.spotless.api.SpotlessDaemonProvider`
 
-`SpotlessDaemonProvider` is the interface of the public
+`SpotlessDaemonProvider` is the interface of the dynamic
 `dev.ghostflyby.spotless.spotlessDaemonProvider` extension point.
 
-Contract notes:
+- `id` is a stable, non-empty, reverse-domain-style ASCII identifier. Provider instances with the same ID are resolved
+  in IntelliJ extension-point order; the first is active, and the next becomes active if the first is removed.
+- `state(project)` returns a stable project-lifetime `StateFlow<SpotlessDaemonProviderState>`.
+- `resolveTarget(project, file)` is a cheap, single-call route decision. `null`, an exception, or a root absent from the
+  current state is a miss and allows the next provider to be considered.
+- The first valid target owns the request. Startup, readiness, and operation failures never fall back to another
+  provider.
+- `runDaemon(context)` suspends for the complete daemon lifetime. Returning or throwing is provider-initiated
+  termination; coroutine cancellation is core-initiated termination.
+- Provider resources belong in structured child coroutines and `finally`. The API intentionally exposes neither a raw
+  `CoroutineScope` nor an IntelliJ `Disposable`.
 
-- `EP_NAME` is the public, JVM-static extension-point handle. Provider evaluation follows IntelliJ extension-point
-  ordering.
-- `presentableName` identifies the provider source in project-level UI.
-- `state(project)` returns a stable, project-owned `StateFlow<SpotlessDaemonProviderState>`.
-- The flow producer must have project lifetime. The core collects it in a provider-session child scope and cancels that
-  scope before a dynamically removed provider extension is released.
-- `resolveTarget(project, file)` must be cheap. Returning `null`, throwing, or returning a normalized root absent from
-  the current provider state lets the core try the next provider.
-- The first valid target owns the request. Startup, readiness, and daemon-operation failures are propagated and never
-  fall back to later providers.
-- `startDaemon(context)` starts provider resources and returns an `Endpoint`; the core owns readiness checks.
-- Startup must cooperate with coroutine cancellation. Register every resource through `context.lifecycle` immediately
-  after creation so partial startup is cleanable during provider removal, generation changes, manual release, or project
-  disposal.
+### `SpotlessDaemonProviderState` and `ExternalProject`
 
-### `dev.ghostflyby.spotless.api.SpotlessDaemonProviderState`
+Provider state contains `projects: List<ExternalProject>`. Each external project has a normalized-by-core `root` and an
+explicit `generation`.
 
-Provider state is an immutable data class containing `projects: List<ExternalProject>`.
-
-Contract notes:
-
-- Each `ExternalProject` contains a root and an explicit generation.
-- Roots are normalized by the core. A provider should publish each root once.
-- A new root updates provider discovery but does not start a daemon.
+- Adding a root updates discovery without starting a daemon.
 - Removing a root stops an existing daemon for that root.
-- Changing a root's generation restarts only an existing daemon for that root.
-- An unchanged root and generation cause no daemon operation.
-- Providers must advance a root's generation whenever inputs affecting target resolution or daemon startup change.
-  Provider-private revision fields and equality side channels are not part of this contract.
+- Changing one root's generation restarts only an existing daemon for that root.
+- Unchanged root/generation pairs cause no daemon operation.
+- Providers advance generation whenever inputs affecting target resolution or daemon startup change.
 
-### `dev.ghostflyby.spotless.api.SpotlessDaemonLifecycle`
+### `SpotlessDaemonTarget`
 
-`SpotlessDaemonLifecycle` is supplied by the core to each daemon startup.
+`SpotlessDaemonTarget(externalProjectRoot, file)` is an invocation-scoped routing result. It remains separate from the
+continuous provider state. The root must exist in the same provider's current state; the core normalizes and validates
+it before selecting the provider.
 
-Contract notes:
+### `SpotlessDaemonRunContext` and `SpotlessDaemonEndpoint`
 
-- `requestClose(reason)` non-blockingly asks the Registry to detach this daemon after natural process termination.
-- `registerCleanup(cleanup)` registers synchronous provider-owned cleanup in exactly-once LIFO order.
-- Registering after closure runs that cleanup synchronously before `registerCleanup` returns, closing the race between
-  resource creation and detach.
-- Cleanup must be prompt and idempotent. Registry release waits only within its shared cleanup deadline.
-- Providers must not call project services or mutate Registry state directly.
-- The lifecycle intentionally exposes neither a `CoroutineScope` nor a `Job`.
+`SpotlessDaemonRunContext` exposes only the project, normalized external-project root, and
+`publishEndpoint(endpoint)`.
 
-### `dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint`
+- Exactly one endpoint must be published.
+- Returning before publication, publishing twice, or publishing after detach fails startup.
+- The core performs the HTTP readiness check after publication.
+- `SpotlessDaemonEndpoint.Localhost` and `.UnixSocket` contain connection information only. Process handles, temporary
+  files, and cleanup callbacks do not cross the provider boundary.
 
-`Endpoint` crosses the provider/core boundary. `Localhost` and `UnixSocket` contain connection information only;
-provider-private process and temporary-directory resources belong in lifecycle cleanup closures.
+## Frontend Presentation API
 
-### `dev.ghostflyby.spotless.api.SpotlessDaemonTarget`
+`dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation` is the interface of the dynamic
+`dev.ghostflyby.spotless.spotlessDaemonProviderPresentation` extension point.
 
-`SpotlessDaemonTarget` contains `externalProjectRoot` for daemon ownership and `file` for the daemon request. The root
-must be present in the same provider's current state. The core normalizes and validates it before startup.
+- `providerId` associates presentation with a backend provider without exposing the provider instance to UI state.
+- `presentableName` is dynamic frontend text and is annotated with `@Nls`.
+- Multiple presentations for one ID use the first EP contribution.
+- Missing, blank, or failing presentation falls back to the provider ID.
+- The FQN and ABI are fixed so this type can move to a frontend module without changing third-party implementations.
 
-### `dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor`
+## Formatting Preprocessor API
 
-`SpotlessFormattingPreprocessor` is the interface of the public, dynamic
+`SpotlessFormattingPreprocessor` remains the public interface of the dynamic
 `dev.ghostflyby.spotless.spotlessFormattingPreprocessor` extension point.
 
-Contract notes:
-
-- `EP_NAME` is the public, JVM-static extension-point handle.
 - `isApplicableTo(psiFile)` runs against the actual target under read access and must be cheap.
-- `preprocess(context)` receives current content and daemon steps and may return transformed text plus step names to
-  skip. Returning `null` leaves the request unchanged.
-- `content` is the authoritative formatter input. `psiFile` supplies invocation context and may not reflect content
-  transformed by an earlier preprocessor.
-- Implementations must not retain the invocation-scoped `PsiFile` and must follow IntelliJ PSI and Document threading
-  rules.
-- The core validates returned step names, removes duplicates, and preserves daemon step order.
-- Provider and preprocessor logic failures keep graceful fallback behavior. Daemon transport failures propagate and
-  invalidate the selected Ready daemon.
+- `preprocess(context)` may transform content and select daemon steps to skip; returning `null` leaves the request
+  unchanged.
+- Provider and preprocessor logic failures retain graceful fallback behavior. Daemon transport failures propagate and
+  invalidate only the selected Ready daemon.
+- Implementations must not retain invocation-scoped PSI and must follow IntelliJ PSI/Document threading rules.
 
-### `Context` and `Result`
+## Ownership Boundary
 
-The preprocessing context carries the invocation-scoped PSI target, current request text, and daemon step list. The
-result carries transformed text and requested skipped steps. Neither exposes the daemon endpoint, HTTP client, daemon
-lifecycle, or formatter result.
+Future split-mode ownership is fixed as follows:
 
-## Internal-Only Surface
+- Backend: provider EP, formatting service, preprocessor EP, Coordinator, Registry, HTTP client, Gradle resolver/data
+  service/launcher.
+- Frontend: presentation EP, widget, popup, actions, configurable, and UI activity.
+- Shared: future internal status/command DTOs. No public DTO or RPC API is added in this phase.
 
-The following are intentionally internal and are not part of the public ABI:
-
-- `SpotlessProjectService` formatting orchestration;
-- `SpotlessFormatResult`;
-- `SpotlessDaemonCoordinator` and its daemon connection;
-- `SpotlessDaemonRegistry` and runtime snapshots;
-- `SpotlessDaemonClient` and `SpotlessDaemonTransportException`;
-- `SpotlessCapabilityCache`;
-- Gradle settings and launcher implementation details.
+`SpotlessProjectService`, `SpotlessFormatResult`, Coordinator/Registry state, provider sessions, endpoints in active
+commands, capability cache, and Gradle process types are internal implementation details.
 
 ## ABI Decision
 
-This phase intentionally replaces the former provider-specific `SpotlessDaemonProvider.State` equality contract with
-`SpotlessDaemonProviderState` and `ExternalProject(root, generation)`. It also renames
-`SpotlessDaemonTarget.externalProject` to `externalProjectRoot`. These are allowed breaking Kotlin ABI changes. The
-external SpotlessDaemon HTTP paths, parameters, and response meanings remain unchanged.
+This revision intentionally removes `presentableName`, `startDaemon`, `SpotlessDaemonStartContext`,
+`SpotlessDaemonLifecycle`, and the nested `SpotlessDaemonProvider.Endpoint`. It adds stable provider identity,
+lifetime-wide `runDaemon`, top-level endpoint/run-context types, and the frontend presentation EP. The FQNs and fields
+of `SpotlessDaemonProviderState`, `ExternalProject`, and `SpotlessDaemonTarget` remain unchanged.

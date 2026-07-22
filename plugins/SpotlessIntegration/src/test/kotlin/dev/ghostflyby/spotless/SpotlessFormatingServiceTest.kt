@@ -57,14 +57,14 @@ internal class SpotlessFormatingServiceTest {
         project.service<SpotlessProjectService>().daemonProvidersLookup = {
             listOf(
                 object : SpotlessDaemonProvider {
-                    override val presentableName: String = "Throwing Spotless"
+                    override val id: String = "dev.ghostflyby.spotless.test.throwing"
 
                     override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> = providerState
 
                     override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget =
                         SpotlessDaemonTarget(externalProject, file.toNioPath())
 
-                    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
+                    override suspend fun runDaemon(context: SpotlessDaemonRunContext) {
                         throw IOException("transport failed")
                     }
                 },

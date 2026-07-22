@@ -54,18 +54,18 @@ internal class SpotlessProjectService(
     internal fun releaseAllDaemonsAsync(onReleased: (Int) -> Unit = {}): Job =
         daemonCoordinator.releaseAllDaemonsAsync(onReleased)
 
-    internal fun releaseDaemons(provider: SpotlessDaemonProvider): Job =
-        daemonCoordinator.releaseDaemons(provider)
+    internal fun releaseDaemons(providerId: String): Job =
+        daemonCoordinator.releaseDaemons(providerId)
 
     internal fun releaseDaemon(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         externalProject: Path,
-    ): Job = daemonCoordinator.releaseDaemon(provider, externalProject)
+    ): Job = daemonCoordinator.releaseDaemon(providerId, externalProject)
 
     internal fun restartDaemon(
-        provider: SpotlessDaemonProvider,
+        providerId: String,
         externalProject: Path,
-    ): Job = daemonCoordinator.restartDaemon(provider, externalProject)
+    ): Job = daemonCoordinator.restartDaemon(providerId, externalProject)
 
     internal fun hasRunningDaemons(): Boolean =
         daemonCoordinator.hasRunningDaemons()

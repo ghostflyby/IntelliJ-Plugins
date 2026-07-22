@@ -24,6 +24,9 @@
     <extensionPoints>
         <extensionPoint name="spotlessDaemonProvider" interface="dev.ghostflyby.spotless.api.SpotlessDaemonProvider"
                         dynamic="true"/>
+        <extensionPoint name="spotlessDaemonProviderPresentation"
+                        interface="dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation"
+                        dynamic="true"/>
         <extensionPoint name="spotlessFormattingPreprocessor"
                         interface="dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor" dynamic="true"/>
     </extensionPoints>

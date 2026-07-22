@@ -1,52 +1,80 @@
 # SpotlessIntegration Async Lifecycle Refactor
 
-The project formatting path is coroutine-native and does not block the UI thread. PSI discovery runs in read actions,
-daemon HTTP operations run from background coroutines, and synchronous formatting capability checks use a cache with
-bounded asynchronous refreshes.
+Spotless daemon control has two internal owners:
 
-Daemon execution is split into two internal layers:
+- `SpotlessDaemonCoordinator` owns ordered provider discovery, stable IDs, dynamic extension sessions, provider-state
+  collection, target selection, commands, and the combined status snapshot.
+- `SpotlessDaemonRegistry` owns daemon executions, `Starting`/`Ready` transitions, readiness, transport invalidation,
+  HTTP stop, cancellation, deadlines, and runtime snapshots.
 
-- `SpotlessDaemonCoordinator` owns ordered provider discovery, dynamic extension lifetimes, `ProviderSession` creation,
-  provider-state collection, normalized external-project roots, target validation, provider commands, and the combined
-  status snapshot consumed by the project service and widget.
-- `SpotlessDaemonRegistry` owns the daemon state machine, shared startup tasks, readiness, transport invalidation,
-  capability-cache invalidation, endpoint shutdown, and provider cleanup.
+## Provider Sessions And Selection
 
-Each provider instance has one `ProviderSession` containing only the provider, its child `CoroutineScope`, and its
-current immutable snapshot. The scope job is the attachment state. Dynamic extension removal first removes the session
-from provider selection, then cancels its scope, synchronously releases its registry entries within one two-second
-session deadline, publishes the provider snapshot, and returns to IntelliJ extension removal.
+A `ProviderSession` contains the provider, its child scope, stable ID, and current immutable snapshot. The scope job is
+the attachment state. Coordinator also keeps a unique ID-to-session index so commands and UI state do not retain backend
+provider objects.
 
-Providers are evaluated in IntelliJ extension-point order. A `null` target, a target whose normalized root is absent
-from the provider state, or a target-resolution exception is treated as a miss and evaluation continues. The first valid
-target owns the request. Startup, readiness, preprocessing transport, and formatting transport failures do not fall back
-to later providers. The built-in Gradle provider has an explicit extension id and `order="last"` so other integrations
-can take precedence.
+Provider IDs and targets follow IntelliJ EP order. Duplicate IDs keep the first contribution; removal promotes the next
+one. Invalid target results are misses. Once the first valid target is selected, startup or runtime failure does not
+fall back.
 
-Provider state uses explicit per-root generations. Adding a root updates discovery without starting a daemon. Removing a
-root stops its existing daemon. Changing one root's generation restarts only an existing `Starting` or `Ready` entry for
-that root; unchanged roots are untouched. Gradle sync and daemon-configuration changes advance the generation of every
-currently detected linked Gradle root. When no root is detected, an otherwise equivalent empty state remains equal.
+Dynamic provider removal removes the session from selection, cancels its state collector, synchronously releases its
+Registry entries under one two-second deadline, publishes provider state, and then returns to the EP removal boundary.
 
-Registry keys contain provider-session identity and a normalized `Path`, so different providers can own daemon entries
-for the same external-project root. Entries have only two states: `Starting` and `Ready`. Startup is created in a
-registry-owned `SupervisorJob`, follows `startDaemon -> awaitReady(60s) -> Ready`, and is shared by concurrent callers.
-Canceling one caller cancels only its await. Provider removal, root release, generation reconciliation, transport
-failure, natural process termination, and project disposal detach the registry entry.
+## Daemon Execution
 
-Detach is atomic under the registry mutex: remove the entry, invalidate the root capability cache, and publish a new
-immutable runtime snapshot. Cleanup then runs outside the mutex. Batch cleanup is parallel across daemon entries, while
-each daemon performs bounded HTTP stop, exactly-once LIFO provider cleanup, and startup-task join against one shared
-deadline. Normal releases use five seconds; dynamic provider removal uses two seconds. A cleanup that exceeds the
-deadline continues best-effort after the already-detached state has been published, without blocking extension removal.
+Registry keys are `(ProviderSession, normalizedRoot)`, so different providers may own daemons for the same root. Each
+entry is either `Starting` or `Ready` and references one `DaemonExecution` containing the endpoint signal, provider
+lifetime job, and shared startup task.
 
-`SpotlessProjectService` resolves a target and executes formatting through a Coordinator-owned daemon connection. It
-does not access Registry or a raw endpoint. The connection performs `steps` and `format` on the selected Ready daemon.
-Transport failures evict that exact Ready entry and propagate to the existing asynchronous error channel; provider or
-preprocessor logic errors retain their previous graceful fallback behavior. `SpotlessFormatResult.Error` remains
-reserved for daemon HTTP response results.
+Both jobs belong to the Registry `SupervisorJob`, not to the first request. Callers only await the shared startup task;
+canceling one caller does not cancel daemon startup.
 
-Status-bar availability is observed by a project activity. The Coordinator publishes domain state only; the activity is
-the sole boundary that accesses IntelliJ's status-bar widget manager and is disabled in headless and unit-test
-environments. Runtime presentation uses `Starting`, `Ready`, and `Not running`. The external SpotlessDaemon HTTP paths,
-parameters, and response semantics are unchanged.
+Startup is:
+
+```text
+launch provider runDaemon
+-> await exactly one published endpoint
+-> HTTP readiness (60 seconds)
+-> atomically publish Ready if the same execution is still current
+```
+
+Provider return, provider failure, duplicate publication, and cancellation are signaled before Ready publication is
+allowed. Completion from an old execution conditionally detaches only an entry still pointing to that execution.
+
+## Bidirectional Termination
+
+Provider-initiated termination is `runDaemon` returning or throwing. Provider `finally` performs process-side cleanup;
+Registry removes the matching entry, invalidates capability cache, and publishes runtime state without sending
+`/stop`.
+
+Core-initiated termination is:
+
+```text
+Mutex: detach entry -> invalidate cache -> publish snapshot
+Outside Mutex: best-effort HTTP /stop when endpoint exists
+-> cancel provider lifetime
+-> wait for provider finally and startup completion
+```
+
+Readiness failure, generation change, transport failure, manual stop/restart, provider removal, and project disposal all
+use the core path. A `Starting` execution whose endpoint is already published still receives `/stop`; one without an
+endpoint is canceled directly. `/stop`-driven process exit and subsequent cancellation are idempotent because every
+completion handler checks execution identity.
+
+Normal release uses one five-second deadline. Dynamic provider removal uses one two-second deadline. HTTP stop,
+cancellation, provider `finally`, and joins consume the same remaining time. Logical state stays detached after timeout;
+provider cleanup running in `NonCancellable` may continue best-effort.
+
+## Formatting And UI
+
+Formatting follows `resolveTarget -> Coordinator.withDaemon -> steps/format`. No per-request health check is performed.
+Only transport exceptions evict the exact Ready entry. HTTP response errors remain `SpotlessFormatResult.Error`;
+startup, readiness, and transport failures propagate through the existing async error channel.
+
+Coordinator status contains provider IDs, roots, and `Starting`/`Ready` state only. The frontend presentation EP
+resolves display names dynamically with ID fallback. Widget activity remains the sole status-bar platform boundary and
+is disabled in headless/unit-test environments.
+
+Current packaging remains monolithic. Future split-mode ownership is backend for provider/runtime/Gradle integration,
+frontend for presentation and UI, and shared for future internal status/command DTOs. No RPC or split-mode descriptor is
+introduced by this refactor.
