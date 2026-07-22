@@ -34,41 +34,41 @@ internal class SpotlessProjectService(
     private val capabilityCache get() = project.service<SpotlessCapabilityCache>()
 
     internal var client: SpotlessDaemonClient = SpotlessDaemonClient()
-    internal val daemonManager = SpotlessDaemonManager(project, scope) { client }
+    internal val daemonCoordinator = SpotlessDaemonCoordinator(project, scope) { client }
     internal var daemonProvidersLookup: (Project) -> List<SpotlessDaemonProvider>
-        get() = daemonManager.providersLookup
+        get() = daemonCoordinator.providersLookup
         set(value) {
-            daemonManager.providersLookup = value
+            daemonCoordinator.providersLookup = value
         }
 
     internal val daemonStatus: StateFlow<SpotlessDaemonStatusSnapshot>
-        get() = daemonManager.snapshot
+        get() = daemonCoordinator.snapshot
 
     internal fun refreshDaemonProviders() {
-        daemonManager.refresh()
+        daemonCoordinator.refresh()
     }
 
     internal suspend fun releaseAllDaemons(): Int =
-        daemonManager.releaseAllDaemons()
+        daemonCoordinator.releaseAllDaemons()
 
     internal fun releaseAllDaemonsAsync(onReleased: (Int) -> Unit = {}): Job =
-        daemonManager.releaseAllDaemonsAsync(onReleased)
+        daemonCoordinator.releaseAllDaemonsAsync(onReleased)
 
     internal fun releaseDaemons(provider: SpotlessDaemonProvider): Job =
-        daemonManager.releaseDaemons(provider)
+        daemonCoordinator.releaseDaemons(provider)
 
     internal fun releaseDaemon(
         provider: SpotlessDaemonProvider,
         externalProject: Path,
-    ): Job = daemonManager.releaseDaemon(provider, externalProject)
+    ): Job = daemonCoordinator.releaseDaemon(provider, externalProject)
 
     internal fun restartDaemon(
         provider: SpotlessDaemonProvider,
         externalProject: Path,
-    ): Job = daemonManager.restartDaemon(provider, externalProject)
+    ): Job = daemonCoordinator.restartDaemon(provider, externalProject)
 
     internal fun hasRunningDaemons(): Boolean =
-        daemonManager.hasRunningDaemons()
+        daemonCoordinator.hasRunningDaemons()
 
     internal fun formatAsync(
         psiFile: PsiFile,
@@ -94,7 +94,7 @@ internal class SpotlessProjectService(
         content: CharSequence,
         expectedCacheRevision: Long?,
     ): SpotlessFormatResult {
-        val providerTarget = daemonManager.resolveTarget(psiFile.viewProvider.virtualFile)
+        val providerTarget = daemonCoordinator.resolveTarget(psiFile.viewProvider.virtualFile)
         if (providerTarget == null) {
             capabilityCache.update(
                 psiFile.viewProvider.virtualFile,
@@ -107,19 +107,16 @@ internal class SpotlessProjectService(
         }
         val target = providerTarget.target
 
-        val daemon = daemonManager.getDaemon(providerTarget)
-        val result = if (!client.healthCheck(daemon)) {
-            Error("Spotless Daemon is not responding")
-        } else {
-            val request = preprocessFormatRequest(daemon, target.file, psiFile, content)
-            client.format(daemon, target.file, request.content, request.skipSteps)
+        val result = daemonCoordinator.withDaemon(providerTarget) {
+            val request = preprocessFormatRequest(this, target.file, psiFile, content)
+            format(target.file, request.content, request.skipSteps)
         }
         if (content.isNotEmpty() && result is Error) {
             capabilityCache.invalidate(psiFile.viewProvider.virtualFile)
         }
         capabilityCache.update(
             psiFile.viewProvider.virtualFile,
-            target.externalProject,
+            target.externalProjectRoot,
             result,
             strictProbe = content.isEmpty(),
             expectedRevision = expectedCacheRevision,
@@ -146,7 +143,7 @@ internal class SpotlessProjectService(
     }
 
     override fun dispose() {
-        daemonManager.dispose()
+        daemonCoordinator.dispose()
         runCatching {
             client.close()
         }.onFailure { error ->
@@ -166,6 +163,10 @@ internal class SpotlessProjectService(
                 withTimeoutOrNull(timeout) {
                     format(psiFile, "", expectedCacheRevision = cacheRevision)
                 }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                logger.debug("Failed to refresh Spotless formatting capability", error)
             } finally {
                 capabilityCache.finishRefresh(virtualFile, job)
             }
@@ -178,7 +179,7 @@ internal class SpotlessProjectService(
     }
 
     private suspend fun preprocessFormatRequest(
-        daemon: SpotlessDaemonProvider.Endpoint,
+        daemon: SpotlessDaemonCoordinator.DaemonConnection,
         path: Path,
         psiFile: PsiFile,
         content: CharSequence,
@@ -187,21 +188,29 @@ internal class SpotlessProjectService(
             return FormatRequest(content)
         }
         val target = findPreprocessingTarget(psiFile) ?: return FormatRequest(content)
-        val daemonSteps = runCatching {
-            client.steps(daemon, path)
-        }.onFailure { error ->
+        val daemonSteps = try {
+            daemon.steps(path)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: SpotlessDaemonTransportException) {
+            throw error
+        } catch (error: Throwable) {
             logger.debug("Failed to inspect Spotless formatter steps", error)
-        }.getOrNull() ?: return FormatRequest(content)
+            null
+        } ?: return FormatRequest(content)
         var processedContent = content
         val skippedSteps = linkedSetOf<String>()
         target.preprocessors.forEach { preprocessor ->
-            val result = runCatching {
+            val result = try {
                 preprocessor.preprocess(
                     FormattingPreprocessContext(target.psiFile, processedContent, daemonSteps),
                 )
-            }.onFailure { error ->
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
                 logger.debug("Failed to preprocess Spotless formatting request", error)
-            }.getOrNull() ?: return@forEach
+                null
+            } ?: return@forEach
             processedContent = result.content
             skippedSteps += result.skippedSteps
         }

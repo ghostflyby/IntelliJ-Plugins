@@ -14,7 +14,9 @@
                              parentId="build"/>
     </extensions>
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
-        <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
+        <spotlessDaemonProvider id="dev.ghostflyby.spotless.gradle"
+                                order="last"
+                                implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
     </extensions>
     <actions resource-bundle="messages.Bundle">
         <group id="dev.ghostflyby.spotless.actions" popup="true">

@@ -16,9 +16,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
-import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
-import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
+import dev.ghostflyby.spotless.api.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,10 +30,6 @@ import kotlin.time.Duration.Companion.seconds
 
 @TestApplication
 internal class SpotlessFormatingServiceTest {
-    private data class TestProviderState(
-        override val externalProjects: List<Path>,
-    ) : SpotlessDaemonProvider.State
-
     private val projectPathFixture = tempPathFixture()
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
@@ -53,9 +47,11 @@ internal class SpotlessFormatingServiceTest {
     @Test
     suspend fun `run reports thrown format failures via on error`() {
         val externalProject = projectPathFixture.get().toAbsolutePath().normalize()
-        val providerState = MutableStateFlow<SpotlessDaemonProvider.State>(
-            TestProviderState(
-                externalProjects = listOf(externalProject),
+        val providerState = MutableStateFlow(
+            SpotlessDaemonProviderState(
+                projects = listOf(
+                    ExternalProject(externalProject, generation = 0),
+                ),
             ),
         )
         project.service<SpotlessProjectService>().daemonProvidersLookup = {
@@ -63,7 +59,7 @@ internal class SpotlessFormatingServiceTest {
                 object : SpotlessDaemonProvider {
                     override val presentableName: String = "Throwing Spotless"
 
-                    override fun state(project: Project): StateFlow<SpotlessDaemonProvider.State> = providerState
+                    override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> = providerState
 
                     override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget =
                         SpotlessDaemonTarget(externalProject, file.toNioPath())

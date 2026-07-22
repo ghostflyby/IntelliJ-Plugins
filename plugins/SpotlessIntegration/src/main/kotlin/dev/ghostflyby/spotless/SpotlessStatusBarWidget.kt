@@ -291,7 +291,7 @@ private fun SpotlessProjectService.findProviderStatus(
 
 private fun SpotlessDaemonRuntimeState?.presentableText(): String = when (this) {
     SpotlessDaemonRuntimeState.Starting -> Bundle.message("status.bar.widget.state.starting")
-    SpotlessDaemonRuntimeState.Running -> Bundle.message("status.bar.widget.state.running")
+    SpotlessDaemonRuntimeState.Ready -> Bundle.message("status.bar.widget.state.ready")
     null -> Bundle.message("status.bar.widget.state.not.running")
 }
 

@@ -13,28 +13,55 @@ import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.coroutines.*
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 private val HTTP_GET: HttpMethod = HttpMethod.parse("GET")
 private val HTTP_POST: HttpMethod = HttpMethod.parse("POST")
 
+internal class SpotlessDaemonTransportException(
+    operation: String,
+    endpoint: SpotlessDaemonProvider.Endpoint,
+    cause: Throwable? = null,
+) : RuntimeException("Spotless daemon $operation failed: $endpoint", cause)
+
 internal class SpotlessDaemonClient(
     internal var http: HttpClient = HttpClient(CIO),
 ) {
-    suspend fun healthCheck(endpoint: SpotlessDaemonProvider.Endpoint): Boolean =
-        runCatching {
-            http.request {
-                method = HTTP_GET
-                configureEndpoint(endpoint)
-                url {
-                    protocol = URLProtocol.HTTP
-                    encodedPath = "/"
-                }
+    suspend fun healthCheck(endpoint: SpotlessDaemonProvider.Endpoint): Boolean = try {
+        val response = http.request {
+            method = HTTP_GET
+            configureEndpoint(endpoint)
+            url {
+                protocol = URLProtocol.HTTP
+                encodedPath = "/"
             }
-        }.map { response ->
-            response.status == HttpStatusCode.OK
-        }.getOrElse { false }
+        }
+        response.status == HttpStatusCode.OK
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Throwable) {
+        false
+    }
+
+    suspend fun awaitReady(
+        endpoint: SpotlessDaemonProvider.Endpoint,
+        timeout: Duration,
+    ) {
+        val ready = withTimeoutOrNull(timeout) {
+            while (!healthCheck(endpoint)) {
+                delay(readinessRetryDelay)
+            }
+            true
+        } ?: false
+        currentCoroutineContext().ensureActive()
+        if (!ready) {
+            throw SpotlessDaemonTransportException("readiness check", endpoint)
+        }
+    }
 
     suspend fun stop(endpoint: SpotlessDaemonProvider.Endpoint) {
         http.request {
@@ -51,7 +78,7 @@ internal class SpotlessDaemonClient(
         endpoint: SpotlessDaemonProvider.Endpoint,
         path: Path,
     ): List<String>? {
-        val response = http.request {
+        val response = requestOrThrow("steps request", endpoint) {
             method = HTTP_GET
             configureEndpoint(endpoint)
             url {
@@ -61,14 +88,17 @@ internal class SpotlessDaemonClient(
             parameter("path", path.normalize().absolutePathString())
         }
         return when (response.status) {
-            HttpStatusCode.OK -> response.bodyAsText()
+            HttpStatusCode.OK -> response.bodyAsTextOrThrow("steps response", endpoint)
                 .lineSequence()
                 .map(String::trim)
                 .filter(String::isNotEmpty)
                 .toList()
 
             HttpStatusCode.NotFound -> null
-            else -> error("Unexpected steps response status: ${response.status}\n${response.bodyAsText()}")
+            else -> error(
+                "Unexpected steps response status: ${response.status}\n" +
+                        response.bodyAsTextOrThrow("steps response", endpoint),
+            )
         }
     }
 
@@ -78,7 +108,7 @@ internal class SpotlessDaemonClient(
         content: CharSequence,
         skipSteps: List<String> = emptyList(),
     ): SpotlessFormatResult {
-        val response = http.request {
+        val response = requestOrThrow("format request", endpoint) {
             method = HTTP_POST
             configureEndpoint(endpoint)
             url {
@@ -97,7 +127,7 @@ internal class SpotlessDaemonClient(
         }
         return when (response.status) {
             HttpStatusCode.OK -> {
-                val formatted = response.bodyAsText()
+                val formatted = response.bodyAsTextOrThrow("format response", endpoint)
                 if (formatted.isEmpty()) {
                     Clean
                 } else {
@@ -106,13 +136,39 @@ internal class SpotlessDaemonClient(
             }
 
             HttpStatusCode.NotFound -> NotCovered
-            HttpStatusCode.InternalServerError -> Error(response.bodyAsText())
-            else -> Error("Unexpected response status: ${response.status}\n${response.bodyAsText()}")
+            HttpStatusCode.InternalServerError -> Error(response.bodyAsTextOrThrow("format response", endpoint))
+            else -> Error(
+                "Unexpected response status: ${response.status}\n" +
+                        response.bodyAsTextOrThrow("format response", endpoint),
+            )
         }
     }
 
     fun close() {
         http.close()
+    }
+
+    private suspend fun requestOrThrow(
+        operation: String,
+        endpoint: SpotlessDaemonProvider.Endpoint,
+        block: HttpRequestBuilder.() -> Unit,
+    ): HttpResponse = try {
+        http.request(block)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
+        throw SpotlessDaemonTransportException(operation, endpoint, error)
+    }
+
+    private suspend fun HttpResponse.bodyAsTextOrThrow(
+        operation: String,
+        endpoint: SpotlessDaemonProvider.Endpoint,
+    ): String = try {
+        bodyAsText()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Throwable) {
+        throw SpotlessDaemonTransportException(operation, endpoint, error)
     }
 
     private fun HttpRequestBuilder.configureEndpoint(endpoint: SpotlessDaemonProvider.Endpoint) {
@@ -124,5 +180,9 @@ internal class SpotlessDaemonClient(
 
             is SpotlessDaemonProvider.Endpoint.UnixSocket -> unixSocket(endpoint.path.toString())
         }
+    }
+
+    private companion object {
+        val readinessRetryDelay: Duration = 100.milliseconds
     }
 }

@@ -16,7 +16,8 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.util.NlsSafe
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.ExternalProject
+import dev.ghostflyby.spotless.api.SpotlessDaemonProviderState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -89,13 +90,6 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     }
 }
 
-private data class SpotlessGradleProviderState(
-    override val externalProjects: List<Path>,
-    val gradleDaemonVersion: String,
-    val gradleDaemonJar: String,
-    val syncGeneration: Long,
-) : SpotlessDaemonProvider.State
-
 @Service(Service.Level.PROJECT)
 @State(
     name = "SpotlessGradleIntegration",
@@ -105,12 +99,12 @@ internal class SpotlessGradleSettings
     (private val project: com.intellij.openapi.project.Project) :
     SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
     private val providerStateLock = Any()
-    private var syncGeneration = 0L
-    private val mutableProviderState: MutableStateFlow<SpotlessGradleProviderState> by lazy {
+    private var providerGeneration = 0L
+    private val mutableProviderState: MutableStateFlow<SpotlessDaemonProviderState> by lazy {
         MutableStateFlow(createProviderState())
     }
 
-    val providerState: StateFlow<SpotlessDaemonProvider.State>
+    val providerState: StateFlow<SpotlessDaemonProviderState>
         get() = mutableProviderState
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
@@ -149,15 +143,13 @@ internal class SpotlessGradleSettings
             val previous = state
             updateState(transform)
             if (force || state != previous) {
-                if (force) {
-                    syncGeneration++
-                }
+                providerGeneration++
                 mutableProviderState.value = createProviderState()
             }
         }
     }
 
-    private fun createProviderState(): SpotlessGradleProviderState {
+    private fun createProviderState(): SpotlessDaemonProviderState {
         val current = state
         val externalProjects = GradleSettings.getInstance(project).linkedProjectsSettings
             .asSequence()
@@ -166,12 +158,15 @@ internal class SpotlessGradleSettings
             .filter { it.absolutePathString() in current.paths }
             .distinct()
             .sortedBy(Path::toString)
+            .map { root ->
+                ExternalProject(
+                    root = root,
+                    generation = providerGeneration,
+                )
+            }
             .toList()
-        return SpotlessGradleProviderState(
-            externalProjects = externalProjects,
-            gradleDaemonVersion = current.gradleDaemonVersion,
-            gradleDaemonJar = current.gradleDaemonJar,
-            syncGeneration = syncGeneration,
+        return SpotlessDaemonProviderState(
+            projects = externalProjects,
         )
     }
 

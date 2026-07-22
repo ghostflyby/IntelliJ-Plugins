@@ -1,19 +1,20 @@
 # SpotlessIntegration TODO
 
-Status: Ready Last Updated: 2026-07-20
+Status: Ready Last Updated: 2026-07-21
 
 ## Next Steps
 
 1. Add UI-enabled integration coverage for status-bar availability changes and popup inline actions.
-2. Add a second provider fixture to exercise the public daemon-provider EP independently of Gradle.
-3. Re-check the isolated `StatusBarWidgetsManager` dependency when updating the IntelliJ Platform baseline.
+2. Add a small third-party provider compatibility fixture for the public generation-based provider API.
+3. Review cleanup deadline telemetry after real Gradle daemon failures and tune warning detail if needed.
 
 ## Done Criteria
 
 1. Status widget creation, removal, and root action rendering are covered in a real IDE-frame test.
-2. Provider-neutral behavior is validated with two independent provider implementations.
-3. The status-bar availability adapter remains the only dependency on the platform implementation package.
+2. A provider outside the built-in Gradle integration compiles and runs against the documented public contract.
+3. Cleanup timeout reports identify the provider session and normalized external-project root.
 
 ## Completed Work
 
-See `docs/SpotlessIntegration-AsyncLifecycleRefactor.md`.
+See `docs/SpotlessIntegration-AsyncLifecycleRefactor.md` and
+`docs/SpotlessIntegration-ApiSurfaceContract.md`.

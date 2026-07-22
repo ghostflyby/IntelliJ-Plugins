@@ -12,8 +12,8 @@
 
 ### Changed
 
-- redesigned the public daemon-provider and formatting-preprocessor extension contracts around file-specific target
-  resolution, project-scoped state flows, core-owned invocation contexts, and connection-only daemon endpoints.
+- redesigned the public daemon-provider and formatting-preprocessor extension contracts around ordered file-specific
+  target selection, explicit per-root generations, core-owned invocation contexts, and connection-only daemon endpoints.
 - restart active Gradle Spotless daemons after every Gradle project synchronization or daemon configuration change.
 
 ### Deprecated

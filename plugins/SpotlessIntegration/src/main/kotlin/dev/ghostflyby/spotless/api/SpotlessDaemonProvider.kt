@@ -31,29 +31,20 @@ public interface SpotlessDaemonProvider {
      * Return the current project-scoped provider state.
      *
      * The returned flow must be owned by a project-level lifecycle and remain stable across calls.
-     * Each emitted value must be immutable and implement structural equality over every input that
-     * can affect [resolveTarget] or [startDaemon]. The core normalizes external-project paths and
-     * restarts currently active provider daemons after every subsequent distinct state emission.
-     * Providers that need event-based invalidation even when derived configuration is unchanged
-     * should include a provider-private revision in their state implementation's equality.
+     * Each external project has an explicit generation. Providers must change that generation when
+     * any input affecting [resolveTarget] or [startDaemon] changes for the project root.
      */
-    public fun state(project: Project): StateFlow<State>
-
-    /** Immutable, structurally comparable project-scoped state published by a provider. */
-    public interface State {
-        /** External projects where the provider has positively detected Spotless. */
-        public val externalProjects: List<Path>
-    }
-
-
+    public fun state(project: Project): StateFlow<SpotlessDaemonProviderState>
 
     /**
      * Resolve the daemon ownership and daemon-side path for [file].
      *
      * This method must be cheap and must return `null` when this provider cannot currently handle
      * the file. The returned external project must be one of
-     * [State.externalProjects]. The core tries later providers when a
-     * provider returns `null`.
+     * [SpotlessDaemonProviderState.projects]. The core tries later providers when a
+     * provider returns `null` or an invalid target. Once a provider returns the first valid target,
+     * it owns that request; startup or daemon-operation failures do not fall back to another
+     * provider. Provider iteration follows IntelliJ extension-point ordering.
      */
     public fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget?
 
@@ -80,6 +71,18 @@ public interface SpotlessDaemonProvider {
         public data class UnixSocket(public val path: Path) : Endpoint
     }
 }
+
+/** Immutable project-scoped state published by a daemon provider. */
+public data class SpotlessDaemonProviderState(
+    /** External projects where the provider has positively detected Spotless. */
+    public val projects: List<ExternalProject>,
+)
+
+/** Provider inputs for one external project. */
+public data class ExternalProject(
+    public val root: Path,
+    public val generation: Long,
+)
 
 /** Invocation-scoped context supplied by the core when starting a provider daemon. */
 public interface SpotlessDaemonStartContext {
@@ -108,6 +111,6 @@ public interface SpotlessDaemonLifecycle {
 }
 
 public data class SpotlessDaemonTarget(
-    public val externalProject: Path,
+    public val externalProjectRoot: Path,
     public val file: Path,
 )

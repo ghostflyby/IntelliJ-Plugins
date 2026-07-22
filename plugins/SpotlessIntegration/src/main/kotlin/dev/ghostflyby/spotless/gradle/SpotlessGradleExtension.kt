@@ -12,9 +12,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import dev.ghostflyby.spotless.Bundle
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
-import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
-import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
+import dev.ghostflyby.spotless.api.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Files
@@ -27,7 +25,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override val presentableName: String
         get() = Bundle.message("spotless.provider.gradle.presentable.name")
 
-    override fun state(project: Project): StateFlow<SpotlessDaemonProvider.State> =
+    override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> =
         project.service<SpotlessGradleSettings>().providerState
 
     override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonProvider.Endpoint {
@@ -42,27 +40,22 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
         }
         val unixSocketPath = workingDirectory / "spotless-daemon.sock"
         val endpoint = SpotlessDaemonProvider.Endpoint.UnixSocket(unixSocketPath)
-        try {
-            val process = withContext(Dispatchers.IO + NonCancellable) {
-                startGradleSpotlessDaemon(
-                    project,
-                    context.externalProjectRoot,
-                    unixSocketPath,
-                    workingDirectory,
-                ) {
-                    lifecycle.requestClose("Spotless daemon process terminated")
-                }.also { daemonProcess ->
-                    lifecycle.registerCleanup {
-                        cleanupGradleDaemonProcess(daemonProcess)
-                    }
+        val process = withContext(Dispatchers.IO + NonCancellable) {
+            startGradleSpotlessDaemon(
+                project,
+                context.externalProjectRoot,
+                unixSocketPath,
+                workingDirectory,
+            ) {
+                lifecycle.requestClose("Spotless daemon process terminated")
+            }.also { daemonProcess ->
+                lifecycle.registerCleanup {
+                    cleanupGradleDaemonProcess(daemonProcess)
                 }
             }
-            currentCoroutineContext().ensureActive()
-            process.start()
-        } catch (error: Throwable) {
-            lifecycle.requestClose("Spotless daemon failed to start")
-            throw error
         }
+        currentCoroutineContext().ensureActive()
+        process.start()
         return endpoint
     }
 
@@ -72,9 +65,10 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     ): SpotlessDaemonTarget? {
         val ioPath = file.toNioPathOrNull() ?: return null
         val abs = ioPath.toAbsolutePath().normalize()
-        val externalProject = state(project).value.externalProjects
+        val externalProject = state(project).value.projects
+            .map(ExternalProject::root)
             .filter { abs.startsWith(it) }
-            .maxByOrNull { it.nameCount }
+            .maxByOrNull(Path::getNameCount)
             ?: return null
         return SpotlessDaemonTarget(externalProject, abs)
     }
