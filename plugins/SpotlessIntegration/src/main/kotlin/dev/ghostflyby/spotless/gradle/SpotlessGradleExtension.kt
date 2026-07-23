@@ -26,8 +26,8 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> =
         project.service<SpotlessGradleSettings>().providerState
 
-    override suspend fun runDaemon(context: SpotlessDaemonRunContext) =
-        runSpotlessGradleDaemonLifetime(
+    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonHandle =
+        startSpotlessGradleDaemon(
             context = context,
             createWorkingDirectory = { Files.createTempDirectory(null) },
             startProcess = ::startGradleSpotlessDaemon,
@@ -57,16 +57,28 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     }
 }
 
-internal suspend fun runSpotlessGradleDaemonLifetime(
-    context: SpotlessDaemonRunContext,
+internal suspend fun startSpotlessGradleDaemon(
+    context: SpotlessDaemonStartContext,
     createWorkingDirectory: () -> Path,
     startProcess: (Project, Path, Path, Path, () -> Unit) -> SpotlessGradleDaemonProcess,
     cleanupProcess: (SpotlessGradleDaemonProcess?) -> Unit,
     cleanupDirectory: (Path) -> Unit,
-) {
+): SpotlessDaemonHandle {
     val terminated = CompletableDeferred<Unit>()
     var workingDirectory: Path? = null
     var process: SpotlessGradleDaemonProcess? = null
+    var ownershipTransferred = false
+
+    suspend fun cleanup() {
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                cleanupProcess(process)
+            } finally {
+                workingDirectory?.let(cleanupDirectory)
+            }
+        }
+    }
+
     try {
         withContext(Dispatchers.IO) {
             workingDirectory = createWorkingDirectory()
@@ -87,12 +99,18 @@ internal suspend fun runSpotlessGradleDaemonLifetime(
         currentCoroutineContext().ensureActive()
         checkNotNull(process).start()
         currentCoroutineContext().ensureActive()
-        context.publishEndpoint(SpotlessDaemonEndpoint.UnixSocket(unixSocketPath))
-        terminated.await()
+        val handle = context.launchHandle(SpotlessDaemonEndpoint.UnixSocket(unixSocketPath)) {
+            try {
+                terminated.await()
+            } finally {
+                cleanup()
+            }
+        }
+        ownershipTransferred = true
+        return handle
     } finally {
-        withContext(NonCancellable + Dispatchers.IO) {
-            cleanupProcess(process)
-            workingDirectory?.let(cleanupDirectory)
+        if (!ownershipTransferred) {
+            cleanup()
         }
     }
 }

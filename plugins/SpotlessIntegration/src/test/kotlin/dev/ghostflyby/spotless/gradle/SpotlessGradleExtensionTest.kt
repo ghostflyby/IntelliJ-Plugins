@@ -11,7 +11,8 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.api.SpotlessDaemonRunContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -26,13 +27,13 @@ internal class SpotlessGradleExtensionTest {
     private val project by projectFixture
 
     @Test
-    suspend fun `natural process termination publishes endpoint and cleans in fixed order`() {
+    suspend fun `natural process termination exposes endpoint and cleans in fixed order`() {
         val workingDirectory = projectPathFixture.get().resolve("natural-lifetime")
         val cleanupOrder = mutableListOf<String>()
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         lateinit var process: FakeGradleDaemonProcess
 
-        runSpotlessGradleDaemonLifetime(
+        val handle = startSpotlessGradleDaemon(
             context = context,
             createWorkingDirectory = { workingDirectory },
             startProcess = { _, _, _, _, onTerminated ->
@@ -47,10 +48,11 @@ internal class SpotlessGradleExtensionTest {
             },
             cleanupDirectory = { cleanupOrder.add("directory") },
         )
+        handle.lifetime.join()
 
         assertEquals(
             SpotlessDaemonEndpoint.UnixSocket(workingDirectory.resolve("spotless-daemon.sock")),
-            context.endpoint.await(),
+            handle.endpoint,
         )
         assertEquals(listOf("process", "directory"), cleanupOrder)
         assertEquals(1, process.destroyCount)
@@ -60,25 +62,22 @@ internal class SpotlessGradleExtensionTest {
     suspend fun `core cancellation cleans process before working directory`() = coroutineScope {
         val workingDirectory = projectPathFixture.get().resolve("cancelled-lifetime")
         val cleanupOrder = mutableListOf<String>()
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         lateinit var process: FakeGradleDaemonProcess
-        val lifetime = async {
-            runSpotlessGradleDaemonLifetime(
-                context = context,
-                createWorkingDirectory = { workingDirectory },
-                startProcess = { _, _, _, _, _ ->
-                    FakeGradleDaemonProcess(workingDirectory.resolve("init.gradle")).also { process = it }
-                },
-                cleanupProcess = {
-                    cleanupOrder.add("process")
-                    it?.destroyProcess()
-                },
-                cleanupDirectory = { cleanupOrder.add("directory") },
-            )
-        }
-        context.endpoint.await()
+        val handle = startSpotlessGradleDaemon(
+            context = context,
+            createWorkingDirectory = { workingDirectory },
+            startProcess = { _, _, _, _, _ ->
+                FakeGradleDaemonProcess(workingDirectory.resolve("init.gradle")).also { process = it }
+            },
+            cleanupProcess = {
+                cleanupOrder.add("process")
+                it?.destroyProcess()
+            },
+            cleanupDirectory = { cleanupOrder.add("directory") },
+        )
 
-        lifetime.cancelAndJoin()
+        handle.lifetime.cancelAndJoin()
 
         assertEquals(listOf("process", "directory"), cleanupOrder)
         assertEquals(1, process.destroyCount)
@@ -92,9 +91,9 @@ internal class SpotlessGradleExtensionTest {
         var directoryCleanupCount = 0
         var cleanedDirectory: Path? = null
         var processCreationCount = 0
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         val lifetime = async {
-            runSpotlessGradleDaemonLifetime(
+            startSpotlessGradleDaemon(
                 context = context,
                 createWorkingDirectory = {
                     creationStarted.complete(Unit)
@@ -121,7 +120,7 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(0, processCreationCount)
         assertEquals(workingDirectory, cleanedDirectory)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.endpoint.isCompleted)
+        assertFalse(context.handle.isCompleted)
     }
 
     @Test
@@ -129,12 +128,12 @@ internal class SpotlessGradleExtensionTest {
         val workingDirectory = projectPathFixture.get().resolve("cancelled-process-creation")
         val processCreationStarted = CompletableDeferred<Unit>()
         val allowProcessCreationToFinish = CountDownLatch(1)
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         lateinit var process: FakeGradleDaemonProcess
         var cleanedProcess: SpotlessGradleDaemonProcess? = null
         var directoryCleanupCount = 0
         val lifetime = async {
-            runSpotlessGradleDaemonLifetime(
+            startSpotlessGradleDaemon(
                 context = context,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
@@ -159,19 +158,19 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(0, process.startCount)
         assertEquals(1, process.destroyCount)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.endpoint.isCompleted)
+        assertFalse(context.handle.isCompleted)
     }
 
     @Test
-    suspend fun `cancellation during process notification does not publish endpoint`() = coroutineScope {
+    suspend fun `cancellation during process notification does not launch handle`() = coroutineScope {
         val workingDirectory = projectPathFixture.get().resolve("cancelled-process-notification")
         val processStartEntered = CompletableDeferred<Unit>()
         val allowProcessStartToFinish = CountDownLatch(1)
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         lateinit var process: FakeGradleDaemonProcess
         var directoryCleanupCount = 0
         val lifetime = async(Dispatchers.Default) {
-            runSpotlessGradleDaemonLifetime(
+            startSpotlessGradleDaemon(
                 context = context,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
@@ -196,18 +195,18 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(1, process.startCount)
         assertEquals(1, process.destroyCount)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.endpoint.isCompleted)
+        assertFalse(context.handle.isCompleted)
     }
 
     @Test
     suspend fun `process start failure still cleans process and working directory`() {
         val workingDirectory = projectPathFixture.get().resolve("failed-start")
         val cleanupOrder = mutableListOf<String>()
-        val context = TestRunContext(project, projectPathFixture.get())
+        val context = TestStartContext(project, projectPathFixture.get())
         lateinit var process: FakeGradleDaemonProcess
 
         val failure = runCatching {
-            runSpotlessGradleDaemonLifetime(
+            startSpotlessGradleDaemon(
                 context = context,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
@@ -225,19 +224,29 @@ internal class SpotlessGradleExtensionTest {
         }.exceptionOrNull()
 
         assertTrue(failure is IOException)
-        assertFalse(context.endpoint.isCompleted)
+        assertFalse(context.handle.isCompleted)
         assertEquals(listOf("process", "directory"), cleanupOrder)
         assertEquals(1, process.destroyCount)
     }
 
-    private class TestRunContext(
+    private class TestStartContext(
         override val project: Project,
         override val externalProjectRoot: Path,
-    ) : SpotlessDaemonRunContext {
-        val endpoint = CompletableDeferred<SpotlessDaemonEndpoint>()
+    ) : SpotlessDaemonStartContext {
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val handle = CompletableDeferred<SpotlessDaemonHandle>()
 
-        override suspend fun publishEndpoint(endpoint: SpotlessDaemonEndpoint) {
-            check(this.endpoint.complete(endpoint))
+        @Suppress("OPT_IN_USAGE")
+        override suspend fun launchHandle(
+            endpoint: SpotlessDaemonEndpoint,
+            lifetime: suspend () -> Unit,
+        ): SpotlessDaemonHandle {
+            val lifetimeTask = scope.async(start = CoroutineStart.ATOMIC) {
+                lifetime()
+            }
+            return SpotlessDaemonHandle(endpoint, lifetimeTask).also {
+                check(handle.complete(it))
+            }
         }
     }
 

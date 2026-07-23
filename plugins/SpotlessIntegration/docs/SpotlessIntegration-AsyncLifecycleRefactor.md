@@ -23,43 +23,52 @@ Registry entries under one two-second deadline, publishes provider state, and th
 ## Daemon Execution
 
 Registry keys are `(ProviderSession, normalizedRoot)`, so different providers may own daemons for the same root. Each
-entry is either `Starting` or `Ready` and references one `DaemonExecution` containing the endpoint signal, provider
-lifetime job, and shared startup task.
+entry is either `Starting` or `Ready` and references one `DaemonExecution` with its own `SupervisorJob`, execution
+scope, shared startup task, and `None`/`Active` handle ownership state.
 
-Both jobs belong to the Registry `SupervisorJob`, not to the first request. Callers only await the shared startup task;
-canceling one caller does not cancel daemon startup.
+The execution job is a child of the Registry `SupervisorJob`. Both the startup task and provider lifetime task are its
+children, not children of the first request. Callers only await the shared startup task; canceling one caller does not
+cancel daemon startup.
 
 Startup is:
 
 ```text
-launch provider runDaemon
--> await exactly one published endpoint
--> HTTP readiness (60 seconds)
--> atomically publish Ready if the same execution is still current
+provider startDaemon(context)
+-> context launchHandle(endpoint, lifetime)
+-> verify the returned handle is the execution's Active handle
+-> race HTTP readiness (60 seconds) against lifetime completion
+-> atomically publish Ready if the same execution and generation are current
 ```
 
-Provider return, provider failure, duplicate publication, and cancellation are signaled before Ready publication is
-allowed. Completion from an old execution conditionally detaches only an entry still pointing to that execution.
+`launchHandle` performs a short non-cancellable `None -> Active` ownership commit after cancellably acquiring the
+Registry mutex. Its internal lifetime task starts atomically so cancellation immediately after handoff still enters the
+lifetime block and runs `finally`. Duplicate or late launch, a foreign returned handle, provider failure, and lifetime
+completion are rejected before Ready publication. Completion from an old execution conditionally detaches only an entry
+still pointing to the same execution and handle.
 
 ## Bidirectional Termination
 
-Provider-initiated termination is `runDaemon` returning or throwing. Provider `finally` performs process-side cleanup;
-Registry removes the matching entry, invalidates capability cache, and publishes runtime state without sending
-`/stop`.
+Provider-initiated termination is the handle lifetime job completing normally, exceptionally, or through provider-side
+cancellation. Provider `finally` performs process-side cleanup; Registry removes the matching entry, invalidates
+capability cache, and publishes runtime state without sending `/stop`. The public handle exposes only `Job`; Registry
+keeps the backing `Deferred<Unit>` internally so a failure during startup is not replaced by execution-parent
+cancellation. Coroutine stack-trace recovery may copy the throwable instance while retaining its type, message, and
+original cause.
 
 Core-initiated termination is:
 
 ```text
 Mutex: detach entry -> invalidate cache -> publish snapshot
 Outside Mutex: best-effort HTTP /stop when endpoint exists
--> cancel provider lifetime
--> wait for provider finally and startup completion
+-> cancel the execution job
+-> join the execution job, covering provider finally and startup completion
 ```
 
 Readiness failure, generation change, transport failure, manual stop/restart, provider removal, and project disposal all
-use the core path. A `Starting` execution whose endpoint is already published still receives `/stop`; one without an
-endpoint is canceled directly. `/stop`-driven process exit and subsequent cancellation are idempotent because every
-completion handler checks execution identity.
+use the core path. A `Starting` execution with an Active handle still receives `/stop`; one without a handle is canceled
+directly. `/stop`-driven process exit and subsequent cancellation are idempotent because every completion handler checks
+execution and handle identity. Replacement always creates a new immutable handle after the old execution cleanup path;
+endpoints are never replaced inside a handle.
 
 Normal release uses one five-second deadline. Dynamic provider removal uses one two-second deadline. HTTP stop,
 cancellation, provider `finally`, and joins consume the same remaining time. Logical state stays detached after timeout;

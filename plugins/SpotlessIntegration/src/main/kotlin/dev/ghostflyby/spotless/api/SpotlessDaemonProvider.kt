@@ -9,6 +9,7 @@ package dev.ghostflyby.spotless.api
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Path
 
@@ -32,7 +33,7 @@ public interface SpotlessDaemonProvider {
      *
      * The returned flow must be owned by a project-level lifecycle and remain stable across calls.
      * Each external project has an explicit generation. Providers must change that generation when
-     * any input affecting [resolveTarget] or [runDaemon] changes for the project root.
+     * any input affecting [resolveTarget] or [startDaemon] changes for the project root.
      */
     public fun state(project: Project): StateFlow<SpotlessDaemonProviderState>
 
@@ -49,16 +50,16 @@ public interface SpotlessDaemonProvider {
     public fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget?
 
     /**
-     * Run one daemon for [SpotlessDaemonRunContext.externalProjectRoot].
+     * Start one daemon for [SpotlessDaemonStartContext.externalProjectRoot].
      *
-     * This function suspends for the entire daemon lifetime. Returning or throwing initiates
-     * provider-side termination. Coroutine cancellation initiates core-side termination.
-     * Provider-owned resources must be released from `finally`; the core owns HTTP readiness and
-     * stop requests.
+     * Resources acquired before [SpotlessDaemonStartContext.launchHandle] remain provider-owned
+     * and must be cleaned up when startup fails. A successfully launched handle transfers daemon
+     * ownership to the core. The handle's lifetime block must release provider-owned resources
+     * from `finally`; the core owns HTTP readiness and stop requests.
      *
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
-    public suspend fun runDaemon(context: SpotlessDaemonRunContext)
+    public suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonHandle
 }
 
 /** Immutable project-scoped state published by a daemon provider. */
@@ -73,19 +74,34 @@ public data class ExternalProject(
     public val generation: Long,
 )
 
-/** Lifetime-scoped context supplied by the core when running a provider daemon. */
-public interface SpotlessDaemonRunContext {
+/** Startup-scoped context supplied by the core when creating a provider daemon handle. */
+public interface SpotlessDaemonStartContext {
     public val project: Project
     public val externalProjectRoot: Path
 
     /**
-     * Publish the daemon connection address exactly once.
+     * Transfer ownership of acquired daemon resources to the core.
      *
-     * The core performs HTTP readiness checks after publication. Repeated publication, publication
-     * after the daemon has been detached, or returning without publication fails startup.
+     * This may be called exactly once. A successful return is the ownership-transfer commit point.
+     * The returned handle is already active, and its lifetime block must not return until the
+     * provider has finished daemon cleanup.
      */
-    public suspend fun publishEndpoint(endpoint: SpotlessDaemonEndpoint)
+    public suspend fun launchHandle(
+        endpoint: SpotlessDaemonEndpoint,
+        lifetime: suspend () -> Unit,
+    ): SpotlessDaemonHandle
 }
+
+/**
+ * Immutable daemon endpoint plus its provider-owned asynchronous lifetime.
+ *
+ * The core or provider may cancel [lifetime]. Joining it waits for the lifetime block, including its
+ * `finally` cleanup, but does not propagate the provider failure that ended the backing task.
+ */
+public class SpotlessDaemonHandle internal constructor(
+    public val endpoint: SpotlessDaemonEndpoint,
+    public val lifetime: Job,
+)
 
 /** Public daemon address contract used by providers and the core daemon client. */
 public sealed interface SpotlessDaemonEndpoint {

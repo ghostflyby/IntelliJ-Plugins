@@ -23,10 +23,10 @@ is not enabled in this phase, and no RPC contract is introduced.
   current state is a miss and allows the next provider to be considered.
 - The first valid target owns the request. Startup, readiness, and operation failures never fall back to another
   provider.
-- `runDaemon(context)` suspends for the complete daemon lifetime. Returning or throwing is provider-initiated
-  termination; coroutine cancellation is core-initiated termination.
-- Provider resources belong in structured child coroutines and `finally`. The API intentionally exposes neither a raw
-  `CoroutineScope` nor an IntelliJ `Disposable`.
+- `startDaemon(context)` acquires one daemon and returns the exact handle created by that context.
+- Resources acquired before `launchHandle` remain provider-owned. A successful `launchHandle` return atomically
+  transfers ownership to the core; the supplied lifetime block then owns cleanup from `finally`.
+- The API intentionally exposes neither a raw `CoroutineScope` nor an IntelliJ `Disposable`.
 
 ### `SpotlessDaemonProviderState` and `ExternalProject`
 
@@ -45,14 +45,18 @@ explicit `generation`.
 continuous provider state. The root must exist in the same provider's current state; the core normalizes and validates
 it before selecting the provider.
 
-### `SpotlessDaemonRunContext` and `SpotlessDaemonEndpoint`
+### `SpotlessDaemonStartContext`, `SpotlessDaemonHandle`, and `SpotlessDaemonEndpoint`
 
-`SpotlessDaemonRunContext` exposes only the project, normalized external-project root, and
-`publishEndpoint(endpoint)`.
+`SpotlessDaemonStartContext` exposes the project, normalized external-project root, and
+`launchHandle(endpoint, lifetime)`.
 
-- Exactly one endpoint must be published.
-- Returning before publication, publishing twice, or publishing after detach fails startup.
-- The core performs the HTTP readiness check after publication.
+- `launchHandle` may succeed exactly once and is the ownership-transfer commit point. Duplicate calls, calls after
+  detach or state invalidation, and returning a foreign handle fail startup.
+- `SpotlessDaemonHandle` is a final composition object. Its endpoint is immediately available and immutable; its
+  `Job` represents provider lifetime and cleanup completion without implementing or delegating `Job`/`Deferred`.
+- Either side may cancel the lifetime job. `join()` waits until provider `finally` completes and does not propagate the
+  provider exception. Registry retains an internal `Deferred<Unit>` only to preserve the original startup failure.
+- The core performs the HTTP readiness check after handle launch.
 - `SpotlessDaemonEndpoint.Localhost` and `.UnixSocket` contain connection information only. Process handles, temporary
   files, and cleanup callbacks do not cross the provider boundary.
 
@@ -93,7 +97,8 @@ commands, capability cache, and Gradle process types are internal implementation
 
 ## ABI Decision
 
-This revision intentionally removes `presentableName`, `startDaemon`, `SpotlessDaemonStartContext`,
-`SpotlessDaemonLifecycle`, and the nested `SpotlessDaemonProvider.Endpoint`. It adds stable provider identity,
-lifetime-wide `runDaemon`, top-level endpoint/run-context types, and the frontend presentation EP. The FQNs and fields
-of `SpotlessDaemonProviderState`, `ExternalProject`, and `SpotlessDaemonTarget` remain unchanged.
+This revision replaces `runDaemon`, `SpotlessDaemonRunContext`, and endpoint publication with `startDaemon`,
+`SpotlessDaemonStartContext`, and the final composition-based `SpotlessDaemonHandle`. It keeps the earlier removal of
+`presentableName`, `SpotlessDaemonLifecycle`, and the nested `SpotlessDaemonProvider.Endpoint`, while retaining stable
+provider identity, the top-level endpoint type, and the frontend presentation EP. The FQNs and fields of
+`SpotlessDaemonProviderState`, `ExternalProject`, and `SpotlessDaemonTarget` remain unchanged.

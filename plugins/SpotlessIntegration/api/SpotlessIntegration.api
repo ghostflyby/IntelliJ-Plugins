@@ -36,12 +36,17 @@ public final class dev/ghostflyby/spotless/api/SpotlessDaemonEndpoint$UnixSocket
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class dev/ghostflyby/spotless/api/SpotlessDaemonHandle {
+	public final fun getEndpoint ()Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint;
+	public final fun getLifetime ()Lkotlinx/coroutines/Job;
+}
+
 public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonProvider {
 	public static final field Companion Ldev/ghostflyby/spotless/api/SpotlessDaemonProvider$Companion;
 	public static final field EP_NAME Lcom/intellij/openapi/extensions/ExtensionPointName;
 	public abstract fun getId ()Ljava/lang/String;
 	public abstract fun resolveTarget (Lcom/intellij/openapi/project/Project;Lcom/intellij/openapi/vfs/VirtualFile;)Ldev/ghostflyby/spotless/api/SpotlessDaemonTarget;
-	public abstract fun runDaemon (Ldev/ghostflyby/spotless/api/SpotlessDaemonRunContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun startDaemon (Ldev/ghostflyby/spotless/api/SpotlessDaemonStartContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun state (Lcom/intellij/openapi/project/Project;)Lkotlinx/coroutines/flow/StateFlow;
 }
 
@@ -59,10 +64,10 @@ public final class dev/ghostflyby/spotless/api/SpotlessDaemonProviderState {
 	public fun toString ()Ljava/lang/String;
 }
 
-public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonRunContext {
+public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonStartContext {
 	public abstract fun getExternalProjectRoot ()Ljava/nio/file/Path;
 	public abstract fun getProject ()Lcom/intellij/openapi/project/Project;
-	public abstract fun publishEndpoint (Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun launchHandle (Ldev/ghostflyby/spotless/api/SpotlessDaemonEndpoint;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/ghostflyby/spotless/api/SpotlessDaemonTarget {

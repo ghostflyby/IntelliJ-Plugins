@@ -330,14 +330,15 @@ internal class SpotlessStatusBarWidgetTest {
 
         override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget? = null
 
-        override suspend fun runDaemon(context: SpotlessDaemonRunContext) {
+        override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonHandle {
             val currentTermination = CompletableDeferred<Unit>()
             termination.set(currentTermination)
-            try {
-                context.publishEndpoint(SpotlessDaemonEndpoint.Localhost(25252U))
-                currentTermination.await()
-            } finally {
-                termination.compareAndSet(currentTermination, null)
+            return context.launchHandle(SpotlessDaemonEndpoint.Localhost(25252U)) {
+                try {
+                    currentTermination.await()
+                } finally {
+                    termination.compareAndSet(currentTermination, null)
+                }
             }
         }
 

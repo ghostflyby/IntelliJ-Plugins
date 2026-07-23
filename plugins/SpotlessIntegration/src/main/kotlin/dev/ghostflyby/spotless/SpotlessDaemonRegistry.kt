@@ -10,7 +10,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.api.SpotlessDaemonRunContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.nio.file.Path
+import kotlin.coroutines.CoroutineContext
 import kotlin.io.path.absolutePathString
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -60,15 +62,22 @@ internal class SpotlessDaemonRegistry(
     private class DaemonExecution(
         val key: DaemonKey,
         val generation: Long,
+        parentContext: CoroutineContext,
+        parentJob: Job,
     ) {
-        val endpointSignal = CompletableDeferred<SpotlessDaemonEndpoint>()
-        val termination = CompletableDeferred<Throwable?>()
+        val job: CompletableJob = SupervisorJob(parentJob)
+        val scope = CoroutineScope(parentContext + job)
+        var ownership: HandleOwnership = HandleOwnership.None
+        lateinit var startupTask: Deferred<SpotlessDaemonHandle>
+    }
 
-        @Volatile
-        var publishedEndpoint: SpotlessDaemonEndpoint? = null
+    private sealed interface HandleOwnership {
+        data object None : HandleOwnership
 
-        lateinit var lifetimeJob: Job
-        lateinit var startupTask: Deferred<SpotlessDaemonEndpoint>
+        data class Active(
+            val handle: SpotlessDaemonHandle,
+            val completion: Deferred<Unit>,
+        ) : HandleOwnership
     }
 
     private sealed interface DaemonEntry {
@@ -84,8 +93,18 @@ internal class SpotlessDaemonRegistry(
     private data class Ready(
         override val generation: Long,
         override val execution: DaemonExecution,
-        val endpoint: SpotlessDaemonEndpoint,
+        val handle: SpotlessDaemonHandle,
     ) : DaemonEntry
+
+    private data class ProviderTermination(
+        val failure: Throwable?,
+    )
+
+    private enum class ReadyPublication {
+        Published,
+        ProviderEnded,
+        Detached,
+    }
 
     private data class ReadyLease(
         val key: DaemonKey,
@@ -120,7 +139,7 @@ internal class SpotlessDaemonRegistry(
     ): T {
         val ready = getDaemon(session, externalProject, generation)
         try {
-            return operation(ready.entry.endpoint)
+            return operation(ready.entry.handle.endpoint)
         } catch (error: CancellationException) {
             throw error
         } catch (error: SpotlessDaemonTransportException) {
@@ -278,12 +297,17 @@ internal class SpotlessDaemonRegistry(
         key: DaemonKey,
         generation: Long,
     ): Starting {
-        val execution = DaemonExecution(key, generation)
-        execution.lifetimeJob = registryScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
-            runProvider(execution)
-        }
-        execution.startupTask = registryScope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+        val execution = DaemonExecution(
+            key = key,
+            generation = generation,
+            parentContext = registryScope.coroutineContext,
+            parentJob = registryJob,
+        )
+        execution.startupTask = execution.scope.async(Dispatchers.IO, start = CoroutineStart.LAZY) {
             startExecution(execution)
+        }
+        execution.startupTask.invokeOnCompletion {
+            execution.job.complete()
         }
         return Starting(generation, execution).also { entry ->
             entries[key] = entry
@@ -291,97 +315,106 @@ internal class SpotlessDaemonRegistry(
         }
     }
 
-    private suspend fun runProvider(execution: DaemonExecution) {
-        var failure: Throwable? = null
-        try {
-            execution.key.session.provider.runDaemon(DaemonRunContext(execution))
-        } catch (error: Throwable) {
-            failure = error
-        } finally {
-            val ended = providerEndedFailure(failure)
-            execution.endpointSignal.completeExceptionally(ended)
-            execution.termination.complete(failure)
-            val wasCurrent = withContext(NonCancellable) {
-                providerExecutionEnded(execution, failure)
-            }
-            if (wasCurrent && failure != null && failure !is CancellationException) {
-                logger.warn("Spotless daemon provider failed: ${execution.key}", failure)
-            }
-        }
-    }
-
-    private suspend fun providerExecutionEnded(
+    private suspend fun providerHandleEnded(
         execution: DaemonExecution,
+        handle: SpotlessDaemonHandle,
+        completion: Deferred<Unit>,
         failure: Throwable?,
     ): Boolean = entriesMutex.withLock {
         val entry = entries[execution.key]
-        if (entry?.execution !== execution) {
+        val ownership = execution.ownership
+        if (
+            entry?.execution !== execution ||
+            ownership !is HandleOwnership.Active ||
+            ownership.handle !== handle ||
+            ownership.completion !== completion
+        ) {
             return@withLock false
         }
         detachLocked(
             execution.key,
             entry,
-            reason = if (failure == null) "provider daemon ended" else "provider daemon failed",
+            reason = if (failure == null) "provider handle ended" else "provider handle failed",
             stopHttp = false,
         )
         publishRuntimeStateLocked()
         true
     }
 
-    private suspend fun startExecution(execution: DaemonExecution): SpotlessDaemonEndpoint {
-        execution.lifetimeJob.start()
+    private suspend fun startExecution(execution: DaemonExecution): SpotlessDaemonHandle {
+        var providerEnded = false
         try {
-            val endpoint = execution.endpointSignal.await()
-            awaitReadyWhileRunning(execution, endpoint)
-            val published = withContext(NonCancellable) {
+            val returned = execution.key.session.provider.startDaemon(DaemonStartContext(execution))
+            val active = entriesMutex.withLock {
+                val ownership = execution.ownership
+                ownership as? HandleOwnership.Active
+            }
+            check(
+                active != null &&
+                        active.handle === returned &&
+                        active.handle.lifetime === active.completion,
+            ) {
+                "Spotless daemon provider returned a handle not created by the current start context"
+            }
+            val completion = active.completion
+
+            val termination = awaitReadyWhileRunning(returned, completion)
+            if (termination != null) {
+                providerEnded = true
+                throw providerEndedFailure(termination.failure)
+            }
+
+            val publication = withContext(NonCancellable) {
                 entriesMutex.withLock {
                     val current = entries[execution.key]
-                    if (
-                        current is Starting &&
-                        current.execution === execution &&
-                        current.generation == execution.generation &&
-                        execution.lifetimeJob.isActive &&
-                        !execution.termination.isCompleted &&
-                        execution.key.session.isAttached &&
-                        execution.key.session.snapshot.generations[execution.key.root] == execution.generation
-                    ) {
-                        entries[execution.key] = Ready(execution.generation, execution, endpoint)
-                        publishRuntimeStateLocked()
-                        true
-                    } else {
-                        false
+                    when {
+                        current !is Starting ||
+                                current.execution !== execution ||
+                                current.generation != execution.generation ||
+                                !execution.key.session.isAttached ||
+                                execution.key.session.snapshot.generations[execution.key.root] != execution.generation ->
+                            ReadyPublication.Detached
+
+                        completion.isCompleted -> ReadyPublication.ProviderEnded
+
+                        else -> {
+                            entries[execution.key] = Ready(execution.generation, execution, returned)
+                            publishRuntimeStateLocked()
+                            ReadyPublication.Published
+                        }
                     }
                 }
             }
-            if (!published) {
-                throw CancellationException("Spotless daemon was detached while starting")
+            when (publication) {
+                ReadyPublication.Published -> return returned
+                ReadyPublication.Detached ->
+                    throw CancellationException("Spotless daemon was detached while starting")
+
+                ReadyPublication.ProviderEnded -> {
+                    providerEnded = true
+                    throw providerEndedFailure(completionFailure(completion))
+                }
             }
-            return endpoint
         } catch (error: Throwable) {
             val detached = withContext(NonCancellable) {
                 entriesMutex.withLock {
                     val current = entries[execution.key]
-                    if (
-                        !execution.termination.isCompleted &&
-                        current is Starting &&
-                        current.execution === execution
-                    ) {
+                    if (current is Starting && current.execution === execution) {
                         detachLocked(
                             execution.key,
                             current,
-                            "daemon start failed",
-                            stopHttp = true,
+                            if (providerEnded) "provider handle ended during startup" else "daemon start failed",
+                            stopHttp = !providerEnded,
                         ).also { publishRuntimeStateLocked() }
                     } else {
                         null
                     }
                 }
             }
-            if (detached != null) {
-                closeDetached(
+            if (!providerEnded && detached != null) {
+                closeFailedStartup(
                     detached = detached,
                     deadline = cleanupDeadline(daemonCleanupTimeout),
-                    waitForStartup = false,
                 )
             }
             throw error
@@ -389,26 +422,29 @@ internal class SpotlessDaemonRegistry(
     }
 
     private suspend fun awaitReadyWhileRunning(
-        execution: DaemonExecution,
-        endpoint: SpotlessDaemonEndpoint,
-    ) = coroutineScope {
+        handle: SpotlessDaemonHandle,
+        completion: Deferred<Unit>,
+    ): ProviderTermination? = coroutineScope {
         val readiness = async(Dispatchers.IO) {
-            clientProvider().awaitReady(endpoint, daemonStartupTimeout)
+            clientProvider().awaitReady(handle.endpoint, daemonStartupTimeout)
         }
         try {
-            select<Unit> {
-                readiness.onAwait { }
-                execution.termination.onAwait { failure ->
-                    throw providerEndedFailure(failure)
+            select {
+                completion.onJoin {
+                    ProviderTermination(completionFailure(completion))
                 }
+                readiness.onAwait { null }
             }
         } finally {
             readiness.cancel()
         }
     }
 
+    private suspend fun completionFailure(completion: Deferred<Unit>): Throwable? =
+        runCatching { completion.await() }.exceptionOrNull()
+
     private fun providerEndedFailure(failure: Throwable?): Throwable =
-        failure ?: IllegalStateException("Spotless daemon provider ended before publishing a ready endpoint")
+        failure ?: IllegalStateException("Spotless daemon provider ended before its endpoint became ready")
 
     private fun ensureCurrentProviderState(
         session: ProviderSession,
@@ -490,7 +526,7 @@ internal class SpotlessDaemonRegistry(
         }
         withContext(NonCancellable + Dispatchers.IO) {
             detached.map { daemon ->
-                async { closeDetached(daemon, deadline, waitForStartup = true) }
+                async { closeDetached(daemon, deadline) }
             }.awaitAll()
         }
     }
@@ -498,45 +534,56 @@ internal class SpotlessDaemonRegistry(
     private suspend fun closeDetached(
         detached: DetachedDaemon,
         deadline: CleanupDeadline,
-        waitForStartup: Boolean,
     ) {
         withContext(NonCancellable + Dispatchers.IO) {
             val execution = detached.entry.execution
-            val endpoint = execution.publishedEndpoint
+            val endpoint = execution.endpointOrNull()
             if (detached.stopHttp && endpoint != null) {
                 stopEndpoint(endpoint, detached.reason, deadline.remaining())
             }
 
             val cancellation = CancellationException("Spotless daemon detached: ${detached.reason}")
-            execution.lifetimeJob.cancel(cancellation)
-            if (waitForStartup) {
-                execution.startupTask.cancel(cancellation)
-            }
-            joinExecution(execution, detached.key, deadline.remaining(), waitForStartup)
+            execution.job.cancel(cancellation)
+            joinJob(execution.job, detached.key, deadline.remaining())
             if (deadline.remaining() <= Duration.ZERO) {
                 logger.warn("Timed out cleaning up Spotless daemon: ${detached.key}")
             }
         }
     }
 
-    private suspend fun joinExecution(
-        execution: DaemonExecution,
+    private suspend fun closeFailedStartup(
+        detached: DetachedDaemon,
+        deadline: CleanupDeadline,
+    ) {
+        withContext(NonCancellable + Dispatchers.IO) {
+            val execution = detached.entry.execution
+            val endpoint = execution.endpointOrNull()
+            if (detached.stopHttp && endpoint != null) {
+                stopEndpoint(endpoint, detached.reason, deadline.remaining())
+            }
+
+            val cancellation = CancellationException("Spotless daemon startup failed: ${detached.reason}")
+            execution.activeCompletionOrNull()?.let { completion ->
+                completion.cancel(cancellation)
+                joinJob(completion, detached.key, deadline.remaining())
+            }
+            if (deadline.remaining() <= Duration.ZERO) {
+                logger.warn("Timed out cleaning up failed Spotless daemon startup: ${detached.key}")
+            }
+        }
+    }
+
+    private suspend fun joinJob(
+        job: Job,
         key: DaemonKey,
         timeout: Duration,
-        waitForStartup: Boolean,
     ) {
         if (timeout <= Duration.ZERO) {
             logger.warn("Timed out waiting for Spotless daemon provider cleanup: $key")
             return
         }
-        val jobs = buildList {
-            add(execution.lifetimeJob)
-            if (waitForStartup) {
-                add(execution.startupTask)
-            }
-        }
         val completed = withTimeoutOrNull(timeout) {
-            jobs.joinAll()
+            job.join()
             true
         } ?: false
         if (!completed) {
@@ -575,30 +622,74 @@ internal class SpotlessDaemonRegistry(
     private fun cleanupDeadline(timeout: Duration): CleanupDeadline =
         CleanupDeadline(TimeSource.Monotonic.markNow(), timeout)
 
-    private inner class DaemonRunContext(
+    private fun DaemonExecution.endpointOrNull(): SpotlessDaemonEndpoint? =
+        when (val current = ownership) {
+            HandleOwnership.None -> null
+            is HandleOwnership.Active -> current.handle.endpoint
+        }
+
+    private fun DaemonExecution.activeCompletionOrNull(): Deferred<Unit>? =
+        (ownership as? HandleOwnership.Active)?.completion
+
+    private fun observeHandleCompletion(
+        execution: DaemonExecution,
+        handle: SpotlessDaemonHandle,
+        completion: Deferred<Unit>,
+    ) {
+        completion.invokeOnCompletion { failure ->
+            registryScope.launch(Dispatchers.IO) {
+                val wasCurrent = withContext(NonCancellable) {
+                    providerHandleEnded(execution, handle, completion, failure)
+                }
+                if (wasCurrent && failure != null && failure !is CancellationException) {
+                    logger.warn("Spotless daemon provider failed: ${execution.key}", failure)
+                }
+            }
+        }
+    }
+
+    private inner class DaemonStartContext(
         private val execution: DaemonExecution,
-    ) : SpotlessDaemonRunContext {
+    ) : SpotlessDaemonStartContext {
         override val project: Project
             get() = this@SpotlessDaemonRegistry.project
 
         override val externalProjectRoot: Path
             get() = execution.key.root
 
-        override suspend fun publishEndpoint(endpoint: SpotlessDaemonEndpoint) {
+        @Suppress("OPT_IN_USAGE")
+        override suspend fun launchHandle(
+            endpoint: SpotlessDaemonEndpoint,
+            lifetime: suspend () -> Unit,
+        ): SpotlessDaemonHandle {
             currentCoroutineContext().ensureActive()
-            entriesMutex.withLock {
-                val entry = entries[execution.key]
-                if (entry?.execution !== execution) {
-                    throw CancellationException("Spotless daemon was detached before publishing its endpoint")
+            entriesMutex.lock()
+            return try {
+                withContext(NonCancellable) {
+                    val entry = entries[execution.key]
+                    if (entry?.execution !== execution) {
+                        throw CancellationException("Spotless daemon was detached before launching its handle")
+                    }
+                    ensureCurrentProviderState(execution.key.session, execution.key.root, execution.generation)
+                    check(execution.ownership === HandleOwnership.None) {
+                        "Spotless daemon provider launched more than one handle"
+                    }
+
+                    // ATOMIC guarantees that a cancellation racing with ownership transfer still enters
+                    // the provider lifetime block, so its finally clause can release acquired resources.
+                    val lifetimeTask = execution.scope.async(
+                        context = Dispatchers.IO,
+                        start = CoroutineStart.ATOMIC,
+                    ) {
+                        lifetime()
+                    }
+                    val handle = SpotlessDaemonHandle(endpoint, lifetimeTask)
+                    execution.ownership = HandleOwnership.Active(handle, lifetimeTask)
+                    observeHandleCompletion(execution, handle, lifetimeTask)
+                    handle
                 }
-                ensureCurrentProviderState(execution.key.session, execution.key.root, execution.generation)
-                check(execution.publishedEndpoint == null) {
-                    "Spotless daemon provider published more than one endpoint"
-                }
-                execution.publishedEndpoint = endpoint
-                check(execution.endpointSignal.complete(endpoint)) {
-                    "Spotless daemon endpoint publication was already completed"
-                }
+            } finally {
+                entriesMutex.unlock()
             }
         }
     }

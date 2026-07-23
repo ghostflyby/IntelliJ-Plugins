@@ -64,7 +64,9 @@ internal class SpotlessFormatingServiceTest {
                     override fun resolveTarget(project: Project, file: VirtualFile): SpotlessDaemonTarget =
                         SpotlessDaemonTarget(externalProject, file.toNioPath())
 
-                    override suspend fun runDaemon(context: SpotlessDaemonRunContext) {
+                    override suspend fun startDaemon(
+                        context: SpotlessDaemonStartContext,
+                    ): SpotlessDaemonHandle {
                         throw IOException("transport failed")
                     }
                 },
