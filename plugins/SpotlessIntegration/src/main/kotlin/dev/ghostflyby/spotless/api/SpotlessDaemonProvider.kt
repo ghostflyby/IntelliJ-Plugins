@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
+import org.jetbrains.annotations.ApiStatus
 import java.nio.file.Path
 
 /**
@@ -18,6 +19,7 @@ import java.nio.file.Path
  *
  * The daemon HTTP API is owned by SpotlessDaemon and is not part of this contract.
  */
+@ApiStatus.OverrideOnly
 public interface SpotlessDaemonProvider {
     public companion object {
         @JvmField
@@ -75,6 +77,7 @@ public data class ExternalProject(
 )
 
 /** Startup-scoped context supplied by the core when creating a provider daemon handle. */
+@ApiStatus.NonExtendable
 public interface SpotlessDaemonStartContext {
     public val project: Project
     public val externalProjectRoot: Path
