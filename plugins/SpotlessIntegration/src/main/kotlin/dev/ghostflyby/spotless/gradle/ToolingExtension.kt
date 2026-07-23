@@ -17,6 +17,7 @@ import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsPr
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.util.NlsSafe
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -95,8 +96,10 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
     name = "SpotlessGradleIntegration",
     storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)],
 )
-internal class SpotlessGradleSettings
-    (private val project: com.intellij.openapi.project.Project) :
+internal class SpotlessGradleSettings(
+    private val project: com.intellij.openapi.project.Project,
+    internal val coroutineScope: CoroutineScope,
+) :
     SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
     private val providerStateLock = Any()
     private var providerGeneration = 0L

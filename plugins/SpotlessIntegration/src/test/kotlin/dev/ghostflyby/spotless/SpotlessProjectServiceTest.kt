@@ -152,7 +152,7 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `provider returning a foreign handle fails startup without fallback`() {
+    suspend fun `provider returning a lazy lifetime job fails startup without fallback`() {
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
                 healthCheck = { DaemonResponse(HttpStatusCode.OK) },
@@ -162,7 +162,7 @@ internal class SpotlessProjectServiceTest {
         val selectedProvider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
             host = SpotlessDaemonEndpoint.Localhost(25251U),
-            returnForeignHandle = true,
+            lifetimeStart = CoroutineStart.LAZY,
         )
         val fallbackProvider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
@@ -171,37 +171,42 @@ internal class SpotlessProjectServiceTest {
         spotless.daemonProvidersLookup = { listOf(selectedProvider, fallbackProvider) }
 
         val failure = runCatching {
-            spotless.canFormat(createProjectFile("ForeignHandle.kt", "content"))
+            spotless.canFormat(createProjectFile("LazyLifetime.kt", "content"))
         }.exceptionOrNull()
 
         assertTrue(failure is IllegalStateException)
         assertEquals(1, selectedProvider.startCount)
-        assertEquals(1, selectedProvider.completionCount.get())
         assertEquals(0, fallbackProvider.startCount)
         assertFalse(spotless.hasRunningDaemons())
     }
 
     @Test
-    suspend fun `duplicate handle launch fails startup`() {
+    suspend fun `provider lifetime completed before readiness fails startup without HTTP stop`() {
+        val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
                 healthCheck = { DaemonResponse(HttpStatusCode.OK) },
                 format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
             ),
         )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
             host = SpotlessDaemonEndpoint.Localhost(25252U),
-            launchHandleTwice = true,
+            completeBeforeReturn = true,
         )
         spotless.daemonProvidersLookup = { listOf(provider) }
 
         val failure = runCatching {
-            spotless.canFormat(createProjectFile("DuplicateHandle.kt", "content"))
+            spotless.canFormat(createProjectFile("CompletedLifetime.kt", "content"))
         }.exceptionOrNull()
 
         assertTrue(failure is IllegalStateException)
-        assertEquals(1, provider.completionCount.get())
+        assertTrue(waitUntil { provider.completionCount.get() == 1 })
+        assertEquals(0, stopCount.get())
         assertFalse(spotless.hasRunningDaemons())
     }
 
@@ -993,6 +998,34 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
+    suspend fun `provider cancellation after readiness detaches without HTTP stop`() {
+        val stopCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
+            ),
+        )
+        val provider = TestDaemonProvider(
+            projectPath = projectPathFixture.get(),
+            host = SpotlessDaemonEndpoint.Localhost(25252U),
+        )
+        spotless.daemonProvidersLookup = { listOf(provider) }
+        val virtualFile = createProjectFile("ProviderCancellation.kt", "content")
+        assertTrue(spotless.canFormat(virtualFile))
+
+        provider.cancelLifetime()
+
+        assertTrue(waitUntil { !spotless.hasRunningDaemons() })
+        assertEquals(1, provider.completionCount.get())
+        assertEquals(0, stopCount.get())
+    }
+
+    @Test
     suspend fun `provider switch stops old daemon before new handle wins`() {
         val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
@@ -1345,13 +1378,24 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `provider cannot launch a handle after its execution is detached`() = supervisorScope {
+    suspend fun `late provider handle is stopped and cancelled after execution detach`() = supervisorScope {
         val startGate = CompletableDeferred<Unit>()
+        val stopCount = AtomicInteger()
+        spotless.client = SpotlessDaemonClient(
+            testHttpClient(
+                healthCheck = { DaemonResponse(HttpStatusCode.OK) },
+                format = { DaemonResponse(HttpStatusCode.OK) },
+                stop = {
+                    stopCount.incrementAndGet()
+                    DaemonResponse(HttpStatusCode.OK)
+                },
+            ),
+        )
         val provider = TestDaemonProvider(
             projectPath = projectPathFixture.get(),
             host = SpotlessDaemonEndpoint.Localhost(25252U),
             startGate = startGate,
-            launchAfterCancellation = true,
+            returnHandleAfterCancellation = true,
         )
         val providerDisposable = registerProvider(provider, "SpotlessProjectServiceTest.lateHandle")
         val formatting = async(Dispatchers.Default) {
@@ -1361,8 +1405,10 @@ internal class SpotlessProjectServiceTest {
 
         Disposer.dispose(providerDisposable)
 
-        val lateLaunchFailure = withTimeout(2.seconds) { provider.lateLaunchFailure.await() }
-        assertTrue(lateLaunchFailure is CancellationException)
+        val lateHandle = withTimeout(2.seconds) { provider.lateReturnedHandle.await() }
+        withTimeout(2.seconds) { lateHandle.lifetime.join() }
+        assertEquals(1, stopCount.get())
+        assertTrue(lateHandle.lifetime.isCancelled)
         assertEquals(1, provider.completionCount.get())
         assertFalse(spotless.hasRunningDaemons())
         assertTrue(runCatching { formatting.await() }.isFailure)
@@ -1673,6 +1719,7 @@ internal class SpotlessProjectServiceTest {
         override val daemonSteps: List<String>,
     ) : SpotlessFormattingPreprocessor.Context
 
+    @Suppress("OPT_IN_USAGE")
     private class TestDaemonProvider(
         private val projectPath: Path,
         val host: SpotlessDaemonEndpoint,
@@ -1682,14 +1729,15 @@ internal class SpotlessProjectServiceTest {
         private val startGate: CompletableDeferred<Unit>? = null,
         private val startCancellationDelay: Duration? = null,
         private val startFailure: Throwable? = null,
-        private val returnForeignHandle: Boolean = false,
-        private val launchHandleTwice: Boolean = false,
-        private val launchAfterCancellation: Boolean = false,
+        private val returnHandleAfterCancellation: Boolean = false,
+        private val lifetimeStart: CoroutineStart = CoroutineStart.ATOMIC,
+        private val completeBeforeReturn: Boolean = false,
         private val targetResolver: (VirtualFile) -> SpotlessDaemonTarget? = { file ->
             SpotlessDaemonTarget(projectPath, requireNotNull(file.toNioPath()))
         },
     ) : SpotlessDaemonProvider {
         private val startCounter = AtomicInteger()
+        private val lifetimeScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var generation = 0L
         private val mutableState = MutableStateFlow(
             providerState(externalProjects, generation),
@@ -1700,7 +1748,7 @@ internal class SpotlessProjectServiceTest {
 
         val completionCount = AtomicInteger()
         val publishedCount = AtomicInteger()
-        val lateLaunchFailure = CompletableDeferred<Throwable?>()
+        val lateReturnedHandle = CompletableDeferred<SpotlessDaemonHandle>()
         val startedRoots: MutableList<Path> = Collections.synchronizedList(mutableListOf())
         private val terminations = ConcurrentHashMap<Path, CompletableDeferred<Throwable?>>()
 
@@ -1710,6 +1758,12 @@ internal class SpotlessProjectServiceTest {
 
         fun fail(error: Throwable) {
             terminations.values.forEach { termination -> termination.complete(error) }
+        }
+
+        fun cancelLifetime() {
+            terminations.values.forEach { termination ->
+                termination.cancel(CancellationException("provider cancelled daemon"))
+            }
         }
 
         override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> = mutableState
@@ -1734,10 +1788,8 @@ internal class SpotlessProjectServiceTest {
                 }
             }
 
-            try {
-                startGate?.await()
-                startFailure?.let { throw it }
-                val handle = context.launchHandle(host) {
+            fun createHandle(): SpotlessDaemonHandle {
+                val lifetime = lifetimeScope.async(start = lifetimeStart) {
                     try {
                         termination.await()?.let { failure -> throw failure }
                     } catch (error: CancellationException) {
@@ -1751,24 +1803,30 @@ internal class SpotlessProjectServiceTest {
                         finishCleanup()
                     }
                 }
+                return SpotlessDaemonHandle(host, lifetime)
+            }
+
+            try {
+                startGate?.await()
+                startFailure?.let { throw it }
+                currentCoroutineContext().ensureActive()
+                if (completeBeforeReturn) {
+                    termination.complete(null)
+                }
+                val handle = createHandle()
                 ownershipTransferred = true
                 publishedCount.incrementAndGet()
-                if (launchHandleTwice) {
-                    context.launchHandle(host) {}
-                }
-                if (returnForeignHandle) {
-                    return SpotlessDaemonHandle(host, CompletableDeferred(Unit))
-                }
                 return handle
             } catch (error: CancellationException) {
                 if (!ownershipTransferred) {
-                    if (launchAfterCancellation) {
-                        val failure = withContext(NonCancellable) {
-                            val result = runCatching { context.launchHandle(host) {} }
-                            result.getOrNull()?.lifetime?.cancelAndJoin()
-                            result.exceptionOrNull()
+                    if (returnHandleAfterCancellation) {
+                        return withContext(NonCancellable) {
+                            createHandle().also { handle ->
+                                ownershipTransferred = true
+                                publishedCount.incrementAndGet()
+                                lateReturnedHandle.complete(handle)
+                            }
                         }
-                        lateLaunchFailure.complete(failure)
                     }
                     startCancellationDelay?.let { delay ->
                         withContext(NonCancellable) {

@@ -29,14 +29,17 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override fun state(project: Project): StateFlow<ProviderState> =
         project.service<SpotlessGradleSettings>().providerState
 
-    override suspend fun startDaemon(context: StartContext): Handle =
-        startSpotlessGradleDaemon(
+    override suspend fun startDaemon(context: StartContext): Handle {
+        val settings = context.project.service<SpotlessGradleSettings>()
+        return startSpotlessGradleDaemon(
             context = context,
+            providerScope = settings.coroutineScope,
             createWorkingDirectory = { Files.createTempDirectory(null) },
             startProcess = ::startGradleSpotlessDaemon,
             cleanupProcess = ::cleanupGradleDaemonProcess,
             cleanupDirectory = ::cleanupWorkingDirectory,
         )
+    }
 
     override fun resolveTarget(
         project: Project,
@@ -62,6 +65,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
 
 internal suspend fun startSpotlessGradleDaemon(
     context: StartContext,
+    providerScope: CoroutineScope,
     createWorkingDirectory: () -> Path,
     startProcess: (Project, Path, Path, Path, () -> Unit) -> SpotlessGradleDaemonProcess,
     cleanupProcess: (SpotlessGradleDaemonProcess?) -> Unit,
@@ -102,7 +106,11 @@ internal suspend fun startSpotlessGradleDaemon(
         currentCoroutineContext().ensureActive()
         checkNotNull(process).start()
         currentCoroutineContext().ensureActive()
-        val handle = context.launchHandle(Endpoint.UnixSocket(unixSocketPath)) {
+        @Suppress("OPT_IN_USAGE")
+        val lifetime = providerScope.launch(
+            context = Dispatchers.IO,
+            start = CoroutineStart.ATOMIC,
+        ) {
             try {
                 terminated.await()
             } finally {
@@ -110,7 +118,7 @@ internal suspend fun startSpotlessGradleDaemon(
             }
         }
         ownershipTransferred = true
-        return handle
+        return Handle(Endpoint.UnixSocket(unixSocketPath), lifetime)
     } finally {
         if (!ownershipTransferred) {
             cleanup()

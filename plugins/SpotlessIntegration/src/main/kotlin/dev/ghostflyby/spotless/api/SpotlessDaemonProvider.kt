@@ -54,10 +54,11 @@ public interface SpotlessDaemonProvider {
     /**
      * Start one daemon for [StartContext.externalProjectRoot].
      *
-     * Resources acquired before [StartContext.launchHandle] remain provider-owned
-     * and must be cleaned up when startup fails. A successfully launched handle transfers daemon
-     * ownership to the core. The handle's lifetime block must release provider-owned resources
-     * from `finally`; the core owns HTTP readiness and stop requests.
+     * Resources remain provider-owned until this method returns a handle. If startup fails or is
+     * cancelled before returning, the provider must clean them up directly. The returned lifetime
+     * job must already be started, must not be a child of this invocation, and must not complete
+     * until all provider-owned daemon resources have been released. The core owns HTTP readiness
+     * and stop requests after the handle is returned.
      *
      * see https://github.com/ghostflyby/SpotlessDaemon#http-api for the http service api details
      */
@@ -80,23 +81,11 @@ public interface SpotlessDaemonProvider {
         public val file: Path,
     )
 
-    /** Startup-scoped context supplied by the core when creating a provider daemon handle. */
+    /** Startup inputs supplied by the core when creating a provider daemon handle. */
     @ApiStatus.NonExtendable
     public interface StartContext {
         public val project: Project
         public val externalProjectRoot: Path
-
-        /**
-         * Transfer ownership of acquired daemon resources to the core.
-         *
-         * This may be called exactly once. A successful return is the ownership-transfer commit point.
-         * The returned handle is already active, and its lifetime block must not return until the
-         * provider has finished daemon cleanup.
-         */
-        public suspend fun launchHandle(
-            endpoint: Endpoint,
-            lifetime: suspend () -> Unit,
-        ): Handle
     }
 
     /**
@@ -105,7 +94,7 @@ public interface SpotlessDaemonProvider {
      * The core or provider may cancel [lifetime]. Joining it waits for the lifetime block, including its
      * `finally` cleanup, but does not propagate the provider failure that ended the backing task.
      */
-    public class Handle internal constructor(
+    public class Handle(
         public val endpoint: Endpoint,
         public val lifetime: Job,
     )

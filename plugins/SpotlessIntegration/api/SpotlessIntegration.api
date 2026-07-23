@@ -49,6 +49,7 @@ public final class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$ExternalPr
 }
 
 public final class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$Handle {
+	public fun <init> (Ldev/ghostflyby/spotless/api/SpotlessDaemonProvider$Endpoint;Lkotlinx/coroutines/Job;)V
 	public final fun getEndpoint ()Ldev/ghostflyby/spotless/api/SpotlessDaemonProvider$Endpoint;
 	public final fun getLifetime ()Lkotlinx/coroutines/Job;
 }
@@ -56,7 +57,6 @@ public final class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$Handle {
 public abstract interface class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$StartContext {
 	public abstract fun getExternalProjectRoot ()Ljava/nio/file/Path;
 	public abstract fun getProject ()Lcom/intellij/openapi/project/Project;
-	public abstract fun launchHandle (Ldev/ghostflyby/spotless/api/SpotlessDaemonProvider$Endpoint;Lkotlin/jvm/functions/Function1;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class dev/ghostflyby/spotless/api/SpotlessDaemonProvider$State {

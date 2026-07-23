@@ -23,10 +23,13 @@ is not enabled in this phase, and no RPC contract is introduced.
   current state is a miss and allows the next provider to be considered.
 - The first valid target owns the request. Startup, readiness, and operation failures never fall back to another
   provider.
-- `startDaemon(context)` acquires one daemon and returns the exact handle created by that context.
-- Resources acquired before `launchHandle` remain provider-owned. A successful `launchHandle` return atomically
-  transfers ownership to the core; the supplied lifetime block then owns cleanup from `finally`.
-- The API intentionally exposes neither a raw `CoroutineScope` nor an IntelliJ `Disposable`.
+- `startDaemon(context)` acquires one daemon and returns a provider-created handle. Returning the handle transfers
+  ownership to the core.
+- Resources remain provider-owned until `startDaemon` returns. Before-return failure or cancellation must clean them
+  directly; afterward the returned lifetime job owns cleanup through its `finally` path.
+- The returned job must already be started, must use a stable provider-owned scope rather than the current startup
+  invocation, and must not complete before all provider resources are released.
+- The API intentionally exposes neither a core `CoroutineScope` nor an IntelliJ `Disposable`.
 
 ### `SpotlessDaemonProvider.State` and `.ExternalProject`
 
@@ -47,16 +50,15 @@ validates it before selecting the provider.
 
 ### `SpotlessDaemonProvider.StartContext`, `.Handle`, and `.Endpoint`
 
-`SpotlessDaemonProvider.StartContext` exposes the project, normalized external-project root, and
-`launchHandle(endpoint, lifetime)`.
+`SpotlessDaemonProvider.StartContext` exposes only the project and normalized external-project root.
 
-- `launchHandle` may succeed exactly once and is the ownership-transfer commit point. Duplicate calls, calls after
-  detach or state invalidation, and returning a foreign handle fail startup.
-- `SpotlessDaemonProvider.Handle` is a final composition object. Its endpoint is immediately available and immutable;
-  its `Job` represents provider lifetime and cleanup completion without implementing or delegating `Job`/`Deferred`.
+- `SpotlessDaemonProvider.Handle` has a public constructor so providers can return an endpoint with their own lifetime
+  job. The endpoint is immediately available and immutable.
+- The final composition object does not implement or delegate `Job`/`Deferred`; its `Job` represents provider lifetime
+  and cleanup completion.
 - Either side may cancel the lifetime job. `join()` waits until provider `finally` completes and does not propagate the
-  provider exception. Registry retains an internal `Deferred<Unit>` only to preserve the original startup failure.
-- The core performs the HTTP readiness check after handle launch.
+  provider exception. Registry observes `invokeOnCompletion` to preserve the original startup failure.
+- The core performs the HTTP readiness check after the provider returns the handle. A lazy lifetime job is rejected.
 - `SpotlessDaemonProvider.Endpoint.Localhost` and `.UnixSocket` contain connection information only. Process handles,
   temporary files, and cleanup callbacks do not cross the provider boundary.
 
@@ -97,9 +99,10 @@ commands, capability cache, and Gradle process types are internal implementation
 
 ## ABI Decision
 
-This revision replaces `runDaemon`, `SpotlessDaemonRunContext`, and endpoint publication with `startDaemon`,
-`SpotlessDaemonProvider.StartContext`, and the final composition-based `SpotlessDaemonProvider.Handle`. Provider-owned
-state, routing, startup, handle, and endpoint contracts are nested under `SpotlessDaemonProvider`; formatting
+This revision replaces `runDaemon`, endpoint publication, and the core-owned `launchHandle` factory with
+`startDaemon`, input-only `SpotlessDaemonProvider.StartContext`, and the provider-created composition
+`SpotlessDaemonProvider.Handle`. Provider-owned state, routing, startup, handle, and endpoint contracts are nested under
+`SpotlessDaemonProvider`; formatting
 preprocessor invocation types remain nested under `SpotlessFormattingPreprocessor`. A public model becomes top-level
 only when multiple public extension contracts or a future shared boundary own it. This keeps provider identity and the
 frontend presentation EP independent without publishing apparently general-purpose daemon models.

@@ -11,13 +11,13 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import kotlinx.coroutines.*
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint as SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Handle as SpotlessDaemonHandle
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as SpotlessDaemonStartContext
 
 @TestApplication
@@ -25,6 +25,7 @@ internal class SpotlessGradleExtensionTest {
     private val projectPathFixture = tempPathFixture()
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
+    private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Test
     suspend fun `natural process termination exposes endpoint and cleans in fixed order`() {
@@ -35,6 +36,7 @@ internal class SpotlessGradleExtensionTest {
 
         val handle = startSpotlessGradleDaemon(
             context = context,
+            providerScope = providerScope,
             createWorkingDirectory = { workingDirectory },
             startProcess = { _, _, _, _, onTerminated ->
                 FakeGradleDaemonProcess(
@@ -66,6 +68,7 @@ internal class SpotlessGradleExtensionTest {
         lateinit var process: FakeGradleDaemonProcess
         val handle = startSpotlessGradleDaemon(
             context = context,
+            providerScope = providerScope,
             createWorkingDirectory = { workingDirectory },
             startProcess = { _, _, _, _, _ ->
                 FakeGradleDaemonProcess(workingDirectory.resolve("init.gradle")).also { process = it }
@@ -95,6 +98,7 @@ internal class SpotlessGradleExtensionTest {
         val lifetime = async {
             startSpotlessGradleDaemon(
                 context = context,
+                providerScope = providerScope,
                 createWorkingDirectory = {
                     creationStarted.complete(Unit)
                     allowCreationToFinish.await()
@@ -120,7 +124,6 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(0, processCreationCount)
         assertEquals(workingDirectory, cleanedDirectory)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.handle.isCompleted)
     }
 
     @Test
@@ -135,6 +138,7 @@ internal class SpotlessGradleExtensionTest {
         val lifetime = async {
             startSpotlessGradleDaemon(
                 context = context,
+                providerScope = providerScope,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
                     processCreationStarted.complete(Unit)
@@ -158,11 +162,10 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(0, process.startCount)
         assertEquals(1, process.destroyCount)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.handle.isCompleted)
     }
 
     @Test
-    suspend fun `cancellation during process notification does not launch handle`() = coroutineScope {
+    suspend fun `cancellation during process notification does not create lifetime job`() = coroutineScope {
         val workingDirectory = projectPathFixture.get().resolve("cancelled-process-notification")
         val processStartEntered = CompletableDeferred<Unit>()
         val allowProcessStartToFinish = CountDownLatch(1)
@@ -172,6 +175,7 @@ internal class SpotlessGradleExtensionTest {
         val lifetime = async(Dispatchers.Default) {
             startSpotlessGradleDaemon(
                 context = context,
+                providerScope = providerScope,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
                     FakeGradleDaemonProcess(
@@ -195,7 +199,6 @@ internal class SpotlessGradleExtensionTest {
         assertEquals(1, process.startCount)
         assertEquals(1, process.destroyCount)
         assertEquals(1, directoryCleanupCount)
-        assertFalse(context.handle.isCompleted)
     }
 
     @Test
@@ -208,6 +211,7 @@ internal class SpotlessGradleExtensionTest {
         val failure = runCatching {
             startSpotlessGradleDaemon(
                 context = context,
+                providerScope = providerScope,
                 createWorkingDirectory = { workingDirectory },
                 startProcess = { _, _, _, _, _ ->
                     FakeGradleDaemonProcess(
@@ -224,7 +228,6 @@ internal class SpotlessGradleExtensionTest {
         }.exceptionOrNull()
 
         assertTrue(failure is IOException)
-        assertFalse(context.handle.isCompleted)
         assertEquals(listOf("process", "directory"), cleanupOrder)
         assertEquals(1, process.destroyCount)
     }
@@ -232,23 +235,7 @@ internal class SpotlessGradleExtensionTest {
     private class TestStartContext(
         override val project: Project,
         override val externalProjectRoot: Path,
-    ) : SpotlessDaemonStartContext {
-        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        val handle = CompletableDeferred<SpotlessDaemonHandle>()
-
-        @Suppress("OPT_IN_USAGE")
-        override suspend fun launchHandle(
-            endpoint: SpotlessDaemonEndpoint,
-            lifetime: suspend () -> Unit,
-        ): SpotlessDaemonHandle {
-            val lifetimeTask = scope.async(start = CoroutineStart.ATOMIC) {
-                lifetime()
-            }
-            return SpotlessDaemonHandle(endpoint, lifetimeTask).also {
-                check(handle.complete(it))
-            }
-        }
-    }
+    ) : SpotlessDaemonStartContext
 
     private class FakeGradleDaemonProcess(
         override val initScript: Path,

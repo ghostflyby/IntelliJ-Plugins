@@ -12,8 +12,9 @@
 
 ### Changed
 
-- finalized the daemon-provider ABI around stable provider IDs, provider-scoped state/routing/lifecycle types, immutable
-  endpoint handles with explicit `Job` lifetimes, and a separate dynamic frontend presentation extension point.
+- finalized the daemon-provider ABI around stable provider IDs, provider-scoped state/routing/lifecycle types,
+  provider-created immutable endpoint handles with explicit `Job` lifetimes, and a separate dynamic frontend
+  presentation extension point.
 - restart active Gradle Spotless daemons after every Gradle project synchronization or daemon configuration change.
 
 ### Deprecated
