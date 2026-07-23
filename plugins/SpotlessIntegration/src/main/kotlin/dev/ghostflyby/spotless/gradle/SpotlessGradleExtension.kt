@@ -106,7 +106,6 @@ internal suspend fun startSpotlessGradleDaemon(
         currentCoroutineContext().ensureActive()
         checkNotNull(process).start()
         currentCoroutineContext().ensureActive()
-        @Suppress("OPT_IN_USAGE")
         val lifetime = providerScope.launch(
             context = Dispatchers.IO,
             start = CoroutineStart.ATOMIC,
