@@ -24,15 +24,15 @@ import dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.http.*
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.CoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint as SpotlessDaemonEndpoint
@@ -118,6 +118,36 @@ internal class SpotlessStatusBarWidgetTest {
             }
         }
         assertFalse(service.daemonStatus.value.providers.any { it.providerId == provider.id })
+    }
+
+    @Test
+    suspend fun `provider collector cancellation can precede combined status update`() {
+        maskProviders()
+        // Hold the derived status collector while the provider collector cancels on Dispatchers.Default.
+        val dispatcher = QueuedDispatcher()
+        val coordinatorScope = CoroutineScope(SupervisorJob() + dispatcher)
+        val provider = TestStatusProvider(listOf(projectPathFixture.get().resolve("detected")))
+        val coordinator = SpotlessDaemonCoordinator(projectFixture.get(), coordinatorScope, ::readyClient)
+
+        try {
+            coordinator.providersLookup = { listOf(provider) }
+            dispatcher.runAll()
+            assertTrue(provider.hasSubscriber())
+            assertTrue(coordinator.snapshot.value.providers.any { it.providerId == provider.id })
+
+            coordinator.providersLookup = { emptyList() }
+
+            withTimeout(5.seconds) {
+                while (provider.hasSubscriber()) {
+                    delay(10.milliseconds)
+                }
+            }
+            assertFalse(coordinator.snapshot.value.providers.any { it.providerId == provider.id })
+        } finally {
+            coordinator.dispose()
+            coordinatorScope.cancel()
+            dispatcher.runAll()
+        }
     }
 
     @Test
@@ -370,6 +400,20 @@ internal class SpotlessStatusBarWidgetTest {
         override val providerId: String,
         override val presentableName: String,
     ) : SpotlessDaemonProviderPresentation
+
+    private class QueuedDispatcher : CoroutineDispatcher() {
+        private val tasks = ConcurrentLinkedQueue<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            tasks.add(block)
+        }
+
+        fun runAll() {
+            while (true) {
+                tasks.poll()?.run() ?: return
+            }
+        }
+    }
 
     private fun readyClient(): SpotlessDaemonClient = SpotlessDaemonClient(
         HttpClient(MockEngine { respond("", HttpStatusCode.OK) }),
