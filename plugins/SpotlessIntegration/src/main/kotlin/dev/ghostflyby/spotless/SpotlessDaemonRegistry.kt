@@ -9,9 +9,7 @@ package dev.ghostflyby.spotless
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.api.SpotlessDaemonHandle
-import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -68,14 +66,14 @@ internal class SpotlessDaemonRegistry(
         val job: CompletableJob = SupervisorJob(parentJob)
         val scope = CoroutineScope(parentContext + job)
         var ownership: HandleOwnership = HandleOwnership.None
-        lateinit var startupTask: Deferred<SpotlessDaemonHandle>
+        lateinit var startupTask: Deferred<Handle>
     }
 
     private sealed interface HandleOwnership {
         data object None : HandleOwnership
 
         data class Active(
-            val handle: SpotlessDaemonHandle,
+            val handle: Handle,
             val completion: Deferred<Unit>,
         ) : HandleOwnership
     }
@@ -93,7 +91,7 @@ internal class SpotlessDaemonRegistry(
     private data class Ready(
         override val generation: Long,
         override val execution: DaemonExecution,
-        val handle: SpotlessDaemonHandle,
+        val handle: Handle,
     ) : DaemonEntry
 
     private data class ProviderTermination(
@@ -135,7 +133,7 @@ internal class SpotlessDaemonRegistry(
         session: ProviderSession,
         externalProject: Path,
         generation: Long,
-        operation: suspend (SpotlessDaemonEndpoint) -> T,
+        operation: suspend (Endpoint) -> T,
     ): T {
         val ready = getDaemon(session, externalProject, generation)
         try {
@@ -317,7 +315,7 @@ internal class SpotlessDaemonRegistry(
 
     private suspend fun providerHandleEnded(
         execution: DaemonExecution,
-        handle: SpotlessDaemonHandle,
+        handle: Handle,
         completion: Deferred<Unit>,
         failure: Throwable?,
     ): Boolean = entriesMutex.withLock {
@@ -341,7 +339,7 @@ internal class SpotlessDaemonRegistry(
         true
     }
 
-    private suspend fun startExecution(execution: DaemonExecution): SpotlessDaemonHandle {
+    private suspend fun startExecution(execution: DaemonExecution): Handle {
         var providerEnded = false
         try {
             val returned = execution.key.session.provider.startDaemon(DaemonStartContext(execution))
@@ -422,7 +420,7 @@ internal class SpotlessDaemonRegistry(
     }
 
     private suspend fun awaitReadyWhileRunning(
-        handle: SpotlessDaemonHandle,
+        handle: Handle,
         completion: Deferred<Unit>,
     ): ProviderTermination? = coroutineScope {
         val readiness = async(Dispatchers.IO) {
@@ -592,7 +590,7 @@ internal class SpotlessDaemonRegistry(
     }
 
     private suspend fun stopEndpoint(
-        endpoint: SpotlessDaemonEndpoint,
+        endpoint: Endpoint,
         reason: String,
         timeout: Duration,
     ) {
@@ -622,7 +620,7 @@ internal class SpotlessDaemonRegistry(
     private fun cleanupDeadline(timeout: Duration): CleanupDeadline =
         CleanupDeadline(TimeSource.Monotonic.markNow(), timeout)
 
-    private fun DaemonExecution.endpointOrNull(): SpotlessDaemonEndpoint? =
+    private fun DaemonExecution.endpointOrNull(): Endpoint? =
         when (val current = ownership) {
             HandleOwnership.None -> null
             is HandleOwnership.Active -> current.handle.endpoint
@@ -633,7 +631,7 @@ internal class SpotlessDaemonRegistry(
 
     private fun observeHandleCompletion(
         execution: DaemonExecution,
-        handle: SpotlessDaemonHandle,
+        handle: Handle,
         completion: Deferred<Unit>,
     ) {
         completion.invokeOnCompletion { failure ->
@@ -650,7 +648,7 @@ internal class SpotlessDaemonRegistry(
 
     private inner class DaemonStartContext(
         private val execution: DaemonExecution,
-    ) : SpotlessDaemonStartContext {
+    ) : StartContext {
         override val project: Project
             get() = this@SpotlessDaemonRegistry.project
 
@@ -659,9 +657,9 @@ internal class SpotlessDaemonRegistry(
 
         @Suppress("OPT_IN_USAGE")
         override suspend fun launchHandle(
-            endpoint: SpotlessDaemonEndpoint,
+            endpoint: Endpoint,
             lifetime: suspend () -> Unit,
-        ): SpotlessDaemonHandle {
+        ): Handle {
             currentCoroutineContext().ensureActive()
             entriesMutex.lock()
             return try {
@@ -683,7 +681,7 @@ internal class SpotlessDaemonRegistry(
                     ) {
                         lifetime()
                     }
-                    val handle = SpotlessDaemonHandle(endpoint, lifetimeTask)
+                    val handle = Handle(endpoint, lifetimeTask)
                     execution.ownership = HandleOwnership.Active(handle, lifetimeTask)
                     observeHandleCompletion(execution, handle, lifetimeTask)
                     handle

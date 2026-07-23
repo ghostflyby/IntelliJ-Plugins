@@ -18,7 +18,8 @@ import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.disposableFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
-import dev.ghostflyby.spotless.api.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
 import dev.ghostflyby.spotless.api.frontend.SpotlessDaemonProviderPresentation
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
@@ -34,6 +35,11 @@ import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint as SpotlessDaemonEndpoint
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Handle as SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as SpotlessDaemonProviderState
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target as SpotlessDaemonTarget
 
 @Suppress("OverrideOnly")
 @TestApplication

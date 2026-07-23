@@ -10,15 +10,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
-import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
-import dev.ghostflyby.spotless.api.SpotlessDaemonHandle
-import dev.ghostflyby.spotless.api.SpotlessDaemonStartContext
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint as SpotlessDaemonEndpoint
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Handle as SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as SpotlessDaemonStartContext
 
 @TestApplication
 internal class SpotlessGradleExtensionTest {

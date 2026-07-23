@@ -16,6 +16,7 @@ import org.jetbrains.plugins.gradle.settings.GradleSettings
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as ProviderState
 
 @TestApplication
 internal class SpotlessGradleSettingsTest {
@@ -28,7 +29,7 @@ internal class SpotlessGradleSettingsTest {
     @Test
     fun `each Gradle sync advances provider state even when imported data is unchanged`() {
         val (settings, root) = settingsWithDetectedRoot()
-        val initial = settings.providerState.value
+        val initial: ProviderState = settings.providerState.value
 
         settings.updateFrom(listOf(spotlessNode(root)))
         val firstSync = settings.providerState.value
@@ -46,7 +47,7 @@ internal class SpotlessGradleSettingsTest {
     @Test
     fun `daemon configuration changes publish distinct provider state`() {
         val (settings, _) = settingsWithDetectedRoot()
-        val initial = settings.providerState.value
+        val initial: ProviderState = settings.providerState.value
 
         settings.gradleDaemonVersion = "0.8.0"
         val versionChanged = settings.providerState.value
@@ -63,7 +64,7 @@ internal class SpotlessGradleSettingsTest {
     @Test
     fun `provider state stays equal while no external project is detected`() {
         val settings = projectFixture.get().service<SpotlessGradleSettings>()
-        val initial = settings.providerState.value
+        val initial: ProviderState = settings.providerState.value
 
         settings.updateFrom(emptyList())
         settings.gradleDaemonVersion = "0.8.0"

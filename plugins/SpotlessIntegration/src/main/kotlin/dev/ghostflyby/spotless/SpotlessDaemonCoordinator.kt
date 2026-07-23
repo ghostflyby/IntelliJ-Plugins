@@ -11,10 +11,9 @@ import com.intellij.openapi.extensions.ExtensionPointListener
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import dev.ghostflyby.spotless.api.SpotlessDaemonEndpoint
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
-import dev.ghostflyby.spotless.api.SpotlessDaemonProviderState
-import dev.ghostflyby.spotless.api.SpotlessDaemonTarget
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.nio.file.Path
@@ -52,7 +51,7 @@ internal data class ProvidersSnapshot(
 
 internal data class ProviderTarget(
     val session: ProviderSession,
-    val target: SpotlessDaemonTarget,
+    val target: Target,
     val generation: Long,
 )
 
@@ -177,7 +176,7 @@ internal class SpotlessDaemonCoordinator(
     }
 
     internal inner class DaemonConnection internal constructor(
-        private val endpoint: SpotlessDaemonEndpoint,
+        private val endpoint: Endpoint,
     ) {
         suspend fun steps(path: Path): List<String>? =
             clientProvider().steps(endpoint, path)
@@ -304,7 +303,7 @@ internal class SpotlessDaemonCoordinator(
 
     private suspend fun observeProviderState(
         session: ProviderSession,
-        state: StateFlow<SpotlessDaemonProviderState>,
+        state: StateFlow<State>,
     ) {
         state.collect { providerState ->
             val previous = session.snapshot
@@ -366,7 +365,7 @@ internal class SpotlessDaemonCoordinator(
         )
     }
 
-    private fun normalizeProviderState(state: SpotlessDaemonProviderState): ProviderSnapshot {
+    private fun normalizeProviderState(state: State): ProviderSnapshot {
         val generations = linkedMapOf<Path, Long>()
         runCatching {
             state.projects.forEach { externalProject ->

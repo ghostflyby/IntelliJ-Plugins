@@ -16,8 +16,7 @@ import com.intellij.openapi.externalSystem.model.project.ProjectData
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.util.NlsSafe
-import dev.ghostflyby.spotless.api.ExternalProject
-import dev.ghostflyby.spotless.api.SpotlessDaemonProviderState
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.Serializable
@@ -30,6 +29,7 @@ import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Path
 import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as ProviderState
 
 
 internal data class SpotlessGradleStateData(
@@ -100,11 +100,11 @@ internal class SpotlessGradleSettings
     SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
     private val providerStateLock = Any()
     private var providerGeneration = 0L
-    private val mutableProviderState: MutableStateFlow<SpotlessDaemonProviderState> by lazy {
+    private val mutableProviderState: MutableStateFlow<ProviderState> by lazy {
         MutableStateFlow(createProviderState())
     }
 
-    val providerState: StateFlow<SpotlessDaemonProviderState>
+    val providerState: StateFlow<ProviderState>
         get() = mutableProviderState
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
@@ -149,7 +149,7 @@ internal class SpotlessGradleSettings
         }
     }
 
-    private fun createProviderState(): SpotlessDaemonProviderState {
+    private fun createProviderState(): ProviderState {
         val current = state
         val externalProjects = GradleSettings.getInstance(project).linkedProjectsSettings
             .asSequence()
@@ -165,7 +165,7 @@ internal class SpotlessGradleSettings
                 )
             }
             .toList()
-        return SpotlessDaemonProviderState(
+        return ProviderState(
             projects = externalProjects,
         )
     }

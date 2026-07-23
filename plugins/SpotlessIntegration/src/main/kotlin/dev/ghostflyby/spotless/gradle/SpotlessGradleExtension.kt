@@ -11,22 +11,25 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.api.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.div
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as ProviderState
 
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private val logger = logger<SpotlessGradleExtension>()
 
     override val id: String = "dev.ghostflyby.spotless.gradle"
 
-    override fun state(project: Project): StateFlow<SpotlessDaemonProviderState> =
+    override fun state(project: Project): StateFlow<ProviderState> =
         project.service<SpotlessGradleSettings>().providerState
 
-    override suspend fun startDaemon(context: SpotlessDaemonStartContext): SpotlessDaemonHandle =
+    override suspend fun startDaemon(context: StartContext): Handle =
         startSpotlessGradleDaemon(
             context = context,
             createWorkingDirectory = { Files.createTempDirectory(null) },
@@ -38,7 +41,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     override fun resolveTarget(
         project: Project,
         file: VirtualFile,
-    ): SpotlessDaemonTarget? {
+    ): Target? {
         val ioPath = file.toNioPathOrNull() ?: return null
         val abs = ioPath.toAbsolutePath().normalize()
         val externalProject = state(project).value.projects
@@ -46,7 +49,7 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
             .filter { abs.startsWith(it) }
             .maxByOrNull(Path::getNameCount)
             ?: return null
-        return SpotlessDaemonTarget(externalProject, abs)
+        return Target(externalProject, abs)
     }
 
     private fun cleanupWorkingDirectory(workingDirectory: Path) {
@@ -58,12 +61,12 @@ internal class SpotlessGradleExtension : SpotlessDaemonProvider {
 }
 
 internal suspend fun startSpotlessGradleDaemon(
-    context: SpotlessDaemonStartContext,
+    context: StartContext,
     createWorkingDirectory: () -> Path,
     startProcess: (Project, Path, Path, Path, () -> Unit) -> SpotlessGradleDaemonProcess,
     cleanupProcess: (SpotlessGradleDaemonProcess?) -> Unit,
     cleanupDirectory: (Path) -> Unit,
-): SpotlessDaemonHandle {
+): Handle {
     val terminated = CompletableDeferred<Unit>()
     var workingDirectory: Path? = null
     var process: SpotlessGradleDaemonProcess? = null
@@ -99,7 +102,7 @@ internal suspend fun startSpotlessGradleDaemon(
         currentCoroutineContext().ensureActive()
         checkNotNull(process).start()
         currentCoroutineContext().ensureActive()
-        val handle = context.launchHandle(SpotlessDaemonEndpoint.UnixSocket(unixSocketPath)) {
+        val handle = context.launchHandle(Endpoint.UnixSocket(unixSocketPath)) {
             try {
                 terminated.await()
             } finally {

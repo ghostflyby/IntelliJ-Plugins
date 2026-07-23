@@ -16,7 +16,8 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.spotless.api.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,10 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Path
 import kotlin.time.Duration.Companion.seconds
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Handle as SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as SpotlessDaemonProviderState
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target as SpotlessDaemonTarget
 
 @TestApplication
 internal class SpotlessFormatingServiceTest {

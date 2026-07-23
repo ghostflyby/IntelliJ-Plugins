@@ -18,7 +18,7 @@ is not enabled in this phase, and no RPC contract is introduced.
 
 - `id` is a stable, non-empty, reverse-domain-style ASCII identifier. Provider instances with the same ID are resolved
   in IntelliJ extension-point order; the first is active, and the next becomes active if the first is removed.
-- `state(project)` returns a stable project-lifetime `StateFlow<SpotlessDaemonProviderState>`.
+- `state(project)` returns a stable project-lifetime `StateFlow<SpotlessDaemonProvider.State>`.
 - `resolveTarget(project, file)` is a cheap, single-call route decision. `null`, an exception, or a root absent from the
   current state is a miss and allows the next provider to be considered.
 - The first valid target owns the request. Startup, readiness, and operation failures never fall back to another
@@ -28,10 +28,10 @@ is not enabled in this phase, and no RPC contract is introduced.
   transfers ownership to the core; the supplied lifetime block then owns cleanup from `finally`.
 - The API intentionally exposes neither a raw `CoroutineScope` nor an IntelliJ `Disposable`.
 
-### `SpotlessDaemonProviderState` and `ExternalProject`
+### `SpotlessDaemonProvider.State` and `.ExternalProject`
 
-Provider state contains `projects: List<ExternalProject>`. Each external project has a normalized-by-core `root` and an
-explicit `generation`.
+Provider state contains `projects: List<SpotlessDaemonProvider.ExternalProject>`. Each external project has a
+normalized-by-core `root` and an explicit `generation`.
 
 - Adding a root updates discovery without starting a daemon.
 - Removing a root stops an existing daemon for that root.
@@ -39,26 +39,26 @@ explicit `generation`.
 - Unchanged root/generation pairs cause no daemon operation.
 - Providers advance generation whenever inputs affecting target resolution or daemon startup change.
 
-### `SpotlessDaemonTarget`
+### `SpotlessDaemonProvider.Target`
 
-`SpotlessDaemonTarget(externalProjectRoot, file)` is an invocation-scoped routing result. It remains separate from the
-continuous provider state. The root must exist in the same provider's current state; the core normalizes and validates
-it before selecting the provider.
+`SpotlessDaemonProvider.Target(externalProjectRoot, file)` is an invocation-scoped routing result. It remains separate
+from the continuous provider state. The root must exist in the same provider's current state; the core normalizes and
+validates it before selecting the provider.
 
-### `SpotlessDaemonStartContext`, `SpotlessDaemonHandle`, and `SpotlessDaemonEndpoint`
+### `SpotlessDaemonProvider.StartContext`, `.Handle`, and `.Endpoint`
 
-`SpotlessDaemonStartContext` exposes the project, normalized external-project root, and
+`SpotlessDaemonProvider.StartContext` exposes the project, normalized external-project root, and
 `launchHandle(endpoint, lifetime)`.
 
 - `launchHandle` may succeed exactly once and is the ownership-transfer commit point. Duplicate calls, calls after
   detach or state invalidation, and returning a foreign handle fail startup.
-- `SpotlessDaemonHandle` is a final composition object. Its endpoint is immediately available and immutable; its
-  `Job` represents provider lifetime and cleanup completion without implementing or delegating `Job`/`Deferred`.
+- `SpotlessDaemonProvider.Handle` is a final composition object. Its endpoint is immediately available and immutable;
+  its `Job` represents provider lifetime and cleanup completion without implementing or delegating `Job`/`Deferred`.
 - Either side may cancel the lifetime job. `join()` waits until provider `finally` completes and does not propagate the
   provider exception. Registry retains an internal `Deferred<Unit>` only to preserve the original startup failure.
 - The core performs the HTTP readiness check after handle launch.
-- `SpotlessDaemonEndpoint.Localhost` and `.UnixSocket` contain connection information only. Process handles, temporary
-  files, and cleanup callbacks do not cross the provider boundary.
+- `SpotlessDaemonProvider.Endpoint.Localhost` and `.UnixSocket` contain connection information only. Process handles,
+  temporary files, and cleanup callbacks do not cross the provider boundary.
 
 ## Frontend Presentation API
 
@@ -98,7 +98,8 @@ commands, capability cache, and Gradle process types are internal implementation
 ## ABI Decision
 
 This revision replaces `runDaemon`, `SpotlessDaemonRunContext`, and endpoint publication with `startDaemon`,
-`SpotlessDaemonStartContext`, and the final composition-based `SpotlessDaemonHandle`. It keeps the earlier removal of
-`presentableName`, `SpotlessDaemonLifecycle`, and the nested `SpotlessDaemonProvider.Endpoint`, while retaining stable
-provider identity, the top-level endpoint type, and the frontend presentation EP. The FQNs and fields of
-`SpotlessDaemonProviderState`, `ExternalProject`, and `SpotlessDaemonTarget` remain unchanged.
+`SpotlessDaemonProvider.StartContext`, and the final composition-based `SpotlessDaemonProvider.Handle`. Provider-owned
+state, routing, startup, handle, and endpoint contracts are nested under `SpotlessDaemonProvider`; formatting
+preprocessor invocation types remain nested under `SpotlessFormattingPreprocessor`. A public model becomes top-level
+only when multiple public extension contracts or a future shared boundary own it. This keeps provider identity and the
+frontend presentation EP independent without publishing apparently general-purpose daemon models.

@@ -1,10 +1,10 @@
 # SpotlessIntegration TODO
 
-Status: Ready Last Updated: 2026-07-22
+Status: Ready Last Updated: 2026-07-23
 
 ## Next Steps
 
-1. Add a third-party provider compatibility fixture for the stable composition-handle and presentation APIs.
+1. Add a third-party provider compatibility fixture for the stable nested composition-handle and presentation APIs.
 2. Add UI-enabled integration coverage for status-bar availability changes and popup inline actions.
 3. Prototype split-mode module movement without changing the fixed public FQNs or adding RPC prematurely.
 

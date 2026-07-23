@@ -17,20 +17,20 @@ import java.lang.reflect.Modifier
 internal class SpotlessDaemonHandleTest {
     @Test
     fun `handle exposes immutable endpoint and exact lifetime job`() {
-        val endpoint = SpotlessDaemonEndpoint.Localhost(25252U)
+        val endpoint = SpotlessDaemonProvider.Endpoint.Localhost(25252U)
         val lifetime = Job()
-        val handle = SpotlessDaemonHandle(endpoint, lifetime)
+        val handle = SpotlessDaemonProvider.Handle(endpoint, lifetime)
 
         assertEquals(endpoint, handle.endpoint)
         assertSame(lifetime, handle.lifetime)
-        assertTrue(Modifier.isFinal(SpotlessDaemonHandle::class.java.modifiers))
+        assertTrue(Modifier.isFinal(SpotlessDaemonProvider.Handle::class.java.modifiers))
     }
 
     @Test
     fun `lifetime cancellation and completion handlers use backing job`() = runBlocking {
         val lifetime = Job()
-        val handle = SpotlessDaemonHandle(
-            endpoint = SpotlessDaemonEndpoint.Localhost(25252U),
+        val handle = SpotlessDaemonProvider.Handle(
+            endpoint = SpotlessDaemonProvider.Endpoint.Localhost(25252U),
             lifetime = lifetime,
         )
         var completionCause: Throwable? = null

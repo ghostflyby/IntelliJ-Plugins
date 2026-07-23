@@ -17,7 +17,9 @@ import com.intellij.psi.PsiManager
 import com.intellij.testFramework.ExtensionTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.spotless.api.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
+import dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor
 import io.ktor.client.*
 import io.ktor.client.engine.mock.*
 import io.ktor.client.request.*
@@ -39,6 +41,11 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.measureTime
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint as SpotlessDaemonEndpoint
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Handle as SpotlessDaemonHandle
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as SpotlessDaemonStartContext
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as SpotlessDaemonProviderState
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target as SpotlessDaemonTarget
 
 @TestApplication
 internal class SpotlessProjectServiceTest {
