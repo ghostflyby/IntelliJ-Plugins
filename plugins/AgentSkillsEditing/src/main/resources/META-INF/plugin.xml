@@ -1,3 +1,4 @@
+<!-- Copyright (c) 2026 ghostflyby -->
 <!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
@@ -17,14 +18,15 @@
     </extensions>
 
     <extensions defaultExtensionNs="com.intellij">
+        <psi.declarationProvider
+                implementation="dev.ghostflyby.skills.SkillNameDeclarationProvider"/>
+        <rename.symbolRenameTargetFactory implementation="dev.ghostflyby.skills.SkillSymbolRenameTargetFactory"/>
+        <searcher
+                forClass="com.intellij.refactoring.rename.api.RenameUsageSearchParameters"
+                implementationClass="dev.ghostflyby.skills.SkillNameRenameUsageSearcher"/>
+
         <referencesSearch
                 implementation="dev.ghostflyby.skills.SkillDirRenameSearchExecutor"/>
-        <renameHandler
-                implementation="dev.ghostflyby.skills.SkillNameRenameHandler"
-                order="first"/>
-        <renamePsiElementProcessor
-                implementation="dev.ghostflyby.skills.SkillNameRenamePsiElementProcessor"
-                order="first"/>
         <gotoDeclarationHandler
                 implementation="dev.ghostflyby.skills.SkillNameGotoDeclarationHandler"/>
 
