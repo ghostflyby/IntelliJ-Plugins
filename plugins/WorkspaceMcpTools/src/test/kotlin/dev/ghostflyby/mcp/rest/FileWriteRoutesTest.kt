@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.testFramework.IndexingTestUtil
@@ -43,7 +49,7 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.post(sessionClient.rootPathUrl("new.txt")) {
+            val response = sessionClient.post(rootPathUrl("new.txt")) {
                 setBody("fresh content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -52,7 +58,7 @@ internal class FileWriteRoutesTest {
             Assertions.assertTrue(response.bodyAsText().contains("encodedUri: file%3A%2F%2F"), response.bodyAsText())
 
             // Verify file exists via GET
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("new.txt"))
+            val getResp = sessionClient.get(rootPathUrl("new.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, getResp.status)
             Assertions.assertEquals("fresh content", getResp.bodyAsText().trim())
         }
@@ -65,7 +71,7 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.post(sessionClient.rootPathUrl("newdir")) {
+            val response = sessionClient.post(rootPathUrl("newdir")) {
                 setBody("")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -80,7 +86,7 @@ internal class FileWriteRoutesTest {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
             // plain.txt exists from blueprint
-            val response = sessionClient.post(sessionClient.rootPathUrl("plain.txt")) {
+            val response = sessionClient.post(rootPathUrl("plain.txt")) {
                 setBody("overwrite attempt")
             }
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
@@ -96,7 +102,7 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.put(sessionClient.rootPathUrl("put-created.txt")) {
+            val response = sessionClient.put(rootPathUrl("put-created.txt")) {
                 setBody("put content")
             }
             Assertions.assertEquals(HttpStatusCode.Created, response.status)
@@ -110,12 +116,12 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.put(sessionClient.rootPathUrl("plain.txt")) {
+            val response = sessionClient.put(rootPathUrl("plain.txt")) {
                 setBody("replaced content")
             }
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals("replaced content", getResp.bodyAsText().trim())
         }
     }
@@ -155,13 +161,13 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.delete(sessionClient.rootPathUrl("plain.txt"))
+            val response = sessionClient.delete(rootPathUrl("plain.txt"))
             Assertions.assertEquals(HttpStatusCode.OK, response.status)
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             Assertions.assertTrue(response.bodyAsText().contains("deleted: true"), response.bodyAsText())
             Assertions.assertTrue(response.bodyAsText().contains("referenceCount: 0"), response.bodyAsText())
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -173,7 +179,7 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.delete(sessionClient.rootPathUrl("doesnotexist.txt"))
+            val response = sessionClient.delete(rootPathUrl("doesnotexist.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, response.status)
         }
     }
@@ -185,7 +191,7 @@ internal class FileWriteRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val response = sessionClient.delete(sessionClient.rootPathUrl("src"))
+            val response = sessionClient.delete(rootPathUrl("src"))
             Assertions.assertEquals(HttpStatusCode.Conflict, response.status)
         }
     }
