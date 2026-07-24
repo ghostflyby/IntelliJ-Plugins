@@ -151,6 +151,57 @@ internal class SpotlessStatusBarWidgetTest {
     }
 
     @Test
+    suspend fun `restart completion publishes Ready status before returning`() {
+        maskProviders()
+        val dispatcher = QueuedDispatcher()
+        val coordinatorScope = CoroutineScope(SupervisorJob() + dispatcher)
+        val root = projectPathFixture.get().resolve("external-project")
+        val provider = TestStatusProvider(listOf(root))
+        val readinessStarted = CompletableDeferred<Unit>()
+        val allowReadiness = CompletableDeferred<Unit>()
+        val client = SpotlessDaemonClient(
+            HttpClient(MockEngine {
+                readinessStarted.complete(Unit)
+                allowReadiness.await()
+                respond("", HttpStatusCode.OK)
+            }),
+        )
+        val coordinator = SpotlessDaemonCoordinator(projectFixture.get(), coordinatorScope) { client }
+        val normalizedRoot = root.toAbsolutePath().normalize()
+
+        try {
+            coordinator.providersLookup = { listOf(provider) }
+            dispatcher.runAll()
+
+            val restart = coordinator.restartDaemon(provider.id, root)
+            withTimeout(5.seconds) {
+                readinessStarted.await()
+            }
+            dispatcher.runAll()
+            assertEquals(
+                mapOf(normalizedRoot to SpotlessDaemonRuntimeState.Starting),
+                coordinator.snapshot.value.providers.single().runtimeStates,
+            )
+
+            allowReadiness.complete(Unit)
+            withTimeout(5.seconds) {
+                restart.join()
+            }
+
+            assertEquals(
+                mapOf(normalizedRoot to SpotlessDaemonRuntimeState.Ready),
+                coordinator.snapshot.value.providers.single().runtimeStates,
+            )
+        } finally {
+            allowReadiness.complete(Unit)
+            coordinator.shutdown()
+            client.close()
+            coordinatorScope.cancel()
+            dispatcher.runAll()
+        }
+    }
+
+    @Test
     suspend fun `runtime states are grouped by provider identity`() {
         val firstRoot = projectPathFixture.get().resolve("first")
         val secondRoot = projectPathFixture.get().resolve("second")
