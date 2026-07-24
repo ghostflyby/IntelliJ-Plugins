@@ -1,15 +1,3 @@
-# GitHub Actions Workflow is created for testing and preparing the plugin release in the following steps:
-# - Validate Gradle Wrapper.
-# - Run 'test' and 'verifyPlugin' tasks.
-# - Run the 'buildPlugin' task and prepare artifact for further tests.
-# - Run the 'runPluginVerifier' task.
-# - Create a draft release.
-#
-# The workflow is triggered on push and pull_request events.
-#
-# GitHub Actions reference: https://help.github.com/en/actions
-#
-
 name: Build
 on:
   push:
@@ -130,7 +118,6 @@ jobs:
 
   inspectCode:
     name: Inspect code
-    needs: [ build-and-check ]
     uses: ./.github/workflows/inspect-code.yml
     permissions:
       contents: write

@@ -1,4 +1,4 @@
-name: Inspect Code
+name: Inspect Code (Qodana)
 
 on:
   workflow_call:
