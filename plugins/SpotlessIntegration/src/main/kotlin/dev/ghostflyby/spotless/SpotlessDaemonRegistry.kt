@@ -137,7 +137,7 @@ internal class SpotlessDaemonRegistry(
         } catch (error: CancellationException) {
             throw error
         } catch (error: SpotlessDaemonTransportException) {
-            releaseIfCurrent(ready, "daemon transport failed")
+            releaseIfCurrent(ready)
             throw error
         }
     }
@@ -233,11 +233,9 @@ internal class SpotlessDaemonRegistry(
     fun hasRunningDaemons(): Boolean = runtimeState.value.entries.isNotEmpty()
 
     fun dispose() {
-        runBlocking(Dispatchers.IO) {
-            withContext(NonCancellable) {
-                releaseMatchingDaemons({ true }, "service disposed", daemonCleanupTimeout)
-                capabilityCache.clear()
-            }
+        runBlocking(Dispatchers.IO + NonCancellable) {
+            releaseMatchingDaemons({ true }, "service disposed", daemonCleanupTimeout)
+            capabilityCache.clear()
         }
         registryJob.cancel()
     }
@@ -340,7 +338,6 @@ internal class SpotlessDaemonRegistry(
                 closeLateHandle(
                     key = execution.key,
                     handle = returned,
-                    reason = "daemon detached before provider returned its handle",
                     deadline = cleanupDeadline(daemonCleanupTimeout),
                 )
                 throw CancellationException("Spotless daemon was detached while starting")
@@ -419,7 +416,7 @@ internal class SpotlessDaemonRegistry(
         observedHandle: ObservedHandle,
     ): ProviderTermination? = coroutineScope {
         val readiness = async(Dispatchers.IO) {
-            clientProvider().awaitReady(observedHandle.handle.endpoint, daemonStartupTimeout)
+            clientProvider().awaitReady(observedHandle.handle.endpoint)
         }
         try {
             select {
@@ -449,7 +446,6 @@ internal class SpotlessDaemonRegistry(
 
     private suspend fun releaseIfCurrent(
         ready: ReadyLease,
-        reason: String,
     ) {
         val deadline = cleanupDeadline(daemonCleanupTimeout)
         val detached = entriesMutex.withLock {
@@ -457,7 +453,7 @@ internal class SpotlessDaemonRegistry(
                 detachLocked(
                     ready.key,
                     ready.entry,
-                    reason,
+                    "daemon transport failed",
                     stopHttp = true,
                 ).also { publishRuntimeStateLocked() }
             } else {
@@ -569,10 +565,10 @@ internal class SpotlessDaemonRegistry(
     private suspend fun closeLateHandle(
         key: DaemonKey,
         handle: Handle,
-        reason: String,
         deadline: CleanupDeadline,
     ) {
         withContext(NonCancellable + Dispatchers.IO) {
+            val reason = "daemon detached before provider returned its handle"
             stopEndpoint(handle.endpoint, reason, deadline.remaining())
             handle.lifetime.cancel(CancellationException("Spotless daemon detached: $reason"))
             joinJobs(listOf(handle.lifetime), key, deadline.remaining())
@@ -710,7 +706,7 @@ internal class SpotlessDaemonRegistry(
         )
     }
 
-    private companion object {
+    companion object {
         val daemonStartupTimeout: Duration = 60.seconds
         val defaultDaemonCleanupTimeout: Duration = 5.seconds
         val defaultProviderRemovalCleanupTimeout: Duration = 2.seconds

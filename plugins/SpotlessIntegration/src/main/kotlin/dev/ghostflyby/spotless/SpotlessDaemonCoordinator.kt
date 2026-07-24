@@ -175,7 +175,7 @@ internal class SpotlessDaemonCoordinator(
         externalProject = target.target.externalProjectRoot,
         generation = target.generation,
     ) { endpoint ->
-        DaemonConnection(endpoint).operation()
+        operation(DaemonConnection(endpoint))
     }
 
     internal inner class DaemonConnection internal constructor(
@@ -234,14 +234,18 @@ internal class SpotlessDaemonCoordinator(
 
     private fun currentProviders(): List<ProviderCandidate> = buildList {
         val providers = Collections.newSetFromMap(IdentityHashMap<SpotlessDaemonProvider, Boolean>())
-        val providerIds = mutableSetOf<String>()
+        val providersById = mutableMapOf<String, SpotlessDaemonProvider>()
         providersLookup(project).forEach { provider ->
             if (!providers.add(provider)) {
                 return@forEach
             }
             val providerId = providerId(provider) ?: return@forEach
-            if (!providerIds.add(providerId)) {
-                logger.warn("Ignoring duplicate Spotless daemon provider id: $providerId")
+            val retainedProvider = providersById.putIfAbsent(providerId, provider)
+            if (retainedProvider != null) {
+                logger.warn(
+                    "Ignoring Spotless daemon provider id '$providerId' from ${provider.javaClass.name}; " +
+                            "the earlier extension ${retainedProvider.javaClass.name} has priority",
+                )
                 return@forEach
             }
             add(ProviderCandidate(providerId, provider))
@@ -269,8 +273,13 @@ internal class SpotlessDaemonCoordinator(
             initialSnapshot = normalizeProviderState(state.value),
         )
         val attached = synchronized(providerLock) {
-            !sessions.containsKey(provider) && if (sessionsById.containsKey(candidate.id)) {
-                logger.warn("Ignoring duplicate Spotless daemon provider id: ${candidate.id}")
+            val existingSession = sessionsById[candidate.id]
+            !sessions.containsKey(provider) && if (existingSession != null) {
+                logger.warn(
+                    "Skipping Spotless daemon provider attachment for id '${candidate.id}' " +
+                            "from ${provider.javaClass.name}; the active session belongs to " +
+                            existingSession.provider.javaClass.name,
+                )
                 false
             } else {
                 sessions[provider] = session

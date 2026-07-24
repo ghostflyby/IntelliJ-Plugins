@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.spotless
 
+import dev.ghostflyby.spotless.SpotlessDaemonRegistry.Companion.daemonStartupTimeout
 import dev.ghostflyby.spotless.SpotlessFormatResult.*
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Endpoint
 import io.ktor.client.*
@@ -49,9 +50,8 @@ internal class SpotlessDaemonClient(
 
     suspend fun awaitReady(
         endpoint: Endpoint,
-        timeout: Duration,
     ) {
-        val ready = withTimeoutOrNull(timeout) {
+        val ready = withTimeoutOrNull(daemonStartupTimeout) {
             while (!healthCheck(endpoint)) {
                 delay(readinessRetryDelay)
             }
