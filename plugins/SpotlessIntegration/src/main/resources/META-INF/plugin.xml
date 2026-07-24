@@ -9,6 +9,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends optional="true" config-file="gradle.xml">com.intellij.gradle</depends>
+    <depends optional="true" config-file="java.xml">com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
@@ -16,9 +17,6 @@
                                 implementation="dev.ghostflyby.spotless.SpotlessStatusBarWidgetFactory"
                                 order="before ReadOnlyAttribute"/>
         <postStartupActivity implementation="dev.ghostflyby.spotless.SpotlessStatusBarWidgetActivity"/>
-    </extensions>
-    <extensions defaultExtensionNs="dev.ghostflyby.spotless">
-        <spotlessFormattingPreprocessor implementation="dev.ghostflyby.spotless.JavaWildcardImportPreprocessor"/>
     </extensions>
 
     <extensionPoints>
