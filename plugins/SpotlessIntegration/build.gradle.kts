@@ -14,12 +14,6 @@ plugins {
 
 version = "1.1.0"
 
-intellijPlatform {
-    pluginVerification {
-        ignoredProblemsFile = layout.projectDirectory.file("plugin-verifier-ignored-problems.txt")
-    }
-}
-
 dependencies {
     intellijPlatform {
         bundledPlugin("com.intellij.gradle")
