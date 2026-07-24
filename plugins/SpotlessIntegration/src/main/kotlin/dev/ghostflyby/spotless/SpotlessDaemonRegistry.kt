@@ -219,7 +219,6 @@ internal class SpotlessDaemonRegistry(
         getDaemon(session, externalProject, generation)
     }
 
-    @Suppress("RunBlocking")
     fun releaseSessionSynchronously(session: ProviderSession): Int =
         // Dynamic extension removal is synchronous and must finish owned cleanup before returning.
         runBlocking {
