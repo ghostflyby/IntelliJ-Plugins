@@ -7,11 +7,9 @@
 package dev.ghostflyby.spotless.api.frontend
 
 import com.intellij.openapi.extensions.ExtensionPointName
-import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.Nls
 
 /** Frontend presentation for a backend Spotless daemon provider. */
-@ApiStatus.OverrideOnly
 public interface SpotlessDaemonProviderPresentation {
     public companion object {
         @JvmField

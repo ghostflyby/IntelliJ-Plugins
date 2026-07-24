@@ -9,7 +9,6 @@ package dev.ghostflyby.spotless.api
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.psi.PsiFile
 import com.intellij.util.concurrency.annotations.RequiresReadLock
-import org.jetbrains.annotations.ApiStatus
 
 /**
  * Prepares formatter input for daemon steps that require IDE-specific handling.
@@ -17,7 +16,6 @@ import org.jetbrains.annotations.ApiStatus
  * Implementations must not retain [PsiFile] instances received through [isApplicableTo] or
  * [Context.psiFile].
  */
-@ApiStatus.OverrideOnly
 public interface SpotlessFormattingPreprocessor {
     public companion object {
         @JvmField
