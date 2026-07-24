@@ -11,10 +11,14 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.storage.entities
 import com.intellij.psi.PsiElement
+import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
 import org.toml.lang.psi.TomlFile
 
+@RequiresReadLock
+@RequiresBackgroundThread
 @Suppress("UnstableApiUsage")
 internal fun findTypesafeConventionsCatalogTomlFile(context: PsiElement, catalogName: String): TomlFile? {
     val contextUrl = context.containingFile?.originalFile?.virtualFile?.url
