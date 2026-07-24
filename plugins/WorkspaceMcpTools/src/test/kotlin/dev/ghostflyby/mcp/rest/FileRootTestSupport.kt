@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import io.ktor.client.*
@@ -62,35 +68,7 @@ internal suspend fun HttpClient.withRestSession(pathPrefix: String, json: Json):
     }
 }
 
-internal fun HttpClient.rootPathUrl(
-    relativePath: String,
-    meta: Boolean? = null,
-    content: Boolean? = null,
-    exists: Boolean? = null,
-    structure: Boolean? = null,
-    force: Boolean? = null,
-    startLine: Int? = null,
-    endLine: Int? = null,
-    maxLines: Int? = null,
-    aroundLine: Int? = null,
-    radius: Int? = null,
-): String {
-    return dev.ghostflyby.mcp.rest.rootPathUrl(
-        relativePath,
-        meta,
-        content,
-        exists,
-        structure,
-        force,
-        startLine,
-        endLine,
-        maxLines,
-        aroundLine,
-        radius,
-    )
-}
-
-internal fun HttpClient.rootPathUrlByRootUrl(
+internal fun rootPathUrlByRootUrl(
     relativePath: String,
     meta: Boolean? = null,
     content: Boolean? = null,

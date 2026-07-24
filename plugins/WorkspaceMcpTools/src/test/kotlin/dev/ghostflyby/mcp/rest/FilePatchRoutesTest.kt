@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.testFramework.IndexingTestUtil
@@ -54,13 +60,13 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(patch)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
             Assertions.assertEquals("hello patched", projectPathFixture.get().resolve("plain.txt").readText().trim())
         }
@@ -78,12 +84,12 @@ internal class FilePatchRoutesTest {
 +created via patch
 *** End Patch"""
             // Create the parent dir first, then PATCH
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("patch-new.txt")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("patch-new.txt")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             Assertions.assertEquals(TestMarkdownContentType, resp.responseContentType())
             Assertions.assertTrue(resp.bodyAsText().contains("- add patch-new.txt"), resp.bodyAsText())
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("patch-new.txt"))
+            val getResp = sessionClient.get(rootPathUrl("patch-new.txt"))
             Assertions.assertEquals("created via patch", getResp.bodyAsText().trim())
         }
     }
@@ -122,7 +128,7 @@ internal class FilePatchRoutesTest {
 -hello sample
 +hello patched
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(patch)
             }
@@ -130,7 +136,7 @@ internal class FilePatchRoutesTest {
             val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
             Assertions.assertTrue(failed.isNullOrEmpty())
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals("hello patched", getResp.bodyAsText().trim())
         }
     }
@@ -150,7 +156,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 header(HttpHeaders.Accept, ContentType.Application.Json.toString())
                 setBody(diff)
             }
@@ -159,7 +165,7 @@ internal class FilePatchRoutesTest {
             Assertions.assertEquals(1, body["applied"]?.jsonArray?.size)
             Assertions.assertTrue(body["failed"]?.jsonArray.isNullOrEmpty())
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
         }
     }
@@ -177,7 +183,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 accept(ContentType.Application.Json)
                 setBody(diff)
             }
@@ -185,7 +191,7 @@ internal class FilePatchRoutesTest {
             val failed = json.parseToJsonElement(resp.bodyAsText()).jsonObject["failed"]?.jsonArray
             Assertions.assertTrue(failed.isNullOrEmpty())
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals("hello git-patched", getResp.bodyAsText().trim())
         }
     }
@@ -203,7 +209,7 @@ internal class FilePatchRoutesTest {
 @@ -1 +1 @@
 -hello sample
 +hello git-patched"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody(diff)
             }
@@ -218,7 +224,7 @@ internal class FilePatchRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 header("Content-Type", "text/x-patch")
                 setBody("*** Begin Patch")
             }
@@ -241,7 +247,7 @@ new file mode 100644
 +++ b/newfile.txt
 @@ -0,0 +1 @@
 +created by git patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("newfile.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("newfile.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
@@ -261,12 +267,12 @@ deleted file mode 100644
 +++ /dev/null
 @@ -1 +0,0 @@
 -hello sample"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 setBody(diff)
             }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("plain.txt"))
+            val getResp = sessionClient.get(rootPathUrl("plain.txt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, getResp.status)
         }
     }
@@ -285,7 +291,7 @@ deleted file mode 100644
 *** Add File: newfile.txt
 +created under directory
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("foo.xml"))
@@ -305,12 +311,12 @@ deleted file mode 100644
 -<foo/>
 +<root><child/></root>
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
 
-            val foo = sessionClient.get(sessionClient.rootPathUrl("src/foo.xml"))
+            val foo = sessionClient.get(rootPathUrl("src/foo.xml"))
             Assertions.assertEquals("<root><child/></root>", foo.bodyAsText().trim())
-            val bar = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            val bar = sessionClient.get(rootPathUrl("src/bar.xml"))
             Assertions.assertEquals("<bar/>", bar.bodyAsText().trim())
         }
     }
@@ -326,16 +332,16 @@ deleted file mode 100644
 *** Update File: bar.xml
 *** Move to: moved-bar.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertFalse(body.contains("Read access is allowed"), body)
             Assertions.assertFalse(body.contains("failed:"), body)
 
-            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved-bar.xml"))
+            val moved = sessionClient.get(rootPathUrl("src/moved-bar.xml"))
             Assertions.assertEquals("<bar/>", moved.bodyAsText().trim())
 
-            val old = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            val old = sessionClient.get(rootPathUrl("src/bar.xml"))
             Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
         }
     }
@@ -351,14 +357,14 @@ deleted file mode 100644
 *** Update File: bar.xml
 *** Move to: moved/bar-renamed.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             Assertions.assertTrue(resp.bodyAsText().contains("- update src/bar.xml"), resp.bodyAsText())
 
-            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved/bar-renamed.xml"))
+            val moved = sessionClient.get(rootPathUrl("src/moved/bar-renamed.xml"))
             Assertions.assertEquals("<bar/>", moved.bodyAsText().trim())
 
-            val old = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            val old = sessionClient.get(rootPathUrl("src/bar.xml"))
             Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
         }
     }
@@ -377,12 +383,12 @@ deleted file mode 100644
 *** Update File: bar.xml
 *** Move to: .git/moved.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertTrue(body.contains("Git metadata paths are read-only"), body)
 
-            val original = sessionClient.get(sessionClient.rootPathUrl("src/bar.xml"))
+            val original = sessionClient.get(rootPathUrl("src/bar.xml"))
             Assertions.assertEquals(HttpStatusCode.OK, original.status)
             Assertions.assertEquals("<bar/>", original.bodyAsText().trim())
 
@@ -407,7 +413,7 @@ deleted file mode 100644
 -[core]
 +changed
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertTrue(body.contains("Git metadata paths are read-only"), body)
@@ -451,18 +457,18 @@ deleted file mode 100644
 *** Update File: pkg/Alpha.java
 *** Move to: moved/Alpha.java
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             Assertions.assertFalse(resp.bodyAsText().contains("failed:"), resp.bodyAsText())
 
-            val moved = sessionClient.get(sessionClient.rootPathUrl("src/moved/Alpha.java"))
+            val moved = sessionClient.get(rootPathUrl("src/moved/Alpha.java"))
             Assertions.assertEquals(HttpStatusCode.OK, moved.status)
             Assertions.assertTrue(moved.bodyAsText().contains("public class Alpha"), moved.bodyAsText())
 
-            val old = sessionClient.get(sessionClient.rootPathUrl("src/pkg/Alpha.java"))
+            val old = sessionClient.get(rootPathUrl("src/pkg/Alpha.java"))
             Assertions.assertEquals(HttpStatusCode.NotFound, old.status)
 
-            val beta = sessionClient.get(sessionClient.rootPathUrl("src/pkg/Beta.java"))
+            val beta = sessionClient.get(rootPathUrl("src/pkg/Beta.java"))
             Assertions.assertEquals(HttpStatusCode.OK, beta.status)
             val betaText = beta.bodyAsText()
             Assertions.assertTrue(betaText.contains("public String call(Alpha target)"), betaText)
@@ -479,7 +485,7 @@ deleted file mode 100644
             val patch = """*** Begin Patch
 *** Reformat File: foo.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertTrue(body.contains("- reformat src/foo.xml"), body)
@@ -496,7 +502,7 @@ deleted file mode 100644
             val patch = """*** Begin Patch
 *** Cleanup: foo.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertTrue(body.contains("- cleanup src/foo.xml"), body)
@@ -515,7 +521,7 @@ deleted file mode 100644
 *** Optimize Imports: foo.xml
 *** Cleanup: foo.xml
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             val cleanup = body.indexOf("- cleanup src/foo.xml")
@@ -541,7 +547,7 @@ deleted file mode 100644
 +  *** Cleanup: src/B.kt
 +after
 *** End Patch"""
-            val createResp = sessionClient.patch(sessionClient.rootPathUrl("operation-doc.md")) { setBody(create) }
+            val createResp = sessionClient.patch(rootPathUrl("operation-doc.md")) { setBody(create) }
             Assertions.assertEquals(HttpStatusCode.OK, createResp.status)
 
             val update = """*** Begin Patch
@@ -552,12 +558,12 @@ deleted file mode 100644
 -after
 +after updated
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("operation-doc.md")) { setBody(update) }
+            val resp = sessionClient.patch(rootPathUrl("operation-doc.md")) { setBody(update) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val body = resp.bodyAsText()
             Assertions.assertFalse(body.contains("File not found: src/B.kt"), body)
 
-            val getResp = sessionClient.get(sessionClient.rootPathUrl("operation-doc.md"))
+            val getResp = sessionClient.get(rootPathUrl("operation-doc.md"))
             Assertions.assertEquals(
                 """before
   *** Cleanup: src/B.kt
@@ -574,7 +580,7 @@ after updated""",
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val resp = sessionClient.patch("${sessionClient.rootPathUrl("plain.txt")}?problemFix=true") {
+            val resp = sessionClient.patch("${rootPathUrl("plain.txt")}?problemFix=true") {
                 setBody(
                     """*** Begin Patch
 *** Fix Problem
@@ -602,7 +608,7 @@ after updated""",
  -nothing
 +something
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("src")) { setBody(patch) }
+            val resp = sessionClient.patch(rootPathUrl("src")) { setBody(patch) }
             Assertions.assertEquals(HttpStatusCode.OK, resp.status)
             val text = resp.bodyAsText()
             Assertions.assertTrue(text.contains("failed"))
@@ -616,7 +622,7 @@ after updated""",
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("plain.txt")) {
+            val resp = sessionClient.patch(rootPathUrl("plain.txt")) {
                 setBody("this is not a patch")
             }
             Assertions.assertEquals(HttpStatusCode.BadRequest, resp.status)
@@ -635,7 +641,7 @@ after updated""",
 +<root>
 +    <unclosed
 *** End Patch"""
-            val resp = sessionClient.patch(sessionClient.rootPathUrl("broken.xml")) {
+            val resp = sessionClient.patch(rootPathUrl("broken.xml")) {
                 setBody(patch)
             }
             Assertions.assertTrue(resp.bodyAsText().contains("applied:"), "PATCH should succeed")
