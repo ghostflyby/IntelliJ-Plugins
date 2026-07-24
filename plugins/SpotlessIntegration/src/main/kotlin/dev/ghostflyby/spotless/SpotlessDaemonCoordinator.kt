@@ -191,7 +191,12 @@ internal class SpotlessDaemonCoordinator(
         ): SpotlessFormatResult = clientProvider().format(endpoint, path, content, skipSteps)
     }
 
-    suspend fun releaseAllDaemons(): Int = registry.releaseAllDaemons()
+    suspend fun releaseAllDaemons(): Int =
+        try {
+            registry.releaseAllDaemons()
+        } finally {
+            publishStatusSnapshot()
+        }
 
     fun releaseAllDaemonsAsync(onReleased: (Int) -> Unit = {}): Job =
         scope.launch(Dispatchers.IO) {
@@ -343,7 +348,11 @@ internal class SpotlessDaemonCoordinator(
             sessionsById[providerId]
         } ?: return completedJob()
         return session.scope.launch(Dispatchers.IO) {
-            command(session)
+            try {
+                command(session)
+            } finally {
+                publishStatusSnapshot()
+            }
         }
     }
 
@@ -358,7 +367,11 @@ internal class SpotlessDaemonCoordinator(
         } ?: return completedJob()
         val generation = session.snapshot.generations[normalizedExternalProject] ?: return completedJob()
         return session.scope.launch(Dispatchers.IO) {
-            command(session, normalizedExternalProject, generation)
+            try {
+                command(session, normalizedExternalProject, generation)
+            } finally {
+                publishStatusSnapshot()
+            }
         }
     }
 
