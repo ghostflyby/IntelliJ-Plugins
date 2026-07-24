@@ -1,0 +1,47 @@
+name: Inspect Code
+
+on:
+  workflow_call:
+    secrets:
+      QODANA_TOKEN:
+        required: true
+  workflow_dispatch:
+
+jobs:
+  inspect-code:
+    name: Inspect code
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: jetbrains
+          java-version: 21
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Qodana - Code Inspection
+        uses: JetBrains/qodana-action@v2026.1.3
+        with:
+          cache-default-branch-only: true
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+          QODANA_ENDPOINT: 'https://qodana.cloud'
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
