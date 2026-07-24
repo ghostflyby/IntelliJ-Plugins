@@ -142,8 +142,12 @@ internal class SpotlessProjectService(
         return false
     }
 
+    @Suppress("RunBlocking")
     override fun dispose() {
-        daemonCoordinator.dispose()
+        // IntelliJ Disposable is synchronous; daemon cleanup must finish before project disposal returns.
+        runBlocking {
+            daemonCoordinator.shutdown()
+        }
         runCatching {
             client.close()
         }.onFailure { error ->

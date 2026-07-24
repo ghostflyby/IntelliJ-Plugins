@@ -1465,7 +1465,7 @@ internal class SpotlessProjectServiceTest {
             }
         } finally {
             providerScope.cancel()
-            registry.dispose()
+            registry.shutdown()
             client.close()
         }
     }
@@ -1509,7 +1509,7 @@ internal class SpotlessProjectServiceTest {
             assertTrue(registry.hasRunningDaemons())
         } finally {
             providerScope.cancel()
-            registry.dispose()
+            registry.shutdown()
             client.close()
         }
     }

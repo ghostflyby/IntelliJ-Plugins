@@ -219,8 +219,10 @@ internal class SpotlessDaemonRegistry(
         getDaemon(session, externalProject, generation)
     }
 
+    @Suppress("RunBlocking")
     fun releaseSessionSynchronously(session: ProviderSession): Int =
-        runBlocking(Dispatchers.IO) {
+        // Dynamic extension removal is synchronous and must finish owned cleanup before returning.
+        runBlocking {
             withContext(NonCancellable) {
                 releaseMatchingDaemons(
                     predicate = { (key) -> key.session === session },
@@ -232,12 +234,12 @@ internal class SpotlessDaemonRegistry(
 
     fun hasRunningDaemons(): Boolean = runtimeState.value.entries.isNotEmpty()
 
-    fun dispose() {
-        runBlocking {
+    suspend fun shutdown() {
+        withContext(NonCancellable) {
             releaseMatchingDaemons({ true }, "service disposed", daemonCleanupTimeout)
             capabilityCache.clear()
+            registryJob.cancelAndJoin()
         }
-        registryJob.cancel()
     }
 
     private suspend fun getDaemon(

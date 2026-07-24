@@ -219,7 +219,7 @@ internal class SpotlessDaemonCoordinator(
 
     fun hasRunningDaemons(): Boolean = registry.hasRunningDaemons()
 
-    fun dispose() {
+    suspend fun shutdown() {
         val detachedSessions = synchronized(providerLock) {
             sessions.values.toList().also {
                 sessions.clear()
@@ -229,7 +229,7 @@ internal class SpotlessDaemonCoordinator(
         }
         detachedSessions.forEach { it.scope.cancel() }
         publishProviders(ProvidersSnapshot())
-        registry.dispose()
+        registry.shutdown()
     }
 
     private fun currentProviders(): List<ProviderCandidate> = buildList {

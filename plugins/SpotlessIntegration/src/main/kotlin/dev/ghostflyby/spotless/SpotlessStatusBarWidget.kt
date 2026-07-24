@@ -48,6 +48,8 @@ internal class SpotlessStatusBarWidgetActivity : ProjectActivity {
             .distinctUntilChanged()
             .collect {
                 withContext(Dispatchers.EDT) {
+                    // false positive
+                    @Suppress("IncorrectServiceRetrieving")
                     project.service<StatusBarWidgetsManager>()
                         .updateWidget(SpotlessStatusBarWidgetFactory::class.java)
                 }

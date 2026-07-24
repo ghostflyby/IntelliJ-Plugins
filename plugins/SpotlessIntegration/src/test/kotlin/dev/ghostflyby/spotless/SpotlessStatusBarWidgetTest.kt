@@ -144,7 +144,7 @@ internal class SpotlessStatusBarWidgetTest {
             }
             assertFalse(coordinator.snapshot.value.providers.any { it.providerId == provider.id })
         } finally {
-            coordinator.dispose()
+            coordinator.shutdown()
             coordinatorScope.cancel()
             dispatcher.runAll()
         }
