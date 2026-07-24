@@ -16,4 +16,4 @@ plugins:
 exclude:
   - name: All
     paths:
-      - third-party/
+      - plugins/IdeaVimToggleIME
