@@ -233,7 +233,7 @@ internal class SpotlessDaemonRegistry(
     fun hasRunningDaemons(): Boolean = runtimeState.value.entries.isNotEmpty()
 
     fun dispose() {
-        runBlocking(Dispatchers.IO + NonCancellable) {
+        runBlocking {
             releaseMatchingDaemons({ true }, "service disposed", daemonCleanupTimeout)
             capabilityCache.clear()
         }
