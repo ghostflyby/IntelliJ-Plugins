@@ -82,7 +82,6 @@ public interface SpotlessDaemonProvider {
     )
 
     /** Startup inputs supplied by the core when creating a provider daemon handle. */
-    @ApiStatus.NonExtendable
     public interface StartContext {
         public val project: Project
         public val externalProjectRoot: Path

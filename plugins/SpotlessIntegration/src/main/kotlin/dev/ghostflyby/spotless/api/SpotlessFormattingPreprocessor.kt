@@ -35,7 +35,6 @@ public interface SpotlessFormattingPreprocessor {
     ): Result?
 
     /** Invocation-scoped formatter input supplied by the core. */
-    @ApiStatus.NonExtendable
     public interface Context {
         public val psiFile: PsiFile
         public val content: CharSequence
