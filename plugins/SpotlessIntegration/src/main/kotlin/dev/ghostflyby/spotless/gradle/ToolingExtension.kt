@@ -2,56 +2,35 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.execution.executors.DefaultRunExecutor
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.*
 import com.intellij.openapi.externalSystem.model.DataNode
 import com.intellij.openapi.externalSystem.model.Key
 import com.intellij.openapi.externalSystem.model.ProjectSystemId
-import com.intellij.openapi.externalSystem.model.execution.ExternalSystemTaskExecutionSettings
 import com.intellij.openapi.externalSystem.model.project.ExternalEntityData
 import com.intellij.openapi.externalSystem.model.project.ModuleData
 import com.intellij.openapi.externalSystem.model.project.ProjectData
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
-import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
-import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
-import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
-import com.intellij.openapi.externalSystem.util.task.TaskExecutionSpec
-import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.NlsSafe
-import dev.ghostflyby.spotless.Spotless
-import dev.ghostflyby.spotless.SpotlessDaemonHost
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.ExternalProject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.serialization.Serializable
 import org.gradle.api.Project
 import org.gradle.tooling.model.idea.IdeaModule
+import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.service.project.GradleProjectResolverExtension
-import org.jetbrains.plugins.gradle.util.GradleConstants
+import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.io.path.absolute
 import kotlin.io.path.absolutePathString
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as ProviderState
 
 
 internal data class SpotlessGradleStateData(
@@ -78,18 +57,13 @@ internal class SpotlessGradleProjectResolverExtension : AbstractProjectResolverE
     ) {
         val myModel = resolverCtx.getExtraProject(gradleModule, SpotlessGradleStateModel::class.java)
         if (myModel != null) {
-            val re = ideModule.createChild(
+            ideModule.createChild(
                 SpotlessGradleStateData.KEY,
                 SpotlessGradleStateData(
                     gradleModule.gradleProject.projectDirectory.toPath().absolute(),
                     myModel.spotless,
                 ),
             )
-            (service<Spotless>() as? Disposable)?.let {
-                Disposer.register(it) {
-                    re.clear(true)
-                }
-            }
         }
         nextResolver.populateModuleExtraModels(gradleModule, ideModule)
     }
@@ -112,27 +86,32 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
         project: com.intellij.openapi.project.Project,
         modelsProvider: IdeModifiableModelsProvider,
     ) {
-        val holder = project.service<SpotlessGradleStateHolder>()
-        holder.updateFrom(toImport)
+        val settings = project.service<SpotlessGradleSettings>()
+        settings.updateFrom(toImport)
     }
 }
-
 
 @Service(Service.Level.PROJECT)
 @State(
     name = "SpotlessGradleIntegration",
-    storages = [Storage(StoragePathMacros.WORKSPACE_FILE, roamingType = RoamingType.DISABLED)],
+    storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)],
 )
-internal class SpotlessGradleStateHolder
-    : SerializablePersistentStateComponent<SpotlessGradleStateHolder.State>(State()) {
-    fun isSpotlessEnabledForProjectDir(path: Path): Boolean {
-        return state.paths.contains(path.absolutePathString())
+internal class SpotlessGradleSettings(
+    private val project: com.intellij.openapi.project.Project,
+    internal val coroutineScope: CoroutineScope,
+) :
+    SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
+    private val providerStateLock = Any()
+    private var providerGeneration = 0L
+    private val mutableProviderState: MutableStateFlow<ProviderState> by lazy {
+        MutableStateFlow(createProviderState())
     }
 
-    val daemons: MutableSet<SpotlessDaemonHost> = ConcurrentHashMap.newKeySet()
+    val providerState: StateFlow<ProviderState>
+        get() = mutableProviderState
 
     fun updateFrom(nodes: Collection<DataNode<SpotlessGradleStateData>>) {
-        updateState { state ->
+        updateStateAndPublish(force = true) { state ->
             state.copy(
                 paths = nodes.asSequence()
                     .filter { it.data.spotless }
@@ -141,18 +120,12 @@ internal class SpotlessGradleStateHolder
             )
         }
         nodes.forEach { it.clear(true) }
-        val runningDaemons = daemons.toList()
-        daemons.clear()
-        val spotless = service<Spotless>()
-        runningDaemons.forEach { daemon ->
-            spotless.releaseDaemon(daemon)
-        }
     }
 
     var gradleDaemonVersion: @NlsSafe String
         get() = state.gradleDaemonVersion
         set(value) {
-            updateState {
+            updateStateAndPublish {
                 it.copy(gradleDaemonVersion = value)
             }
         }
@@ -160,50 +133,81 @@ internal class SpotlessGradleStateHolder
     var gradleDaemonJar: @NlsSafe String
         get() = state.gradleDaemonJar
         set(value) {
-            updateState {
+            updateStateAndPublish {
                 it.copy(gradleDaemonJar = value)
             }
         }
 
+    private fun updateStateAndPublish(
+        force: Boolean = false,
+        transform: (State) -> State,
+    ) {
+        synchronized(providerStateLock) {
+            val previous = state
+            updateState(transform)
+            if (force || state != previous) {
+                providerGeneration++
+                mutableProviderState.value = createProviderState()
+            }
+        }
+    }
+
+    private fun createProviderState(): ProviderState {
+        val current = state
+        val externalProjects = GradleSettings.getInstance(project).linkedProjectsSettings
+            .asSequence()
+            .mapNotNull { it.externalProjectPath }
+            .map { Path.of(it).toAbsolutePath().normalize() }
+            .filter { it.absolutePathString() in current.paths }
+            .distinct()
+            .sortedBy(Path::toString)
+            .map { root ->
+                ExternalProject(
+                    root = root,
+                    generation = providerGeneration,
+                )
+            }
+            .toList()
+        return ProviderState(
+            projects = externalProjects,
+        )
+    }
+
+    @Serializable
     internal data class State(
-        @JvmField val paths: Set<String> = emptySet(),
-        @JvmField val gradleDaemonVersion: String = "",
-        @JvmField val gradleDaemonJar: String = "",
+        val paths: Set<String> = emptySet(),
+        val gradleDaemonVersion: String = "",
+        val gradleDaemonJar: String = "",
     )
 }
 
-internal fun runGradleSpotlessDaemon(
-    project: com.intellij.openapi.project.Project,
-    externalProject: Path,
-    unixSocketPath: Path,
-    host: SpotlessDaemonHost.Unix,
-) {
-    val settings = ExternalSystemTaskExecutionSettings().apply {
-        externalSystemIdString = GradleConstants.SYSTEM_ID.id
-        externalProjectPath = externalProject.toString()
-        taskNames = listOf(":spotlessDaemon")
-        scriptParameters = "-Pdev.ghostflyby.spotless.daemon.unixsocket=${unixSocketPath.toAbsolutePath()}"
-    }
-    val exe = TaskExecutionSpec.create()
-        .withProgressExecutionMode(ProgressExecutionMode.NO_PROGRESS_ASYNC)
-        .withProject(project)
-        .withSettings(settings)
-        .withSystemId(GradleConstants.SYSTEM_ID)
-        .withListener(
-            object : ExternalSystemTaskNotificationListener {
-                override fun onEnd(projectPath: String, id: ExternalSystemTaskId) {
-                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
-                    service<Spotless>().releaseDaemon(host)
+internal fun spotlessDaemonInitScript(
+    daemonVersion: String,
+    daemonJar: String,
+): String {
+    val script =
+        $$"""
+        gradle.allprojects { proj ->
+            proj.buildscript {
+                repositories {
+                    gradlePluginPortal()
                 }
-
-                override fun onCancel(projectPath: String, id: ExternalSystemTaskId) {
-                    project.service<SpotlessGradleStateHolder>().daemons.remove(host)
-                    service<Spotless>().releaseDaemon(host)
+                dependencies {
+                    def daemonJar = $${daemonJar.toGroovyStringLiteral()}
+                    def daemonVersion = $${daemonVersion.toGroovyStringLiteral()}
+                    if (daemonJar) {
+                        classpath files(daemonJar)
+                    } else {
+                        def resolved = daemonVersion ? daemonVersion : '0.7.0'
+                        classpath "dev.ghostflyby.spotless.daemon:dev.ghostflyby.spotless.daemon.gradle.plugin:$resolved"
+                    }
                 }
+            }
 
-            },
-        )
-        .withExecutorId(DefaultRunExecutor.EXECUTOR_ID)
-        .build()
-    ExternalSystemUtil.runTask(exe)
+            proj.pluginManager.withPlugin("com.diffplug.spotless") {
+                proj.apply plugin: "dev.ghostflyby.spotless.daemon"
+            }
+        }
+    """.trimIndent()
+    return script
 }

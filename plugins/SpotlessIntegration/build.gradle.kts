@@ -9,6 +9,7 @@ import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 
 plugins {
     id("repo.intellij-plugin")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 version = "1.1.0"
@@ -19,18 +20,9 @@ dependencies {
         bundledPlugin("org.jetbrains.idea.maven")
     }
     implementation(project("ModelBuilderService"))
-    implementation(libs.ktor.client.cio) {
-        excludeCoroutines()
-        excludeKotlinStdlib()
-        exclude(group = "org.slf4j", module = "slf4j-api")
-    }
     testImplementation("io.ktor:ktor-client-mock:${libs.versions.ktor.get()}") {
         excludeCoroutines()
         excludeKotlinStdlib()
         exclude(group = "org.slf4j", module = "slf4j-api")
     }
-}
-
-configurations.all {
-    resolutionStrategy.sortArtifacts(ResolutionStrategy.SortOrder.DEPENDENCY_FIRST)
 }
