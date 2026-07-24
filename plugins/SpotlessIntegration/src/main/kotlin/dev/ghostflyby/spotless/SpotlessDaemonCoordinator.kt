@@ -15,7 +15,9 @@ import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.*
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.nio.file.Path
 import java.util.*
 
@@ -73,20 +75,16 @@ internal class SpotlessDaemonCoordinator(
     private val logger = logger<SpotlessDaemonCoordinator>()
     private val registry = SpotlessDaemonRegistry(project, scope, clientProvider)
     private val providerLock = Any()
+    private val statusLock = Any()
     private val sessions = IdentityHashMap<SpotlessDaemonProvider, ProviderSession>()
     private val sessionsById = mutableMapOf<String, ProviderSession>()
     private var orderedSessions: List<ProviderSession> = emptyList()
     private val mutableProviders = MutableStateFlow(ProvidersSnapshot())
-
-    val snapshot: StateFlow<SpotlessDaemonStatusSnapshot> = combine(
-        mutableProviders,
-        registry.runtimeState,
-        ::createStatusSnapshot,
-    ).stateIn(
-        scope = scope,
-        started = SharingStarted.Eagerly,
-        initialValue = createStatusSnapshot(mutableProviders.value, registry.runtimeState.value),
+    private val mutableSnapshot = MutableStateFlow(
+        createStatusSnapshot(mutableProviders.value, registry.runtimeState.value),
     )
+
+    val snapshot: StateFlow<SpotlessDaemonStatusSnapshot> = mutableSnapshot.asStateFlow()
 
     internal var providersLookup: (Project) -> List<SpotlessDaemonProvider> =
         { SpotlessDaemonProvider.EP_NAME.extensionList }
@@ -96,6 +94,11 @@ internal class SpotlessDaemonCoordinator(
         }
 
     init {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            registry.runtimeState.collect {
+                publishStatusSnapshot()
+            }
+        }
         SpotlessDaemonProvider.EP_NAME.point.addExtensionPointListener(
             scope,
             false,
@@ -225,7 +228,7 @@ internal class SpotlessDaemonCoordinator(
             }
         }
         detachedSessions.forEach { it.scope.cancel() }
-        mutableProviders.value = ProvidersSnapshot()
+        publishProviders(ProvidersSnapshot())
         registry.dispose()
     }
 
@@ -354,15 +357,30 @@ internal class SpotlessDaemonCoordinator(
         val sessions = synchronized(providerLock) {
             orderedSessions
         }
-        mutableProviders.value = ProvidersSnapshot(
-            sessions.map { session ->
-                ProviderDescriptor(
-                    session = session,
-                    providerId = session.id,
-                    snapshot = session.snapshot,
-                )
-            },
+        publishProviders(
+            ProvidersSnapshot(
+                sessions.map { session ->
+                    ProviderDescriptor(
+                        session = session,
+                        providerId = session.id,
+                        snapshot = session.snapshot,
+                    )
+                },
+            ),
         )
+    }
+
+    private fun publishProviders(providers: ProvidersSnapshot) {
+        synchronized(statusLock) {
+            mutableProviders.value = providers
+            mutableSnapshot.value = createStatusSnapshot(providers, registry.runtimeState.value)
+        }
+    }
+
+    private fun publishStatusSnapshot() {
+        synchronized(statusLock) {
+            mutableSnapshot.value = createStatusSnapshot(mutableProviders.value, registry.runtimeState.value)
+        }
     }
 
     private fun normalizeProviderState(state: State): ProviderSnapshot {
