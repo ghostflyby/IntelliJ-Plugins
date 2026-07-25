@@ -20,7 +20,7 @@ public val Class<*>.pluginVersion: String
     get() = readPluginDescriptor { version }
 
 private inline fun <T> Class<*>.readPluginDescriptor(read: PluginDescriptor.() -> T): T {
-    return requirePluginAwareClassLoader().pluginDescriptor.read()
+    return read(requirePluginAwareClassLoader().pluginDescriptor)
 }
 
 private fun Class<*>.requirePluginAwareClassLoader(): PluginAwareClassLoader {
