@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- NPE on server launch due to `lazy` concurrency [#275](https://github.com/ghostflyby/IntelliJ-Plugins/pull/275)
+
 ## [2.0.1] - 2026-07-02
 
 ### Fixed
