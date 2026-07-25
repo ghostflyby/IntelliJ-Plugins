@@ -6,9 +6,9 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
-import org.jetbrains.kotlin.idea.gradle.versionCatalog.toml.KtTomlVersionCatalogReference
+import com.intellij.psi.PsiReference
+import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
-import org.jetbrains.kotlin.psi.KtNameReferenceExpression
 import org.jetbrains.kotlin.references.KotlinPsiReferenceProviderContributor
 
 internal class TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor :
@@ -18,32 +18,20 @@ internal class TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor :
         get() = KtDotQualifiedExpression::class.java
 
     override val referenceProvider: KotlinPsiReferenceProviderContributor.ReferenceProvider<KtDotQualifiedExpression>
-        get() = KotlinPsiReferenceProviderContributor.ReferenceProvider { dotExpression ->
-            val tomlFile = when {
-                !dotExpression.containingFile.name.endsWith(".gradle.kts") -> null
-                !dotExpression.matchesTopmostCatalogReferencePattern() -> null
-                else -> {
-                    val catalogName = dotExpression.text.substringBefore(".")
-                    findTypesafeConventionsCatalogTomlFile(dotExpression, catalogName)
-                }
-            }
-            listOfNotNull(
-                tomlFile?.let { KtTomlVersionCatalogReference(dotExpression, it) },
-            )
+        get() = KotlinPsiReferenceProviderContributor.ReferenceProvider(::getReferences)
+
+    @RequiresReadLock
+    private fun getReferences(dotExpression: KtDotQualifiedExpression): List<PsiReference> {
+        val accessor = dotExpression.typesafeConventionsCatalogAccessor()
+        val isTypesafeConventionsCatalog = when {
+            !dotExpression.matchesTopmostTypesafeConventionsCatalogReferencePattern() -> false
+            accessor == null -> false
+            else -> findTypesafeConventionsCatalogTomlFile(dotExpression, accessor.catalogName) != null
         }
-}
-
-private fun KtDotQualifiedExpression.matchesTopmostCatalogReferencePattern(): Boolean =
-    hasOnlyNameReferences() && !hasWrappingVersionCatalogExpression()
-
-private fun KtDotQualifiedExpression.hasWrappingVersionCatalogExpression(): Boolean =
-    parent is KtDotQualifiedExpression && parent.lastChild is KtNameReferenceExpression
-
-private fun KtDotQualifiedExpression.hasOnlyNameReferences(): Boolean =
-    children.all {
-        when (it) {
-            is KtNameReferenceExpression -> true
-            is KtDotQualifiedExpression -> it.hasOnlyNameReferences()
-            else -> false
+        return if (isTypesafeConventionsCatalog) {
+            listOf(TypesafeConventionsKotlinCatalogReference(dotExpression))
+        } else {
+            emptyList()
         }
     }
+}

@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Fixed an IntelliJ IDEA 2026.1 Kotlin DSL navigation crash while preserving declaration navigation, Find Usages, and
+  rename support for version catalogs used from `buildSrc` and included build logic.
 - Avoid blocking dynamic plugin unload by reusing Gradle-owned Workspace Model
   entity sources instead of plugin-owned sources.
 - Restored Groovy DSL goto declaration for custom version catalog roots such as
