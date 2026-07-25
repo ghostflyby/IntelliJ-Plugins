@@ -1,16 +1,17 @@
 # TypesafeConventionsIntegration TODO
 
-Status: In Progress
-Last Updated: 2026-07-09
+Status: In Progress Last Updated: 2026-07-25
 
-## Plan
+## Compatibility Hardening
 
-1. Add Gradle Tooling model extraction for effective typesafe-conventions catalogs.
-2. Add Gradle sync integration that contributes missing version catalog workspace entities.
-3. Validate Kotlin DSL TOML navigation and usage search in build logic projects.
+1. Add Groovy DSL Find Usages and rename support for contributed catalogs.
+2. Add real Gradle sync integration coverage for `versions`, `bundles`, and
+   `plugins` accessors.
+3. Track IntelliJ changes to the experimental Gradle sync and Workspace Model APIs used by the integration.
 
 ## Done Criteria
 
-1. Build logic `libs.*` accessors navigate to their TOML declarations.
-2. TOML Find Usages includes build logic references.
-3. The plugin avoids `@ApiStatus.Internal` Gradle catalog handler APIs.
+1. Groovy catalog aliases support the same navigation, usage, and rename workflow as Kotlin aliases.
+2. Every version catalog section has real synced-build integration coverage.
+3. Experimental Gradle API changes are reviewed on each IntelliJ platform upgrade and recorded with an explicit
+   migration decision.
