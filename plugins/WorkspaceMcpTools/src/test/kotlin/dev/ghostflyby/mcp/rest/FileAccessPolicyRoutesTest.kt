@@ -85,18 +85,18 @@ internal class FileAccessPolicyRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val meta = sessionClient.get(sessionClient.rootPathUrl("ignored.generated", meta = true)) {
+            val meta = sessionClient.get(rootPathUrl("ignored.generated", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_TEXT", parsed["classification"]?.jsonPrimitive?.content)
 
-            val content = sessionClient.get(sessionClient.rootPathUrl("ignored.generated"))
+            val content = sessionClient.get(rootPathUrl("ignored.generated"))
             Assertions.assertEquals(HttpStatusCode.OK, content.status)
             Assertions.assertEquals("ignored", content.bodyAsText().trim())
 
-            val structure = sessionClient.get(sessionClient.rootPathUrl("ignored.generated", structure = true))
+            val structure = sessionClient.get(rootPathUrl("ignored.generated", structure = true))
             Assertions.assertEquals(HttpStatusCode.OK, structure.status)
         }
     }
@@ -107,12 +107,12 @@ internal class FileAccessPolicyRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val denied = sessionClient.put(sessionClient.rootPathUrl("ignored.generated")) {
+            val denied = sessionClient.put(rootPathUrl("ignored.generated")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.OK, denied.status)
 
-            val readBack = sessionClient.get(sessionClient.rootPathUrl("ignored.generated"))
+            val readBack = sessionClient.get(rootPathUrl("ignored.generated"))
             Assertions.assertEquals("changed", readBack.bodyAsText().trim())
         }
     }
@@ -124,32 +124,32 @@ internal class FileAccessPolicyRoutesTest {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
             val root = projectPathFixture.get()
 
-            val putExisting = sessionClient.put(sessionClient.rootPathUrl(".git/config")) {
+            val putExisting = sessionClient.put(rootPathUrl(".git/config")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, putExisting.status)
             Assertions.assertTrue(putExisting.bodyAsText().contains("Git metadata paths are read-only"))
             Assertions.assertEquals("[core]\n", root.resolve(".git/config").toFile().readText())
 
-            val putMissing = sessionClient.put(sessionClient.rootPathUrl(".git/new-file")) {
+            val putMissing = sessionClient.put(rootPathUrl(".git/new-file")) {
                 setBody("new")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, putMissing.status)
             Assertions.assertFalse(Files.exists(root.resolve(".git/new-file")))
 
-            val postDirectory = sessionClient.post(sessionClient.rootPathUrl(".git/new-dir")) {
+            val postDirectory = sessionClient.post(rootPathUrl(".git/new-dir")) {
                 setBody("")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, postDirectory.status)
             Assertions.assertFalse(Files.exists(root.resolve(".git/new-dir")))
 
-            val force = sessionClient.put(sessionClient.rootPathUrl(".git/config", force = true)) {
+            val force = sessionClient.put(rootPathUrl(".git/config", force = true)) {
                 setBody("forced")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, force.status)
             Assertions.assertTrue(force.bodyAsText().contains("force: true"))
 
-            val dotGitSubstring = sessionClient.put(sessionClient.rootPathUrl("foo.git/config")) {
+            val dotGitSubstring = sessionClient.put(rootPathUrl("foo.git/config")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.OK, dotGitSubstring.status)
@@ -184,7 +184,7 @@ internal class FileAccessPolicyRoutesTest {
 
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val meta = sessionClient.get(sessionClient.rootPathUrl("src/source.txt", meta = true)) {
+            val meta = sessionClient.get(rootPathUrl("src/source.txt", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
@@ -196,12 +196,12 @@ internal class FileAccessPolicyRoutesTest {
                 ?: emptySet()
             Assertions.assertTrue(setOf("put", "patch", "delete").all { it in writableKinds })
 
-            val put = sessionClient.put(sessionClient.rootPathUrl("src/source.txt")) {
+            val put = sessionClient.put(rootPathUrl("src/source.txt")) {
                 setBody("changed source")
             }
             Assertions.assertEquals(HttpStatusCode.OK, put.status)
 
-            val readBack = sessionClient.get(sessionClient.rootPathUrl("src/source.txt"))
+            val readBack = sessionClient.get(rootPathUrl("src/source.txt"))
             Assertions.assertEquals("changed source", readBack.bodyAsText().trim())
         }
     }
@@ -212,22 +212,22 @@ internal class FileAccessPolicyRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val meta = sessionClient.get(sessionClient.rootPathUrl("binary.bin", meta = true)) {
+            val meta = sessionClient.get(rootPathUrl("binary.bin", meta = true)) {
                 accept(ContentType.Application.Json)
             }
             Assertions.assertEquals(HttpStatusCode.OK, meta.status)
             val parsed = json.parseToJsonElement(meta.bodyAsText()).jsonObject
             Assertions.assertEquals("WORKSPACE_BINARY", parsed["classification"]?.jsonPrimitive?.content)
 
-            val put = sessionClient.put(sessionClient.rootPathUrl("binary.bin")) { setBody("nope") }
+            val put = sessionClient.put(rootPathUrl("binary.bin")) { setBody("nope") }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, put.status)
 
-            val patch = sessionClient.patch(sessionClient.rootPathUrl("binary.bin")) {
+            val patch = sessionClient.patch(rootPathUrl("binary.bin")) {
                 setBody("*** Begin Patch\n*** End Patch")
             }
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, patch.status)
 
-            val delete = sessionClient.delete(sessionClient.rootPathUrl("binary.bin"))
+            val delete = sessionClient.delete(rootPathUrl("binary.bin"))
             Assertions.assertEquals(HttpStatusCode.UnsupportedMediaType, delete.status)
         }
     }
@@ -238,21 +238,21 @@ internal class FileAccessPolicyRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().toString(), json)
 
-            val get = sessionClient.get(sessionClient.rootPathUrl("excluded/hidden.kt"))
+            val get = sessionClient.get(rootPathUrl("excluded/hidden.kt"))
             Assertions.assertEquals(HttpStatusCode.NotFound, get.status)
 
-            val put = sessionClient.put(sessionClient.rootPathUrl("excluded/hidden.kt")) {
+            val put = sessionClient.put(rootPathUrl("excluded/hidden.kt")) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, put.status)
 
-            val explicitFalse = sessionClient.put(sessionClient.rootPathUrl("excluded/hidden.kt", force = false)) {
+            val explicitFalse = sessionClient.put(rootPathUrl("excluded/hidden.kt", force = false)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitFalse.status)
             Assertions.assertTrue(explicitFalse.bodyAsText().contains("force: false"))
 
-            val explicitTrue = sessionClient.put(sessionClient.rootPathUrl("excluded/hidden.kt", force = true)) {
+            val explicitTrue = sessionClient.put(rootPathUrl("excluded/hidden.kt", force = true)) {
                 setBody("changed")
             }
             Assertions.assertEquals(HttpStatusCode.Forbidden, explicitTrue.status)
