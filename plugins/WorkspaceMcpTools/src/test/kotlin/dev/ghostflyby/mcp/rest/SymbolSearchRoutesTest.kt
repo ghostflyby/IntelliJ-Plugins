@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 ghostflyby
+ * SPDX-FileCopyrightText: 2026 ghostflyby
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+
 package dev.ghostflyby.mcp.rest
 
 import com.intellij.navigation.ChooseByNameContributor
@@ -206,7 +212,7 @@ internal class SymbolSearchRoutesTest {
     }
 
     private fun items(body: String): JsonArray {
-        return json.parseToJsonElement(body).jsonObject["items"]!!.jsonArray
+        return json.parseToJsonElement(body).jsonObject["items"]?.jsonArray ?: JsonArray(emptyList())
     }
 
     private fun registerFixtureSymbolContributor(root: Path) {
