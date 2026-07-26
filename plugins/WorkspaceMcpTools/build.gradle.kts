@@ -12,7 +12,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "2.0.1"
+version = "2.0.2"
 
 dependencies {
     implementation(libs.ktor.resources)
