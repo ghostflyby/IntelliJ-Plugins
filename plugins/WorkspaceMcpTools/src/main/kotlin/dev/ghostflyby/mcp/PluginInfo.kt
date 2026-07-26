@@ -6,9 +6,7 @@
 
 package dev.ghostflyby.mcp
 
-import dev.ghostflyby.intellij.PluginInfoProvider
-
-internal val PluginInfo = PluginInfoProvider(WorkspaceMcpStartupActivity::class.java)
+import dev.ghostflyby.intellij.pluginVersion
 
 internal val pluginVersion: String
-    get() = PluginInfo.version
+    get() = WorkspaceMcpStartupActivity::class.java.pluginVersion
