@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-07-26
+
+### Fixed
+
+- NPE on server launch due to `lazy` concurrency [#275](https://github.com/ghostflyby/IntelliJ-Plugins/pull/275)
+
 ## [2.0.1] - 2026-07-02
 
 ### Fixed
@@ -150,7 +156,8 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.2...HEAD
+[2.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.1...WorkspaceMcpTools-v2.0.2
 [2.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.0...WorkspaceMcpTools-v2.0.1
 [2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.4...WorkspaceMcpTools-v2.0.0
 [1.0.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.3...WorkspaceMcpTools-v1.0.4
