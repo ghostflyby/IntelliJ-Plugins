@@ -63,7 +63,7 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache check
+          & $gradlew --configuration-cache check koverXmlReport
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
@@ -74,9 +74,12 @@ jobs:
         id: coverage
         run: |
           $reports = Get-ChildItem `
-            -Path (Join-Path $env:GITHUB_WORKSPACE "plugins/*/build/reports/kover/report.xml") `
+            -Path $env:GITHUB_WORKSPACE `
+            -Filter "report.xml" `
             -File `
-            -ErrorAction SilentlyContinue
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -match "[/\\]build[/\\]reports[/\\]kover[/\\]report\.xml$" }
           if (-not $reports)
           {
               exit 0
