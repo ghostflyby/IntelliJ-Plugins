@@ -126,6 +126,7 @@ jobs:
       pull-requests: write
     secrets:
       QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+      GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
 
 
