@@ -38,6 +38,26 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Configure IntelliJ Platform IDE Cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle_user_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          ide_cache="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          mkdir -p "$gradle_user_home" "$ide_cache"
+          {
+            printf '\n'
+            printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
+            printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
+          } >> "$gradle_user_home/gradle.properties"
+      - name: Restore IntelliJ Platform IDE Cache
+        id: restore-intellij-platform-ides
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
+          restore-keys: |
+            ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
       - name: Build plugin
         run: |
           $gradlew = if ($IsWindows)
