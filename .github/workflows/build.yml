@@ -53,24 +53,7 @@ jobs:
           key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
           restore-keys: |
             ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
-      - name: Build plugin
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache buildPlugin
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: plugin-distributions
-          path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
-          if-no-files-found: error
-      - name: Run Tests
+      - name: Run Checks
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -198,6 +181,13 @@ jobs:
           }
           $gradleArguments += $verificationTasks
           & $gradlew @gradleArguments
+      - name: Upload plugin distributions
+        if: ${{ always() && hashFiles('plugins/*/build/distributions/*.zip') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-distributions
+          path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
+          if-no-files-found: error
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
