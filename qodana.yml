@@ -4,13 +4,14 @@
 version: "1.0"
 projectJDK: "21"
 linter: qodana-jvm-community
-# withinDocker: "false"
+withinDocker: "false"
 profile:
   path: .idea/inspectionProfiles/Project_Default.xml
   inspections:
     - group: ALL
       ignore:
         - "scope#$gitignore"
+        - "scope#$spi" # false positive annotator errors, which cannot be suppressed
 plugins:
   - id: DevKit
 exclude:
