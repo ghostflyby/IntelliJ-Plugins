@@ -15,6 +15,7 @@
     <depends>org.toml.lang</depends>
     <depends optional="true" config-file="gradle-typesafe-conventions-groovy.xml">org.intellij.groovy</depends>
     <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <!--suppress XmlHighlighting -->
         <supportsKotlinPluginMode supportsK2="true"/>
     </extensions>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">

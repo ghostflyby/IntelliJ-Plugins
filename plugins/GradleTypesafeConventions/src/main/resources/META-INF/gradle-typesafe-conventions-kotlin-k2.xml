@@ -5,6 +5,7 @@
 <idea-plugin>
     <depends>com.intellij.modules.kotlin.k2</depends>
     <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <!--suppress XmlHighlighting -->
         <psiReferenceProvider
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor"/>
     </extensions>
