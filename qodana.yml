@@ -4,7 +4,7 @@
 version: "1.0"
 projectJDK: "21"
 linter: qodana-jvm-community
-withinDocker: "false"
+# withinDocker: "false"
 profile:
   path: .idea/inspectionProfiles/Project_Default.xml
   inspections:
