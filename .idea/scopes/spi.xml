@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="spi" pattern="file:resources/META-INF/services/*" />
+</component>
