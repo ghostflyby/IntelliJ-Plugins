@@ -17,11 +17,6 @@ jobs:
     name: Build and Check
     runs-on: ubuntu-latest
     steps:
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
@@ -110,7 +105,82 @@ jobs:
         with:
           files: ${{ steps.coverage.outputs.files }}
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Select Plugin Verification tasks
+        id: plugin-verification
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          $verificationIdes = "recommended"
+          [string[]]$verificationTasks = @("verifyPlugin")
+
+          if ($env:EVENT_NAME -eq "pull_request")
+          {
+              $verificationIdes = "platform"
+              [string[]]$changedFiles = @(git diff --name-only --no-renames $env:BASE_SHA $env:HEAD_SHA)
+              $diffExitCode = $LASTEXITCODE
+
+              if ($diffExitCode -eq 0 -and $changedFiles.Count -gt 0)
+              {
+                  $excludedPluginsPath = Join-Path $env:GITHUB_WORKSPACE ".ci/excluded-plugins.txt"
+                  [string[]]$excludedPlugins = if (Test-Path -LiteralPath $excludedPluginsPath -PathType Leaf)
+                  {
+                      @(Get-Content -LiteralPath $excludedPluginsPath |
+                              ForEach-Object { $_.Trim() } |
+                              Where-Object { $_ -and -not $_.StartsWith("#") })
+                  }
+                  else
+                  {
+                      @()
+                  }
+
+                  $allChangesMapToPlugins = $true
+                  [string[]]$plugins = @()
+                  foreach ($changedFile in $changedFiles)
+                  {
+                      $normalizedPath = $changedFile.Replace("\", "/")
+                      if ($normalizedPath -notmatch "^plugins/([^/]+)/")
+                      {
+                          $allChangesMapToPlugins = $false
+                          break
+                      }
+
+                      $pluginName = $Matches[1]
+                      $pluginBuildFile = Join-Path $env:GITHUB_WORKSPACE "plugins/$pluginName/build.gradle.kts"
+                      if (-not (Test-Path -LiteralPath $pluginBuildFile -PathType Leaf) -or
+                              $excludedPlugins -contains $pluginName)
+                      {
+                          $allChangesMapToPlugins = $false
+                          break
+                      }
+
+                      $plugins += $pluginName
+                  }
+
+                  if ($allChangesMapToPlugins -and $plugins.Count -gt 0)
+                  {
+                      [string[]]$verificationTasks = @($plugins |
+                              Sort-Object -Unique |
+                              ForEach-Object { ":plugins:${_}:verifyPlugin" })
+                  }
+              }
+              elseif ($diffExitCode -ne 0)
+              {
+                  Write-Warning "Unable to determine changed files; falling back to all Plugin Verifier tasks."
+                  $global:LASTEXITCODE = 0
+              }
+          }
+
+          $tasksJson = ConvertTo-Json -InputObject ([string[]]$verificationTasks) -Compress
+          "tasks=$tasksJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "ides=$verificationIdes" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Plugin verification tasks: $( $verificationTasks -join ', ' )"
+          Write-Host "Plugin verification IDE selection: $verificationIdes"
       - name: Run Plugin Verification tasks
+        env:
+          PLUGIN_VERIFICATION_TASKS: ${{ steps.plugin-verification.outputs.tasks }}
+          PLUGIN_VERIFICATION_IDES: ${{ steps.plugin-verification.outputs.ides }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -120,7 +190,14 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache verifyPlugin
+          [string[]]$verificationTasks = @($env:PLUGIN_VERIFICATION_TASKS | ConvertFrom-Json)
+          [string[]]$gradleArguments = @("--configuration-cache")
+          if ($env:PLUGIN_VERIFICATION_IDES -eq "platform")
+          {
+              $gradleArguments += "-PpluginVerificationIdes=platform"
+          }
+          $gradleArguments += $verificationTasks
+          & $gradlew @gradleArguments
       - name: Collect Plugin Verifier Result
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
@@ -134,6 +211,10 @@ jobs:
           Get-ChildItem -Path $env:reports -Filter "*.md" -Recurse -File |
                   Get-Content |
                   Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      - name: Report disk space
+        if: ${{ always() }}
+        shell: bash
+        run: df -h /
   
 
   inspectCode:
