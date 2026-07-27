@@ -88,6 +88,26 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
     }
 
     @Test
+    suspend fun `resolves table dotted keys to individual alias segments`() = readAction {
+        val file = createTomlFile(
+            """
+                [libraries]
+                junit.jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "6.1.1" }
+            """.trimIndent(),
+        )
+        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, "junit.jupiter"))
+
+        assertEquals("junit.jupiter", entry.key.text)
+        assertEquals(
+            listOf("junit", "jupiter"),
+            findTypesafeConventionsCatalogAliasSegments(
+                entry,
+                TypesafeConventionsCatalogSection.LIBRARIES,
+            ).mapNotNull { segment -> segment.name },
+        )
+    }
+
+    @Test
     suspend fun `resolves inline tables`() = readAction {
         val file = createTomlFile(
             """
@@ -136,6 +156,106 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 "new_alias",
             ).text,
         )
+    }
+
+    @Test
+    suspend fun `renames only the targeted dotted alias segment`() = readAction {
+        assertDottedSegmentRenames(
+            """
+                [libraries]
+                dotted.rename = { module = "example:library", version = "1.0" }
+            """.trimIndent(),
+            declarationPath = "dotted.rename",
+            expressionText = "libs.dotted.rename",
+        )
+    }
+
+    @Test
+    suspend fun `renames only the targeted top level dotted alias segment`() = readAction {
+        assertDottedSegmentRenames(
+            """
+                libraries.dotted.rename = { module = "example:library", version = "1.0" }
+            """.trimIndent(),
+            declarationPath = "dotted.rename",
+            expressionText = "libs.dotted.rename",
+        )
+    }
+
+    @Test
+    suspend fun `one separator alias segment owns all matching kotlin selectors`() = readAction {
+        val file = createTomlFile(
+            """
+                [libraries]
+                foo-Bar_baz = { module = "example:library", version = "1.0" }
+            """.trimIndent(),
+        )
+        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, "foo.bar.baz"))
+        val segments = findTypesafeConventionsCatalogAliasSegments(
+            entry,
+            TypesafeConventionsCatalogSection.LIBRARIES,
+        )
+        val expression =
+            KtPsiFactory(project).createExpression("libs.foo.bar.baz") as KtDotQualifiedExpression
+        val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
+        val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
+            accessor,
+            segments,
+            catalogUrl = null,
+        )
+
+        assertEquals(
+            listOf("foo.bar.baz"),
+            contexts.map { context ->
+                expression.text.substring(
+                    context.rangeInElement.startOffset,
+                    context.rangeInElement.endOffset,
+                )
+            },
+        )
+
+        val renamed = TypesafeConventionsKotlinCatalogReference(expression, contexts.single())
+            .handleElementRename("new-alias")
+
+        assertEquals("libs.new.alias", renamed.text)
+    }
+
+    private fun assertDottedSegmentRenames(
+        tomlText: String,
+        declarationPath: String,
+        expressionText: String,
+    ) {
+        val file = createTomlFile(tomlText)
+        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, declarationPath))
+        val segments = findTypesafeConventionsCatalogAliasSegments(
+            entry,
+            TypesafeConventionsCatalogSection.LIBRARIES,
+        )
+
+        val expectedRanges = listOf("dotted", "rename")
+        val expectedRenames = listOf("libs.renamed.rename", "libs.dotted.renamed")
+        expectedRenames.forEachIndexed { segmentIndex, expectedExpression ->
+            val expression =
+                KtPsiFactory(project).createExpression(expressionText) as KtDotQualifiedExpression
+            val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
+            val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
+                accessor,
+                segments,
+                catalogUrl = null,
+            )
+            assertEquals(
+                expectedRanges,
+                contexts.map { context ->
+                    expression.text.substring(
+                        context.rangeInElement.startOffset,
+                        context.rangeInElement.endOffset,
+                    )
+                },
+            )
+
+            val renamed = TypesafeConventionsKotlinCatalogReference(expression, contexts[segmentIndex])
+                .handleElementRename("renamed")
+            assertEquals(expectedExpression, renamed.text)
+        }
     }
 
     private fun createTomlFile(text: String): TomlFile =
