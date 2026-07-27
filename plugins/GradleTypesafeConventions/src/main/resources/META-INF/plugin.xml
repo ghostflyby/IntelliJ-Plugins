@@ -28,5 +28,7 @@
     <projectListeners>
         <listener class="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectDataImportListener"
                   topic="com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener"/>
+        <listener class="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectDataImportListener"
+                  topic="org.jetbrains.plugins.gradle.settings.GradleSettingsListener"/>
     </projectListeners>
 </idea-plugin>

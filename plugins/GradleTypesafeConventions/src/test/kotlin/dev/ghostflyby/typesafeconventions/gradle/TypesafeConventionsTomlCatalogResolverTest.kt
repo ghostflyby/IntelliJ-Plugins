@@ -6,14 +6,21 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
+import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
 import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.moduleFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
+import com.intellij.testFramework.junit5.fixture.psiFileFixture
+import com.intellij.testFramework.junit5.fixture.sourceRootFixture
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
 import org.jetbrains.kotlin.psi.KtPsiFactory
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.toml.lang.psi.TomlFile
 import org.toml.lang.psi.TomlFileType
@@ -23,6 +30,16 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
     private val projectFixture = projectFixture(openAfterCreation = true)
     private val project by projectFixture
+    private val moduleFixture = projectFixture.moduleFixture()
+    private val sourceRootFixture = moduleFixture.sourceRootFixture()
+    private val cachedTomlFileFixture = sourceRootFixture.psiFileFixture(
+        "cached.versions.toml",
+        """
+            [libraries]
+            before = { module = "example:before", version = "1.0" }
+        """.trimIndent(),
+    )
+    private val cachedTomlFile by cachedTomlFileFixture
 
     @Test
     suspend fun `resolves all version catalog sections`() = readAction {
@@ -132,6 +149,40 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
         assertNull(findTypesafeConventionsCatalogEntry(file, "missing"))
         assertNull(findTypesafeConventionsCatalogEntry(file, "plugins.present"))
+    }
+
+    @Test
+    suspend fun `reuses toml alias index until the file changes`() {
+        val file = cachedTomlFile as TomlFile
+        val first = readAction { typesafeConventionsTomlCatalogAliasIndex(file) }
+        val reused = readAction { typesafeConventionsTomlCatalogAliasIndex(file) }
+
+        assertSame(first, reused)
+
+        val documentManager = PsiDocumentManager.getInstance(project)
+        val document = readAction { requireNotNull(documentManager.getDocument(file)) }
+        withContext(Dispatchers.EDT) {
+            WriteCommandAction.runWriteCommandAction(project) {
+                document.replaceString(
+                    0,
+                    document.textLength,
+                    """
+                        [libraries]
+                        after = { module = "example:after", version = "2.0" }
+                    """.trimIndent(),
+                )
+                documentManager.doPostponedOperationsAndUnblockDocument(document)
+                documentManager.commitDocument(document)
+            }
+        }
+
+        val rebuilt = readAction { typesafeConventionsTomlCatalogAliasIndex(file) }
+        assertNotSame(reused, rebuilt)
+        assertNull(readAction { findTypesafeConventionsCatalogEntry(file, "before") })
+        assertEquals(
+            "after",
+            readAction { findTypesafeConventionsCatalogEntry(file, "after")?.key?.text },
+        )
     }
 
     @Test

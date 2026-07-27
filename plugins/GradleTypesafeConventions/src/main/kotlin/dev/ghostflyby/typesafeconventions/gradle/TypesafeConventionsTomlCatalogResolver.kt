@@ -6,6 +6,10 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
+import com.intellij.openapi.util.Key
+import com.intellij.psi.util.CachedValue
+import com.intellij.psi.util.CachedValueProvider
+import com.intellij.psi.util.CachedValuesManager
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.toml.lang.psi.*
 
@@ -21,6 +25,108 @@ internal enum class TypesafeConventionsCatalogSection(val tomlName: String) {
             entries.firstOrNull { it != LIBRARIES && it.tomlName == prefix }
     }
 }
+
+internal data class TypesafeConventionsTomlCatalogAlias(
+    val section: TypesafeConventionsCatalogSection,
+    val normalizedAliasPath: String,
+    val entry: TomlKeyValue,
+    val segments: List<TomlKeySegment>,
+)
+
+internal class TypesafeConventionsTomlCatalogAliasIndex private constructor(
+    aliases: List<TypesafeConventionsTomlCatalogAlias>,
+) {
+    private val aliasesByKey = aliases.associateBy { alias -> alias.section to alias.normalizedAliasPath }
+    private val aliasesByEntry = aliases.groupBy(TypesafeConventionsTomlCatalogAlias::entry)
+
+    fun find(
+        section: TypesafeConventionsCatalogSection,
+        aliasPath: String,
+    ): TypesafeConventionsTomlCatalogAlias? =
+        aliasesByKey[section to aliasPath.normalizedTypesafeConventionsCatalogKey()]
+
+    fun find(
+        entry: TomlKeyValue,
+        section: TypesafeConventionsCatalogSection,
+    ): TypesafeConventionsTomlCatalogAlias? =
+        aliasesByEntry[entry].orEmpty().firstOrNull { alias -> alias.section == section }
+
+    fun find(entry: TomlKeyValue): TypesafeConventionsTomlCatalogAlias? =
+        aliasesByEntry[entry].orEmpty().firstOrNull()
+
+    internal companion object {
+        fun create(tomlFile: TomlFile): TypesafeConventionsTomlCatalogAliasIndex {
+            val aliases = buildList {
+                for (element in tomlFile.children) {
+                    if (element is TomlHeaderOwner) {
+                        val section = element.header.key?.text.typesafeConventionsCatalogSection()
+                        val owner = element as? TomlKeyValueOwner
+                        if (section != null && owner != null) {
+                            owner.entries.forEach { entry -> addAlias(section, entry, entry.key.segments) }
+                        }
+                    }
+                    if (element is TomlKeyValue) {
+                        val segments = element.key.segments
+                        val section = segments.firstOrNull()?.name.typesafeConventionsCatalogSection()
+                        if (section != null && segments.size > 1) {
+                            addAlias(section, element, segments.drop(1))
+                        }
+
+                        val inlineTable = element.value as? TomlInlineTable
+                        val inlineSection = element.key.text.typesafeConventionsCatalogSection()
+                        if (inlineTable != null && inlineSection != null) {
+                            inlineTable.entries.forEach { entry ->
+                                addAlias(inlineSection, entry, entry.key.segments)
+                            }
+                        }
+                    }
+                }
+            }
+            return TypesafeConventionsTomlCatalogAliasIndex(aliases)
+        }
+
+        private fun MutableList<TypesafeConventionsTomlCatalogAlias>.addAlias(
+            section: TypesafeConventionsCatalogSection,
+            entry: TomlKeyValue,
+            segments: List<TomlKeySegment>,
+        ) {
+            val segmentNames = segments.mapNotNull(TomlKeySegment::getName)
+            if (segmentNames.size != segments.size || segmentNames.isEmpty()) {
+                return
+            }
+            val aliasPath = segmentNames.joinToString(".")
+            add(
+                TypesafeConventionsTomlCatalogAlias(
+                    section = section,
+                    normalizedAliasPath = aliasPath.normalizedTypesafeConventionsCatalogKey(),
+                    entry = entry,
+                    segments = segments,
+                ),
+            )
+        }
+    }
+}
+
+private val TYPESAFE_CONVENTIONS_TOML_ALIAS_INDEX_KEY =
+    Key.create<CachedValue<TypesafeConventionsTomlCatalogAliasIndex>>(
+        "typesafe.conventions.toml.catalog.alias.index",
+    )
+
+@RequiresReadLock
+internal fun typesafeConventionsTomlCatalogAliasIndex(
+    tomlFile: TomlFile,
+): TypesafeConventionsTomlCatalogAliasIndex =
+    CachedValuesManager.getManager(tomlFile.project).getCachedValue(
+        tomlFile,
+        TYPESAFE_CONVENTIONS_TOML_ALIAS_INDEX_KEY,
+        {
+            CachedValueProvider.Result.create(
+                TypesafeConventionsTomlCatalogAliasIndex.create(tomlFile),
+                tomlFile,
+            )
+        },
+        false,
+    )
 
 @RequiresReadLock
 internal fun findTypesafeConventionsCatalogEntry(
@@ -47,37 +153,13 @@ internal fun findTypesafeConventionsCatalogEntry(
     if (aliasPath.isEmpty()) {
         return null
     }
-
-    for (element in tomlFile.children) {
-        if (element is TomlHeaderOwner && typesafeConventionsCatalogKeysMatch(
-                element.header.key?.text,
-                section.tomlName,
-            )
-        ) {
-            val owner = element as? TomlKeyValueOwner ?: continue
-            findAlias(owner, aliasPath)?.let { return it }
-        }
-        if (element is TomlKeyValue) {
-            if (typesafeConventionsCatalogKeysMatch(element.key.text, "${section.tomlName}.$aliasPath")) {
-                return element
-            }
-            val inlineTable = element.value as? TomlInlineTable
-            if (inlineTable != null && typesafeConventionsCatalogKeysMatch(element.key.text, section.tomlName)) {
-                findAlias(inlineTable, aliasPath)?.let { return it }
-            }
-        }
-    }
-    return null
+    return typesafeConventionsTomlCatalogAliasIndex(tomlFile).find(section, aliasPath)?.entry
 }
 
 @RequiresReadLock
 internal fun findTypesafeConventionsCatalogSection(entry: TomlKeyValue): TypesafeConventionsCatalogSection? {
-    for (section in TypesafeConventionsCatalogSection.entries) {
-        if (findTypesafeConventionsCatalogAliasSegments(entry, section).isNotEmpty()) {
-            return section
-        }
-    }
-    return null
+    val tomlFile = entry.containingFile as? TomlFile ?: return null
+    return typesafeConventionsTomlCatalogAliasIndex(tomlFile).find(entry)?.section
 }
 
 @RequiresReadLock
@@ -86,41 +168,29 @@ internal fun findTypesafeConventionsCatalogAliasSegments(
     section: TypesafeConventionsCatalogSection,
 ): List<TomlKeySegment> {
     val tomlFile = entry.containingFile as? TomlFile ?: return emptyList()
-    val allSegments = entry.key.segments
-    val candidates = buildList {
-        add(allSegments)
-        if (allSegments.size > 1 && allSegments.first().name == section.tomlName) {
-            add(allSegments.drop(1))
-        }
-    }
-    return candidates.firstOrNull { segments ->
-        val names = segments.mapNotNull { it.name }
-        names.size == segments.size &&
-                findTypesafeConventionsCatalogEntry(tomlFile, section, names.joinToString(".")) === entry
-    }.orEmpty()
-}
-
-@RequiresReadLock
-private fun findAlias(owner: TomlKeyValueOwner, aliasPath: String): TomlKeyValue? {
-    return owner.entries.firstOrNull { entry ->
-        typesafeConventionsCatalogKeysMatch(entry.key.text, aliasPath)
-    }
+    return typesafeConventionsTomlCatalogAliasIndex(tomlFile).find(entry, section)?.segments.orEmpty()
 }
 
 internal fun typesafeConventionsCatalogKeysMatch(keyText: String?, reference: String): Boolean {
     keyText ?: return false
-    if (keyText.length != reference.length) {
-        return false
-    }
-    for (index in keyText.indices) {
-        val keyCharacter = keyText.normalizedCatalogCharacterAt(index)
-        val referenceCharacter = reference.normalizedCatalogCharacterAt(index)
-        if (keyCharacter != referenceCharacter) {
-            return false
+    return keyText.length == reference.length &&
+            keyText.normalizedTypesafeConventionsCatalogKey() ==
+            reference.normalizedTypesafeConventionsCatalogKey()
+}
+
+private fun String?.typesafeConventionsCatalogSection(): TypesafeConventionsCatalogSection? =
+    this?.let { keyText ->
+        TypesafeConventionsCatalogSection.entries.firstOrNull { section ->
+            typesafeConventionsCatalogKeysMatch(keyText, section.tomlName)
         }
     }
-    return true
-}
+
+private fun String.normalizedTypesafeConventionsCatalogKey(): String =
+    buildString(length) {
+        for (index in this@normalizedTypesafeConventionsCatalogKey.indices) {
+            append(this@normalizedTypesafeConventionsCatalogKey.normalizedCatalogCharacterAt(index))
+        }
+    }
 
 private fun String.isAfterCatalogDelimiter(index: Int): Boolean =
     index > 0 && this[index - 1].normalizeCatalogCharacter() == '.'
