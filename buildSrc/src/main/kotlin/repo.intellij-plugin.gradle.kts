@@ -19,6 +19,7 @@ plugins {
 }
 
 val buildLogic: BuildLogicSettings = extensions.getByType()
+val pluginVerificationIdes = providers.gradleProperty("pluginVerificationIdes").orElse("recommended")
 
 intellijPlatform {
     pluginConfiguration {
@@ -69,7 +70,13 @@ intellijPlatform {
             VerifyPluginTask.VerificationReportsFormats.PLAIN,
         )
         failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
-        ides.recommended()
+        when (val value = pluginVerificationIdes.get()) {
+            "recommended" -> ides.recommended()
+            "platform" -> ides.create(buildLogic.platformType, buildLogic.platformVersion)
+            else -> throw GradleException(
+                "Unsupported pluginVerificationIdes value '$value'. Expected 'recommended' or 'platform'.",
+            )
+        }
     }
 
 }

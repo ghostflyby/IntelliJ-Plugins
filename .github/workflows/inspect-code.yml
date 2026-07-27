@@ -5,6 +5,8 @@ on:
     secrets:
       QODANA_TOKEN:
         required: true
+      GRADLE_ENCRYPTION_KEY:
+        required: true
   workflow_dispatch:
 
 jobs:
@@ -35,13 +37,103 @@ jobs:
           java-version: 21
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Configure IntelliJ Platform IDE Cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle_user_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          ide_cache="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          mkdir -p "$gradle_user_home" "$ide_cache"
+          {
+            printf '\n'
+            printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
+            printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
+          } >> "$gradle_user_home/gradle.properties"
+      - name: Restore IntelliJ Platform IDE Cache
+        id: restore-intellij-platform-ides
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
+          restore-keys: |
+            ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
+      - name: Compute Qodana Cache Layout
+        id: qodana-cache-layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          fingerprint="$(printf '%s\0%s' "$HOME" "$GITHUB_WORKSPACE" | sha256sum | cut -d ' ' -f 1)"
+          printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
+      - name: Restore Qodana Cache
+        id: restore-qodana-cache
+        if: ${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-refs/heads/main-
       - name: Qodana - Code Inspection
         uses: JetBrains/qodana-action@v2026.1.3
         with:
-          cache-default-branch-only: true
+          use-caches: false
+          cache-dir: ${{ runner.temp }}/qodana/caches
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
-      - uses: github/codeql-action/upload-sarif@v4
+      - name: Upload Qodana SARIF
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+      - name: Compute IntelliJ Platform IDE Inventory
+        id: intellij-platform-ides
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_dir="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          inventory_file="$RUNNER_TEMP/intellij-platform-ides-inventory"
+          : > "$inventory_file"
+
+          while IFS= read -r -d '' ide_dir; do
+            relative_name="${ide_dir#"$cache_dir"/}"
+            printf '%s\0' "$relative_name" >> "$inventory_file"
+          done < <(find "$cache_dir" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+          if [[ ! -s "$inventory_file" ]]; then
+            printf '%s\n' '::error::No IntelliJ Platform IDE distributions were resolved'
+            exit 1
+          fi
+
+          fingerprint="$(sha256sum "$inventory_file" | cut -d ' ' -f 1)"
+          key="ijpl-ides-v2-${RUNNER_OS}-${RUNNER_ARCH}-${fingerprint}"
+          {
+            printf 'fingerprint=%s\n' "$fingerprint"
+            printf 'key=%s\n' "$key"
+          } >> "$GITHUB_OUTPUT"
+      - name: Compute Qodana Cache Key
+        id: qodana-cache-key
+        shell: bash
+        env:
+          IDE_CACHE_KEY: ${{ steps.intellij-platform-ides.outputs.key }}
+          LAYOUT_FINGERPRINT: ${{ steps.qodana-cache-layout.outputs.fingerprint }}
+        run: |
+          set -euo pipefail
+          key="qodana-native-v3-2026.1-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-refs/heads/main-${GITHUB_SHA}"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Save IntelliJ Platform IDE Cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.intellij-platform-ides.outputs.key != steps.restore-intellij-platform-ides.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ${{ steps.intellij-platform-ides.outputs.key }}
+      - name: Save Qodana Cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.qodana-cache-key.outputs.key != steps.restore-qodana-cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: ${{ steps.qodana-cache-key.outputs.key }}
