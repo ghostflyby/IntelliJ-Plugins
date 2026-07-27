@@ -17,6 +17,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -40,7 +41,10 @@ import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
+import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.projectModel.gradleModuleEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
@@ -65,6 +69,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import kotlin.io.path.createDirectories
 import kotlin.io.path.writeText
+import kotlin.time.Duration.Companion.minutes
 
 internal data class VersionCatalogCase(
     val catalogName: String,
@@ -75,6 +80,8 @@ internal data class VersionCatalogCase(
 
     override fun toString(): String = catalogName
 }
+
+private val GRADLE_SYNC_TIMEOUT = 2.minutes
 
 internal data class ConventionBuildCase(
     val name: String,
@@ -91,6 +98,40 @@ internal data class VersionCatalogInConventionBuildCase(
     override fun toString(): String = "${conventionBuild.name}: ${versionCatalog.catalogName}"
 }
 
+internal data class CatalogAccessorCase(
+    val name: String,
+    val declarationPath: String,
+    val accessorPath: String,
+    val referenceText: String,
+    val expectedEntryText: String,
+) {
+    override fun toString(): String = name
+}
+
+internal data class CatalogAccessorInConventionBuildCase(
+    val catalog: VersionCatalogCase,
+    val conventionBuild: ConventionBuildCase,
+    val accessor: CatalogAccessorCase,
+) {
+    override fun toString(): String = "${conventionBuild.name}: ${catalog.catalogName} ${accessor.name}"
+}
+
+internal data class CatalogAccessorInCatalogCase(
+    val catalog: VersionCatalogCase,
+    val accessor: CatalogAccessorCase,
+) {
+    override fun toString(): String = "${catalog.catalogName} ${accessor.name}"
+}
+
+internal data class CatalogRenameCase(
+    val name: String,
+    val oldDeclarationPath: String,
+    val newAliasName: String,
+    val newDeclarationPath: String,
+) {
+    override fun toString(): String = name
+}
+
 private class GradleTypesafeConventionsSyncedProject(
     private val project: Project,
     private val projectRoot: Path,
@@ -104,41 +145,62 @@ private class GradleTypesafeConventionsSyncedProject(
         projectJdk = sdk
 
         try {
-            val modelFetchFuture = CompletableDeferred<Unit>()
-            @Suppress("UnstableApiUsage")
-            project.messageBus.connect(project).subscribe(
-                GradleSyncListener.TOPIC,
-                object : GradleSyncListener {
-                    override fun onModelFetchCompleted(context: ProjectResolverContext) {
-                        modelFetchFuture.complete(Unit)
-                    }
-                },
-            )
-            val importFuture = CompletableDeferred<Unit>()
-            @Suppress("CAST_NEVER_SUCCEEDS")
-            project.messageBus.connect(project).subscribe(
-                ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
-                object : ProjectDataImportListener {
-                    override fun onFinalTasksFinished(projectPath: String?) {
-                        importFuture.complete(Unit)
-                    }
-                },
-            )
-
             Registry.get(CommonGradleProjectResolverExtension.GRADLE_VERSION_CATALOGS_DYNAMIC_SUPPORT)
                 .setValue(true, project)
-
-            project.trackActivity(ExternalSystemActivityKey) {
-                linkAndSyncGradleProject(project, projectRoot.toString())
-            }
-            modelFetchFuture.await()
-            importFuture.await()
-            IndexingTestUtil.waitUntilIndexesAreReady(project)
+            syncGradleProject(projectRoot)
         } catch (throwable: Throwable) {
             projectJdk = null
             cleanupProjectJdk(sdk)
             throw throwable
         }
+    }
+
+    private suspend fun syncGradleProject(gradleProjectRoot: Path) {
+        val modelFetchFuture = CompletableDeferred<Unit>()
+        val importFuture = CompletableDeferred<Unit>()
+        fun failSync(stage: String, throwable: Throwable) {
+            val failure = IllegalStateException(
+                "Gradle $stage failed for $gradleProjectRoot",
+                throwable,
+            )
+            modelFetchFuture.completeExceptionally(failure)
+            importFuture.completeExceptionally(failure)
+        }
+        @Suppress("UnstableApiUsage")
+        project.messageBus.connect(project).subscribe(
+            GradleSyncListener.TOPIC,
+            object : GradleSyncListener {
+                override fun onModelFetchCompleted(context: ProjectResolverContext) {
+                    modelFetchFuture.complete(Unit)
+                }
+
+                override fun onModelFetchFailed(context: ProjectResolverContext, exception: Throwable) {
+                    failSync("model fetch", exception)
+                }
+            },
+        )
+        @Suppress("CAST_NEVER_SUCCEEDS")
+        project.messageBus.connect(project).subscribe(
+            ProjectDataImportListener.TOPIC as Topic<ProjectDataImportListener>,
+            object : ProjectDataImportListener {
+                override fun onImportFailed(projectPath: String?, t: Throwable) {
+                    failSync("project import for ${projectPath ?: "unknown project"}", t)
+                }
+
+                override fun onFinalTasksFinished(projectPath: String?) {
+                    importFuture.complete(Unit)
+                }
+            },
+        )
+
+        project.trackActivity(ExternalSystemActivityKey) {
+            linkAndSyncGradleProject(project, gradleProjectRoot.toString())
+        }
+        withTimeout(GRADLE_SYNC_TIMEOUT) {
+            modelFetchFuture.await()
+            importFuture.await()
+        }
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
     suspend fun tearDown() {
@@ -238,6 +300,7 @@ private class GradleTypesafeConventionsSyncedProject(
         versionCatalog: VersionCatalogCase,
         referenceText: String,
         expectedEntryText: String,
+        expressionText: String = versionCatalog.expressionText,
         resolveTargets: (PsiElement, Int) -> Array<PsiElement>?,
     ) {
         val tomlPath = projectRoot.resolve(versionCatalog.catalogPath).realPath()
@@ -246,7 +309,7 @@ private class GradleTypesafeConventionsSyncedProject(
         val resolvedTargets = readAction {
             val (sourceElement, offset) = findElementAtText(
                 conventionBuildScript,
-                versionCatalog.expressionText,
+                expressionText,
                 referenceText,
             )
             resolveTargets(sourceElement, offset)
@@ -259,37 +322,68 @@ private class GradleTypesafeConventionsSyncedProject(
 
         assertTrue(
             realResolvedTargets.any { (path, text) -> path == tomlPath && text.startsWith(expectedEntryText) },
-            "Expected $referenceText in ${versionCatalog.expressionText} to resolve to TOML entry $expectedEntryText. " +
+            "Expected $referenceText in $expressionText to resolve to TOML entry $expectedEntryText. " +
                     "resolvedTargets=$realResolvedTargets ${workspaceModelState()} ${moduleGradleState()}",
         )
     }
 
-    suspend fun assertConventionBuildKotlinCatalogReferenceResolvesToTomlEntry(
+    suspend fun assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
         scriptPath: Path,
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
+        expressionText: String = versionCatalog.expressionText,
     ) {
         val expectedEntry = requireTomlCatalogEntry(versionCatalog, declarationPath)
+        val expectedSegments = readAction {
+            val section = requireNotNull(findTypesafeConventionsCatalogSection(expectedEntry))
+            findTypesafeConventionsCatalogAliasSegments(expectedEntry, section)
+        }
         val conventionBuildScript = requirePsiFile(scriptPath)
+        val generatedEntrypointState = generatedEntrypointState()
 
-        val resolvedEntry = readAction {
-            val expression = findKotlinCatalogExpression(conventionBuildScript, versionCatalog.expressionText)
-            val reference = expression.references
+        val resolvedSegments = readAction {
+            val expression = findKotlinCatalogExpression(conventionBuildScript, expressionText)
+            val references = expression.references
                 .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
-                .singleOrNull()
-                ?: error(
-                    "Expected ${versionCatalog.expressionText} to expose exactly one " +
-                            "TypesafeConventionsKotlinCatalogReference. " +
-                            "references=${expression.references.map { it.javaClass.name }}",
-                )
-            reference.resolve()
+                .sortedBy { it.rangeInElement.startOffset }
+            assertEquals(
+                expectedSegments.size,
+                references.size,
+                "Expected $expressionText to expose one reference per TOML alias segment. " +
+                        "references=${expression.references.map { it.javaClass.name }} " +
+                        "catalogRootResolution=${expression.catalogRootResolutionState()} " +
+                        "generatedEntrypoints=$generatedEntrypointState",
+            )
+            references.map { it.resolve() }
         }
 
-        assertSame(
-            expectedEntry,
-            resolvedEntry,
-            "Expected ${versionCatalog.expressionText} to resolve to the exact TOML entry.",
+        assertEquals(
+            expectedSegments,
+            resolvedSegments,
+            "Expected $expressionText to resolve to the exact TOML alias segments.",
         )
+    }
+
+    suspend fun assertKotlinExpressionHasNoCustomCatalogReferences(
+        scriptPath: Path,
+        expressionText: String,
+    ) {
+        val script = requirePsiFile(scriptPath)
+        readAction {
+            val expression = findKotlinCatalogExpression(script, expressionText)
+            val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
+            val root = accessor.nameExpressions.first()
+            assertNotNull(
+                root.mainReference.resolve(),
+                "Expected local root ${root.text} to resolve so the shadowing assertion exercises semantic provenance. " +
+                        "catalogRootResolution=${expression.catalogRootResolutionState()}",
+            )
+            assertTrue(
+                expression.references.none { it is TypesafeConventionsKotlinCatalogReference },
+                "Expected $expressionText in ${script.name} to keep only its standard Kotlin references. " +
+                        "references=${expression.references.map { it.javaClass.name }}",
+            )
+        }
     }
 
     suspend fun assertKotlinCatalogFindUsagesAreIsolatedToTargetCatalog(
@@ -300,8 +394,9 @@ private class GradleTypesafeConventionsSyncedProject(
     ) {
         val expectedEntry = requireTomlCatalogEntry(versionCatalog, declarationPath)
         val keySegment = readAction {
-            expectedEntry.key.segments.singleOrNull()
-        } ?: error("Expected $declarationPath to use a single TOML key segment")
+            val section = requireNotNull(findTypesafeConventionsCatalogSection(expectedEntry))
+            findTypesafeConventionsCatalogAliasSegments(expectedEntry, section).singleOrNull()
+        } ?: error("Expected $declarationPath to use a single TOML alias segment")
         val expectedPsiFiles = expectedScriptPaths.map { requirePsiFile(it) }
         readAction {
             expectedPsiFiles.forEach { file ->
@@ -311,9 +406,9 @@ private class GradleTypesafeConventionsSyncedProject(
                     .singleOrNull()
                     ?: error("Expected $expectedExpressionText to expose a local reference in ${file.name}")
                 assertSame(
-                    expectedEntry,
+                    keySegment,
                     reference.resolve(),
-                    "Expected $expectedExpressionText to resolve to the searched catalog entry in ${file.name}",
+                    "Expected $expectedExpressionText to resolve to the searched TOML key segment in ${file.name}",
                 )
             }
         }
@@ -343,7 +438,7 @@ private class GradleTypesafeConventionsSyncedProject(
             }
         }
         val actualUsages = resolvedReferences
-            .filter { (_, _, resolved) -> resolved === expectedEntry }
+            .filter { (_, _, resolved) -> resolved === keySegment }
             .map { (path, text, _) -> path.realPath() to text }
             .toSet()
         val expectedUsages = expectedScriptPaths
@@ -368,8 +463,9 @@ private class GradleTypesafeConventionsSyncedProject(
         newAliasName: String,
         newDeclarationPath: String,
         expectedScriptPaths: List<Path>,
+        segmentIndex: Int = 0,
     ) {
-        val keySegment = requireTomlCatalogKeySegment(versionCatalog, oldDeclarationPath)
+        val keySegment = requireTomlCatalogKeySegment(versionCatalog, oldDeclarationPath, segmentIndex)
         @Suppress("UnstableApiUsage")
         writeIntentReadAction {
             RenameProcessor(project, keySegment, newAliasName, false, false).run()
@@ -379,10 +475,10 @@ private class GradleTypesafeConventionsSyncedProject(
         val scripts = expectedScriptPaths.map { requirePsiFile(it) }
         readAction {
             assertNull(findTypesafeConventionsCatalogEntry(tomlFile, oldDeclarationPath))
-            assertEquals(
-                newAliasName,
-                findTypesafeConventionsCatalogEntry(tomlFile, newDeclarationPath)?.key?.text,
-            )
+            val renamedEntry = requireNotNull(findTypesafeConventionsCatalogEntry(tomlFile, newDeclarationPath))
+            val section = requireNotNull(findTypesafeConventionsCatalogSection(renamedEntry))
+            val renamedSegment = findTypesafeConventionsCatalogAliasSegments(renamedEntry, section)[segmentIndex]
+            assertEquals(newAliasName, renamedSegment.name)
             val oldExpression = "${versionCatalog.catalogName}.$oldDeclarationPath"
             val newExpression = "${versionCatalog.catalogName}.$newDeclarationPath"
             scripts.forEach { script ->
@@ -391,6 +487,58 @@ private class GradleTypesafeConventionsSyncedProject(
                     "Expected $oldExpression to be renamed in ${script.name}",
                 )
                 assertTrue(script.text.contains(newExpression), "Expected $newExpression in ${script.name}")
+            }
+        }
+    }
+
+    suspend fun renameKotlinCatalogAliasFromUsageAndAssertUsages(
+        versionCatalog: VersionCatalogCase,
+        oldDeclarationPath: String,
+        sourceExpressionText: String,
+        sourceSelectorText: String,
+        newAliasName: String,
+        newDeclarationPath: String,
+        expectedScriptPaths: List<Path>,
+    ) {
+        val sourceScript = requirePsiFile(expectedScriptPaths.first())
+        val keySegment = readAction {
+            val expression = findKotlinCatalogExpression(sourceScript, sourceExpressionText)
+            val selectorOffset = sourceExpressionText.lastIndexOf(sourceSelectorText)
+                .takeIf { it >= 0 }
+                ?: error("Cannot find selector $sourceSelectorText in $sourceExpressionText")
+            val caretOffset = selectorOffset + sourceSelectorText.length / 2
+            expression.references
+                .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
+                .singleOrNull { reference -> reference.rangeInElement.containsOffset(caretOffset) }
+                ?.resolve()
+                ?: error(
+                    "Expected $sourceExpressionText at $sourceSelectorText to resolve through a custom " +
+                            "catalog reference. references=${expression.references.map { it.javaClass.name }}",
+                )
+        }
+
+        @Suppress("UnstableApiUsage")
+        writeIntentReadAction {
+            RenameProcessor(project, keySegment, newAliasName, false, false).run()
+        }
+
+        val tomlFile = requirePsiFile(projectRoot.resolve(versionCatalog.catalogPath)) as TomlFile
+        val scripts = expectedScriptPaths.map { requirePsiFile(it) }
+        readAction {
+            assertNull(findTypesafeConventionsCatalogEntry(tomlFile, oldDeclarationPath))
+            val renamedEntry = requireNotNull(findTypesafeConventionsCatalogEntry(tomlFile, newDeclarationPath))
+            val section = requireNotNull(findTypesafeConventionsCatalogSection(renamedEntry))
+            assertEquals(newAliasName, findTypesafeConventionsCatalogAliasSegments(renamedEntry, section).single().name)
+            val newExpression = "${versionCatalog.catalogName}.$newDeclarationPath"
+            scripts.forEach { script ->
+                assertTrue(
+                    script.text.contains(newExpression),
+                    "Expected Kotlin-initiated rename to update $newExpression in ${script.virtualFile.url}",
+                )
+                assertFalse(
+                    script.text.contains(sourceExpressionText),
+                    "Expected Kotlin-initiated rename to remove $sourceExpressionText from ${script.virtualFile.url}",
+                )
             }
         }
     }
@@ -430,6 +578,67 @@ private class GradleTypesafeConventionsSyncedProject(
             }
             ?: error("Cannot find topmost Kotlin catalog expression $expressionText in ${file.virtualFile.url}")
 
+    private fun KtDotQualifiedExpression.catalogRootResolutionState(): String {
+        val accessor = typesafeConventionsCatalogAccessor()
+            ?: return "accessor=null"
+        val root = accessor.nameExpressions.firstOrNull()
+            ?: return "root=null"
+        val target = root.mainReference.resolve()
+        return buildString {
+            append("root=")
+            append(root.text)
+            append(", target=")
+            append(target.describeCatalogRootResolutionElement())
+            append(", navigation=")
+            append(target?.navigationElement.describeCatalogRootResolutionElement())
+            append(", original=")
+            append(target?.originalElement.describeCatalogRootResolutionElement())
+        }
+    }
+
+    private fun PsiElement?.describeCatalogRootResolutionElement(): String {
+        this ?: return "null"
+        return buildString {
+            append(javaClass.name)
+            append("(text=")
+            append(text.take(240))
+            append(", file=")
+            append(containingFile?.virtualFile?.path)
+            append(", receiver=")
+            append((this@describeCatalogRootResolutionElement as? KtProperty)?.receiverTypeReference?.text)
+            append(')')
+        }
+    }
+
+    private suspend fun generatedEntrypointState(): String {
+        val entrypointPaths = withContext(Dispatchers.IO) {
+            Files.walk(projectRoot).use { paths ->
+                paths.filter { path ->
+                    val name = path.fileName?.toString().orEmpty()
+                    Files.isRegularFile(path) && name.startsWith("EntrypointFor") && name.endsWith(".kt")
+                }.toList()
+            }
+        }
+        return readAction {
+            val fileIndex = ProjectFileIndex.getInstance(project)
+            entrypointPaths.joinToString(prefix = "[", postfix = "]") { path ->
+                val virtualFile = LocalFileSystem.getInstance().findFileByNioFile(path)
+                buildString {
+                    append(path)
+                    append("(vfs=")
+                    append(virtualFile != null)
+                    append(", source=")
+                    append(virtualFile?.let(fileIndex::isInSourceContent))
+                    append(", module=")
+                    append(virtualFile?.let(fileIndex::getModuleForFile)?.name)
+                    append(", psi=")
+                    append(virtualFile?.let { PsiManager.getInstance(project).findFile(it) }?.javaClass?.name)
+                    append(')')
+                }
+            }
+        }
+    }
+
     private suspend fun requireTomlCatalogEntry(
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
@@ -444,11 +653,13 @@ private class GradleTypesafeConventionsSyncedProject(
     private suspend fun requireTomlCatalogKeySegment(
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
+        segmentIndex: Int,
     ): TomlKeySegment {
         val entry = requireTomlCatalogEntry(versionCatalog, declarationPath)
         return readAction {
-            entry.key.segments.singleOrNull()
-        } ?: error("Expected $declarationPath to use a single TOML key segment")
+            val section = requireNotNull(findTypesafeConventionsCatalogSection(entry))
+            findTypesafeConventionsCatalogAliasSegments(entry, section).getOrNull(segmentIndex)
+        } ?: error("Cannot find TOML alias segment $segmentIndex for $declarationPath")
     }
 
     private suspend fun requirePsiFile(path: Path): PsiFile {
@@ -551,6 +762,31 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
     }
 
     @ParameterizedTest(name = "{0}")
+    @MethodSource("catalogAccessorsInConventionBuildCases")
+    suspend fun `kotlin dsl catalog sections resolve and navigate to exact toml segment`(
+        testCase: CatalogAccessorInConventionBuildCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        val expressionText = "${testCase.catalog.catalogName}.${testCase.accessor.accessorPath}"
+        val scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath)
+        syncedProject.assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
+            scriptPath = scriptPath,
+            versionCatalog = testCase.catalog,
+            declarationPath = testCase.accessor.declarationPath,
+            expressionText = expressionText,
+        )
+        syncedProject.assertConventionBuildCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+            scriptPath = scriptPath,
+            versionCatalog = testCase.catalog,
+            referenceText = testCase.accessor.referenceText,
+            expectedEntryText = testCase.accessor.expectedEntryText,
+            expressionText = expressionText,
+        ) { sourceElement, offset ->
+            syncedProject.resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
+        }
+    }
+
+    @ParameterizedTest(name = "{0}")
     @MethodSource("versionCatalogInConventionBuildCases")
     suspend fun `kotlin dsl convention build catalog accessor goto resolves to toml library entry`(
         testCase: VersionCatalogInConventionBuildCase,
@@ -572,7 +808,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         testCase: VersionCatalogInConventionBuildCase,
     ) {
         val projectRoot = projectPathFixture.get()
-        syncedProject.assertConventionBuildKotlinCatalogReferenceResolvesToTomlEntry(
+        syncedProject.assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
             scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath),
             versionCatalog = testCase.versionCatalog,
             declarationPath = "junit.jupiter",
@@ -593,6 +829,20 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         )
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("catalogAccessorsInCatalogCases")
+    suspend fun `kotlin dsl find usages supports every catalog section`(
+        testCase: CatalogAccessorInCatalogCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinCatalogFindUsagesAreIsolatedToTargetCatalog(
+            versionCatalog = testCase.catalog,
+            declarationPath = testCase.accessor.declarationPath,
+            expectedExpressionText = "${testCase.catalog.catalogName}.${testCase.accessor.accessorPath}",
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+        )
+    }
+
     @Test
     suspend fun `renaming toml alias updates all kotlin convention build usages`() {
         val projectRoot = projectPathFixture.get()
@@ -602,6 +852,79 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
             newAliasName = "renamed-alias",
             newDeclarationPath = "renamed.alias",
             expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+        )
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("catalogRenameCases")
+    suspend fun `renaming toml alias updates kotlin usages in every catalog section`(
+        testCase: CatalogRenameCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.renameKotlinCatalogAliasAndAssertUsages(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            oldDeclarationPath = testCase.oldDeclarationPath,
+            newAliasName = testCase.newAliasName,
+            newDeclarationPath = testCase.newDeclarationPath,
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+        )
+    }
+
+    @Test
+    suspend fun `renaming kotlin usage from junit selector updates toml and all usages`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.renameKotlinCatalogAliasFromUsageAndAssertUsages(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            oldDeclarationPath = "rename.from.junit",
+            sourceExpressionText = "libs.rename.from.junit",
+            sourceSelectorText = "junit",
+            newAliasName = "renamed-from-junit",
+            newDeclarationPath = "renamed.from.junit",
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+        )
+    }
+
+    @Test
+    suspend fun `renaming kotlin usage from jupiter selector updates toml and all usages`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.renameKotlinCatalogAliasFromUsageAndAssertUsages(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            oldDeclarationPath = "rename.from.jupiter",
+            sourceExpressionText = "libs.rename.from.jupiter",
+            sourceSelectorText = "jupiter",
+            newAliasName = "renamed-from-jupiter",
+            newDeclarationPath = "renamed.from.jupiter",
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+        )
+    }
+
+    @Test
+    suspend fun `separator alias maps multiple kotlin selectors to one toml segment`() {
+        val projectRoot = projectPathFixture.get()
+        val versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" }
+        syncedProject.assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
+            scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
+            versionCatalog = versionCatalog,
+            declarationPath = "dotted.rename",
+            expressionText = "libs.dotted.rename",
+        )
+    }
+
+    @Test
+    suspend fun `local catalog shaped expression does not expose custom reference`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/LocalShadow.kt"),
+            expressionText = "libs.usage.target",
+        )
+    }
+
+    @Test
+    suspend fun `programmatic only alias does not expose custom toml reference`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
+            scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
+            expressionText = "customLibs.programmatic.only",
         )
     }
 
@@ -623,6 +946,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
                     versionCatalogs {
                         create("customLibs") {
                             from(files("gradle/customLibs.versions.toml"))
+                            library("programmatic-only", "org.junit.jupiter", "junit-jupiter").version("6.1.1")
                         }
                     }
                 }
@@ -636,6 +960,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
             """
                 plugins {
                     java
+                    id("buildlogic.fixture")
                 }
                 
                 dependencies {
@@ -647,6 +972,7 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         writeJupiterCatalog(projectRoot, "gradle/customLibs.versions.toml")
         writeKotlinDslConventionBuild(projectRoot.resolve("buildSrc"), rootProjectName = null)
         writeKotlinDslConventionBuild(projectRoot.resolve("build-logic"), rootProjectName = "build-logic")
+        projectRoot.resolve("build-logic/src/main/kotlin/buildlogic.fixture.gradle.kts").writeText("")
     }
 
     fun versionCatalogInConventionBuildCases(): List<VersionCatalogInConventionBuildCase> =
@@ -654,6 +980,44 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
 
     fun versionCatalogCases(): List<VersionCatalogCase> =
         versionCatalogCasesForTypesafeConventions()
+
+    fun catalogAccessorsInConventionBuildCases(): List<CatalogAccessorInConventionBuildCase> =
+        kotlinDslConventionBuildCases().flatMap { conventionBuild ->
+            versionCatalogCasesForTypesafeConventions().flatMap { catalog ->
+                catalogAccessorCases().map { accessor ->
+                    CatalogAccessorInConventionBuildCase(catalog, conventionBuild, accessor)
+                }
+            }
+        }
+
+
+    fun catalogAccessorsInCatalogCases(): List<CatalogAccessorInCatalogCase> =
+        versionCatalogCasesForTypesafeConventions().flatMap { catalog ->
+            catalogAccessorCases().map { accessor -> CatalogAccessorInCatalogCase(catalog, accessor) }
+        }
+
+    fun catalogRenameCases(): List<CatalogRenameCase> =
+        listOf(
+            CatalogRenameCase("libraries", "rename.library", "renamed-library", "renamed.library"),
+            CatalogRenameCase(
+                "versions",
+                "versions.rename.version",
+                "renamed-version",
+                "versions.renamed.version",
+            ),
+            CatalogRenameCase(
+                "bundles",
+                "bundles.rename.bundle",
+                "renamed-bundle",
+                "bundles.renamed.bundle",
+            ),
+            CatalogRenameCase(
+                "plugins",
+                "plugins.rename.plugin",
+                "renamed-plugin",
+                "plugins.renamed.plugin",
+            ),
+        )
 }
 
 @TestApplication
@@ -840,6 +1204,38 @@ private fun versionCatalogCasesForTypesafeConventions(): List<VersionCatalogCase
         ),
     )
 
+private fun catalogAccessorCases(): List<CatalogAccessorCase> =
+    listOf(
+        CatalogAccessorCase(
+            name = "libraries",
+            declarationPath = "junit.jupiter",
+            accessorPath = "junit.jupiter",
+            referenceText = "jupiter",
+            expectedEntryText = "junit-jupiter",
+        ),
+        CatalogAccessorCase(
+            name = "versions",
+            declarationPath = "versions.junit.jupiter",
+            accessorPath = "versions.junit.jupiter",
+            referenceText = "jupiter",
+            expectedEntryText = "junit-jupiter",
+        ),
+        CatalogAccessorCase(
+            name = "bundles",
+            declarationPath = "bundles.junit.bundle",
+            accessorPath = "bundles.junit.bundle",
+            referenceText = "bundle",
+            expectedEntryText = "junit-bundle",
+        ),
+        CatalogAccessorCase(
+            name = "plugins",
+            declarationPath = "plugins.kotlin.jvm",
+            accessorPath = "plugins.kotlin.jvm",
+            referenceText = "jvm",
+            expectedEntryText = "kotlin-jvm",
+        ),
+    )
+
 private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: String?) {
     buildRoot.createDirectories()
     buildRoot.resolve("settings.gradle.kts").writeText(
@@ -885,7 +1281,22 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                     testImplementation(libs.usage.target)
                     testImplementation(customLibs.usage.target)
                     testImplementation(libs.rename.target)
+                    testImplementation(libs.rename.library)
+                    testImplementation(libs.rename.from.junit)
+                    testImplementation(libs.rename.from.jupiter)
+                    testImplementation(libs.dotted.rename)
+                    testImplementation(customLibs.programmatic.only)
                 }
+
+                val libsVersion = libs.versions.junit.jupiter
+                val libsBundle = libs.bundles.junit.bundle
+                val libsPlugin = libs.plugins.kotlin.jvm
+                val customLibsVersion = customLibs.versions.junit.jupiter
+                val customLibsBundle = customLibs.bundles.junit.bundle
+                val customLibsPlugin = customLibs.plugins.kotlin.jvm
+                val renameVersion = libs.versions.rename.version
+                val renameBundle = libs.bundles.rename.bundle
+                val renamePlugin = libs.plugins.rename.plugin
             """.trimIndent(),
         )
     sourceRoot.resolve("RepoConventionPlugin.kt").writeText(
@@ -901,8 +1312,38 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                         dependencies.add("testImplementation", libs.usage.target)
                         dependencies.add("testImplementation", customLibs.usage.target)
                         dependencies.add("testImplementation", libs.rename.target)
+                        dependencies.add("testImplementation", libs.rename.library)
+                        dependencies.add("testImplementation", libs.rename.from.junit)
+                        dependencies.add("testImplementation", libs.rename.from.jupiter)
+                        dependencies.add("testImplementation", libs.dotted.rename)
+                        dependencies.add("testImplementation", customLibs.programmatic.only)
+                        val libsVersion = libs.versions.junit.jupiter
+                        val libsBundle = libs.bundles.junit.bundle
+                        val libsPlugin = libs.plugins.kotlin.jvm
+                        val customLibsVersion = customLibs.versions.junit.jupiter
+                        val customLibsBundle = customLibs.bundles.junit.bundle
+                        val customLibsPlugin = customLibs.plugins.kotlin.jvm
+                        val renameVersion = libs.versions.rename.version
+                        val renameBundle = libs.bundles.rename.bundle
+                        val renamePlugin = libs.plugins.rename.plugin
                     }
                 }
+            }
+        """.trimIndent(),
+    )
+    sourceRoot.resolve("LocalShadow.kt").writeText(
+        """
+            private class LocalCatalog {
+                val usage = LocalUsage()
+            }
+
+            private class LocalUsage {
+                val target = "local"
+            }
+
+            private fun localTarget(): String {
+                val libs = LocalCatalog()
+                return libs.usage.target
             }
         """.trimIndent(),
     )
@@ -994,20 +1435,47 @@ private fun writeJupiterCatalog(
     projectRoot.resolve(catalogPath).parent.createDirectories()
     projectRoot.resolve(catalogPath).writeText(
         buildString {
+            appendLine("[versions]")
+            appendLine("junit-jupiter = \"6.1.1\"")
+            if (includeRenameAlias) {
+                appendLine("rename-version = \"6.1.1\"")
+            }
+            appendLine()
+            appendLine("[libraries]")
             appendLine(
-                """
-                    [versions]
-                    junit-jupiter = "6.1.1"
-
-                    [libraries]
-                    junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
-                    usage-target = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-jupiter" }
-                """.trimIndent(),
+                "junit-jupiter = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
+            )
+            appendLine(
+                "usage-target = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
+            )
+            appendLine(
+                "dotted-rename = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
             )
             if (includeRenameAlias) {
                 appendLine(
                     "rename-target = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
                 )
+                appendLine(
+                    "rename-library = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
+                )
+                appendLine(
+                    "rename-from-junit = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
+                )
+                appendLine(
+                    "rename-from-jupiter = { module = \"org.junit.jupiter:junit-jupiter\", version.ref = \"junit-jupiter\" }",
+                )
+            }
+            appendLine()
+            appendLine("[bundles]")
+            appendLine("junit-bundle = [\"junit-jupiter\"]")
+            if (includeRenameAlias) {
+                appendLine("rename-bundle = [\"junit-jupiter\"]")
+            }
+            appendLine()
+            appendLine("[plugins]")
+            appendLine("kotlin-jvm = { id = \"org.jetbrains.kotlin.jvm\", version = \"2.3.0\" }")
+            if (includeRenameAlias) {
+                appendLine("rename-plugin = { id = \"org.jetbrains.kotlin.jvm\", version = \"2.3.0\" }")
             }
         }.trimEnd(),
     )

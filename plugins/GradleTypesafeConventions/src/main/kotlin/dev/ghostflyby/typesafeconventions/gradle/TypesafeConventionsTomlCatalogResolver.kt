@@ -113,12 +113,8 @@ internal fun typesafeConventionsCatalogKeysMatch(keyText: String?, reference: St
         return false
     }
     for (index in keyText.indices) {
-        val keyCharacter = if (keyText.isAfterCatalogDelimiter(index)) {
-            keyText[index].normalizeCatalogCharacter().lowercaseChar()
-        } else {
-            keyText[index].normalizeCatalogCharacter()
-        }
-        val referenceCharacter = reference[index].normalizeCatalogCharacter()
+        val keyCharacter = keyText.normalizedCatalogCharacterAt(index)
+        val referenceCharacter = reference.normalizedCatalogCharacterAt(index)
         if (keyCharacter != referenceCharacter) {
             return false
         }
@@ -128,6 +124,11 @@ internal fun typesafeConventionsCatalogKeysMatch(keyText: String?, reference: St
 
 private fun String.isAfterCatalogDelimiter(index: Int): Boolean =
     index > 0 && this[index - 1].normalizeCatalogCharacter() == '.'
+
+private fun String.normalizedCatalogCharacterAt(index: Int): Char {
+    val character = this[index].normalizeCatalogCharacter()
+    return if (isAfterCatalogDelimiter(index)) character.lowercaseChar() else character
+}
 
 private fun Char.normalizeCatalogCharacter(): Char =
     if (this == '-' || this == '_') '.' else this
