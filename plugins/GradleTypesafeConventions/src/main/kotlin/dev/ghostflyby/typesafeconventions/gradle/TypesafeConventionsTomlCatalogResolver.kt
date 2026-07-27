@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
-import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.toml.lang.psi.*
 
@@ -23,12 +22,11 @@ internal enum class TypesafeConventionsCatalogSection(val tomlName: String) {
     }
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun findTypesafeConventionsCatalogEntry(
     tomlFile: TomlFile,
     declarationPath: String,
 ): TomlKeyValue? {
-    ThreadingAssertions.assertReadAccess()
     val prefix = declarationPath.substringBefore('.', missingDelimiterValue = declarationPath)
     val section = TypesafeConventionsCatalogSection.fromAccessorPrefix(prefix)
         ?: TypesafeConventionsCatalogSection.LIBRARIES
@@ -40,13 +38,12 @@ internal fun findTypesafeConventionsCatalogEntry(
     return findTypesafeConventionsCatalogEntry(tomlFile, section, aliasPath)
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun findTypesafeConventionsCatalogEntry(
     tomlFile: TomlFile,
     section: TypesafeConventionsCatalogSection,
     aliasPath: String,
 ): TomlKeyValue? {
-    ThreadingAssertions.assertReadAccess()
     if (aliasPath.isEmpty()) {
         return null
     }
@@ -73,9 +70,8 @@ internal fun findTypesafeConventionsCatalogEntry(
     return null
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun findTypesafeConventionsCatalogSection(entry: TomlKeyValue): TypesafeConventionsCatalogSection? {
-    ThreadingAssertions.assertReadAccess()
     for (section in TypesafeConventionsCatalogSection.entries) {
         if (findTypesafeConventionsCatalogAliasSegments(entry, section).isNotEmpty()) {
             return section
@@ -84,12 +80,11 @@ internal fun findTypesafeConventionsCatalogSection(entry: TomlKeyValue): Typesaf
     return null
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun findTypesafeConventionsCatalogAliasSegments(
     entry: TomlKeyValue,
     section: TypesafeConventionsCatalogSection,
 ): List<TomlKeySegment> {
-    ThreadingAssertions.assertReadAccess()
     val tomlFile = entry.containingFile as? TomlFile ?: return emptyList()
     val allSegments = entry.key.segments
     val candidates = buildList {
@@ -105,9 +100,8 @@ internal fun findTypesafeConventionsCatalogAliasSegments(
     }.orEmpty()
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 private fun findAlias(owner: TomlKeyValueOwner, aliasPath: String): TomlKeyValue? {
-    ThreadingAssertions.assertReadAccess()
     return owner.entries.firstOrNull { entry ->
         typesafeConventionsCatalogKeysMatch(entry.key.text, aliasPath)
     }

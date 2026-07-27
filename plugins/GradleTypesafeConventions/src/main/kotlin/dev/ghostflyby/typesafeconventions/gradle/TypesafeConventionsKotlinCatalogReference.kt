@@ -19,7 +19,6 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.parentOfType
 import com.intellij.psi.util.parents
 import com.intellij.util.Processor
-import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
@@ -47,9 +46,8 @@ internal class TypesafeConventionsKotlinCatalogReference(
     expression: KtDotQualifiedExpression,
 ) : PsiReferenceBase<KtDotQualifiedExpression>(expression) {
 
-    @RequiresReadLock(generateAssertion = false)
+    @RequiresReadLock
     override fun resolve(): TomlKeyValue? {
-        ThreadingAssertions.assertReadAccess()
         val accessor = element.typesafeConventionsCatalogAccessor() ?: return null
         val tomlFile = findTypesafeConventionsCatalogTomlFile(element, accessor.catalogName) ?: return null
         return findTypesafeConventionsCatalogEntry(tomlFile, accessor.section, accessor.aliasPath)
@@ -80,9 +78,8 @@ internal class TypesafeConventionsKotlinCatalogGotoDeclarationHandler : GotoDecl
 
 internal class TypesafeConventionsKotlinCatalogUseScopeEnlarger : UseScopeEnlarger() {
 
-    @RequiresReadLock(generateAssertion = false)
+    @RequiresReadLock
     override fun getAdditionalUseScope(element: PsiElement): SearchScope? {
-        ThreadingAssertions.assertReadAccess()
         val keySegment = element as? TomlKeySegment ?: return null
         keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return null
         return GlobalSearchScope.projectScope(element.project)
@@ -122,13 +119,12 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
         private val catalogBuildRoots: List<VirtualFile>,
     ) : RequestResultProcessor(searchedEntry, section, catalogBuildRoots) {
 
-        @RequiresReadLock(generateAssertion = false)
+        @RequiresReadLock
         override fun processTextOccurrence(
             element: PsiElement,
             offsetInElement: Int,
             consumer: Processor<in PsiReference>,
         ): Boolean {
-            ThreadingAssertions.assertReadAccess()
             val occurrence = element as? KtNameReferenceExpression ?: return true
             val virtualFile = occurrence.containingFile.virtualFile ?: return true
             if (catalogBuildRoots.none { VfsUtilCore.isAncestor(it, virtualFile, false) }) {
@@ -144,10 +140,9 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
     }
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 private fun TomlKeySegment.typesafeConventionsKotlinCatalogSearchTarget():
         TypesafeConventionsKotlinCatalogSearchTarget? {
-    ThreadingAssertions.assertReadAccess()
     val keyValue = parentOfType<TomlKeyValue>(withSelf = false) ?: return null
     val section = findTypesafeConventionsCatalogSection(keyValue) ?: return null
     if (this !in findTypesafeConventionsCatalogAliasSegments(keyValue, section)) {
@@ -183,10 +178,9 @@ internal class TypesafeConventionsKotlinCatalogUsageReference(
         element.replaceWithTypesafeConventionsCatalogAccessor(newElementName, section)
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun KtDotQualifiedExpression.typesafeConventionsCatalogAccessor():
         TypesafeConventionsKotlinCatalogAccessor? {
-    ThreadingAssertions.assertReadAccess()
     val names = catalogNameParts() ?: return null
     if (names.size < 2) {
         return null

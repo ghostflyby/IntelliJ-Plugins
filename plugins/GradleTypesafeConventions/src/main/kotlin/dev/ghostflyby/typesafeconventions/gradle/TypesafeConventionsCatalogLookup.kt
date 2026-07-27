@@ -13,17 +13,15 @@ import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.storage.entities
 import com.intellij.psi.PsiElement
-import com.intellij.util.concurrency.ThreadingAssertions
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
 import org.toml.lang.psi.TomlFile
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 @RequiresBackgroundThread
 internal fun findTypesafeConventionsCatalogTomlFile(context: PsiElement, catalogName: String): TomlFile? {
-    ThreadingAssertions.assertReadAccess()
     val contextUrl = context.containingFile?.originalFile?.virtualFile?.url
         ?: context.containingFile?.virtualFile?.url
         ?: return null
@@ -44,9 +42,8 @@ internal fun findTypesafeConventionsCatalogTomlFile(context: PsiElement, catalog
     return context.manager.findFile(virtualFile) as? TomlFile
 }
 
-@RequiresReadLock(generateAssertion = false)
+@RequiresReadLock
 internal fun findTypesafeConventionsCatalogBuildRoots(catalogFile: TomlFile): List<VirtualFile> {
-    ThreadingAssertions.assertReadAccess()
     val catalogUrl = catalogFile.originalFile.virtualFile?.url
         ?: catalogFile.virtualFile?.url
         ?: return emptyList()
