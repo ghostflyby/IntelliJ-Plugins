@@ -6,16 +6,16 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.service
+import com.intellij.openapi.components.*
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFileManager
-import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.storage.EntitySource
 import com.intellij.platform.workspace.storage.ImmutableEntityStorage
 import com.intellij.platform.workspace.storage.entities
 import com.intellij.platform.workspace.storage.toBuilder
+import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.projectModel.modifyGradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
@@ -27,6 +27,8 @@ import org.jetbrains.plugins.gradle.service.project.ProjectResolverContext
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncContributor
 import org.jetbrains.plugins.gradle.service.syncAction.GradleSyncPhase
 import org.jetbrains.plugins.gradle.service.syncAction.virtualFileUrl
+import org.jetbrains.plugins.gradle.settings.GradleSettingsListener
+import java.io.File
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 
@@ -49,93 +51,275 @@ internal class TypesafeConventionsGradleSyncContributor :
     @Suppress("UnstableApiUsage")
     override val phase: GradleSyncPhase = GradleSyncPhase.ADDITIONAL_MODEL_PHASE
 
+    @Suppress("UnstableApiUsage")
     override suspend fun createProjectModel(
         context: ProjectResolverContext,
         storage: ImmutableEntityStorage,
     ): ImmutableEntityStorage {
-        val builder = storage.toBuilder()
-        val enabledBuilds = mutableMapOf<String, String>()
-        var changed = false
+        val enabledBuildUrls = mutableSetOf<String>()
+        val catalogUrls = mutableSetOf<String>()
+        val preparedBuilds = mutableListOf<TypesafeConventionsPreparedBuild>()
+        val buildEntitiesByUrl = storage.entities<@Suppress("UnstableApiUsage") GradleBuildEntity>()
+            .associateBy { it.url.url }
 
         for (buildModel in context.allBuilds) {
             val model = context.getBuildModel(buildModel, TypesafeConventionsCatalogModel::class.java)
-                ?: continue
-            if (!model.enabled || model.catalogs.isEmpty()) {
+            if (model == null) {
+                LOG.warn("Typesafe conventions model is unavailable for ${buildModel.buildIdentifier.rootDir}")
+                return rejectCandidate(context, storage)
+            }
+            when (model.status) {
+                TypesafeConventionsCatalogModelStatus.DISABLED -> continue
+                TypesafeConventionsCatalogModelStatus.INCOMPLETE -> {
+                    model.diagnostics.forEach { diagnostic ->
+                        LOG.warn(
+                            "Typesafe conventions model is incomplete for " +
+                                    "${buildModel.buildIdentifier.rootDir}: " +
+                                    "${diagnostic.code}: ${diagnostic.message}",
+                        )
+                    }
+                    return rejectCandidate(context, storage)
+                }
+
+                TypesafeConventionsCatalogModelStatus.COMPLETE -> Unit
+            }
+            if (model.catalogs.isEmpty()) {
                 continue
             }
 
             val buildUrl = context.virtualFileUrl(buildModel.buildIdentifier.rootDir)
-            enabledBuilds[buildUrl.url] = context.projectPath
-            val buildEntity = builder.entities<@Suppress("UnstableApiUsage") GradleBuildEntity>().firstOrNull {
-                @Suppress("UnstableApiUsage")
-                it.url == buildUrl
-            } ?: continue
-            val existingNames = buildEntity.versionCatalogs.mapTo(mutableSetOf()) { it.name }
-            val newCatalogs = model.catalogs.mapNotNull { (catalogName, catalogPath) ->
-                if (catalogName in existingNames) {
-                    return@mapNotNull null
-                }
-                createCatalogEntity(context, catalogName, catalogPath, buildEntity.entitySource)
+            val buildEntity = buildEntitiesByUrl[buildUrl.url]
+            if (buildEntity == null) {
+                LOG.warn(
+                    "Typesafe conventions model for ${buildModel.buildIdentifier.rootDir} has no Gradle build entity",
+                )
+                return rejectCandidate(context, storage)
             }
+            val newCatalogs = mutableListOf<GradleVersionCatalogEntityBuilder>()
+            for ((catalogName, catalogPath) in model.catalogs) {
+                val path = parseCatalogPath(catalogPath)
+                if (path == null) {
+                    LOG.warn(
+                        "Typesafe conventions catalog $catalogName for ${buildModel.buildIdentifier.rootDir} " +
+                                "has an invalid absolute path: $catalogPath",
+                    )
+                    return rejectCandidate(context, storage)
+                }
+                val catalogUrl = context.virtualFileUrl(path)
+                catalogUrls.add(catalogUrl.url)
+                val existingCatalog = buildEntity.versionCatalogs.firstOrNull { it.name == catalogName }
+                if (existingCatalog != null) {
+                    if (existingCatalog.url != catalogUrl) {
+                        LOG.warn(
+                            "Typesafe conventions catalog $catalogName for ${buildModel.buildIdentifier.rootDir} " +
+                                    "does not match the Gradle catalog entity URL: " +
+                                    "model=${catalogUrl.url}, workspace=${existingCatalog.url.url}",
+                        )
+                        return rejectCandidate(context, storage)
+                    }
+                    continue
+                }
+                newCatalogs.add(createCatalogEntity(catalogName, catalogUrl, buildEntity.entitySource))
+            }
+            enabledBuildUrls.add(buildUrl.url)
+            preparedBuilds.add(TypesafeConventionsPreparedBuild(buildEntity, newCatalogs))
+        }
 
-            if (newCatalogs.isNotEmpty()) {
+        val result = if (preparedBuilds.any { it.newCatalogs.isNotEmpty() }) {
+            val builder = storage.toBuilder()
+            for ((buildEntity, newCatalogs) in preparedBuilds) {
+                if (newCatalogs.isEmpty()) {
+                    continue
+                }
                 builder.modifyGradleBuildEntity(buildEntity) {
                     versionCatalogs = versionCatalogs + newCatalogs
                 }
-                changed = true
             }
+            builder.toSnapshot()
+        } else {
+            storage
         }
-        context.project.service<TypesafeConventionsGradleBuildState>().enabledBuilds = enabledBuilds
-
-        return if (changed) builder.toSnapshot() else storage
+        val state = context.project.service<TypesafeConventionsGradleBuildState>()
+        state.stageCandidate(
+            context.projectPath,
+            TypesafeConventionsGradleBuildCandidate(
+                buildUrls = enabledBuildUrls,
+                catalogUrls = catalogUrls,
+            ),
+        )
+        return result
     }
+
+    private fun rejectCandidate(
+        context: ProjectResolverContext,
+        storage: ImmutableEntityStorage,
+    ): ImmutableEntityStorage {
+        context.project.service<TypesafeConventionsGradleBuildState>().discard(context.projectPath)
+        return storage
+    }
+
+    private fun parseCatalogPath(catalogPath: String): Path? =
+        try {
+            Path.of(catalogPath).takeIf(Path::isAbsolute)
+        } catch (_: InvalidPathException) {
+            null
+        }
 
     private fun createCatalogEntity(
-        context: ProjectResolverContext,
         catalogName: String,
-        catalogPath: String,
+        catalogUrl: VirtualFileUrl,
         entitySource: EntitySource,
-    ): GradleVersionCatalogEntityBuilder? {
-        val path = try {
-            Path.of(catalogPath)
-        } catch (_: InvalidPathException) {
-            return null
-        }
-        return GradleVersionCatalogEntity(catalogName, context.virtualFileUrl(path), entitySource)
+    ): GradleVersionCatalogEntityBuilder =
+        GradleVersionCatalogEntity(catalogName, catalogUrl, entitySource)
+
+    private companion object {
+        private val LOG = logger<TypesafeConventionsGradleSyncContributor>()
     }
 }
 
+@Suppress("UnstableApiUsage")
+private data class TypesafeConventionsPreparedBuild(
+    val buildEntity: GradleBuildEntity,
+    val newCatalogs: List<GradleVersionCatalogEntityBuilder>,
+)
+
+internal data class TypesafeConventionsGradleBuildCandidate(
+    val buildUrls: Set<String>,
+    val catalogUrls: Set<String>,
+)
+
+internal data class TypesafeConventionsGradleBuildCommit(
+    val projectPaths: Set<String>,
+    val catalogUrlsToRefresh: Set<String>,
+)
+
+internal data class TypesafeConventionsGradleBuildPersistentState(
+    val buildUrlsByProjectPath: Map<String, List<String>> = emptyMap(),
+)
+
+@State(
+    name = "TypesafeConventionsGradleBuildState",
+    storages = [Storage(StoragePathMacros.WORKSPACE_FILE)],
+)
 @Service(Service.Level.PROJECT)
-internal class TypesafeConventionsGradleBuildState {
-    @Volatile
-    var enabledBuilds: Map<String, String> = emptyMap()
+internal class TypesafeConventionsGradleBuildState :
+    SerializablePersistentStateComponent<TypesafeConventionsGradleBuildPersistentState>(
+        TypesafeConventionsGradleBuildPersistentState(),
+    ) {
+
+    private val pendingCandidates = linkedMapOf<String, TypesafeConventionsGradleBuildCandidate>()
+    private val committedCatalogUrls = linkedMapOf<String, Set<String>>()
+
+    fun stageCandidate(projectPath: String, candidate: TypesafeConventionsGradleBuildCandidate) {
+        val normalizedProjectPath = projectPath.normalizedGradleProjectPath()
+        synchronized(pendingCandidates) {
+            pendingCandidates[normalizedProjectPath] = candidate.normalized()
+        }
+    }
+
+    fun commit(projectPath: String?): TypesafeConventionsGradleBuildCommit = synchronized(pendingCandidates) {
+        val projectPaths = if (projectPath == null) {
+            pendingCandidates.keys.toSet()
+        } else {
+            setOf(projectPath.normalizedGradleProjectPath()).filterTo(mutableSetOf()) {
+                it in pendingCandidates
+            }
+        }
+        if (projectPaths.isEmpty()) {
+            return@synchronized TypesafeConventionsGradleBuildCommit(emptySet(), emptySet())
+        }
+
+        val candidates = projectPaths.associateWith { pendingCandidates.getValue(it) }
+        updateState { currentState ->
+            val nextBuildUrls = currentState.buildUrlsByProjectPath.toMutableMap()
+            for ((candidateProjectPath, candidate) in candidates) {
+                if (candidate.buildUrls.isEmpty()) {
+                    nextBuildUrls.remove(candidateProjectPath)
+                } else {
+                    nextBuildUrls[candidateProjectPath] = candidate.buildUrls.sorted()
+                }
+            }
+            currentState.copy(buildUrlsByProjectPath = nextBuildUrls.toSortedMap())
+        }
+
+        val catalogUrlsToRefresh = buildSet {
+            for ((candidateProjectPath, candidate) in candidates) {
+                val previousCatalogUrls = committedCatalogUrls[candidateProjectPath].orEmpty()
+                addAll(candidate.catalogUrls - previousCatalogUrls)
+                if (candidate.catalogUrls.isEmpty()) {
+                    committedCatalogUrls.remove(candidateProjectPath)
+                } else {
+                    committedCatalogUrls[candidateProjectPath] = candidate.catalogUrls
+                }
+                pendingCandidates.remove(candidateProjectPath)
+            }
+        }
+        TypesafeConventionsGradleBuildCommit(projectPaths, catalogUrlsToRefresh)
+    }
+
+    fun discard(projectPath: String?) {
+        synchronized(pendingCandidates) {
+            if (projectPath == null) {
+                pendingCandidates.clear()
+            } else {
+                pendingCandidates.remove(projectPath.normalizedGradleProjectPath())
+            }
+        }
+    }
+
+    fun remove(projectPath: String) {
+        val normalizedProjectPath = projectPath.normalizedGradleProjectPath()
+        synchronized(pendingCandidates) {
+            pendingCandidates.remove(normalizedProjectPath)
+            committedCatalogUrls.remove(normalizedProjectPath)
+            updateState { currentState ->
+                currentState.copy(
+                    buildUrlsByProjectPath = currentState.buildUrlsByProjectPath - normalizedProjectPath,
+                )
+            }
+        }
+    }
+
+    fun committedBuildUrls(): Set<String> =
+        state.buildUrlsByProjectPath.values.flatMapTo(mutableSetOf()) { it }
+
+    fun pendingProjectPaths(): Set<String> = synchronized(pendingCandidates) {
+        pendingCandidates.keys.toSet()
+    }
+
+    private fun TypesafeConventionsGradleBuildCandidate.normalized(): TypesafeConventionsGradleBuildCandidate =
+        copy(
+            buildUrls = buildUrls.toSortedSet(),
+            catalogUrls = catalogUrls.toSortedSet(),
+        )
 }
 
-internal class TypesafeConventionsProjectDataImportListener(private val project: Project) : ProjectDataImportListener {
+internal class TypesafeConventionsProjectDataImportListener(private val project: Project) :
+    ProjectDataImportListener,
+    GradleSettingsListener {
     override fun onImportFinished(projectPath: String?) {
-        refreshTypesafeConventionsCatalogFiles(project)
+        val commit = project.service<TypesafeConventionsGradleBuildState>().commit(projectPath)
+        refreshTypesafeConventionsCatalogFiles(commit.catalogUrlsToRefresh)
     }
 
-    override fun onFinalTasksFinished(projectPath: String?) {
-        refreshTypesafeConventionsCatalogFiles(project)
+    override fun onImportFailed(projectPath: String?, t: Throwable) {
+        project.service<TypesafeConventionsGradleBuildState>().discard(projectPath)
+    }
+
+    override fun onProjectsUnlinked(linkedProjectPaths: Set<String>) {
+        val state = project.service<TypesafeConventionsGradleBuildState>()
+        linkedProjectPaths.forEach(state::remove)
     }
 }
 
-private fun refreshTypesafeConventionsCatalogFiles(project: Project) {
-    val enabledBuildUrls = project.service<TypesafeConventionsGradleBuildState>().enabledBuilds.keys
-    if (enabledBuildUrls.isEmpty()) {
-        return
-    }
+private fun refreshTypesafeConventionsCatalogFiles(catalogUrls: Set<String>) {
     val virtualFileManager = VirtualFileManager.getInstance()
-    @Suppress("UnstableApiUsage")
-    project.workspaceModel.currentSnapshot.entities<GradleBuildEntity>()
-        .filter {
-            @Suppress("UnstableApiUsage")
-            it.url.url in enabledBuildUrls
-        }
-        .flatMap { it.versionCatalogs }
-        .forEach { catalog ->
-            virtualFileManager.refreshAndFindFileByUrl(catalog.url.url)
-        }
+    catalogUrls.forEach(virtualFileManager::refreshAndFindFileByUrl)
 }
 
+private fun String.normalizedGradleProjectPath(): String =
+    try {
+        Path.of(this).toAbsolutePath().normalize().toString().replace(File.separatorChar, '/')
+    } catch (_: InvalidPathException) {
+        this
+    }

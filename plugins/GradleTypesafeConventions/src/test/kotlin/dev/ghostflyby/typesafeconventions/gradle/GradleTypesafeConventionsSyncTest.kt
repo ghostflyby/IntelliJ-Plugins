@@ -10,6 +10,7 @@ import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeIntentReadAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
@@ -30,6 +31,8 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.SearchRequestCollector
+import com.intellij.psi.search.SearchSession
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.rename.RenameProcessor
@@ -153,6 +156,15 @@ private class GradleTypesafeConventionsSyncedProject(
             cleanupProjectJdk(sdk)
             throw throwable
         }
+    }
+
+    suspend fun createAndSyncAdditionalProject(
+        additionalProjectRoot: Path,
+        createProject: (Path) -> Unit,
+    ) {
+        checkNotNull(projectJdk) { "The primary Gradle project must be set up first" }
+        createProject(additionalProjectRoot)
+        syncGradleProject(additionalProjectRoot)
     }
 
     private suspend fun syncGradleProject(gradleProjectRoot: Path) {
@@ -455,6 +467,60 @@ private class GradleTypesafeConventionsSyncedProject(
             references.any { it is TypesafeConventionsKotlinCatalogUsageReference },
             "Expected the local references searcher to contribute a rename-capable usage reference.",
         )
+    }
+
+    suspend fun assertKotlinCatalogSearchUsesBuildScopedWordRequest(
+        versionCatalog: VersionCatalogCase,
+        declarationPath: String,
+        segmentIndex: Int,
+        expectedSearchWord: String,
+        expectedScriptPaths: List<Path>,
+        unrelatedPath: Path,
+    ) {
+        val keySegment = requireTomlCatalogKeySegment(versionCatalog, declarationPath, segmentIndex)
+        val expectedFiles = expectedScriptPaths.map { requirePsiFile(it).virtualFile }
+        val unrelatedFile = requirePsiFile(unrelatedPath).virtualFile
+
+        readAction {
+            val optimizer = SearchRequestCollector(SearchSession(keySegment))
+            val parameters = ReferencesSearch.SearchParameters(
+                keySegment,
+                GlobalSearchScope.projectScope(project),
+                false,
+                optimizer,
+            )
+            TypesafeConventionsKotlinCatalogReferencesSearcher().execute(parameters) { true }
+
+            assertTrue(
+                optimizer.takeCustomSearchActions().isEmpty(),
+                "Expected catalog search to use the word index instead of a custom full-scope scan.",
+            )
+            val requests = optimizer.takeSearchRequests()
+            assertEquals(1, requests.size, "Expected one indexed word request for the TOML segment.")
+            val request = requests.single()
+            assertEquals(expectedSearchWord, request.word)
+            assertTrue(
+                expectedFiles.all(request.searchScope::contains),
+                "Expected the word request to include every related convention build source.",
+            )
+            assertFalse(
+                request.searchScope.contains(unrelatedFile),
+                "Expected the word request to exclude files outside the catalog build roots.",
+            )
+
+            val additionalScope = assertInstanceOf(
+                GlobalSearchScope::class.java,
+                TypesafeConventionsKotlinCatalogUseScopeEnlarger().getAdditionalUseScope(keySegment),
+            )
+            assertTrue(
+                expectedFiles.all(additionalScope::contains),
+                "Expected the TOML segment use scope to include every related convention build source.",
+            )
+            assertFalse(
+                additionalScope.contains(unrelatedFile),
+                "Expected the TOML segment use scope to exclude files outside the catalog build roots.",
+            )
+        }
     }
 
     suspend fun renameKotlinCatalogAliasAndAssertUsages(
@@ -928,6 +994,19 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         )
     }
 
+    @Test
+    suspend fun `kotlin find usages registers a build scoped word request`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinCatalogSearchUsesBuildScopedWordRequest(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            declarationPath = "usage.target",
+            segmentIndex = 0,
+            expectedSearchWord = "target",
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+            unrelatedPath = projectRoot.resolve("build.gradle.kts"),
+        )
+    }
+
     private fun createGradleProjectWithConventionBuilds(projectRoot: Path) {
         copyGradleWrapper(projectRoot)
         projectRoot.resolve("settings.gradle.kts").writeText(
@@ -1018,6 +1097,54 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
                 "plugins.renamed.plugin",
             ),
         )
+}
+
+@TestApplication
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+internal class MultipleLinkedGradleRootsTypesafeConventionsSyncTest {
+
+    private val projectPathFixture = tempPathFixture()
+    private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
+    private val project by projectFixture
+    private lateinit var syncedProject: GradleTypesafeConventionsSyncedProject
+    private lateinit var firstRoot: Path
+    private lateinit var secondRoot: Path
+
+    @BeforeAll
+    suspend fun setUp() {
+        val fixtureRoot = projectPathFixture.get()
+        firstRoot = fixtureRoot.resolve("root-a")
+        secondRoot = fixtureRoot.resolve("root-b")
+        syncedProject = GradleTypesafeConventionsSyncedProject(
+            project = project,
+            projectRoot = firstRoot,
+            createGradleProject = { root -> writeSingleLinkedGradleRoot(root, "root-a") },
+        )
+        syncedProject.setUp()
+        syncedProject.createAndSyncAdditionalProject(secondRoot) { root ->
+            writeSingleLinkedGradleRoot(root, "root-b")
+        }
+    }
+
+    @AfterAll
+    suspend fun tearDown() {
+        syncedProject.tearDown()
+    }
+
+    @Test
+    fun `sequential linked root sync preserves both committed states`() {
+        val state = project.service<TypesafeConventionsGradleBuildState>()
+        val expectedProjectPaths = setOf(firstRoot.normalizedPathText(), secondRoot.normalizedPathText())
+
+        assertEquals(expectedProjectPaths, state.state.buildUrlsByProjectPath.keys)
+        expectedProjectPaths.forEach { projectPath ->
+            val buildUrls = state.state.buildUrlsByProjectPath.getValue(projectPath)
+            assertTrue(
+                buildUrls.any { it.contains("$projectPath/buildSrc") },
+                "Expected $projectPath to retain its typesafe-conventions build. state=${state.state}",
+            )
+        }
+    }
 }
 
 @TestApplication
@@ -1349,6 +1476,71 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
     )
 }
 
+private fun writeSingleLinkedGradleRoot(
+    projectRoot: Path,
+    rootProjectName: String,
+) {
+    projectRoot.createDirectories()
+    copyGradleWrapper(projectRoot)
+    projectRoot.resolve("settings.gradle.kts").writeText(
+        """
+            pluginManagement {
+                repositories {
+                    gradlePluginPortal()
+                    mavenCentral()
+                }
+            }
+
+            rootProject.name = "$rootProjectName"
+        """.trimIndent(),
+    )
+    projectRoot.resolve("build.gradle.kts").writeText(
+        """
+            plugins {
+                java
+                id("linked.fixture")
+            }
+        """.trimIndent(),
+    )
+    writeJupiterCatalog(projectRoot, "gradle/libs.versions.toml")
+
+    val buildSrc = projectRoot.resolve("buildSrc").createDirectories()
+    buildSrc.resolve("settings.gradle.kts").writeText(
+        """
+            dependencyResolutionManagement {
+                @Suppress("UnstableApiUsage")
+                repositories {
+                    gradlePluginPortal()
+                    mavenCentral()
+                }
+            }
+            plugins {
+                id("dev.panuszewski.typesafe-conventions") version "0.11.1"
+            }
+        """.trimIndent(),
+    )
+    buildSrc.resolve("build.gradle.kts").writeText(
+        """
+            plugins {
+                `kotlin-dsl`
+            }
+        """.trimIndent(),
+    )
+    buildSrc.resolve("src/main/kotlin").createDirectories()
+        .resolve("linked.fixture.gradle.kts")
+        .writeText(
+            """
+                plugins {
+                    `java-library`
+                }
+
+                dependencies {
+                    testImplementation(libs.junit.jupiter)
+                }
+            """.trimIndent(),
+        )
+}
+
 private fun writeGroovyDslConventionBuild(buildRoot: Path, rootProjectName: String?) {
     buildRoot.createDirectories()
     buildRoot.resolve("settings.gradle").writeText(
@@ -1490,3 +1682,6 @@ private fun findRepositoryRoot(): Path {
         }
         ?: error("Cannot locate IntelliJ-Plugins repository root from ${Path.of("").toAbsolutePath()}")
 }
+
+private fun Path.normalizedPathText(): String =
+    toAbsolutePath().normalize().toString().replace('\\', '/')

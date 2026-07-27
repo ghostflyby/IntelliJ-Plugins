@@ -9,8 +9,9 @@ package dev.ghostflyby.typesafeconventions.gradle
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.openapi.application.QueryExecutorBase
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.module.Module
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
@@ -23,11 +24,7 @@ import com.intellij.util.Processor
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.psi.KtDotQualifiedExpression
-import org.jetbrains.kotlin.psi.KtExpression
-import org.jetbrains.kotlin.psi.KtNameReferenceExpression
-import org.jetbrains.kotlin.psi.KtProperty
-import org.jetbrains.kotlin.psi.KtPsiFactory
+import org.jetbrains.kotlin.psi.*
 import org.toml.lang.psi.TomlFile
 import org.toml.lang.psi.TomlKeySegment
 import org.toml.lang.psi.TomlKeyValue
@@ -82,8 +79,10 @@ internal open class TypesafeConventionsKotlinCatalogReference(
             context.section,
             context.aliasSegments.joinToString("."),
         ) ?: return null
-        return findTypesafeConventionsCatalogAliasSegments(entry, context.section)
-            .getOrNull(context.targetSegmentIndex)
+        return typesafeConventionsTomlCatalogAliasIndex(tomlFile)
+            .find(entry, context.section)
+            ?.segments
+            ?.getOrNull(context.targetSegmentIndex)
     }
 
     @RequiresReadLock
@@ -116,9 +115,30 @@ internal class TypesafeConventionsKotlinCatalogUseScopeEnlarger : UseScopeEnlarg
     @RequiresReadLock
     override fun getAdditionalUseScope(element: PsiElement): SearchScope? {
         val keySegment = element as? TomlKeySegment ?: return null
-        keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return null
-        return GlobalSearchScope.projectScope(element.project)
+        val target = keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return null
+        return typesafeConventionsCatalogBuildRootsSearchScope(element.project, target.catalogBuildRoots)
     }
+}
+
+internal fun typesafeConventionsCatalogBuildRootsSearchScope(
+    project: Project,
+    buildRoots: List<VirtualFile>,
+): GlobalSearchScope = TypesafeConventionsCatalogBuildRootsSearchScope(project, buildRoots)
+
+private class TypesafeConventionsCatalogBuildRootsSearchScope(
+    project: Project,
+    private val buildRoots: List<VirtualFile>,
+) : GlobalSearchScope(project) {
+    override fun contains(file: VirtualFile): Boolean =
+        buildRoots.any { root ->
+            file == root || file.path.startsWith(root.path.trimEnd('/') + "/")
+        }
+
+    override fun isSearchInModuleContent(aModule: Module): Boolean = true
+
+    override fun isSearchInLibraries(): Boolean = false
+
+    override fun toString(): String = "Typesafe conventions catalog build roots: $buildRoots"
 }
 
 internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
@@ -135,24 +155,26 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
         val resultProcessor = CatalogReferenceRequestProcessor(
             target.segment,
             target.section,
+        )
+        val buildScope = typesafeConventionsCatalogBuildRootsSearchScope(
+            keySegment.project,
             target.catalogBuildRoots,
         )
-        queryParameters.optimizer.searchCustom { consumer ->
-            PsiSearchHelper.getInstance(keySegment.project).processElementsWithWord(
-                { element, offset -> resultProcessor.processTextOccurrence(element, offset, consumer) },
-                queryParameters.scopeDeterminedByUser,
-                target.searchWord,
-                UsageSearchContext.IN_CODE,
-                false,
-            )
-        }
+        val searchScope = queryParameters.scopeDeterminedByUser.intersectWith(buildScope)
+        queryParameters.optimizer.searchWord(
+            target.searchWord,
+            searchScope,
+            UsageSearchContext.IN_CODE,
+            false,
+            keySegment,
+            resultProcessor,
+        )
     }
 
     private class CatalogReferenceRequestProcessor(
         private val searchedSegment: TomlKeySegment,
         section: TypesafeConventionsCatalogSection,
-        private val catalogBuildRoots: List<VirtualFile>,
-    ) : RequestResultProcessor(searchedSegment, section, catalogBuildRoots) {
+    ) : RequestResultProcessor(searchedSegment, section) {
 
         @RequiresReadLock
         override fun processTextOccurrence(
@@ -161,10 +183,6 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
             consumer: Processor<in PsiReference>,
         ): Boolean {
             val occurrence = element as? KtNameReferenceExpression ?: return true
-            val virtualFile = occurrence.containingFile.virtualFile ?: return true
-            if (catalogBuildRoots.none { VfsUtilCore.isAncestor(it, virtualFile, false) }) {
-                return true
-            }
             val expression = occurrence.findTypesafeConventionsCatalogExpression() ?: return true
             val reference = createTypesafeConventionsKotlinCatalogReferences(expression)
                 .firstOrNull { it.resolve() === searchedSegment }
@@ -243,19 +261,24 @@ internal fun createTypesafeConventionsKotlinCatalogReferences(
         return emptyList()
     }
     val accessor = expression.typesafeConventionsCatalogAccessor() ?: return emptyList()
-    if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
-        return emptyList()
-    }
     val tomlFile = findTypesafeConventionsCatalogTomlFile(expression, accessor.catalogName) ?: return emptyList()
     val entry = findTypesafeConventionsCatalogEntry(tomlFile, accessor.section, accessor.aliasPath)
         ?: return emptyList()
-    val aliasSegments = findTypesafeConventionsCatalogAliasSegments(entry, accessor.section)
+    val aliasSegments = typesafeConventionsTomlCatalogAliasIndex(tomlFile)
+        .find(entry, accessor.section)
+        ?.segments
+        .orEmpty()
+    if (aliasSegments.isEmpty() || !accessor.resolvesToTypesafeConventionsEntrypoint()) {
+        return emptyList()
+    }
     val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
         accessor,
         aliasSegments,
         tomlFile.originalFile.virtualFile?.url ?: tomlFile.virtualFile?.url,
     )
-    return contexts.map { context -> TypesafeConventionsKotlinCatalogReference(expression, context) }
+    return contexts.mapIndexed { index, context ->
+        TypesafeConventionsKotlinCatalogReference(expression, context, aliasSegments[index])
+    }
 }
 
 @RequiresReadLock
