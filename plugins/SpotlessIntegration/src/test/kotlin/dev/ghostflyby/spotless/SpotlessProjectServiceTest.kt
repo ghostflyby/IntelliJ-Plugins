@@ -1084,6 +1084,8 @@ internal class SpotlessProjectServiceTest {
 
         assertTrue(spotless.canFormat(virtualFile))
 
+        spotlessHarness.close()
+
         assertTrue(waitUntil { provider.completionCount.get() == 1 })
         assertEquals(1, stopCount.get())
         assertFalse(spotless.hasRunningDaemons())
