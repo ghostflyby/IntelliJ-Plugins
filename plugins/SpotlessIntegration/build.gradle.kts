@@ -20,7 +20,7 @@ dependencies {
         bundledPlugin("org.jetbrains.idea.maven")
     }
     implementation(project("ModelBuilderService"))
-    testImplementation("io.ktor:ktor-client-mock:${libs.versions.ktor.get()}") {
+    testImplementation(libs.ktor.client.mock) {
         excludeCoroutines()
         excludeKotlinStdlib()
         exclude(group = "org.slf4j", module = "slf4j-api")
