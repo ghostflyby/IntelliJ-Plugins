@@ -102,7 +102,6 @@ internal class SpotlessGradleSettings(
 ) :
     SerializablePersistentStateComponent<SpotlessGradleSettings.State>(State()) {
     private val providerStateLock = Any()
-    private var providerGeneration = 0L
     private val mutableProviderState: MutableStateFlow<ProviderState> by lazy {
         MutableStateFlow(createProviderState())
     }
@@ -144,9 +143,8 @@ internal class SpotlessGradleSettings(
     ) {
         synchronized(providerStateLock) {
             val previous = state
-            updateState(transform)
-            if (force || state != previous) {
-                providerGeneration++
+            val next = updateState(transform)
+            if (force || next != previous) {
                 mutableProviderState.value = createProviderState()
             }
         }
@@ -164,7 +162,7 @@ internal class SpotlessGradleSettings(
             .map { root ->
                 ExternalProject(
                     root = root,
-                    generation = providerGeneration,
+                    generation = stateModificationCount,
                 )
             }
             .toList()
