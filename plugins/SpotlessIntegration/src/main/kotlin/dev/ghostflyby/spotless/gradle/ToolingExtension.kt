@@ -94,7 +94,7 @@ internal class SpotlessGradleStateDataService : AbstractProjectDataService<Spotl
 @Service(Service.Level.PROJECT)
 @State(
     name = "SpotlessGradleIntegration",
-    storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.DISABLED)],
+    storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.LOCAL)],
 )
 internal class SpotlessGradleSettings(
     private val project: com.intellij.openapi.project.Project,
