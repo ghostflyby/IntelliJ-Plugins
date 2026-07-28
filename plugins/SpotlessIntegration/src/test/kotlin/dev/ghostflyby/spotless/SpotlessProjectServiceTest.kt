@@ -1902,7 +1902,7 @@ private class TestSpotlessService(
             return
         }
         closed = true
-        service.dispose()
+        Disposer.dispose(service)
         scope.cancel()
     }
 }
