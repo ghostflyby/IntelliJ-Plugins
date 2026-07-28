@@ -1084,7 +1084,7 @@ internal class SpotlessProjectServiceTest {
 
         assertTrue(spotless.canFormat(virtualFile))
 
-        spotlessHarness.close()
+        spotlessHarness.closeAsync()
 
         assertTrue(waitUntil { provider.completionCount.get() == 1 })
         assertEquals(1, stopCount.get())
@@ -1896,6 +1896,14 @@ private class TestSpotlessService(
     private val scope: CoroutineScope,
 ) {
     private var closed = false
+
+    suspend fun closeAsync() {
+        if (closed)
+            return
+        closed = true
+        service.disposeAsync()
+        scope.cancel()
+    }
 
     fun close() {
         if (closed) {

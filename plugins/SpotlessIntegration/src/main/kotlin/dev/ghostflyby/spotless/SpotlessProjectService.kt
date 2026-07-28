@@ -19,6 +19,7 @@ import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
 import dev.ghostflyby.spotless.api.SpotlessFormattingPreprocessor
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.StateFlow
+import org.jetbrains.annotations.TestOnly
 import java.nio.file.Path
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -152,6 +153,12 @@ internal class SpotlessProjectService(
         }.onFailure { error ->
             logger.warn("Failed to close Spotless HTTP client", error)
         }
+    }
+
+    @TestOnly
+    internal suspend fun disposeAsync() {
+        daemonCoordinator.shutdown()
+        client.close()
     }
 
     private fun scheduleCanFormatRefresh(
