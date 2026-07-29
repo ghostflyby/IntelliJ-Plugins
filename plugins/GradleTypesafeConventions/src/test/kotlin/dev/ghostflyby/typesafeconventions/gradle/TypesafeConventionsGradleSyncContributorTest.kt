@@ -45,6 +45,10 @@ internal class TypesafeConventionsGradleSyncContributorTest {
             project.service<TypesafeConventionsGradleBuildState>().pendingProjectPaths().isEmpty(),
             "A candidate without its Gradle build entity must not be staged",
         )
+        assertEquals(
+            TypesafeConventionsGradleProjectPathHealth.STALE,
+            project.service<TypesafeConventionsGradleBuildState>().projectPathHealth(buildRoot.toString()),
+        )
     }
 
     @Test
@@ -68,6 +72,7 @@ internal class TypesafeConventionsGradleSyncContributorTest {
 
         assertEquals(setOf("file:///old"), state.committedBuildUrls())
         assertTrue(state.pendingProjectPaths().isEmpty())
+        assertEquals(TypesafeConventionsGradleProjectPathHealth.STALE, state.projectPathHealth(projectPath))
     }
 
     @Test

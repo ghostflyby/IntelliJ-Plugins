@@ -248,24 +248,24 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
         val expression =
             KtPsiFactory(project).createExpression("libs.foo.bar.baz") as KtDotQualifiedExpression
         val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
-        val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
+        val groups = expression.createTypesafeConventionsKotlinCatalogSelectorGroups(
             accessor,
             segments,
-            catalogUrl = null,
         )
 
         assertEquals(
             listOf("foo.bar.baz"),
-            contexts.map { context ->
+            groups.map { group ->
                 expression.text.substring(
-                    context.rangeInElement.startOffset,
-                    context.rangeInElement.endOffset,
+                    group.rangeInElement.startOffset,
+                    group.rangeInElement.endOffset,
                 )
             },
         )
+        val snapshot = CatalogResolutionSnapshot.create(groups)
+        assertTrue((0..2).all { selectorIndex -> snapshot.groupForSelector(selectorIndex) === groups.single() })
 
-        val renamed = TypesafeConventionsKotlinCatalogReference(expression, contexts.single())
-            .handleElementRename("new-alias")
+        val renamed = expression.replaceTypesafeConventionsCatalogAliasGroup(groups.single(), "new-alias")
 
         assertEquals("libs.new.alias", renamed.text)
     }
@@ -288,23 +288,24 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
             val expression =
                 KtPsiFactory(project).createExpression(expressionText) as KtDotQualifiedExpression
             val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
-            val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
+            val groups = expression.createTypesafeConventionsKotlinCatalogSelectorGroups(
                 accessor,
                 segments,
-                catalogUrl = null,
             )
             assertEquals(
                 expectedRanges,
-                contexts.map { context ->
+                groups.map { group ->
                     expression.text.substring(
-                        context.rangeInElement.startOffset,
-                        context.rangeInElement.endOffset,
+                        group.rangeInElement.startOffset,
+                        group.rangeInElement.endOffset,
                     )
                 },
             )
 
-            val renamed = TypesafeConventionsKotlinCatalogReference(expression, contexts[segmentIndex])
-                .handleElementRename("renamed")
+            val renamed = expression.replaceTypesafeConventionsCatalogAliasGroup(
+                groups[segmentIndex],
+                "renamed",
+            )
             assertEquals(expectedExpression, renamed.text)
         }
     }

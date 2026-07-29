@@ -12,26 +12,62 @@ import org.junit.jupiter.api.Test
 internal class TypesafeConventionsCatalogIndexTest {
 
     @Test
-    fun `reuses index for the same snapshot identity and state version`() {
-        val cache = TypesafeConventionsCatalogIndexCache()
-        val snapshot = Any()
+    fun `publishes only semantic index changes`() {
+        val published = TypesafeConventionsPublishedCatalogIndex()
         var buildCount = 0
 
-        fun index(snapshotIdentity: Any, stateModificationCount: Long) =
-            cache.getOrBuild(snapshotIdentity, stateModificationCount) {
-                buildCount++
-                TypesafeConventionsCatalogIndex.create(emptyList())
-            }
+        val initial = published.currentOrBuild {
+            buildCount++
+            TypesafeConventionsCatalogIndex.create(emptyList())
+        }
+        val reused = published.currentOrBuild {
+            buildCount++
+            TypesafeConventionsCatalogIndex.create(emptyList())
+        }
 
-        val first = index(snapshot, 1)
-        val reused = index(snapshot, 1)
-        val stateChanged = index(snapshot, 2)
-        val snapshotChanged = index(Any(), 2)
+        assertSame(initial, reused)
+        assertFalse(published.publish(TypesafeConventionsCatalogIndex.create(emptyList())))
+        assertEquals(0, published.modificationCount)
+        assertTrue(
+            published.publish(
+                TypesafeConventionsCatalogIndex.create(emptyList(), setOf("file:///repo")),
+            ),
+        )
+        assertEquals(1, published.modificationCount)
+        assertFalse(
+            published.publish(
+                TypesafeConventionsCatalogIndex.create(emptyList(), setOf("file:///repo")),
+            ),
+        )
+        assertEquals(1, published.modificationCount)
+        assertEquals(1, buildCount)
+    }
 
-        assertSame(first, reused)
-        assertNotSame(reused, stateChanged)
-        assertNotSame(stateChanged, snapshotChanged)
-        assertEquals(3, buildCount)
+    @Test
+    fun `normalizes entry ordering before semantic comparison`() {
+        val published = TypesafeConventionsPublishedCatalogIndex()
+        val first = TypesafeConventionsCatalogIndexEntry(
+            catalogName = "libs",
+            catalogUrl = "file:///repo/gradle/libs.versions.toml",
+            buildUrl = "file:///repo",
+            contextRootUrls = linkedSetOf("file:///repo/subproject", "file:///repo"),
+        )
+        val second = first.copy(catalogName = "tools")
+        published.currentOrBuild {
+            TypesafeConventionsCatalogIndex.create(listOf(first, second))
+        }
+
+        assertFalse(
+            published.publish(
+                TypesafeConventionsCatalogIndex.create(
+                    listOf(
+                        second.copy(contextRootUrls = first.contextRootUrls.reversed().toSet()),
+                        first.copy(contextRootUrls = first.contextRootUrls.reversed().toSet()),
+                    ),
+                ),
+            ),
+        )
+        assertEquals(0, published.modificationCount)
     }
 
     @Test
@@ -51,7 +87,7 @@ internal class TypesafeConventionsCatalogIndexTest {
         )
         val index = TypesafeConventionsCatalogIndex.create(listOf(rootCatalog, nestedCatalog))
 
-        assertSame(
+        assertEquals(
             nestedCatalog,
             index.findCatalog("file:///repo/build-logic/src/main/kotlin/Plugin.kt", "libs"),
         )

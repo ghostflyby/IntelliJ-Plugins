@@ -353,26 +353,30 @@ private class GradleTypesafeConventionsSyncedProject(
         val conventionBuildScript = requirePsiFile(scriptPath)
         val generatedEntrypointState = generatedEntrypointState()
 
-        val resolvedSegments = readAction {
+        val (resolvedSegments, expectedTargets) = readAction {
             val expression = findKotlinCatalogExpression(conventionBuildScript, expressionText)
+            val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
+            val groups = expression.createTypesafeConventionsKotlinCatalogSelectorGroups(accessor, expectedSegments)
             val references = expression.references
                 .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
                 .sortedBy { it.rangeInElement.startOffset }
             assertEquals(
-                expectedSegments.size,
+                accessor.aliasSelectorExpressions.size,
                 references.size,
-                "Expected $expressionText to expose one reference per TOML alias segment. " +
+                "Expected $expressionText to expose one stable reference per Kotlin alias selector. " +
                         "references=${expression.references.map { it.javaClass.name }} " +
                         "catalogRootResolution=${expression.catalogRootResolutionState()} " +
                         "generatedEntrypoints=$generatedEntrypointState",
             )
-            references.map { it.resolve() }
+            references.map { it.resolve() } to groups.flatMap { group ->
+                List(group.selectorEndIndex - group.selectorStartIndex) { group.targetSegment }
+            }
         }
 
         assertEquals(
-            expectedSegments,
+            expectedTargets,
             resolvedSegments,
-            "Expected $expressionText to resolve to the exact TOML alias segments.",
+            "Expected every selector in $expressionText to resolve through its current TOML alias group.",
         )
     }
 
@@ -398,6 +402,220 @@ private class GradleTypesafeConventionsSyncedProject(
         }
     }
 
+    suspend fun assertKotlinExpressionHasOnlyUnresolvedSoftCatalogReferences(
+        scriptPath: Path,
+        expressionText: String,
+    ) {
+        val script = requirePsiFile(scriptPath)
+        readAction {
+            val expression = findKotlinCatalogExpression(script, expressionText)
+            val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
+            val references = expression.references
+                .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
+            assertEquals(accessor.aliasSelectorExpressions.size, references.size)
+            assertTrue(references.all(PsiReference::isSoft))
+            assertTrue(
+                references.all { it.resolve() == null },
+                "Expected $expressionText to remain structurally referenced but have no TOML target.",
+            )
+        }
+    }
+
+    suspend fun assertExistingReferenceTracksPublishedCatalogChanges(
+        scriptPath: Path,
+        expressionText: String,
+        selectorText: String,
+        originalCatalog: VersionCatalogCase,
+        remappedCatalog: VersionCatalogCase,
+        declarationPath: String,
+    ) {
+        val script = requirePsiFile(scriptPath)
+        val (expression, reference) = readAction {
+            val expression = findKotlinCatalogExpression(script, expressionText)
+            val reference = expression.references
+                .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
+                .single { candidate ->
+                    expression.text.substring(
+                        candidate.rangeInElement.startOffset,
+                        candidate.rangeInElement.endOffset,
+                    ) == selectorText
+                }
+            expression to reference
+        }
+        val originalTarget = requireTomlCatalogKeySegment(originalCatalog, declarationPath, 0)
+        val remappedTarget = requireTomlCatalogKeySegment(remappedCatalog, declarationPath, 0)
+        val indexService = project.service<TypesafeConventionsCatalogIndexService>()
+        val originalIndex = readAction { indexService.currentIndex() }
+        val contextUrl = readAction { requireNotNull(expression.containingFile.virtualFile?.url) }
+        val matchedCatalog = requireNotNull(originalIndex.findCatalog(contextUrl, originalCatalog.catalogName))
+        val remappedCatalogUrl = readAction {
+            requireNotNull((remappedTarget.containingFile as TomlFile).virtualFile?.url)
+        }
+        val remappedIndex = TypesafeConventionsCatalogIndex.create(
+            originalIndex.entries.map { entry ->
+                if (entry == matchedCatalog) entry.copy(catalogUrl = remappedCatalogUrl) else entry
+            },
+            originalIndex.enabledBuildUrls,
+        )
+        val emptyIndex = TypesafeConventionsCatalogIndex.create(emptyList(), emptySet())
+
+        try {
+            assertSame(originalTarget, readAction { reference.resolve() })
+
+            indexService.publishForTests(emptyIndex)
+            assertNull(readAction { reference.resolve() }, "Missing mapping must invalidate the existing reference")
+
+            indexService.publishForTests(originalIndex)
+            assertSame(originalTarget, readAction { reference.resolve() })
+
+            indexService.publishForTests(remappedIndex)
+            assertSame(remappedTarget, readAction { reference.resolve() })
+
+            indexService.publishForTests(emptyIndex)
+            assertNull(readAction { reference.resolve() }, "Disabled or unlinked mapping must resolve to null")
+        } finally {
+            indexService.publishForTests(originalIndex)
+        }
+    }
+
+    suspend fun assertExistingReferenceTracksTomlEditsWithoutSync(
+        scriptPath: Path,
+        expressionText: String,
+        selectorText: String,
+        versionCatalog: VersionCatalogCase,
+        aliasText: String,
+    ) {
+        val script = requirePsiFile(scriptPath)
+        val reference = readAction {
+            val expression = findKotlinCatalogExpression(script, expressionText)
+            expression.references
+                .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
+                .single { candidate ->
+                    expression.text.substring(
+                        candidate.rangeInElement.startOffset,
+                        candidate.rangeInElement.endOffset,
+                    ) == selectorText
+                }
+        }
+        val tomlFile = requirePsiFile(projectRoot.resolve(versionCatalog.catalogPath)) as TomlFile
+        val documentManager = PsiDocumentManager.getInstance(project)
+        val document = readAction { requireNotNull(documentManager.getDocument(tomlFile)) }
+        val originalText = document.text
+        val replacementText = "changed-$aliasText"
+        require(originalText.contains(aliasText))
+
+        try {
+            withContext(Dispatchers.EDT) {
+                WriteCommandAction.runWriteCommandAction(project) {
+                    document.text = originalText.replace(aliasText, replacementText)
+                    documentManager.doPostponedOperationsAndUnblockDocument(document)
+                    documentManager.commitDocument(document)
+                }
+            }
+            assertNull(readAction { reference.resolve() })
+        } finally {
+            withContext(Dispatchers.EDT) {
+                WriteCommandAction.runWriteCommandAction(project) {
+                    document.text = originalText
+                    documentManager.doPostponedOperationsAndUnblockDocument(document)
+                    documentManager.commitDocument(document)
+                    FileDocumentManager.getInstance().saveDocumentAsIs(document)
+                }
+            }
+        }
+
+        assertNotNull(readAction { reference.resolve() })
+    }
+
+    suspend fun assertSuccessfulCommitRefreshesExternallyReplacedCatalog(
+        scriptPath: Path,
+        expressionText: String,
+        selectorText: String,
+        versionCatalog: VersionCatalogCase,
+        aliasText: String,
+    ) {
+        val script = requirePsiFile(scriptPath)
+        val reference = readAction {
+            val expression = findKotlinCatalogExpression(script, expressionText)
+            expression.references
+                .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
+                .single { candidate ->
+                    expression.text.substring(
+                        candidate.rangeInElement.startOffset,
+                        candidate.rangeInElement.endOffset,
+                    ) == selectorText
+                }
+        }
+        val state = project.service<TypesafeConventionsGradleBuildState>()
+        val projectPath = projectRoot.normalizedPathText()
+        val buildUrls = state.state.buildUrlsByProjectPath.getValue(projectPath).toSet()
+        val indexService = project.service<TypesafeConventionsCatalogIndexService>()
+        val index = readAction { indexService.currentIndex() }
+        val candidate = TypesafeConventionsGradleBuildCandidate(
+            buildUrls = buildUrls,
+            catalogUrls = index.entries.mapTo(sortedSetOf()) { it.catalogUrl },
+        )
+        val catalogPath = projectRoot.resolve(versionCatalog.catalogPath)
+        val catalogPsiFile = requirePsiFile(catalogPath)
+        val catalogDocument = readAction {
+            FileDocumentManager.getInstance().getDocument(catalogPsiFile.virtualFile)
+        }
+        if (catalogDocument != null) {
+            withContext(Dispatchers.EDT) {
+                FileDocumentManager.getInstance().saveDocumentAsIs(catalogDocument)
+            }
+        }
+        val originalText = withContext(Dispatchers.IO) { Files.readString(catalogPath) }
+        val replacementText = "changed-$aliasText"
+        val externallyReplacedText = originalText.replace(aliasText, replacementText)
+        require(externallyReplacedText != originalText) {
+            "Expected $catalogPath to contain $aliasText before simulating an external replacement"
+        }
+        val originalGeneration = indexService.modificationCount
+
+        try {
+            withContext(Dispatchers.IO) {
+                catalogPath.writeText(externallyReplacedText)
+            }
+            state.stageCandidate(projectPath, candidate)
+            withContext(Dispatchers.EDT) {
+                TypesafeConventionsProjectDataImportListener(project).onImportFinished(projectPath)
+            }
+            val (documentText, psiText, resolvedTarget) = readAction {
+                Triple(
+                    catalogDocument?.text,
+                    PsiManager.getInstance(project).findFile(catalogPsiFile.virtualFile)?.text,
+                    reference.resolve(),
+                )
+            }
+            val diskText = withContext(Dispatchers.IO) { Files.readString(catalogPath) }
+            assertNull(
+                resolvedTarget,
+                "Expected successful commit to expose externally replaced catalog content. " +
+                        "diskUpdated=${diskText == externallyReplacedText}, " +
+                        "documentUnsaved=${catalogDocument?.let(FileDocumentManager.getInstance()::isDocumentUnsaved)}, " +
+                        "documentUpdated=${documentText == externallyReplacedText}, " +
+                        "psiUpdated=${psiText == externallyReplacedText}",
+            )
+            assertEquals(
+                originalGeneration,
+                indexService.modificationCount,
+                "Refreshing unchanged semantic mappings must not advance the catalog index generation",
+            )
+        } finally {
+            withContext(Dispatchers.IO) {
+                catalogPath.writeText(originalText)
+            }
+            state.stageCandidate(projectPath, candidate)
+            withContext(Dispatchers.EDT) {
+                TypesafeConventionsProjectDataImportListener(project).onImportFinished(projectPath)
+            }
+        }
+
+        // The fixture is restored for the remaining tests. The feature assertion is the first refresh above:
+        // an unchanged catalog URL exposed the externally replaced content after a successful commit.
+    }
+
     suspend fun assertKotlinCatalogFindUsagesAreIsolatedToTargetCatalog(
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
@@ -415,7 +633,7 @@ private class GradleTypesafeConventionsSyncedProject(
                 val expression = findKotlinCatalogExpression(file, expectedExpressionText)
                 val reference = expression.references
                     .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
-                    .singleOrNull()
+                    .firstOrNull { reference -> reference.resolve() === keySegment }
                     ?: error("Expected $expectedExpressionText to expose a local reference in ${file.name}")
                 assertSame(
                     keySegment,
@@ -453,6 +671,20 @@ private class GradleTypesafeConventionsSyncedProject(
             .filter { (_, _, resolved) -> resolved === keySegment }
             .map { (path, text, _) -> path.realPath() to text }
             .toSet()
+        val usageReferences = references.filterIsInstance<TypesafeConventionsKotlinCatalogUsageReference>()
+        val usageReferenceDetails = readAction {
+            usageReferences.map { reference ->
+                val expression = reference.element
+                "${expression.containingFile.virtualFile?.path}:${expression.textRange.startOffset}:" +
+                        "${reference.rangeInElement}:selector=${reference.context.selectorIndex}"
+            }
+        }
+        assertEquals(
+            expectedScriptPaths.size,
+            usageReferences.size,
+            "Expected one deduplicated rename usage per Kotlin expression. " +
+                    "references=${references.map { it.javaClass.name }}, usages=$usageReferenceDetails",
+        )
         val expectedUsages = expectedScriptPaths
             .map { it.realPath() to expectedExpressionText }
             .toSet()
@@ -977,6 +1209,64 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
     }
 
     @Test
+    suspend fun `same kotlin reference tracks missing present remapped and disabled catalog mappings`() {
+        val projectRoot = projectPathFixture.get()
+        val catalogs = versionCatalogCasesForTypesafeConventions()
+        syncedProject.assertExistingReferenceTracksPublishedCatalogChanges(
+            scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
+            expressionText = "libs.usage.target",
+            selectorText = "target",
+            originalCatalog = catalogs.single { it.catalogName == "libs" },
+            remappedCatalog = catalogs.single { it.catalogName == "customLibs" },
+            declarationPath = "usage.target",
+        )
+    }
+
+    @Test
+    suspend fun `same kotlin reference observes toml edits without gradle sync`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertExistingReferenceTracksTomlEditsWithoutSync(
+            scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
+            expressionText = "libs.usage.target",
+            selectorText = "target",
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            aliasText = "usage-target",
+        )
+    }
+
+    @Test
+    suspend fun `successful commit refreshes externally replaced same url catalog`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertSuccessfulCommitRefreshesExternallyReplacedCatalog(
+            scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
+            expressionText = "libs.usage.target",
+            selectorText = "target",
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            aliasText = "usage-target",
+        )
+    }
+
+    @Test
+    suspend fun `custom build directory contains generated entrypoints used by navigation`() {
+        val projectRoot = projectPathFixture.get()
+        val entrypoints = withContext(Dispatchers.IO) {
+            Files.walk(projectRoot).use { paths ->
+                paths.filter { path ->
+                    Files.isRegularFile(path) &&
+                            path.fileName.toString().startsWith("EntrypointFor") &&
+                            path.fileName.toString().endsWith(".kt")
+                }.toList()
+            }
+        }
+
+        assertTrue(entrypoints.isNotEmpty())
+        assertTrue(
+            entrypoints.all { path -> path.toString().replace('\\', '/').contains("/custom-build/") },
+            "Expected every generated entrypoint to use the custom convention-build output: $entrypoints",
+        )
+    }
+
+    @Test
     suspend fun `local catalog shaped expression does not expose custom reference`() {
         val projectRoot = projectPathFixture.get()
         syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
@@ -986,9 +1276,18 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
     }
 
     @Test
-    suspend fun `programmatic only alias does not expose custom toml reference`() {
+    suspend fun `non Project extension does not expose custom reference`() {
         val projectRoot = projectPathFixture.get()
         syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/NonProjectExtension.kt"),
+            expressionText = "libs.usage.target",
+        )
+    }
+
+    @Test
+    suspend fun `programmatic only alias exposes only unresolved soft toml references`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinExpressionHasOnlyUnresolvedSoftCatalogReferences(
             scriptPath = kotlinDslConventionScriptPaths(projectRoot).first(),
             expressionText = "customLibs.programmatic.only",
         )
@@ -1392,6 +1691,8 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
             plugins {
                 `kotlin-dsl`
             }
+
+            layout.buildDirectory = file("custom-build")
         """.trimIndent(),
     )
     val sourceRoot = buildRoot.resolve("src/main/kotlin").createDirectories()
@@ -1471,6 +1772,26 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
             private fun localTarget(): String {
                 val libs = LocalCatalog()
                 return libs.usage.target
+            }
+        """.trimIndent(),
+    )
+    sourceRoot.resolve("NonProjectExtension.kt").writeText(
+        """
+            private class NonProject
+
+            private class NonProjectCatalog {
+                val usage = NonProjectUsage()
+            }
+
+            private class NonProjectUsage {
+                val target = "not a Gradle Project extension"
+            }
+
+            private val NonProject.libs: NonProjectCatalog
+                get() = NonProjectCatalog()
+
+            private fun nonProjectTarget(): String = with(NonProject()) {
+                libs.usage.target
             }
         """.trimIndent(),
     )
