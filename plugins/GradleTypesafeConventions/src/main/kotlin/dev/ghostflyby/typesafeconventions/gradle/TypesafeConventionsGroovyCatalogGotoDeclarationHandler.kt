@@ -16,11 +16,6 @@ import com.intellij.psi.util.parentOfType
 import com.intellij.psi.util.parents
 import org.jetbrains.plugins.groovy.lang.psi.GrReferenceElement
 import org.jetbrains.plugins.groovy.lang.resolve.api.GroovyPropertyBase
-import org.toml.lang.psi.TomlHeaderOwner
-import org.toml.lang.psi.TomlKeyValue
-import org.toml.lang.psi.TomlKeyValueOwner
-import org.toml.lang.psi.TomlTable
-import org.toml.lang.psi.ext.name
 
 internal class TypesafeConventionsGroovyCatalogGotoDeclarationHandler : GotoDeclarationHandler {
 
@@ -79,24 +74,21 @@ private fun findOriginInTypesafeConventionsTomlFile(method: PsiMethod, context: 
         .firstNotNullOfOrNull { findTypesafeConventionsCatalogTomlFile(context, it) }
         ?: return null
     val accessorClasses = containingClasses.drop(1)
-    val tableName = accessorClasses.firstOrNull()?.tomlTableName()
-        ?: method.tomlTableNameForRootAccessor()
-        ?: TOML_TABLE_LIBRARIES
+    val section = accessorClasses.firstOrNull()?.catalogSection()
+        ?: method.catalogSectionForRootAccessor()
+        ?: TypesafeConventionsCatalogSection.LIBRARIES
+    val aliasIndex = typesafeConventionsTomlCatalogAliasIndex(tomlFile)
     if (accessorClasses.isEmpty()) {
         when (method.name) {
             METHOD_GET_PLUGINS,
             METHOD_GET_BUNDLES,
             METHOD_GET_VERSIONS,
-                -> return tomlFile.findTomlTable(tableName)
+                -> return aliasIndex.sectionOwner(section)
         }
     }
     val accessorName = method.capitalizedAccessorName()
         ?: return null
-    val table = tomlFile.findTomlTable(tableName)
-        ?: return null
-    return table.entries.firstOrNull { entry ->
-        entry.key.segments.firstOrNull()?.name?.toAccessorName() == accessorName
-    }
+    return aliasIndex.findByGeneratedAccessor(section, accessorName)?.entry
 }
 
 private fun PsiMethod.containingClasses(): List<PsiClass> {
@@ -122,22 +114,22 @@ private fun PsiMethod.capitalizedAccessorName(): String? {
     return classPrefix + methodFinalPart
 }
 
-private fun PsiClass.tomlTableName(): String? =
+private fun PsiClass.catalogSection(): TypesafeConventionsCatalogSection? =
     name?.let {
         when {
-            it.endsWith(VERSION_ACCESSORS_SUFFIX) -> TOML_TABLE_VERSIONS
-            it.endsWith(BUNDLE_ACCESSORS_SUFFIX) -> TOML_TABLE_BUNDLES
-            it.endsWith(PLUGIN_ACCESSORS_SUFFIX) -> TOML_TABLE_PLUGINS
-            it.endsWith(LIBRARY_ACCESSORS_SUFFIX) -> TOML_TABLE_LIBRARIES
+            it.endsWith(VERSION_ACCESSORS_SUFFIX) -> TypesafeConventionsCatalogSection.VERSIONS
+            it.endsWith(BUNDLE_ACCESSORS_SUFFIX) -> TypesafeConventionsCatalogSection.BUNDLES
+            it.endsWith(PLUGIN_ACCESSORS_SUFFIX) -> TypesafeConventionsCatalogSection.PLUGINS
+            it.endsWith(LIBRARY_ACCESSORS_SUFFIX) -> TypesafeConventionsCatalogSection.LIBRARIES
             else -> null
         }
     }
 
-private fun PsiMethod.tomlTableNameForRootAccessor(): String? =
+private fun PsiMethod.catalogSectionForRootAccessor(): TypesafeConventionsCatalogSection? =
     when (name) {
-        METHOD_GET_PLUGINS -> TOML_TABLE_PLUGINS
-        METHOD_GET_BUNDLES -> TOML_TABLE_BUNDLES
-        METHOD_GET_VERSIONS -> TOML_TABLE_VERSIONS
+        METHOD_GET_PLUGINS -> TypesafeConventionsCatalogSection.PLUGINS
+        METHOD_GET_BUNDLES -> TypesafeConventionsCatalogSection.BUNDLES
+        METHOD_GET_VERSIONS -> TypesafeConventionsCatalogSection.VERSIONS
         else -> null
     }
 
@@ -147,26 +139,8 @@ private fun String.trimAccessorSuffix(): String =
         ?.let { substringBeforeLast(it) }
         ?: this
 
-private fun String.toAccessorName(): String =
-    split("-", "_").joinToString("") { it.capitalizeAscii() }
-
 private fun String.capitalizeAscii(): String =
     replaceFirstChar { if (it in 'a'..'z') it.uppercaseChar() else it }
-
-private fun org.toml.lang.psi.TomlFile.findTomlTable(name: String): TomlKeyValueOwner? {
-    for (element in children) {
-        if (element is TomlHeaderOwner && element.header.key?.name == name && element is TomlKeyValueOwner) {
-            return element
-        }
-        if (element is TomlKeyValue && element.key.text == name && element.value is TomlKeyValueOwner) {
-            return element.value as TomlKeyValueOwner
-        }
-        if (element is TomlTable && element.header.key?.name == name) {
-            return element
-        }
-    }
-    return null
-}
 
 /**
  * Local copy of Gradle's version catalog accessor shape check.
@@ -195,10 +169,6 @@ private const val PLUGIN_ACCESSORS_SUFFIX = "PluginAccessors"
 private const val VERSION_ACCESSORS_SUFFIX = "VersionAccessors"
 private const val LIBRARIES_FOR_PREFIX = "LibrariesFor"
 private const val IN_PLUGINS_BLOCK_SUFFIX = "InPluginsBlock"
-private const val TOML_TABLE_VERSIONS = "versions"
-private const val TOML_TABLE_LIBRARIES = "libraries"
-private const val TOML_TABLE_BUNDLES = "bundles"
-private const val TOML_TABLE_PLUGINS = "plugins"
 private const val METHOD_GET_PLUGINS = "getPlugins"
 private const val METHOD_GET_VERSIONS = "getVersions"
 private const val METHOD_GET_BUNDLES = "getBundles"

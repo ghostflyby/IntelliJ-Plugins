@@ -59,10 +59,10 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
             """.trimIndent(),
         )
 
-        assertEquals("kotlin-stdlib", findTypesafeConventionsCatalogEntry(file, "kotlin.stdlib")?.key?.text)
-        assertEquals("kotlin", findTypesafeConventionsCatalogEntry(file, "versions.kotlin")?.key?.text)
-        assertEquals("kotlin", findTypesafeConventionsCatalogEntry(file, "bundles.kotlin")?.key?.text)
-        assertEquals("kotlin-jvm", findTypesafeConventionsCatalogEntry(file, "plugins.kotlin.jvm")?.key?.text)
+        assertEquals("kotlin-stdlib", findCatalogEntry(file, "kotlin.stdlib")?.key?.text)
+        assertEquals("kotlin", findCatalogEntry(file, "versions.kotlin")?.key?.text)
+        assertEquals("kotlin", findCatalogEntry(file, "bundles.kotlin")?.key?.text)
+        assertEquals("kotlin-jvm", findCatalogEntry(file, "plugins.kotlin.jvm")?.key?.text)
     }
 
     @Test
@@ -76,7 +76,7 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
         assertEquals(
             "foo-Bar_baz.qux",
-            findTypesafeConventionsCatalogEntry(file, "foo.bar.baz.qux")?.key?.text,
+            findCatalogEntry(file, "foo.bar.baz.qux")?.key?.text,
         )
     }
 
@@ -87,7 +87,7 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 libraries.junit.jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "6.1.1" }
             """.trimIndent(),
         )
-        val entry = findTypesafeConventionsCatalogEntry(file, "junit.jupiter")
+        val entry = findCatalogEntry(file, "junit.jupiter")
 
         assertEquals(
             "libraries.junit.jupiter",
@@ -95,12 +95,9 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
         )
         assertEquals(
             listOf("junit", "jupiter"),
-            entry?.let {
-                findTypesafeConventionsCatalogAliasSegments(
-                    it,
-                    TypesafeConventionsCatalogSection.LIBRARIES,
-                ).mapNotNull { segment -> segment.name }
-            },
+            entry?.let(::findTypesafeConventionsTomlCatalogAlias)
+                ?.segments
+                ?.mapNotNull { segment -> segment.name },
         )
     }
 
@@ -112,15 +109,14 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 junit.jupiter = { module = "org.junit.jupiter:junit-jupiter", version = "6.1.1" }
             """.trimIndent(),
         )
-        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, "junit.jupiter"))
+        val entry = requireNotNull(findCatalogEntry(file, "junit.jupiter"))
 
         assertEquals("junit.jupiter", entry.key.text)
         assertEquals(
             listOf("junit", "jupiter"),
-            findTypesafeConventionsCatalogAliasSegments(
-                entry,
-                TypesafeConventionsCatalogSection.LIBRARIES,
-            ).mapNotNull { segment -> segment.name },
+            requireNotNull(findTypesafeConventionsTomlCatalogAlias(entry))
+                .segments
+                .mapNotNull { segment -> segment.name },
         )
     }
 
@@ -134,7 +130,85 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
         assertEquals(
             "kotlin-jvm",
-            findTypesafeConventionsCatalogEntry(file, "plugins.kotlin.jvm")?.key?.text,
+            findCatalogEntry(file, "plugins.kotlin.jvm")?.key?.text,
+        )
+    }
+
+    @Test
+    suspend fun `indexes section owners and generated accessor names for every toml shape`() = readAction {
+        val standard = createTomlFile(
+            """
+                [libraries]
+                foo-bar_baz = { module = "example:standard", version = "1.0" }
+            """.trimIndent(),
+        )
+        val dotted = createTomlFile(
+            """
+                libraries.foo.bar = { module = "example:dotted", version = "1.0" }
+            """.trimIndent(),
+        )
+        val inline = createTomlFile(
+            """
+                plugins = { kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version = "2.3.0" } }
+            """.trimIndent(),
+        )
+
+        val standardIndex = typesafeConventionsTomlCatalogAliasIndex(standard)
+        val dottedIndex = typesafeConventionsTomlCatalogAliasIndex(dotted)
+        val inlineIndex = typesafeConventionsTomlCatalogAliasIndex(inline)
+
+        assertNotNull(standardIndex.sectionOwner(TypesafeConventionsCatalogSection.LIBRARIES))
+        assertEquals(
+            "foo-bar_baz",
+            standardIndex.findByGeneratedAccessor(TypesafeConventionsCatalogSection.LIBRARIES, "FooBarBaz")
+                ?.entry
+                ?.key
+                ?.text,
+        )
+        assertNotNull(dottedIndex.sectionOwner(TypesafeConventionsCatalogSection.LIBRARIES))
+        assertEquals(
+            "libraries.foo.bar",
+            dottedIndex.findByGeneratedAccessor(TypesafeConventionsCatalogSection.LIBRARIES, "FooBar")
+                ?.entry
+                ?.key
+                ?.text,
+        )
+        assertNotNull(inlineIndex.sectionOwner(TypesafeConventionsCatalogSection.PLUGINS))
+        assertEquals(
+            "kotlin-jvm",
+            inlineIndex.findByGeneratedAccessor(TypesafeConventionsCatalogSection.PLUGINS, "KotlinJvm")
+                ?.entry
+                ?.key
+                ?.text,
+        )
+    }
+
+    @Test
+    suspend fun `generated accessor collisions stay isolated by catalog section`() = readAction {
+        val file = createTomlFile(
+            """
+                [versions]
+                shared-name = "1.0"
+
+                [libraries]
+                shared_name = { module = "example:library", version = "1.0" }
+            """.trimIndent(),
+        )
+        val index = typesafeConventionsTomlCatalogAliasIndex(file)
+
+        assertEquals(
+            "shared-name",
+            index.findByGeneratedAccessor(TypesafeConventionsCatalogSection.VERSIONS, "SharedName")
+                ?.entry
+                ?.key
+                ?.text,
+        )
+        assertEquals(
+            "shared_name",
+            index.findByGeneratedAccessor(TypesafeConventionsCatalogSection.LIBRARIES, "SharedName")
+                ?.entry
+                ?.key
+                ?.text,
         )
     }
 
@@ -147,8 +221,8 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
             """.trimIndent(),
         )
 
-        assertNull(findTypesafeConventionsCatalogEntry(file, "missing"))
-        assertNull(findTypesafeConventionsCatalogEntry(file, "plugins.present"))
+        assertNull(findCatalogEntry(file, "missing"))
+        assertNull(findCatalogEntry(file, "plugins.present"))
     }
 
     @Test
@@ -178,34 +252,10 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
         val rebuilt = readAction { typesafeConventionsTomlCatalogAliasIndex(file) }
         assertNotSame(reused, rebuilt)
-        assertNull(readAction { findTypesafeConventionsCatalogEntry(file, "before") })
+        assertNull(readAction { findCatalogEntry(file, "before") })
         assertEquals(
             "after",
-            readAction { findTypesafeConventionsCatalogEntry(file, "after")?.key?.text },
-        )
-    }
-
-    @Test
-    suspend fun `builds renamed kotlin accessor expressions`() = readAction {
-        val libraryExpression = KtPsiFactory(project).createExpression("libs.old.alias") as KtDotQualifiedExpression
-        val pluginExpression =
-            KtPsiFactory(project).createExpression("customLibs.plugins.old.alias") as KtDotQualifiedExpression
-
-        assertEquals(
-            "libs.new.alias",
-            createTypesafeConventionsKotlinCatalogAccessorExpression(
-                libraryExpression,
-                TypesafeConventionsCatalogSection.LIBRARIES,
-                "new-alias",
-            ).text,
-        )
-        assertEquals(
-            "customLibs.plugins.new.alias",
-            createTypesafeConventionsKotlinCatalogAccessorExpression(
-                pluginExpression,
-                TypesafeConventionsCatalogSection.PLUGINS,
-                "new_alias",
-            ).text,
+            readAction { findCatalogEntry(file, "after")?.key?.text },
         )
     }
 
@@ -216,8 +266,6 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 [libraries]
                 dotted.rename = { module = "example:library", version = "1.0" }
             """.trimIndent(),
-            declarationPath = "dotted.rename",
-            expressionText = "libs.dotted.rename",
         )
     }
 
@@ -227,8 +275,6 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
             """
                 libraries.dotted.rename = { module = "example:library", version = "1.0" }
             """.trimIndent(),
-            declarationPath = "dotted.rename",
-            expressionText = "libs.dotted.rename",
         )
     }
 
@@ -240,11 +286,8 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 foo-Bar_baz = { module = "example:library", version = "1.0" }
             """.trimIndent(),
         )
-        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, "foo.bar.baz"))
-        val segments = findTypesafeConventionsCatalogAliasSegments(
-            entry,
-            TypesafeConventionsCatalogSection.LIBRARIES,
-        )
+        val entry = requireNotNull(findCatalogEntry(file, "foo.bar.baz"))
+        val segments = requireNotNull(findTypesafeConventionsTomlCatalogAlias(entry)).segments
         val expression =
             KtPsiFactory(project).createExpression("libs.foo.bar.baz") as KtDotQualifiedExpression
         val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
@@ -262,9 +305,6 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
                 )
             },
         )
-        val snapshot = CatalogResolutionSnapshot.create(groups)
-        assertTrue((0..2).all { selectorIndex -> snapshot.groupForSelector(selectorIndex) === groups.single() })
-
         val renamed = expression.replaceTypesafeConventionsCatalogAliasGroup(groups.single(), "new-alias")
 
         assertEquals("libs.new.alias", renamed.text)
@@ -272,21 +312,16 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
 
     private fun assertDottedSegmentRenames(
         tomlText: String,
-        declarationPath: String,
-        expressionText: String,
     ) {
         val file = createTomlFile(tomlText)
-        val entry = requireNotNull(findTypesafeConventionsCatalogEntry(file, declarationPath))
-        val segments = findTypesafeConventionsCatalogAliasSegments(
-            entry,
-            TypesafeConventionsCatalogSection.LIBRARIES,
-        )
+        val entry = requireNotNull(findCatalogEntry(file, "dotted.rename"))
+        val segments = requireNotNull(findTypesafeConventionsTomlCatalogAlias(entry)).segments
 
         val expectedRanges = listOf("dotted", "rename")
         val expectedRenames = listOf("libs.renamed.rename", "libs.dotted.renamed")
         expectedRenames.forEachIndexed { segmentIndex, expectedExpression ->
             val expression =
-                KtPsiFactory(project).createExpression(expressionText) as KtDotQualifiedExpression
+                KtPsiFactory(project).createExpression("libs.dotted.rename") as KtDotQualifiedExpression
             val accessor = requireNotNull(expression.typesafeConventionsCatalogAccessor())
             val groups = expression.createTypesafeConventionsKotlinCatalogSelectorGroups(
                 accessor,
@@ -313,4 +348,23 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
     private fun createTomlFile(text: String): TomlFile =
         PsiFileFactory.getInstance(project)
             .createFileFromText("libs.versions.toml", TomlFileType, text) as TomlFile
+
+    private fun findCatalogEntry(tomlFile: TomlFile, declarationPath: String) =
+        findCatalogAlias(tomlFile, declarationPath)?.entry
+
+    private fun findCatalogAlias(
+        tomlFile: TomlFile,
+        declarationPath: String,
+    ): TypesafeConventionsTomlCatalogAlias? {
+        val prefix = declarationPath.substringBefore('.', missingDelimiterValue = declarationPath)
+        val section = TypesafeConventionsCatalogSection.fromAccessorPrefix(prefix)
+            ?: TypesafeConventionsCatalogSection.LIBRARIES
+        val aliasPath = if (section == TypesafeConventionsCatalogSection.LIBRARIES) {
+            declarationPath
+        } else {
+            declarationPath.substringAfter('.', missingDelimiterValue = "")
+        }
+        return aliasPath.takeIf(String::isNotEmpty)
+            ?.let { typesafeConventionsTomlCatalogAliasIndex(tomlFile).find(section, it) }
+    }
 }

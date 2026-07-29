@@ -1,6 +1,6 @@
 # Gradle Typesafe Conventions TOML Navigation
 
-Status: Completed Completed: 2026-07-27
+Status: Completed Updated: 2026-07-29
 
 ## Scope
 
@@ -39,7 +39,8 @@ marker required before optional Kotlin configuration is loaded.
   remaining dotted alias.
 - Local variables that shadow catalog roots and programmatic-only aliases retain their native Kotlin references without
   an additional unresolved catalog reference.
-- Existing Groovy catalog navigation remains unchanged.
+- Groovy catalog accessors navigate through the same section-aware TOML alias index as Kotlin accessors, including
+  standard tables, top-level dotted keys, inline tables, and dash/underscore separator normalization.
 
 ## Sync State
 
@@ -54,13 +55,15 @@ stale state from creating references after unlink or workspace migration.
 
 ## Performance
 
-Catalog lookup uses an immutable project-level index keyed by Workspace Model snapshot identity and the committed sync
-state modification count. Repeated resolution against an unchanged project reuses the index instead of traversing all
-Gradle build entities, while a workspace or committed-state change rebuilds it from the cross-validated model.
+Catalog lookup uses an immutable project-level index published by the refresh service. Repeated resolution against an
+unchanged project reuses the index instead of traversing all Gradle build entities. Successful sync state changes
+rebuild the index, while an explicit catalog-file refresh advances the same generation even when the Workspace Model
+entries are unchanged, invalidating PSI resolution caches exactly once for that publication.
 
-Each TOML catalog file keeps a PSI-dependent alias index by section and normalized alias. Kotlin reference creation
-checks the catalog and alias indexes before resolving the Kotlin root declaration, and created references retain their
-resolved TOML segment for the rest of the occurrence-processing path.
+Each TOML catalog file keeps a PSI-dependent alias index by section, normalized alias, generated Groovy accessor name,
+entry, and exact key segments. Kotlin reference creation caches immutable selector groups against the catalog-index
+generation and TOML PSI; Groovy navigation reuses the same alias and section-owner mappings instead of scanning tables
+independently.
 
 Find Usages registers an indexed word request whose scope is the intersection of the user-selected scope and the Gradle
 build roots associated with the target catalog. The TOML use-scope enlargement uses the same roots, preventing unrelated
@@ -75,4 +78,6 @@ Coverage includes focused TOML PSI tests and real Gradle sync tests for
 coverage includes sequential linked roots, successful disable, failed and cancelled imports, null-path commits, unlink
 cleanup, restart recovery, and rejection of incomplete Workspace Model candidates. Structural performance coverage
 verifies Workspace Model index reuse and invalidation, TOML PSI cache invalidation, build-root search scoping, and
-catalog refresh deduplication without relying on absolute timing assertions.
+catalog refresh deduplication without relying on absolute timing assertions. Groovy coverage exercises all four catalog
+sections for both default and custom catalogs across `buildSrc` and included builds, with focused standard-table,
+dotted-key, inline-table, separator-normalization, and accessor-collision checks.

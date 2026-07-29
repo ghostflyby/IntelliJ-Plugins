@@ -6,46 +6,40 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
+import com.intellij.openapi.components.service
+import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.projectFixture
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
+@TestApplication
 internal class TypesafeConventionsCatalogIndexTest {
 
+    private val projectFixture = projectFixture(openAfterCreation = true)
+    private val project by projectFixture
+    private val indexService
+        get() = project.service<TypesafeConventionsCatalogIndexService>()
+
     @Test
-    fun `publishes only semantic index changes`() {
-        val published = TypesafeConventionsPublishedCatalogIndex()
-        var buildCount = 0
+    fun `same index is a no-op unless publication is explicitly invalidated`() {
+        val initial = TypesafeConventionsCatalogIndex.create(emptyList())
+        assertTrue(indexService.publishForTests(initial))
+        val initialGeneration = indexService.modificationCount
 
-        val initial = published.currentOrBuild {
-            buildCount++
-            TypesafeConventionsCatalogIndex.create(emptyList())
-        }
-        val reused = published.currentOrBuild {
-            buildCount++
-            TypesafeConventionsCatalogIndex.create(emptyList())
-        }
+        assertFalse(indexService.publishForTests(TypesafeConventionsCatalogIndex.create(emptyList())))
+        assertEquals(initialGeneration, indexService.modificationCount)
 
-        assertSame(initial, reused)
-        assertFalse(published.publish(TypesafeConventionsCatalogIndex.create(emptyList())))
-        assertEquals(0, published.modificationCount)
         assertTrue(
-            published.publish(
-                TypesafeConventionsCatalogIndex.create(emptyList(), setOf("file:///repo")),
+            indexService.publishForTests(
+                TypesafeConventionsCatalogIndex.create(emptyList()),
+                forceInvalidate = true,
             ),
         )
-        assertEquals(1, published.modificationCount)
-        assertFalse(
-            published.publish(
-                TypesafeConventionsCatalogIndex.create(emptyList(), setOf("file:///repo")),
-            ),
-        )
-        assertEquals(1, published.modificationCount)
-        assertEquals(1, buildCount)
+        assertEquals(initialGeneration + 1, indexService.modificationCount)
     }
 
     @Test
     fun `normalizes entry ordering before semantic comparison`() {
-        val published = TypesafeConventionsPublishedCatalogIndex()
         val first = TypesafeConventionsCatalogIndexEntry(
             catalogName = "libs",
             catalogUrl = "file:///repo/gradle/libs.versions.toml",
@@ -53,12 +47,11 @@ internal class TypesafeConventionsCatalogIndexTest {
             contextRootUrls = linkedSetOf("file:///repo/subproject", "file:///repo"),
         )
         val second = first.copy(catalogName = "tools")
-        published.currentOrBuild {
-            TypesafeConventionsCatalogIndex.create(listOf(first, second))
-        }
+        assertTrue(indexService.publishForTests(TypesafeConventionsCatalogIndex.create(listOf(first, second))))
+        val initialGeneration = indexService.modificationCount
 
         assertFalse(
-            published.publish(
+            indexService.publishForTests(
                 TypesafeConventionsCatalogIndex.create(
                     listOf(
                         second.copy(contextRootUrls = first.contextRootUrls.reversed().toSet()),
@@ -67,7 +60,7 @@ internal class TypesafeConventionsCatalogIndexTest {
                 ),
             ),
         )
-        assertEquals(0, published.modificationCount)
+        assertEquals(initialGeneration, indexService.modificationCount)
     }
 
     @Test

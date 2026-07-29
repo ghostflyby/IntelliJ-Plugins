@@ -17,7 +17,6 @@ public final class dev/ghostflyby/typesafeconventions/gradle/TypesafeConventions
 public abstract interface class dev/ghostflyby/typesafeconventions/gradle/TypesafeConventionsCatalogModel : java/io/Serializable {
 	public abstract fun getCatalogs ()Ljava/util/Map;
 	public abstract fun getDiagnostics ()Ljava/util/List;
-	public abstract fun getEnabled ()Z
 	public abstract fun getStatus ()Ldev/ghostflyby/typesafeconventions/gradle/TypesafeConventionsCatalogModelStatus;
 }
 

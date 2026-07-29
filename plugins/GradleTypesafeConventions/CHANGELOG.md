@@ -35,6 +35,8 @@
   entity sources instead of plugin-owned sources.
 - Restored Groovy DSL goto declaration for custom version catalog roots such as
   `customLibs` in `buildSrc` convention plugins.
+- Resolve Groovy catalog accessors declared through standard tables, dotted keys, or inline tables with separator
+  normalization, while keeping same-named accessors isolated by catalog section.
 
 ### Security
 

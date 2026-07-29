@@ -41,13 +41,9 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         val result = TypesafeConventionsGradleSyncContributor().createProjectModel(context, storage)
 
         assertSame(storage, result)
-        assertTrue(
-            project.service<TypesafeConventionsGradleBuildState>().pendingProjectPaths().isEmpty(),
-            "A candidate without its Gradle build entity must not be staged",
-        )
-        assertEquals(
-            TypesafeConventionsGradleProjectPathHealth.STALE,
-            project.service<TypesafeConventionsGradleBuildState>().projectPathHealth(buildRoot.toString()),
+        assertNull(
+            project.service<TypesafeConventionsGradleBuildState>().commit(buildRoot.toString()),
+            "A candidate without its Gradle build entity must not remain staged",
         )
     }
 
@@ -71,8 +67,7 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         )
 
         assertEquals(setOf("file:///old"), state.committedBuildUrls())
-        assertTrue(state.pendingProjectPaths().isEmpty())
-        assertEquals(TypesafeConventionsGradleProjectPathHealth.STALE, state.projectPathHealth(projectPath))
+        assertNull(state.commit(projectPath))
     }
 
     @Test
@@ -91,7 +86,7 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         TypesafeConventionsProjectDataImportListener(project).onImportFinished(null)
 
         assertEquals(setOf("file:///root-a", "file:///root-b"), state.committedBuildUrls())
-        assertTrue(state.pendingProjectPaths().isEmpty())
+        assertNull(state.commit(null))
     }
 
     @Test
@@ -118,18 +113,33 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
 
         assertTrue(state.committedBuildUrls().isEmpty())
-        assertTrue(state.pendingProjectPaths().isEmpty())
-        assertEquals(TypesafeConventionsGradleProjectPathHealth.UNKNOWN, state.projectPathHealth(rootA))
-        assertEquals(TypesafeConventionsGradleProjectPathHealth.UNKNOWN, state.projectPathHealth(rootB))
+        assertNull(state.commit(null))
+    }
+
+    @Test
+    fun `unlinking a pending-only root does not invalidate the catalog index`() = runBlocking {
+        val state = project.service<TypesafeConventionsGradleBuildState>()
+        val root = buildPathFixture.get().toString()
+        state.stageCandidate(
+            root,
+            TypesafeConventionsGradleBuildCandidate(setOf("file:///root"), emptySet()),
+        )
+        val indexService = project.service<TypesafeConventionsCatalogIndexService>()
+        indexService.publishForTests(TypesafeConventionsCatalogIndex.create(emptyList()))
+        val initialGeneration = indexService.modificationCount
+
+        TypesafeConventionsProjectDataImportListener(project).onProjectsUnlinked(setOf(root))
+        project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
+
+        assertNull(state.commit(root))
+        assertEquals(initialGeneration, indexService.modificationCount)
     }
 
     private fun projectResolverContext(
         buildRoot: Path,
         model: TypesafeConventionsCatalogModel,
     ): ProjectResolverContext {
-        val buildIdentifier = object : BuildIdentifier {
-            override fun getRootDir() = buildRoot.toFile()
-        }
+        val buildIdentifier = BuildIdentifier { buildRoot.toFile() }
         val build = Proxy.newProxyInstance(
             GradleLightBuild::class.java.classLoader,
             arrayOf(GradleLightBuild::class.java),
@@ -179,8 +189,5 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         override val status: TypesafeConventionsCatalogModelStatus,
         override val catalogs: Map<String, String>,
         override val diagnostics: List<TypesafeConventionsCatalogDiagnostic> = emptyList(),
-    ) : TypesafeConventionsCatalogModel {
-        override val enabled: Boolean
-            get() = status != TypesafeConventionsCatalogModelStatus.DISABLED
-    }
+    ) : TypesafeConventionsCatalogModel
 }
