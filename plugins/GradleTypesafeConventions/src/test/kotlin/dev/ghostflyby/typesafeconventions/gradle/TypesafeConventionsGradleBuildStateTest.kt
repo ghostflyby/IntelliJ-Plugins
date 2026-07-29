@@ -36,19 +36,12 @@ internal class TypesafeConventionsGradleBuildStateTest {
         state.discard("/repo/root")
 
         assertEquals(setOf("file:///repo/old"), state.committedBuildUrls())
-        assertTrue(state.pendingProjectPaths().isEmpty())
-        assertEquals(
-            TypesafeConventionsGradleProjectPathHealth.STALE,
-            state.projectPathHealth("/repo/root"),
-        )
+        assertNull(state.commit("/repo/root"))
 
         state.stageCandidate("/repo/root", candidate("file:///repo/new", "file:///repo/new/libs.toml"))
-        state.commit("/repo/root")
+        val catalogUrls = state.commit("/repo/root")
 
-        assertEquals(
-            TypesafeConventionsGradleProjectPathHealth.CURRENT,
-            state.projectPathHealth("/repo/root"),
-        )
+        assertEquals(setOf("file:///repo/new/libs.toml"), catalogUrls)
     }
 
     @Test
@@ -59,8 +52,9 @@ internal class TypesafeConventionsGradleBuildStateTest {
         state.commit(null)
 
         state.stageCandidate("/repo/root-a", candidate())
-        state.commit("/repo/root-a")
+        val catalogUrls = state.commit("/repo/root-a")
 
+        assertEquals(emptySet<String>(), catalogUrls)
         assertEquals(setOf("file:///repo/root-b"), state.committedBuildUrls())
     }
 
@@ -70,14 +64,13 @@ internal class TypesafeConventionsGradleBuildStateTest {
         state.stageCandidate("/repo/root-a", candidate("file:///repo/root-a", "file:///repo/root-a/libs.toml"))
         state.stageCandidate("/repo/root-b", candidate("file:///repo/root-b", "file:///repo/root-b/libs.toml"))
 
-        val commit = state.commit(null)
+        val catalogUrls = state.commit(null)
 
-        assertEquals(setOf("/repo/root-a", "/repo/root-b"), commit.projectPaths)
         assertEquals(
             setOf("file:///repo/root-a/libs.toml", "file:///repo/root-b/libs.toml"),
-            commit.catalogUrlsToRefresh,
+            catalogUrls,
         )
-        assertTrue(state.pendingProjectPaths().isEmpty())
+        assertNull(state.commit(null))
     }
 
     @Test
@@ -91,8 +84,8 @@ internal class TypesafeConventionsGradleBuildStateTest {
         state.stageCandidate("/repo/root", candidate)
         val secondCommit = state.commit("/repo/root")
 
-        assertEquals(setOf("file:///repo/root/libs.toml"), firstCommit.catalogUrlsToRefresh)
-        assertEquals(setOf("file:///repo/root/libs.toml"), secondCommit.catalogUrlsToRefresh)
+        assertEquals(setOf("file:///repo/root/libs.toml"), firstCommit)
+        assertEquals(setOf("file:///repo/root/libs.toml"), secondCommit)
         assertEquals(firstModificationCount, state.stateModificationCount)
     }
 
@@ -121,14 +114,22 @@ internal class TypesafeConventionsGradleBuildStateTest {
         assertTrue(state.remove("/repo/root-a"))
 
         assertEquals(setOf("file:///repo/root-b"), state.committedBuildUrls())
-        assertTrue(state.pendingProjectPaths().isEmpty())
-        assertEquals(
-            TypesafeConventionsGradleProjectPathHealth.UNKNOWN,
-            state.projectPathHealth("/repo/root-a"),
-        )
+        assertNull(state.commit("/repo/root-a"))
 
         val modificationCount = state.stateModificationCount
         assertFalse(state.remove("/repo/missing"))
+        assertEquals(modificationCount, state.stateModificationCount)
+    }
+
+    @Test
+    fun `unlink clears pending candidate without reporting a persistent change`() {
+        val state = TypesafeConventionsGradleBuildState()
+        state.stageCandidate("/repo/root", candidate("file:///repo/root", "file:///repo/root/libs.toml"))
+        val modificationCount = state.stateModificationCount
+
+        assertFalse(state.remove("/repo/root"))
+
+        assertNull(state.commit("/repo/root"))
         assertEquals(modificationCount, state.stateModificationCount)
     }
 
@@ -146,11 +147,7 @@ internal class TypesafeConventionsGradleBuildStateTest {
         restored.loadState(original.state)
 
         assertEquals(setOf("file:///repo/root-a"), restored.committedBuildUrls())
-        assertTrue(restored.pendingProjectPaths().isEmpty())
-        assertEquals(
-            TypesafeConventionsGradleProjectPathHealth.UNKNOWN,
-            restored.projectPathHealth("/repo/root-a"),
-        )
+        assertNull(restored.commit(null))
     }
 
     private fun candidate(

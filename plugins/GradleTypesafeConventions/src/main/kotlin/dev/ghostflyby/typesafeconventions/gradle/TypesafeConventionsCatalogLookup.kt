@@ -37,7 +37,6 @@ internal data class TypesafeConventionsCatalogIndexEntry(
 
 internal class TypesafeConventionsCatalogIndex private constructor(
     internal val entries: List<TypesafeConventionsCatalogIndexEntry>,
-    internal val enabledBuildUrls: Set<String>,
 ) {
     private val catalogsByName = entries.groupBy(TypesafeConventionsCatalogIndexEntry::catalogName)
     private val buildRootUrlsByCatalogUrl = entries
@@ -59,15 +58,12 @@ internal class TypesafeConventionsCatalogIndex private constructor(
 
     override fun equals(other: Any?): Boolean =
         this === other || other is TypesafeConventionsCatalogIndex &&
-                entries == other.entries && enabledBuildUrls == other.enabledBuildUrls
+                entries == other.entries
 
-    override fun hashCode(): Int = 31 * entries.hashCode() + enabledBuildUrls.hashCode()
+    override fun hashCode(): Int = entries.hashCode()
 
     internal companion object {
-        fun create(
-            entries: Collection<TypesafeConventionsCatalogIndexEntry>,
-            enabledBuildUrls: Set<String> = entries.mapTo(sortedSetOf()) { it.buildUrl },
-        ) =
+        fun create(entries: Collection<TypesafeConventionsCatalogIndexEntry>) =
             TypesafeConventionsCatalogIndex(
                 entries = entries
                     .map { entry -> entry.copy(contextRootUrls = entry.contextRootUrls.toSortedSet()) }
@@ -79,62 +75,45 @@ internal class TypesafeConventionsCatalogIndex private constructor(
                             TypesafeConventionsCatalogIndexEntry::catalogUrl,
                         ).thenBy { entry -> entry.contextRootUrls.joinToString("\u0000") },
                     ),
-                enabledBuildUrls = enabledBuildUrls.toSortedSet(),
             )
-    }
-}
-
-internal class TypesafeConventionsPublishedCatalogIndex : ModificationTracker {
-    @Volatile
-    private var published: TypesafeConventionsCatalogIndex? = null
-    private val generation = AtomicLong()
-
-    override fun getModificationCount(): Long = generation.get()
-
-    fun currentOrBuild(
-        builder: () -> TypesafeConventionsCatalogIndex,
-    ): TypesafeConventionsCatalogIndex {
-        published?.let { return it }
-
-        return synchronized(this) {
-            published ?: builder().also { published = it }
-        }
-    }
-
-    fun publish(index: TypesafeConventionsCatalogIndex): Boolean = synchronized(this) {
-        if (published == index) {
-            return@synchronized false
-        }
-        published = index
-        generation.incrementAndGet()
-        true
     }
 }
 
 @Service(Service.Level.PROJECT)
 internal class TypesafeConventionsCatalogIndexService(private val project: Project) : ModificationTracker {
-    private val publishedIndex = TypesafeConventionsPublishedCatalogIndex()
-    private val catalogRefreshGeneration = AtomicLong()
+    @Volatile
+    private var publishedIndex: TypesafeConventionsCatalogIndex? = null
+    private val generation = AtomicLong()
 
-    internal val catalogRefreshTracker = ModificationTracker { catalogRefreshGeneration.get() }
-
-    override fun getModificationCount(): Long = publishedIndex.modificationCount
+    override fun getModificationCount(): Long = generation.get()
 
     @RequiresReadLock
-    fun currentIndex(): TypesafeConventionsCatalogIndex =
-        publishedIndex.currentOrBuild {
-            buildCurrentIndex()
+    fun currentIndex(): TypesafeConventionsCatalogIndex {
+        publishedIndex?.let { return it }
+
+        return synchronized(this) {
+            publishedIndex ?: buildCurrentIndex().also { publishedIndex = it }
         }
-
-    fun rebuildAndPublish(): Boolean = publishedIndex.publish(buildCurrentIndex())
-
-    internal fun catalogsRefreshed() {
-        catalogRefreshGeneration.incrementAndGet()
     }
 
+    fun rebuildAndPublish(forceInvalidate: Boolean = false): Boolean =
+        publish(buildCurrentIndex(), forceInvalidate)
+
     @TestOnly
-    internal fun publishForTests(index: TypesafeConventionsCatalogIndex): Boolean =
-        publishedIndex.publish(index)
+    internal fun publishForTests(
+        index: TypesafeConventionsCatalogIndex,
+        forceInvalidate: Boolean = false,
+    ): Boolean = publish(index, forceInvalidate)
+
+    private fun publish(index: TypesafeConventionsCatalogIndex, forceInvalidate: Boolean): Boolean =
+        synchronized(this) {
+            if (!forceInvalidate && publishedIndex == index) {
+            return@synchronized false
+        }
+            publishedIndex = index
+        generation.incrementAndGet()
+        true
+    }
 
     private fun buildCurrentIndex(): TypesafeConventionsCatalogIndex {
         val snapshot = project.workspaceModel.currentSnapshot
@@ -148,7 +127,7 @@ internal class TypesafeConventionsCatalogIndexService(private val project: Proje
         enabledBuildUrls: Set<String>,
     ): TypesafeConventionsCatalogIndex {
         if (enabledBuildUrls.isEmpty()) {
-            return TypesafeConventionsCatalogIndex.create(emptyList(), emptySet())
+            return TypesafeConventionsCatalogIndex.create(emptyList())
         }
         val entries = snapshot.entities<GradleBuildEntity>()
             .filter { build -> build.url.url in enabledBuildUrls }
@@ -167,7 +146,7 @@ internal class TypesafeConventionsCatalogIndexService(private val project: Proje
                 }
             }
             .toList()
-        return TypesafeConventionsCatalogIndex.create(entries, enabledBuildUrls)
+        return TypesafeConventionsCatalogIndex.create(entries)
     }
 }
 
