@@ -9,6 +9,7 @@ package dev.ghostflyby.typesafeconventions.gradle
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.ModificationTracker
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.platform.backend.workspace.workspaceModel
@@ -17,9 +18,11 @@ import com.intellij.platform.workspace.storage.entities
 import com.intellij.psi.PsiElement
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.versionCatalogs
 import org.toml.lang.psi.TomlFile
+import java.util.concurrent.atomic.AtomicLong
 
 internal data class TypesafeConventionsCatalogIndexEntry(
     val catalogName: String,
@@ -33,9 +36,14 @@ internal data class TypesafeConventionsCatalogIndexEntry(
 }
 
 internal class TypesafeConventionsCatalogIndex private constructor(
-    private val catalogsByName: Map<String, List<TypesafeConventionsCatalogIndexEntry>>,
-    private val buildRootUrlsByCatalogUrl: Map<String, Set<String>>,
+    internal val entries: List<TypesafeConventionsCatalogIndexEntry>,
+    internal val enabledBuildUrls: Set<String>,
 ) {
+    private val catalogsByName = entries.groupBy(TypesafeConventionsCatalogIndexEntry::catalogName)
+    private val buildRootUrlsByCatalogUrl = entries
+        .groupBy(TypesafeConventionsCatalogIndexEntry::catalogUrl)
+        .mapValues { (_, catalogs) -> catalogs.mapTo(sortedSetOf()) { it.buildUrl } }
+
     fun findCatalog(contextUrl: String, catalogName: String): TypesafeConventionsCatalogIndexEntry? =
         catalogsByName[catalogName]
             .orEmpty()
@@ -49,61 +57,89 @@ internal class TypesafeConventionsCatalogIndex private constructor(
     fun buildRootUrls(catalogUrl: String): Set<String> =
         buildRootUrlsByCatalogUrl[catalogUrl].orEmpty()
 
+    override fun equals(other: Any?): Boolean =
+        this === other || other is TypesafeConventionsCatalogIndex &&
+                entries == other.entries && enabledBuildUrls == other.enabledBuildUrls
+
+    override fun hashCode(): Int = 31 * entries.hashCode() + enabledBuildUrls.hashCode()
+
     internal companion object {
-        fun create(entries: Collection<TypesafeConventionsCatalogIndexEntry>): TypesafeConventionsCatalogIndex =
+        fun create(
+            entries: Collection<TypesafeConventionsCatalogIndexEntry>,
+            enabledBuildUrls: Set<String> = entries.mapTo(sortedSetOf()) { it.buildUrl },
+        ) =
             TypesafeConventionsCatalogIndex(
-                catalogsByName = entries
-                    .groupBy(TypesafeConventionsCatalogIndexEntry::catalogName)
-                    .mapValues { (_, catalogs) -> catalogs.sortedBy { it.buildUrl } },
-                buildRootUrlsByCatalogUrl = entries
-                    .groupBy(TypesafeConventionsCatalogIndexEntry::catalogUrl)
-                    .mapValues { (_, catalogs) -> catalogs.mapTo(sortedSetOf()) { it.buildUrl } },
+                entries = entries
+                    .map { entry -> entry.copy(contextRootUrls = entry.contextRootUrls.toSortedSet()) }
+                    .distinct()
+                    .sortedWith(
+                        compareBy(
+                            TypesafeConventionsCatalogIndexEntry::catalogName,
+                            TypesafeConventionsCatalogIndexEntry::buildUrl,
+                            TypesafeConventionsCatalogIndexEntry::catalogUrl,
+                        ).thenBy { entry -> entry.contextRootUrls.joinToString("\u0000") },
+                    ),
+                enabledBuildUrls = enabledBuildUrls.toSortedSet(),
             )
     }
 }
 
-internal class TypesafeConventionsCatalogIndexCache {
+internal class TypesafeConventionsPublishedCatalogIndex : ModificationTracker {
     @Volatile
-    private var cached: CachedIndex? = null
+    private var published: TypesafeConventionsCatalogIndex? = null
+    private val generation = AtomicLong()
 
-    fun getOrBuild(
-        snapshotIdentity: Any,
-        stateModificationCount: Long,
+    override fun getModificationCount(): Long = generation.get()
+
+    fun currentOrBuild(
         builder: () -> TypesafeConventionsCatalogIndex,
     ): TypesafeConventionsCatalogIndex {
-        cached?.takeIf { cache ->
-            cache.snapshotIdentity === snapshotIdentity &&
-                    cache.stateModificationCount == stateModificationCount
-        }?.let(CachedIndex::index)?.let { return it }
+        published?.let { return it }
 
         return synchronized(this) {
-            cached?.takeIf { cache ->
-                cache.snapshotIdentity === snapshotIdentity &&
-                        cache.stateModificationCount == stateModificationCount
-            }?.index ?: builder().also { index ->
-                cached = CachedIndex(snapshotIdentity, stateModificationCount, index)
-            }
+            published ?: builder().also { published = it }
         }
     }
 
-    private data class CachedIndex(
-        val snapshotIdentity: Any,
-        val stateModificationCount: Long,
-        val index: TypesafeConventionsCatalogIndex,
-    )
+    fun publish(index: TypesafeConventionsCatalogIndex): Boolean = synchronized(this) {
+        if (published == index) {
+            return@synchronized false
+        }
+        published = index
+        generation.incrementAndGet()
+        true
+    }
 }
 
 @Service(Service.Level.PROJECT)
-internal class TypesafeConventionsCatalogIndexService(private val project: Project) {
-    private val cache = TypesafeConventionsCatalogIndexCache()
+internal class TypesafeConventionsCatalogIndexService(private val project: Project) : ModificationTracker {
+    private val publishedIndex = TypesafeConventionsPublishedCatalogIndex()
+    private val catalogRefreshGeneration = AtomicLong()
+
+    internal val catalogRefreshTracker = ModificationTracker { catalogRefreshGeneration.get() }
+
+    override fun getModificationCount(): Long = publishedIndex.modificationCount
 
     @RequiresReadLock
-    fun currentIndex(): TypesafeConventionsCatalogIndex {
-        val snapshot = project.workspaceModel.currentSnapshot
-        val buildState = project.service<TypesafeConventionsGradleBuildState>()
-        return cache.getOrBuild(snapshot, buildState.stateModificationCount) {
-            buildIndex(snapshot, buildState.committedBuildUrls())
+    fun currentIndex(): TypesafeConventionsCatalogIndex =
+        publishedIndex.currentOrBuild {
+            buildCurrentIndex()
         }
+
+    fun rebuildAndPublish(): Boolean = publishedIndex.publish(buildCurrentIndex())
+
+    internal fun catalogsRefreshed() {
+        catalogRefreshGeneration.incrementAndGet()
+    }
+
+    @TestOnly
+    internal fun publishForTests(index: TypesafeConventionsCatalogIndex): Boolean =
+        publishedIndex.publish(index)
+
+    private fun buildCurrentIndex(): TypesafeConventionsCatalogIndex {
+        val snapshot = project.workspaceModel.currentSnapshot
+        val enabledBuildUrls = project.service<TypesafeConventionsGradleBuildState>().committedBuildUrls()
+        return buildIndex(snapshot, enabledBuildUrls)
     }
 
     @Suppress("UnstableApiUsage")
@@ -112,7 +148,7 @@ internal class TypesafeConventionsCatalogIndexService(private val project: Proje
         enabledBuildUrls: Set<String>,
     ): TypesafeConventionsCatalogIndex {
         if (enabledBuildUrls.isEmpty()) {
-            return TypesafeConventionsCatalogIndex.create(emptyList())
+            return TypesafeConventionsCatalogIndex.create(emptyList(), emptySet())
         }
         val entries = snapshot.entities<GradleBuildEntity>()
             .filter { build -> build.url.url in enabledBuildUrls }
@@ -131,7 +167,7 @@ internal class TypesafeConventionsCatalogIndexService(private val project: Proje
                 }
             }
             .toList()
-        return TypesafeConventionsCatalogIndex.create(entries)
+        return TypesafeConventionsCatalogIndex.create(entries, enabledBuildUrls)
     }
 }
 

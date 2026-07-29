@@ -38,6 +38,9 @@ internal data class TypesafeConventionsKotlinCatalogAccessor(
     val aliasSelectorNames: List<String>
         get() = nameExpressions.drop(aliasSelectorStartIndex).map { it.getReferencedName() }
 
+    val aliasSelectorExpressions: List<KtNameReferenceExpression>
+        get() = nameExpressions.drop(aliasSelectorStartIndex)
+
     val aliasPath: String
         get() = aliasSelectorNames.joinToString(".")
 }
@@ -45,13 +48,38 @@ internal data class TypesafeConventionsKotlinCatalogAccessor(
 internal data class TypesafeConventionsKotlinCatalogReferenceContext(
     val catalogName: String,
     val section: TypesafeConventionsCatalogSection,
-    val aliasSegments: List<String>,
-    val targetSegmentIndex: Int,
-    val selectorStartIndex: Int,
-    val selectorEndIndex: Int,
-    val catalogUrl: String?,
+    val selectorIndex: Int,
     val rangeInElement: TextRange,
 )
+
+internal data class TypesafeConventionsKotlinCatalogSelectorGroup(
+    val selectorStartIndex: Int,
+    val selectorEndIndex: Int,
+    val rangeInElement: TextRange,
+    val targetSegment: TomlKeySegment,
+)
+
+internal class CatalogResolutionSnapshot private constructor(
+    internal val selectorGroups: List<TypesafeConventionsKotlinCatalogSelectorGroup>,
+) {
+    private val selectorGroupsByIndex = buildMap {
+        selectorGroups.forEach { group ->
+            for (selectorIndex in group.selectorStartIndex until group.selectorEndIndex) {
+                put(selectorIndex, group)
+            }
+        }
+    }
+
+    fun groupForSelector(selectorIndex: Int): TypesafeConventionsKotlinCatalogSelectorGroup? =
+        selectorGroupsByIndex[selectorIndex]
+
+    internal companion object {
+        val EMPTY = CatalogResolutionSnapshot(emptyList())
+
+        fun create(selectorGroups: List<TypesafeConventionsKotlinCatalogSelectorGroup>): CatalogResolutionSnapshot =
+            CatalogResolutionSnapshot(selectorGroups)
+    }
+}
 
 private data class TypesafeConventionsKotlinCatalogSearchTarget(
     val segment: TomlKeySegment,
@@ -63,31 +91,23 @@ private data class TypesafeConventionsKotlinCatalogSearchTarget(
 internal open class TypesafeConventionsKotlinCatalogReference(
     expression: KtDotQualifiedExpression,
     internal val context: TypesafeConventionsKotlinCatalogReferenceContext,
-    private val resolvedTarget: TomlKeySegment? = null,
-) : PsiReferenceBase<KtDotQualifiedExpression>(expression, context.rangeInElement) {
+) : PsiReferenceBase<KtDotQualifiedExpression>(expression, context.rangeInElement, true) {
 
     @RequiresReadLock
     @RequiresBackgroundThread
-    override fun resolve(): TomlKeySegment? {
-        resolvedTarget?.takeIf(PsiElement::isValid)?.let { return it }
-        val tomlFile = findTypesafeConventionsCatalogTomlFile(element, context.catalogName) ?: return null
-        if (context.catalogUrl != null && tomlFile.virtualFile?.url != context.catalogUrl) {
-            return null
-        }
-        val entry = findTypesafeConventionsCatalogEntry(
-            tomlFile,
-            context.section,
-            context.aliasSegments.joinToString("."),
-        ) ?: return null
-        return typesafeConventionsTomlCatalogAliasIndex(tomlFile)
-            .find(entry, context.section)
-            ?.segments
-            ?.getOrNull(context.targetSegmentIndex)
-    }
+    override fun resolve(): TomlKeySegment? =
+        element.typesafeConventionsCatalogResolutionSnapshot()
+            .groupForSelector(context.selectorIndex)
+            ?.targetSegment
+            ?.takeIf(PsiElement::isValid)
 
     @RequiresReadLock
-    override fun handleElementRename(newElementName: String): PsiElement =
-        element.replaceTypesafeConventionsCatalogAliasSegment(context, newElementName)
+    override fun handleElementRename(newElementName: String): PsiElement {
+        val group = element.typesafeConventionsCatalogResolutionSnapshot()
+            .groupForSelector(context.selectorIndex)
+            ?: return element
+        return element.replaceTypesafeConventionsCatalogAliasGroup(group, newElementName)
+    }
 }
 
 internal class TypesafeConventionsKotlinCatalogGotoDeclarationHandler : GotoDeclarationHandler {
@@ -152,9 +172,17 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
     ) {
         val keySegment = queryParameters.elementToSearch as? TomlKeySegment ?: return
         val target = keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return
+        val searchSession = queryParameters.optimizer.searchSession
+        val processedGroups = synchronized(searchSession) {
+            searchSession.getUserData(PROCESSED_CATALOG_SELECTOR_GROUPS_KEY)
+                ?: ConcurrentHashMap.newKeySet<ProcessedSelectorGroup>().also { groups ->
+                    searchSession.putUserData(PROCESSED_CATALOG_SELECTOR_GROUPS_KEY, groups)
+                }
+        }
         val resultProcessor = CatalogReferenceRequestProcessor(
             target.segment,
             target.section,
+            processedGroups,
         )
         val buildScope = typesafeConventionsCatalogBuildRootsSearchScope(
             keySegment.project,
@@ -174,8 +202,8 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
     private class CatalogReferenceRequestProcessor(
         private val searchedSegment: TomlKeySegment,
         section: TypesafeConventionsCatalogSection,
+        private val processedGroups: MutableSet<ProcessedSelectorGroup>,
     ) : RequestResultProcessor(searchedSegment, section) {
-
         @RequiresReadLock
         override fun processTextOccurrence(
             element: PsiElement,
@@ -184,19 +212,53 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
         ): Boolean {
             val occurrence = element as? KtNameReferenceExpression ?: return true
             val expression = occurrence.findTypesafeConventionsCatalogExpression() ?: return true
-            val reference = createTypesafeConventionsKotlinCatalogReferences(expression)
-                .firstOrNull { it.resolve() === searchedSegment }
+            val accessor = expression.typesafeConventionsCatalogAccessor() ?: return true
+            val absoluteOffset = occurrence.textRange.startOffset + offsetInElement
+            val selectorIndex = accessor.aliasSelectorExpressions.indexOfFirst { selector ->
+                selector === occurrence || selector.textRange.containsOffset(absoluteOffset)
+            }.takeIf { it >= 0 } ?: return true
+            val group = expression.typesafeConventionsCatalogResolutionSnapshot()
+                .groupForSelector(selectorIndex)
                 ?: return true
+            if (group.targetSegment !== searchedSegment) {
+                return true
+            }
+            val expressionFileUrl = expression.containingFile.virtualFile?.url ?: return true
+            if (!processedGroups.add(
+                    ProcessedSelectorGroup(
+                        expressionFileUrl,
+                        expression.textRange.startOffset,
+                        group.selectorStartIndex,
+                        group.selectorEndIndex,
+                    ),
+                )
+            ) {
+                return true
+            }
+            if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
+                return true
+            }
             return consumer.process(
                 TypesafeConventionsKotlinCatalogUsageReference(
                     expression,
-                    searchedSegment,
-                    reference.context,
+                    TypesafeConventionsKotlinCatalogReferenceContext(
+                        catalogName = accessor.catalogName,
+                        section = accessor.section,
+                        selectorIndex = selectorIndex,
+                        rangeInElement = group.rangeInElement,
+                    ),
                 ),
             )
         }
     }
 }
+
+private data class ProcessedSelectorGroup(
+    val expressionFileUrl: String,
+    val expressionStartOffset: Int,
+    val selectorStartIndex: Int,
+    val selectorEndIndex: Int,
+)
 
 @RequiresReadLock
 private fun TomlKeySegment.typesafeConventionsKotlinCatalogSearchTarget():
@@ -226,9 +288,25 @@ private fun TomlKeySegment.typesafeConventionsKotlinCatalogSearchTarget():
 
 internal class TypesafeConventionsKotlinCatalogUsageReference(
     expression: KtDotQualifiedExpression,
-    searchedSegment: TomlKeySegment,
     context: TypesafeConventionsKotlinCatalogReferenceContext,
-) : TypesafeConventionsKotlinCatalogReference(expression, context, searchedSegment)
+) : TypesafeConventionsKotlinCatalogReference(expression, context) {
+    private val identity = UsageReferenceIdentity(
+        fileUrl = expression.containingFile.virtualFile?.url,
+        expressionStartOffset = expression.textRange.startOffset,
+        rangeInExpression = context.rangeInElement,
+    )
+
+    override fun equals(other: Any?): Boolean =
+        this === other || other is TypesafeConventionsKotlinCatalogUsageReference && identity == other.identity
+
+    override fun hashCode(): Int = identity.hashCode()
+
+    private data class UsageReferenceIdentity(
+        val fileUrl: String?,
+        val expressionStartOffset: Int,
+        val rangeInExpression: TextRange,
+    )
+}
 
 @RequiresReadLock
 internal fun KtDotQualifiedExpression.typesafeConventionsCatalogAccessor():
@@ -261,48 +339,121 @@ internal fun createTypesafeConventionsKotlinCatalogReferences(
         return emptyList()
     }
     val accessor = expression.typesafeConventionsCatalogAccessor() ?: return emptyList()
-    val tomlFile = findTypesafeConventionsCatalogTomlFile(expression, accessor.catalogName) ?: return emptyList()
-    val entry = findTypesafeConventionsCatalogEntry(tomlFile, accessor.section, accessor.aliasPath)
-        ?: return emptyList()
-    val aliasSegments = typesafeConventionsTomlCatalogAliasIndex(tomlFile)
-        .find(entry, accessor.section)
-        ?.segments
-        .orEmpty()
-    if (aliasSegments.isEmpty() || !accessor.resolvesToTypesafeConventionsEntrypoint()) {
+    if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
         return emptyList()
     }
-    val contexts = expression.createTypesafeConventionsCatalogReferenceContexts(
-        accessor,
-        aliasSegments,
-        tomlFile.originalFile.virtualFile?.url ?: tomlFile.virtualFile?.url,
-    )
-    return contexts.mapIndexed { index, context ->
-        TypesafeConventionsKotlinCatalogReference(expression, context, aliasSegments[index])
+    return accessor.aliasSelectorExpressions.mapIndexed { selectorIndex, selector ->
+        TypesafeConventionsKotlinCatalogReference(
+            expression,
+            TypesafeConventionsKotlinCatalogReferenceContext(
+                catalogName = accessor.catalogName,
+                section = accessor.section,
+                selectorIndex = selectorIndex,
+                rangeInElement = expression.relativeRange(selector, selector),
+            ),
+        )
     }
 }
 
 @RequiresReadLock
 private fun TypesafeConventionsKotlinCatalogAccessor.resolvesToTypesafeConventionsEntrypoint(): Boolean {
     val declaration = nameExpressions.first().mainReference.resolve() as? KtProperty ?: return false
-    val generatedFile = declaration.containingKtFile.virtualFile ?: return false
-    val normalizedPath = generatedFile.path.replace('\\', '/')
     return declaration.name == catalogName &&
-            declaration.receiverTypeReference?.text?.substringAfterLast('.') == "Project" &&
-            generatedFile.name.startsWith("EntrypointFor") &&
-            normalizedPath.contains("/build/generated-sources/typesafe-conventions/kotlin/")
+            declaration.receiverTypeReference.resolvesToGradleProjectType()
 }
 
 @RequiresReadLock
-internal fun KtDotQualifiedExpression.createTypesafeConventionsCatalogReferenceContexts(
+private fun KtTypeReference?.resolvesToGradleProjectType(): Boolean {
+    val userType = this?.typeElement as? KtUserType ?: return false
+    return userType.referenceExpression?.mainReference?.resolve().resolvedQualifiedName() == GRADLE_PROJECT_FQ_NAME
+}
+
+@RequiresReadLock
+private fun PsiElement?.resolvedQualifiedName(): String? =
+    when (this) {
+        is PsiClass -> qualifiedName
+        is KtClassOrObject -> fqName?.asString()
+        is KtTypeAlias -> getTypeReference().resolvesToQualifiedName()
+        else -> this?.navigationElement?.takeIf { it !== this }?.resolvedQualifiedName()
+    }
+
+@RequiresReadLock
+private fun KtTypeReference?.resolvesToQualifiedName(): String? {
+    val userType = this?.typeElement as? KtUserType ?: return null
+    return userType.referenceExpression?.mainReference?.resolve().resolvedQualifiedName()
+}
+
+@RequiresReadLock
+@RequiresBackgroundThread
+internal fun KtDotQualifiedExpression.typesafeConventionsCatalogResolutionSnapshot(): CatalogResolutionSnapshot =
+    CachedValuesManager.getManager(project).getCachedValue(
+        this,
+        TYPESAFE_CONVENTIONS_CATALOG_RESOLUTION_SNAPSHOT_KEY,
+        { createTypesafeConventionsCatalogResolutionSnapshotResult() },
+        false,
+    )
+
+@RequiresReadLock
+@RequiresBackgroundThread
+private fun KtDotQualifiedExpression.createTypesafeConventionsCatalogResolutionSnapshotResult():
+        CachedValueProvider.Result<CatalogResolutionSnapshot> {
+    val accessor = typesafeConventionsCatalogAccessor()
+        ?: return CachedValueProvider.Result.create(CatalogResolutionSnapshot.EMPTY, this)
+    val contextUrl = containingFile.originalFile.virtualFile?.url
+        ?: containingFile.virtualFile?.url
+        ?: return CachedValueProvider.Result.create(CatalogResolutionSnapshot.EMPTY, this)
+    val catalogIndexService = project.service<TypesafeConventionsCatalogIndexService>()
+    val catalog = catalogIndexService.currentIndex().findCatalog(contextUrl, accessor.catalogName)
+        ?: return CachedValueProvider.Result.create(
+            CatalogResolutionSnapshot.EMPTY,
+            this,
+            catalogIndexService,
+            catalogIndexService.catalogRefreshTracker,
+        )
+    val virtualFile = VirtualFileManager.getInstance().findFileByUrl(catalog.catalogUrl)
+        ?: return CachedValueProvider.Result.create(
+            CatalogResolutionSnapshot.EMPTY,
+            this,
+            catalogIndexService,
+            catalogIndexService.catalogRefreshTracker,
+            VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+        )
+    val tomlFile = manager.findFile(virtualFile) as? TomlFile
+        ?: return CachedValueProvider.Result.create(
+            CatalogResolutionSnapshot.EMPTY,
+            this,
+            catalogIndexService,
+            catalogIndexService.catalogRefreshTracker,
+            VirtualFileManager.VFS_STRUCTURE_MODIFICATIONS,
+        )
+    val alias = typesafeConventionsTomlCatalogAliasIndex(tomlFile)
+        .find(accessor.section, accessor.aliasPath)
+    val snapshot = alias?.segments
+        ?.let { segments ->
+            CatalogResolutionSnapshot.create(
+                createTypesafeConventionsKotlinCatalogSelectorGroups(accessor, segments),
+            )
+        }
+        ?: CatalogResolutionSnapshot.EMPTY
+    return CachedValueProvider.Result.create(
+        snapshot,
+        this,
+        catalogIndexService,
+        catalogIndexService.catalogRefreshTracker,
+        tomlFile,
+    )
+}
+
+@RequiresReadLock
+internal fun KtDotQualifiedExpression.createTypesafeConventionsKotlinCatalogSelectorGroups(
     accessor: TypesafeConventionsKotlinCatalogAccessor,
     tomlSegments: List<TomlKeySegment>,
-    catalogUrl: String?,
-): List<TypesafeConventionsKotlinCatalogReferenceContext> {
+): List<TypesafeConventionsKotlinCatalogSelectorGroup> {
     val segmentNames = tomlSegments.map { it.name ?: return emptyList() }
-    val selectorExpressions = accessor.nameExpressions.drop(accessor.aliasSelectorStartIndex)
+    val selectorExpressions = accessor.aliasSelectorExpressions
     val selectorNames = selectorExpressions.map { it.getReferencedName() }
     var selectorIndex = 0
-    val contexts = buildList {
+    val groups = buildList {
         for ((segmentIndex, segmentName) in segmentNames.withIndex()) {
             val selectorEndIndex = (selectorIndex + 1..selectorNames.size).firstOrNull { candidateEnd ->
                 typesafeConventionsCatalogKeysMatch(
@@ -315,21 +466,17 @@ internal fun KtDotQualifiedExpression.createTypesafeConventionsCatalogReferenceC
                 selectorExpressions[selectorEndIndex - 1],
             )
             add(
-                TypesafeConventionsKotlinCatalogReferenceContext(
-                    catalogName = accessor.catalogName,
-                    section = accessor.section,
-                    aliasSegments = segmentNames,
-                    targetSegmentIndex = segmentIndex,
+                TypesafeConventionsKotlinCatalogSelectorGroup(
                     selectorStartIndex = selectorIndex,
                     selectorEndIndex = selectorEndIndex,
-                    catalogUrl = catalogUrl,
                     rangeInElement = range,
+                    targetSegment = tomlSegments[segmentIndex],
                 ),
             )
             selectorIndex = selectorEndIndex
         }
     }
-    return contexts.takeIf { selectorIndex == selectorNames.size }.orEmpty()
+    return groups.takeIf { selectorIndex == selectorNames.size }.orEmpty()
 }
 
 private fun KtDotQualifiedExpression.relativeRange(
@@ -376,15 +523,15 @@ internal fun KtDotQualifiedExpression.matchesTopmostTypesafeConventionsCatalogRe
     hasOnlyNameReferences() && !hasWrappingVersionCatalogExpression()
 
 @RequiresReadLock
-private fun KtDotQualifiedExpression.replaceTypesafeConventionsCatalogAliasSegment(
-    context: TypesafeConventionsKotlinCatalogReferenceContext,
+internal fun KtDotQualifiedExpression.replaceTypesafeConventionsCatalogAliasGroup(
+    group: TypesafeConventionsKotlinCatalogSelectorGroup,
     newElementName: String,
 ): PsiElement {
     val accessor = typesafeConventionsCatalogAccessor() ?: return this
     val aliasSelectorNames = accessor.aliasSelectorNames.toMutableList()
-    if (context.selectorStartIndex !in aliasSelectorNames.indices ||
-        context.selectorEndIndex !in 1..aliasSelectorNames.size ||
-        context.selectorStartIndex >= context.selectorEndIndex
+    if (group.selectorStartIndex !in aliasSelectorNames.indices ||
+        group.selectorEndIndex !in 1..aliasSelectorNames.size ||
+        group.selectorStartIndex >= group.selectorEndIndex
     ) {
         return this
     }
@@ -392,8 +539,8 @@ private fun KtDotQualifiedExpression.replaceTypesafeConventionsCatalogAliasSegme
     if (replacementSelectors.isEmpty()) {
         return this
     }
-    aliasSelectorNames.subList(context.selectorStartIndex, context.selectorEndIndex).clear()
-    aliasSelectorNames.addAll(context.selectorStartIndex, replacementSelectors)
+    aliasSelectorNames.subList(group.selectorStartIndex, group.selectorEndIndex).clear()
+    aliasSelectorNames.addAll(group.selectorStartIndex, replacementSelectors)
     val newExpressionText = buildTypesafeConventionsKotlinCatalogAccessorText(
         accessor.catalogName,
         accessor.section,
@@ -435,3 +582,15 @@ private fun String.toCatalogSearchWord(): String =
 
 private fun String.toCatalogSelectorNames(): List<String> =
     split('.', '-', '_').filter(String::isNotEmpty)
+
+private val TYPESAFE_CONVENTIONS_CATALOG_RESOLUTION_SNAPSHOT_KEY =
+    Key.create<CachedValue<CatalogResolutionSnapshot>>(
+        "typesafe.conventions.kotlin.catalog.resolution.snapshot",
+    )
+
+private val PROCESSED_CATALOG_SELECTOR_GROUPS_KEY =
+    Key.create<MutableSet<ProcessedSelectorGroup>>(
+        "typesafe.conventions.kotlin.catalog.processed.selector.groups",
+    )
+
+private const val GRADLE_PROJECT_FQ_NAME = "org.gradle.api.Project"
