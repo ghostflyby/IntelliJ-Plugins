@@ -8,18 +8,21 @@ package dev.ghostflyby.typesafeconventions.gradle
 
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
 import com.intellij.openapi.application.QueryExecutorBase
+import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
 import com.intellij.psi.PsiReferenceBase
 import com.intellij.psi.search.*
 import com.intellij.psi.search.searches.ReferencesSearch
-import com.intellij.psi.util.parentOfType
-import com.intellij.psi.util.parents
+import com.intellij.psi.util.*
 import com.intellij.util.Processor
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
@@ -28,6 +31,7 @@ import org.jetbrains.kotlin.psi.*
 import org.toml.lang.psi.TomlFile
 import org.toml.lang.psi.TomlKeySegment
 import org.toml.lang.psi.TomlKeyValue
+import java.util.concurrent.ConcurrentHashMap
 
 internal data class TypesafeConventionsKotlinCatalogAccessor(
     val catalogName: String,

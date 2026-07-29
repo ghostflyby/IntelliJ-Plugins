@@ -7,13 +7,16 @@
 package dev.ghostflyby.typesafeconventions.gradle
 
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeIntentReadAction
+import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
@@ -27,9 +30,7 @@ import com.intellij.platform.backend.observation.trackActivity
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.storage.entities
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiManager
+import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.SearchRequestCollector
 import com.intellij.psi.search.SearchSession
@@ -507,7 +508,7 @@ private class GradleTypesafeConventionsSyncedProject(
         try {
             withContext(Dispatchers.EDT) {
                 WriteCommandAction.runWriteCommandAction(project) {
-                    document.text = originalText.replace(aliasText, replacementText)
+                    document.setText(originalText.replace(aliasText, replacementText))
                     documentManager.doPostponedOperationsAndUnblockDocument(document)
                     documentManager.commitDocument(document)
                 }
@@ -516,7 +517,7 @@ private class GradleTypesafeConventionsSyncedProject(
         } finally {
             withContext(Dispatchers.EDT) {
                 WriteCommandAction.runWriteCommandAction(project) {
-                    document.text = originalText
+                    document.setText(originalText)
                     documentManager.doPostponedOperationsAndUnblockDocument(document)
                     documentManager.commitDocument(document)
                     FileDocumentManager.getInstance().saveDocumentAsIs(document)
