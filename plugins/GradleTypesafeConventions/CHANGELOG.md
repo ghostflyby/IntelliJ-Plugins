@@ -23,6 +23,8 @@
 
 ### Fixed
 
+- Ignore unrelated `Project` extensions that resemble generated catalog accessors, completely clean up every unlinked
+  Gradle root, and refresh synchronized catalogs without blocking the UI thread.
 - Fixed an IntelliJ IDEA 2026.1 Kotlin DSL navigation crash while preserving declaration navigation, Find Usages, and
   rename support for version catalogs used from `buildSrc` and included build logic.
 - Resolve dotted and separator-normalized Kotlin catalog accessors to the exact TOML key segment, so Goto Declaration,

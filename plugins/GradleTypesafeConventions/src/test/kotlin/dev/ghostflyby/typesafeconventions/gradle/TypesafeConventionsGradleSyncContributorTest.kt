@@ -94,6 +94,35 @@ internal class TypesafeConventionsGradleSyncContributorTest {
         assertTrue(state.pendingProjectPaths().isEmpty())
     }
 
+    @Test
+    fun `unlinking multiple roots removes all committed and pending state`() = runBlocking {
+        val state = project.service<TypesafeConventionsGradleBuildState>()
+        val root = buildPathFixture.get()
+        val rootA = root.resolve("root-a").toString()
+        val rootB = root.resolve("root-b").toString()
+        state.stageCandidate(
+            rootA,
+            TypesafeConventionsGradleBuildCandidate(setOf("file:///root-a"), emptySet()),
+        )
+        state.stageCandidate(
+            rootB,
+            TypesafeConventionsGradleBuildCandidate(setOf("file:///root-b"), emptySet()),
+        )
+        state.commit(null)
+        state.stageCandidate(
+            rootA,
+            TypesafeConventionsGradleBuildCandidate(setOf("file:///root-a/replacement"), emptySet()),
+        )
+
+        TypesafeConventionsProjectDataImportListener(project).onProjectsUnlinked(setOf(rootA, rootB))
+        project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
+
+        assertTrue(state.committedBuildUrls().isEmpty())
+        assertTrue(state.pendingProjectPaths().isEmpty())
+        assertEquals(TypesafeConventionsGradleProjectPathHealth.UNKNOWN, state.projectPathHealth(rootA))
+        assertEquals(TypesafeConventionsGradleProjectPathHealth.UNKNOWN, state.projectPathHealth(rootB))
+    }
+
     private fun projectResolverContext(
         buildRoot: Path,
         model: TypesafeConventionsCatalogModel,

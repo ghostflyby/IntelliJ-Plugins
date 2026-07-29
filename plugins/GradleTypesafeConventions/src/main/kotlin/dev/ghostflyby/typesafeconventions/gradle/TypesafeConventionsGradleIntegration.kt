@@ -6,7 +6,7 @@
 
 package dev.ghostflyby.typesafeconventions.gradle
 
-import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.*
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
@@ -20,6 +20,11 @@ import com.intellij.platform.workspace.storage.entities
 import com.intellij.platform.workspace.storage.toBuilder
 import com.intellij.platform.workspace.storage.url.VirtualFileUrl
 import com.intellij.psi.PsiDocumentManager
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.projectModel.modifyGradleBuildEntity
 import org.jetbrains.plugins.gradle.model.versionCatalogs.GradleVersionCatalogEntity
@@ -35,6 +40,7 @@ import org.jetbrains.plugins.gradle.settings.GradleSettingsListener
 import java.io.File
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicLong
 
 internal class TypesafeConventionsProjectResolverExtension : AbstractProjectResolverExtension(),
     GradleProjectResolverExtension {
@@ -326,19 +332,11 @@ internal class TypesafeConventionsProjectDataImportListener(private val project:
     ProjectDataImportListener,
     GradleSettingsListener {
     override fun onImportFinished(projectPath: String?) {
-        val commit = project.service<TypesafeConventionsGradleBuildState>().commit(projectPath)
-        if (commit.projectPaths.isEmpty()) {
-            return
-        }
-        refreshTypesafeConventionsCatalogFiles(project, commit.catalogUrlsToRefresh)
-        project.service<TypesafeConventionsCatalogIndexService>().apply {
-            catalogsRefreshed()
-            rebuildAndPublish()
-        }
+        project.service<TypesafeConventionsCatalogRefreshService>().importFinished(projectPath)
     }
 
     override fun onImportFailed(projectPath: String?, t: Throwable) {
-        project.service<TypesafeConventionsGradleBuildState>().discard(projectPath)
+        project.service<TypesafeConventionsCatalogRefreshService>().importFailed(projectPath)
         LOG.warn(
             "Typesafe conventions Gradle import failed for ${projectPath ?: "all linked projects"}; " +
                     "retaining the last-known-good catalog index",
@@ -347,11 +345,7 @@ internal class TypesafeConventionsProjectDataImportListener(private val project:
     }
 
     override fun onProjectsUnlinked(linkedProjectPaths: Set<String>) {
-        val state = project.service<TypesafeConventionsGradleBuildState>()
-        val changed = linkedProjectPaths.any(state::remove)
-        if (changed) {
-            project.service<TypesafeConventionsCatalogIndexService>().rebuildAndPublish()
-        }
+        project.service<TypesafeConventionsCatalogRefreshService>().projectsUnlinked(linkedProjectPaths)
     }
 
     private companion object {
@@ -359,29 +353,188 @@ internal class TypesafeConventionsProjectDataImportListener(private val project:
     }
 }
 
-private fun refreshTypesafeConventionsCatalogFiles(project: Project, catalogUrls: Set<String>) {
-    val virtualFileManager = VirtualFileManager.getInstance()
-    val catalogFiles = catalogUrls.mapNotNull(virtualFileManager::refreshAndFindFileByUrl)
-    VfsUtil.markDirtyAndRefresh(false, false, false, *catalogFiles.toTypedArray())
+@Service(Service.Level.PROJECT)
+internal class TypesafeConventionsCatalogRefreshService(
+    private val project: Project,
+    scope: CoroutineScope,
+) {
+    private val stateLock = Any()
+    private val retryCatalogUrls = sortedSetOf<String>()
+    private val coordinator: TypesafeConventionsCatalogRefreshCoordinator
 
-    val fileDocumentManager = FileDocumentManager.getInstance()
-    val documents = catalogFiles.mapNotNull(fileDocumentManager::getCachedDocument)
-    if (documents.isEmpty()) {
-        return
+    init {
+        coordinator = TypesafeConventionsCatalogRefreshCoordinator(
+            scope = scope,
+            refreshCatalogs = ::refreshCatalogs,
+            publishIfCurrent = ::publishIfCurrent,
+            onFailure = ::refreshFailed,
+        )
     }
-    val commitDocuments = Runnable {
-        val psiDocumentManager = PsiDocumentManager.getInstance(project)
-        documents.forEach { document ->
-            if (psiDocumentManager.isUncommited(document)) {
-                psiDocumentManager.commitDocument(document)
+
+    internal fun importFinished(projectPath: String?) {
+        synchronized(stateLock) {
+            val commit = project.service<TypesafeConventionsGradleBuildState>().commit(projectPath)
+            if (commit.projectPaths.isNotEmpty()) {
+                scheduleLocked(commit.catalogUrlsToRefresh)
             }
         }
     }
-    val application = ApplicationManager.getApplication()
-    if (application.isDispatchThread) {
-        commitDocuments.run()
-    } else {
-        application.invokeAndWait(commitDocuments)
+
+    internal fun importFailed(projectPath: String?) {
+        synchronized(stateLock) {
+            project.service<TypesafeConventionsGradleBuildState>().discard(projectPath)
+        }
+    }
+
+    internal fun projectsUnlinked(linkedProjectPaths: Set<String>) {
+        synchronized(stateLock) {
+            val state = project.service<TypesafeConventionsGradleBuildState>()
+            var changed = false
+            for (linkedProjectPath in linkedProjectPaths) {
+                if (state.remove(linkedProjectPath)) {
+                    changed = true
+                }
+            }
+            if (changed) {
+                scheduleLocked(emptySet())
+            }
+        }
+    }
+
+    @TestOnly
+    internal suspend fun awaitIdle() {
+        coordinator.awaitIdle()
+    }
+
+    private fun scheduleLocked(catalogUrls: Set<String>) {
+        coordinator.schedule(catalogUrls + retryCatalogUrls)
+    }
+
+    private suspend fun refreshCatalogs(catalogUrls: Set<String>) {
+        if (catalogUrls.isEmpty()) {
+            return
+        }
+        val catalogFiles = withContext(Dispatchers.IO) {
+            val virtualFileManager = VirtualFileManager.getInstance()
+            catalogUrls.mapNotNull(virtualFileManager::refreshAndFindFileByUrl).also { files ->
+                if (files.isNotEmpty()) {
+                    VfsUtil.markDirtyAndRefresh(false, false, false, *files.toTypedArray())
+                }
+            }
+        }
+        withContext(Dispatchers.EDT) {
+            val fileDocumentManager = FileDocumentManager.getInstance()
+            val psiDocumentManager = PsiDocumentManager.getInstance(project)
+            catalogFiles.asSequence()
+                .filter { it.isValid }
+                .mapNotNull(fileDocumentManager::getCachedDocument)
+                .filter(psiDocumentManager::isUncommited)
+                .forEach(psiDocumentManager::commitDocument)
+        }
+    }
+
+    private fun publishIfCurrent(generation: Long, refreshedCatalogUrls: Set<String>): Boolean =
+        synchronized(stateLock) {
+            if (coordinator.currentGeneration != generation) {
+                return@synchronized false
+            }
+            project.service<TypesafeConventionsCatalogIndexService>().apply {
+                rebuildAndPublish()
+                if (refreshedCatalogUrls.isNotEmpty()) {
+                    catalogsRefreshed()
+                }
+            }
+            retryCatalogUrls.removeAll(refreshedCatalogUrls)
+            true
+        }
+
+    private fun refreshFailed(catalogUrls: Set<String>, throwable: Throwable) {
+        synchronized(stateLock) {
+            retryCatalogUrls.addAll(catalogUrls)
+        }
+        LOG.warn(
+            "Failed to refresh typesafe conventions catalogs; retaining the last-known-good catalog index",
+            throwable,
+        )
+    }
+
+    private companion object {
+        private val LOG = logger<TypesafeConventionsCatalogRefreshService>()
+    }
+}
+
+internal class TypesafeConventionsCatalogRefreshCoordinator(
+    scope: CoroutineScope,
+    private val refreshCatalogs: suspend (Set<String>) -> Unit,
+    private val publishIfCurrent: (Long, Set<String>) -> Boolean,
+    private val onFailure: (Set<String>, Throwable) -> Unit,
+) {
+    private data class RefreshRequest(
+        val generation: Long,
+        val catalogUrls: Set<String>,
+    )
+
+    private val requests = Channel<RefreshRequest>(Channel.UNLIMITED)
+    private val requestedGeneration = AtomicLong()
+    private val completedGeneration = MutableStateFlow(0L)
+
+    internal val currentGeneration: Long
+        get() = requestedGeneration.get()
+
+    init {
+        scope.launch {
+            processRequests()
+        }
+    }
+
+    internal fun schedule(catalogUrls: Set<String>) {
+        val generation = requestedGeneration.incrementAndGet()
+        if (requests.trySend(RefreshRequest(generation, catalogUrls.toSortedSet())).isFailure) {
+            completedGeneration.value = generation
+        }
+    }
+
+    @TestOnly
+    internal suspend fun awaitIdle() {
+        val targetGeneration = requestedGeneration.get()
+        completedGeneration.first { generation -> generation >= targetGeneration }
+    }
+
+    private suspend fun processRequests() {
+        for (firstRequest in requests) {
+            var request = firstRequest
+            var latestGeneration = firstRequest.generation
+            val refreshedCatalogUrls = sortedSetOf<String>()
+            while (true) {
+                val catalogUrlsToRefresh = sortedSetOf<String>()
+                fun collect(nextRequest: RefreshRequest) {
+                    latestGeneration = maxOf(latestGeneration, nextRequest.generation)
+                    catalogUrlsToRefresh.addAll(nextRequest.catalogUrls - refreshedCatalogUrls)
+                }
+
+                collect(request)
+                while (true) {
+                    val queuedRequest = requests.tryReceive().getOrNull() ?: break
+                    collect(queuedRequest)
+                }
+
+                try {
+                    refreshCatalogs(catalogUrlsToRefresh)
+                    refreshedCatalogUrls.addAll(catalogUrlsToRefresh)
+                    if (publishIfCurrent(latestGeneration, refreshedCatalogUrls)) {
+                        completedGeneration.value = latestGeneration
+                        break
+                    }
+                    request = requests.receive()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (throwable: Throwable) {
+                    onFailure(refreshedCatalogUrls + catalogUrlsToRefresh, throwable)
+                    completedGeneration.value = latestGeneration
+                    break
+                }
+            }
+        }
     }
 }
 
