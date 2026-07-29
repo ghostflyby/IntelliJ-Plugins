@@ -213,6 +213,7 @@ private class GradleTypesafeConventionsSyncedProject(
             modelFetchFuture.await()
             importFuture.await()
         }
+        project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -582,6 +583,7 @@ private class GradleTypesafeConventionsSyncedProject(
             withContext(Dispatchers.EDT) {
                 TypesafeConventionsProjectDataImportListener(project).onImportFinished(projectPath)
             }
+            project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
             val (documentText, psiText, resolvedTarget) = readAction {
                 Triple(
                     catalogDocument?.text,
@@ -611,6 +613,7 @@ private class GradleTypesafeConventionsSyncedProject(
             withContext(Dispatchers.EDT) {
                 TypesafeConventionsProjectDataImportListener(project).onImportFinished(projectPath)
             }
+            project.service<TypesafeConventionsCatalogRefreshService>().awaitIdle()
         }
 
         // The fixture is restored for the remaining tests. The feature assertion is the first refresh above:
@@ -1286,6 +1289,15 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
     }
 
     @Test
+    suspend fun `unrelated Project extension does not expose custom reference`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/ProjectExtensionShadow.kt"),
+            expressionText = "libs.usage.target",
+        )
+    }
+
+    @Test
     suspend fun `programmatic only alias exposes only unresolved soft toml references`() {
         val projectRoot = projectPathFixture.get()
         syncedProject.assertKotlinExpressionHasOnlyUnresolvedSoftCatalogReferences(
@@ -1792,6 +1804,28 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                 get() = NonProjectCatalog()
 
             private fun nonProjectTarget(): String = with(NonProject()) {
+                libs.usage.target
+            }
+        """.trimIndent(),
+    )
+    sourceRoot.resolve("ProjectExtensionShadow.kt").writeText(
+        """
+            package fixture.shadow
+
+            import org.gradle.api.Project
+
+            private class ProjectExtensionCatalog {
+                val usage = ProjectExtensionUsage()
+            }
+
+            private class ProjectExtensionUsage {
+                val target = "not a generated typesafe-conventions entrypoint"
+            }
+
+            private val Project.libs: ProjectExtensionCatalog
+                get() = ProjectExtensionCatalog()
+
+            private fun projectExtensionTarget(project: Project): String = with(project) {
                 libs.usage.target
             }
         """.trimIndent(),
