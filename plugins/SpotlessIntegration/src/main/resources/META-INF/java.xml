@@ -1,0 +1,8 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+<idea-plugin>
+    <extensions defaultExtensionNs="dev.ghostflyby.spotless">
+        <spotlessFormattingPreprocessor implementation="dev.ghostflyby.spotless.JavaWildcardImportPreprocessor"/>
+    </extensions>
+</idea-plugin>

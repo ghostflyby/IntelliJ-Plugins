@@ -2,101 +2,125 @@
  * Copyright (c) 2025-2026 ghostflyby
  * SPDX-FileCopyrightText: 2025-2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.spotless.gradle
 
-import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.components.service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
-import dev.ghostflyby.spotless.SpotlessDaemonHost
-import dev.ghostflyby.spotless.SpotlessDaemonProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import org.jetbrains.plugins.gradle.settings.GradleSettings
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.*
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.StateFlow
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.Paths
-import kotlin.io.path.Path
 import kotlin.io.path.div
+import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as ProviderState
 
 internal class SpotlessGradleExtension : SpotlessDaemonProvider {
     private val logger = logger<SpotlessGradleExtension>()
 
-    override fun isApplicableTo(
-        project: Project,
-    ): Boolean {
-        val holder = project.service<SpotlessGradleStateHolder>()
-        return GradleSettings.getInstance(project).linkedProjectsSettings
-            .any { holder.isSpotlessEnabledForProjectDir(Path(it.externalProjectPath)) }
-    }
+    override val id: String = "dev.ghostflyby.spotless.gradle"
 
-    override suspend fun startDaemon(
-        project: Project,
-        externalProject: Path,
-    ): SpotlessDaemonHost {
-        val workingDirectory: Path = withContext(Dispatchers.IO) {
-            Files.createTempDirectory(null)
-        }
-        val unixSocketPath = workingDirectory / "spotless-daemon.sock"
-        val host = SpotlessDaemonHost.Unix(unixSocketPath, workingDirectory)
-        runGradleSpotlessDaemon(
-            project,
-            externalProject,
-            unixSocketPath,
-            host,
+    override fun state(project: Project): StateFlow<ProviderState> =
+        project.service<SpotlessGradleSettings>().providerState
+
+    override suspend fun startDaemon(context: StartContext): Handle {
+        val settings = context.project.service<SpotlessGradleSettings>()
+        return startSpotlessGradleDaemon(
+            context = context,
+            providerScope = settings.coroutineScope,
+            createWorkingDirectory = { Files.createTempDirectory(null) },
+            startProcess = ::startGradleSpotlessDaemon,
+            cleanupProcess = ::cleanupGradleDaemonProcess,
+            cleanupDirectory = ::cleanupWorkingDirectory,
         )
-        project.service<SpotlessGradleStateHolder>().daemons.add(host)
-        return host
     }
 
-    override fun findExternalProjectPath(
+    override fun resolveTarget(
         project: Project,
-        virtualFile: VirtualFile,
-    ): Path? {
-        val ioPath = virtualFile.toNioPathOrNull() ?: return null
+        file: VirtualFile,
+    ): Target? {
+        val ioPath = file.toNioPathOrNull() ?: return null
         val abs = ioPath.toAbsolutePath().normalize()
-
-        val rootDirs = GradleSettings.getInstance(project).linkedProjectsSettings
-            .mapNotNull { it.externalProjectPath }
-            .map { Paths.get(it).toAbsolutePath().normalize() }
-
-        return rootDirs
+        val externalProject = state(project).value.projects
+            .map(ExternalProject::root)
             .filter { abs.startsWith(it) }
-            .minByOrNull { it.nameCount }
+            .maxByOrNull(Path::getNameCount)
+            ?: return null
+        return Target(externalProject, abs)
     }
 
-    override suspend fun afterDaemonStopped(
-        daemon: SpotlessDaemonHost,
-        reason: String,
-    ) {
-        if (daemon !is SpotlessDaemonHost.Unix) return
-        runCatching {
-            val deleted = daemon.workingDirectory.toFile().deleteRecursively()
-            if (!deleted && Files.exists(daemon.workingDirectory)) {
-                logger.warn("Failed to delete daemon temp directory after stop ($reason): ${daemon.workingDirectory}")
+    private fun cleanupWorkingDirectory(workingDirectory: Path) {
+        val deleted = workingDirectory.toFile().deleteRecursively()
+        if (!deleted && Files.exists(workingDirectory)) {
+            logger.warn("Failed to delete daemon temp directory after stop (daemon detached): $workingDirectory")
+        }
+    }
+}
+
+internal suspend fun startSpotlessGradleDaemon(
+    context: StartContext,
+    providerScope: CoroutineScope,
+    createWorkingDirectory: () -> Path,
+    startProcess: (Project, Path, Path, Path, () -> Unit) -> SpotlessGradleDaemonProcess,
+    cleanupProcess: (SpotlessGradleDaemonProcess?) -> Unit,
+    cleanupDirectory: (Path) -> Unit,
+): Handle {
+    val terminated = CompletableDeferred<Unit>()
+    var workingDirectory: Path? = null
+    var process: SpotlessGradleDaemonProcess? = null
+    var ownershipTransferred = false
+
+    suspend fun cleanup() {
+        withContext(NonCancellable + Dispatchers.IO) {
+            try {
+                cleanupProcess(process)
+            } finally {
+                workingDirectory?.let(cleanupDirectory)
             }
-        }.onFailure { error ->
-            logger.warn("Failed to cleanup daemon temp directory after stop ($reason): ${daemon.workingDirectory}", error)
         }
     }
 
+    try {
+        withContext(Dispatchers.IO) {
+            workingDirectory = createWorkingDirectory()
+        }
+        currentCoroutineContext().ensureActive()
+        val directory = checkNotNull(workingDirectory)
+        val unixSocketPath = directory / "spotless-daemon.sock"
+        withContext(Dispatchers.IO) {
+            process = startProcess(
+                context.project,
+                context.externalProjectRoot,
+                unixSocketPath,
+                directory,
+            ) {
+                terminated.complete(Unit)
+            }
+        }
+        currentCoroutineContext().ensureActive()
+        checkNotNull(process).start()
+        currentCoroutineContext().ensureActive()
+        val lifetime = providerScope.launch(
+            context = Dispatchers.IO,
+            start = CoroutineStart.ATOMIC,
+        ) {
+            try {
+                terminated.await()
+            } finally {
+                cleanup()
+            }
+        }
+        ownershipTransferred = true
+        return Handle(Endpoint.UnixSocket(unixSocketPath), lifetime)
+    } finally {
+        if (!ownershipTransferred) {
+            cleanup()
+        }
+    }
 }
