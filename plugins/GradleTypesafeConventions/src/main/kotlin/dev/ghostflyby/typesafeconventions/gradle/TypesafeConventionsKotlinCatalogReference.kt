@@ -27,6 +27,7 @@ import com.intellij.util.Processor
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.concurrency.annotations.RequiresReadLock
 import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.references.KotlinPsiReferenceProviderContributor
 import org.toml.lang.psi.TomlFile
@@ -340,15 +341,9 @@ internal fun createTypesafeConventionsKotlinCatalogReferences(
 @RequiresReadLock
 private fun TypesafeConventionsKotlinCatalogAccessor.resolvesToTypesafeConventionsEntrypoint(): Boolean {
     val declaration = nameExpressions.first().mainReference.resolve() as? KtProperty ?: return false
-    val generatedFile = declaration.containingKtFile.originalFile.virtualFile
-        ?: declaration.containingKtFile.virtualFile
-        ?: return false
-    val normalizedPath = generatedFile.path.replace('\\', '/')
     return declaration.name == catalogName &&
-            declaration.receiverTypeReference.resolvesToGradleProjectType() &&
-            generatedFile.name.startsWith(TYPESAFE_CONVENTIONS_ENTRYPOINT_FILE_PREFIX) &&
-            generatedFile.name.endsWith(".kt") &&
-            normalizedPath.contains(TYPESAFE_CONVENTIONS_GENERATED_SOURCE_PATH_SEGMENT)
+            !declaration.hasModifier(KtTokens.PRIVATE_KEYWORD) &&
+            declaration.receiverTypeReference.resolvesToGradleProjectType()
 }
 
 @RequiresReadLock
@@ -571,6 +566,3 @@ private val PROCESSED_CATALOG_SELECTOR_GROUPS_KEY =
     )
 
 private const val GRADLE_PROJECT_FQ_NAME = "org.gradle.api.Project"
-private const val TYPESAFE_CONVENTIONS_ENTRYPOINT_FILE_PREFIX = "EntrypointFor"
-private const val TYPESAFE_CONVENTIONS_GENERATED_SOURCE_PATH_SEGMENT =
-    "/generated-sources/typesafe-conventions/kotlin/"
