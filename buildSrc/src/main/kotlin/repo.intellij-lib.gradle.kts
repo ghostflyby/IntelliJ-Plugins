@@ -19,6 +19,12 @@ kotlin {
     abiValidation()
 }
 
+intellijPlatform {
+    pluginVerification {
+        ides.current()
+    }
+}
+
 repositories {
     intellijPlatform { defaultRepositories() }
 }
