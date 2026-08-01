@@ -1180,11 +1180,16 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         versionCatalog: VersionCatalogCase,
     ) {
         val projectRoot = projectPathFixture.get()
+        val expectedScriptPaths = if (versionCatalog.catalogName == "libs") {
+            kotlinDslConventionScriptPaths(projectRoot) + kotlinDslInternalExtensionScriptPaths(projectRoot)
+        } else {
+            kotlinDslConventionScriptPaths(projectRoot)
+        }
         syncedProject.assertKotlinCatalogFindUsagesAreIsolatedToTargetCatalog(
             versionCatalog = versionCatalog,
             declarationPath = "usage.target",
             expectedExpressionText = "${versionCatalog.catalogName}.usage.target",
-            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+            expectedScriptPaths = expectedScriptPaths,
         )
     }
 
@@ -1350,6 +1355,17 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         val projectRoot = projectPathFixture.get()
         syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
             scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/ProjectExtensionShadow.kt"),
+            expressionText = "libs.usage.target",
+        )
+    }
+
+    @Test
+    suspend fun `source level internal Project extension still exposes custom reference`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/InternalProjectExtension.kt"),
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            declarationPath = "usage.target",
             expressionText = "libs.usage.target",
         )
     }
@@ -1662,6 +1678,12 @@ private fun kotlinDslVersionCatalogInConventionBuildCases(): List<VersionCatalog
 private fun kotlinDslConventionScriptPaths(projectRoot: Path): List<Path> =
     kotlinDslConventionBuildCases().map { projectRoot.resolve(it.scriptPath) }
 
+private fun kotlinDslInternalExtensionScriptPaths(projectRoot: Path): List<Path> =
+    listOf(
+        projectRoot.resolve("buildSrc/src/main/kotlin/InternalProjectExtension.kt"),
+        projectRoot.resolve("build-logic/src/main/kotlin/InternalProjectExtension.kt"),
+    )
+
 private fun kotlinDslConventionBuildCases(): List<ConventionBuildCase> =
     listOf(
         ConventionBuildCase(
@@ -1901,6 +1923,28 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                 get() = ProjectExtensionCatalog()
 
             private fun projectExtensionTarget(project: Project): String = with(project) {
+                libs.usage.target
+            }
+        """.trimIndent(),
+    )
+    sourceRoot.resolve("InternalProjectExtension.kt").writeText(
+        """
+            package fixture.internalextension
+
+            import org.gradle.api.Project
+
+            internal class InternalProjectExtensionCatalog {
+                val usage = InternalProjectExtensionUsage()
+            }
+
+            internal class InternalProjectExtensionUsage {
+                val target = "source-level accessor-like extension"
+            }
+
+            internal val Project.libs: InternalProjectExtensionCatalog
+                get() = InternalProjectExtensionCatalog()
+
+            private fun internalProjectExtensionTarget(project: Project): String = with(project) {
                 libs.usage.target
             }
         """.trimIndent(),
