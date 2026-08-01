@@ -1,15 +1,31 @@
-<!-- SPDX-FileCopyrightText: 2025 ghostflyby -->
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2025-2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
-        <taskManager implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleTaskManagerExtension"/>
         <projectResolve implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleProjectResolverExtension"/>
     </extensions>
     <extensions defaultExtensionNs="com.intellij">
         <externalProjectDataService implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleStateDataService"/>
+        <projectConfigurable bundle="messages.Bundle" id="dev.ghostflyby.spotless.workspace"
+                             instance="dev.ghostflyby.spotless.gradle.SpotlessGradleConfigurable"
+                             key="spotless.configuration.title.workspace"
+                             parentId="build"/>
     </extensions>
     <extensions defaultExtensionNs="dev.ghostflyby.spotless">
-        <spotlessDaemonProvider implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
+        <spotlessDaemonProvider id="dev.ghostflyby.spotless.gradle"
+                                order="last"
+                                implementation="dev.ghostflyby.spotless.gradle.SpotlessGradleExtension"/>
+        <spotlessDaemonProviderPresentation
+                implementation="dev.ghostflyby.spotless.gradle.frontend.SpotlessGradlePresentation"/>
     </extensions>
+    <actions resource-bundle="messages.Bundle">
+        <group id="dev.ghostflyby.spotless.actions" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="dev.ghostflyby.spotless.stopDaemons"
+                    class="dev.ghostflyby.spotless.gradle.StopSpotlessDaemonsAction"/>
+        </group>
+    </actions>
+    <resource-bundle>messages.Bundle</resource-bundle>
 </idea-plugin>

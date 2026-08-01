@@ -103,7 +103,7 @@ jobs:
 
           if ($env:EVENT_NAME -eq "pull_request")
           {
-              $verificationIdes = "platform"
+              $verificationIdes = "current"
               [string[]]$changedFiles = @(git diff --name-only --no-renames $env:BASE_SHA $env:HEAD_SHA)
               $diffExitCode = $LASTEXITCODE
 
@@ -178,9 +178,9 @@ jobs:
           }
           [string[]]$verificationTasks = @($env:PLUGIN_VERIFICATION_TASKS | ConvertFrom-Json)
           [string[]]$gradleArguments = @("--configuration-cache")
-          if ($env:PLUGIN_VERIFICATION_IDES -eq "platform")
+          if ($env:PLUGIN_VERIFICATION_IDES -ne "current")
           {
-              $gradleArguments += "-PpluginVerificationIdes=platform"
+              $gradleArguments += "-PpluginVerificationIdes=$env:PLUGIN_VERIFICATION_IDES"
           }
           $gradleArguments += $verificationTasks
           & $gradlew @gradleArguments

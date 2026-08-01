@@ -4,17 +4,20 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-07-29
+
 ### Added
+
+- optimize Java imports before formatting when the Spotless configuration expands or forbids wildcard imports.
+- show a provider-neutral Spotless status bar widget with per-external-project daemon status, restart, and stop
+  controls.
 
 ### Changed
 
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
+- finalized the daemon-provider ABI around stable provider IDs, provider-scoped state/routing/lifecycle types,
+  provider-created immutable endpoint handles with explicit `Job` lifetimes, and a separate dynamic frontend
+  presentation extension point.
+- restart active Gradle Spotless daemons after every Gradle project synchronization or daemon configuration change.
 
 ## [1.1.0] - 2026-03-22
 
@@ -73,7 +76,8 @@
 - Initial release of the Spotless Integration plugin for IntelliJ IDEA.
 - Support for automatic code formatting using Spotless.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.1.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.0...HEAD
+[2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.1.0...SpotlessIntegration-v2.0.0
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.0.0...SpotlessIntegration-v1.1.0
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.4.0...SpotlessIntegration-v1.0.0
 [0.4.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.3.0...SpotlessIntegration-v0.4.0

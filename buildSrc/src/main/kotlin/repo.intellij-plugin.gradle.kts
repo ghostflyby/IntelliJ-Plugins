@@ -19,7 +19,7 @@ plugins {
 }
 
 val buildLogic: BuildLogicSettings = extensions.getByType()
-val pluginVerificationIdes = providers.gradleProperty("pluginVerificationIdes").orElse("recommended")
+val pluginVerificationIdes = providers.gradleProperty("pluginVerificationIdes").orElse("current")
 
 intellijPlatform {
     pluginConfiguration {
@@ -71,10 +71,10 @@ intellijPlatform {
         )
         failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
         when (val value = pluginVerificationIdes.get()) {
+            "current" -> ides.current()
             "recommended" -> ides.recommended()
-            "platform" -> ides.create(buildLogic.platformType, buildLogic.platformVersion)
             else -> throw GradleException(
-                "Unsupported pluginVerificationIdes value '$value'. Expected 'recommended' or 'platform'.",
+                "Unsupported pluginVerificationIdes value '$value'. Expected 'current' or 'recommended'.",
             )
         }
     }
@@ -167,12 +167,6 @@ tasks {
         systemProperty(
             "plugin.verifier.home.dir",
             layout.buildDirectory.dir("plugin-verifier-home").get().asFile.absolutePath
-        )
-        systemProperty(
-            "intellij.plugin.verifier.download.ide.temp.dir",
-            providers.systemProperty("user.dir").map {
-                "$it/plugin-verifier-ides"
-            }
         )
     }
 
