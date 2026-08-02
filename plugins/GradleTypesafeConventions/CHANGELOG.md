@@ -37,8 +37,10 @@
   `customLibs` in `buildSrc` convention plugins.
 - Resolve Groovy catalog accessors declared through standard tables, dotted keys, or inline tables with separator
   normalization, while keeping same-named accessors isolated by catalog section.
-- Restore Kotlin Goto Declaration and Find Usages when the generated catalog entrypoint is resolved outside the
-  hard-coded generated-source path, so accessor-like Project extensions in any Gradle-managed layout keep working.
+- Restore Kotlin Goto Declaration and Find Usages for generated catalog entrypoints outside the hard-coded
+  generated-source path, including version catalog aliases used in precompiled Kotlin script `plugins` blocks.
+- Restore catalog navigation after Gradle sync when version catalog models are reported by `buildSrc` or another
+  resolver beneath the linked Gradle root.
 
 ### Security
 

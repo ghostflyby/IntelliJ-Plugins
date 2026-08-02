@@ -27,6 +27,72 @@ internal class TypesafeConventionsGradleBuildStateTest {
     }
 
     @Test
+    fun `root import commits buildSrc candidate staged by nested resolver`() {
+        val state = TypesafeConventionsGradleBuildState()
+        state.stageCandidate(
+            importProjectPath = "/repo/root",
+            candidateProjectPath = "/repo/root",
+            candidate = candidate(),
+        )
+        state.stageCandidate(
+            importProjectPath = "/repo/root",
+            candidateProjectPath = "/repo/root/buildSrc",
+            candidate = candidate("file:///repo/root/buildSrc", "file:///repo/root/gradle/libs.versions.toml"),
+        )
+
+        val catalogUrls = state.commit("/repo/root")
+
+        assertEquals(setOf("file:///repo/root/gradle/libs.versions.toml"), catalogUrls)
+        assertEquals(setOf("file:///repo/root/buildSrc"), state.committedBuildUrls())
+        assertNull(state.commit(null), "The nested buildSrc candidate must be consumed with its root import")
+    }
+
+    @Test
+    fun `root import does not consume candidate owned by nested linked root`() {
+        val state = TypesafeConventionsGradleBuildState()
+        state.stageCandidate(
+            importProjectPath = "/repo/root",
+            candidateProjectPath = "/repo/root/buildSrc",
+            candidate = candidate("file:///repo/root/buildSrc", "file:///repo/root/libs.toml"),
+        )
+        state.stageCandidate(
+            importProjectPath = "/repo/root/examples",
+            candidateProjectPath = "/repo/root/examples/buildSrc",
+            candidate = candidate("file:///repo/root/examples/buildSrc", "file:///repo/root/examples/libs.toml"),
+        )
+
+        assertEquals(setOf("file:///repo/root/libs.toml"), state.commit("/repo/root"))
+        assertEquals(setOf("file:///repo/root/buildSrc"), state.committedBuildUrls())
+
+        assertEquals(setOf("file:///repo/root/examples/libs.toml"), state.commit("/repo/root/examples"))
+        assertEquals(
+            setOf("file:///repo/root/buildSrc", "file:///repo/root/examples/buildSrc"),
+            state.committedBuildUrls(),
+        )
+    }
+
+    @Test
+    fun `candidate identity includes its owning import`() {
+        val state = TypesafeConventionsGradleBuildState()
+        state.stageCandidate(
+            importProjectPath = "/repo/root-a",
+            candidateProjectPath = "/repo/shared-resolver",
+            candidate = candidate("file:///repo/root-a", "file:///repo/root-a/libs.toml"),
+        )
+        state.stageCandidate(
+            importProjectPath = "/repo/root-b",
+            candidateProjectPath = "/repo/shared-resolver",
+            candidate = candidate("file:///repo/root-b", "file:///repo/root-b/libs.toml"),
+        )
+
+        assertEquals(setOf("file:///repo/root-a/libs.toml"), state.commit("/repo/root-a"))
+        assertEquals(setOf("file:///repo/root-a"), state.committedBuildUrls())
+
+        assertEquals(setOf("file:///repo/root-b/libs.toml"), state.commit("/repo/root-b"))
+        assertEquals(setOf("file:///repo/root-a", "file:///repo/root-b"), state.committedBuildUrls())
+    }
+
+    @Test
     fun `failed import discards pending candidate and preserves last known good`() {
         val state = TypesafeConventionsGradleBuildState()
         state.stageCandidate("/repo/root", candidate("file:///repo/old", "file:///repo/old/libs.toml"))

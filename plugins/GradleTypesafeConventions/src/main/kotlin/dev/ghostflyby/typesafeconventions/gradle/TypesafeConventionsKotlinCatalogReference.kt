@@ -343,13 +343,14 @@ private fun TypesafeConventionsKotlinCatalogAccessor.resolvesToTypesafeConventio
     val declaration = nameExpressions.first().mainReference.resolve() as? KtProperty ?: return false
     return declaration.name == catalogName &&
             !declaration.hasModifier(KtTokens.PRIVATE_KEYWORD) &&
-            declaration.receiverTypeReference.resolvesToGradleProjectType()
+            declaration.receiverTypeReference.resolvesToGradleEntrypointReceiverType()
 }
 
 @RequiresReadLock
-private fun KtTypeReference?.resolvesToGradleProjectType(): Boolean {
+private fun KtTypeReference?.resolvesToGradleEntrypointReceiverType(): Boolean {
     val userType = this?.typeElement as? KtUserType ?: return false
-    return userType.referenceExpression?.mainReference?.resolve().resolvedQualifiedName() == GRADLE_PROJECT_FQ_NAME
+    return userType.referenceExpression?.mainReference?.resolve().resolvedQualifiedName() in
+            GRADLE_ENTRYPOINT_RECEIVER_FQ_NAMES
 }
 
 @RequiresReadLock
@@ -565,4 +566,8 @@ private val PROCESSED_CATALOG_SELECTOR_GROUPS_KEY =
         "typesafe.conventions.kotlin.catalog.processed.selector.groups",
     )
 
-private const val GRADLE_PROJECT_FQ_NAME = "org.gradle.api.Project"
+private val GRADLE_ENTRYPOINT_RECEIVER_FQ_NAMES =
+    setOf(
+        "org.gradle.api.Project",
+        "org.gradle.kotlin.dsl.PluginDependenciesSpecScope",
+    )

@@ -48,6 +48,27 @@ internal class TypesafeConventionsGradleSyncContributorTest {
     }
 
     @Test
+    fun `buildSrc candidate is owned by external project import`() = runBlocking {
+        val root = buildPathFixture.get()
+        val buildSrc = root.resolve("buildSrc")
+        val context = projectResolverContext(
+            buildRoot = buildSrc,
+            model = TestCatalogModel(TypesafeConventionsCatalogModelStatus.DISABLED, emptyMap()),
+            externalProjectPath = root,
+        )
+        val storage = ImmutableEntityStorage.empty()
+
+        val result = TypesafeConventionsGradleSyncContributor().createProjectModel(context, storage)
+
+        assertSame(storage, result)
+        assertEquals(
+            emptySet<String>(),
+            project.service<TypesafeConventionsGradleBuildState>().commit(root.toString()),
+        )
+        assertNull(project.service<TypesafeConventionsGradleBuildState>().commit(buildSrc.toString()))
+    }
+
+    @Test
     fun `cancelled import discards pending candidate and preserves last known good`() {
         val state = project.service<TypesafeConventionsGradleBuildState>()
         val projectPath = buildPathFixture.get().toString()
@@ -138,6 +159,7 @@ internal class TypesafeConventionsGradleSyncContributorTest {
     private fun projectResolverContext(
         buildRoot: Path,
         model: TypesafeConventionsCatalogModel,
+        externalProjectPath: Path = buildRoot,
     ): ProjectResolverContext {
         val buildIdentifier = BuildIdentifier { buildRoot.toFile() }
         val build = Proxy.newProxyInstance(
@@ -161,7 +183,8 @@ internal class TypesafeConventionsGradleSyncContributorTest {
                 "getAllBuilds" -> listOf(build)
                 "getBuildModel" -> model
                 "getProject" -> project
-                "getProjectPath", "getExternalProjectPath", "getIdeProjectPath" -> buildRoot.toString()
+                "getProjectPath", "getIdeProjectPath" -> buildRoot.toString()
+                "getExternalProjectPath" -> externalProjectPath.toString()
                 "getRootBuild" -> build
                 "getNestedBuilds" -> emptyList<GradleLightBuild>()
                 "equals" -> proxy === arguments?.singleOrNull()

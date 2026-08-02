@@ -136,8 +136,9 @@ internal class TypesafeConventionsGradleSyncContributor :
         }
         val state = context.project.service<TypesafeConventionsGradleBuildState>()
         state.stageCandidate(
-            context.projectPath,
-            TypesafeConventionsGradleBuildCandidate(
+            importProjectPath = context.externalProjectPath,
+            candidateProjectPath = context.projectPath,
+            candidate = TypesafeConventionsGradleBuildCandidate(
                 buildUrls = enabledBuildUrls,
                 catalogUrls = catalogUrls,
             ),
@@ -149,7 +150,7 @@ internal class TypesafeConventionsGradleSyncContributor :
         context: ProjectResolverContext,
         storage: ImmutableEntityStorage,
     ): ImmutableEntityStorage {
-        context.project.service<TypesafeConventionsGradleBuildState>().discard(context.projectPath)
+        context.project.service<TypesafeConventionsGradleBuildState>().discard(context.externalProjectPath)
         return storage
     }
 
@@ -174,6 +175,11 @@ internal data class TypesafeConventionsGradleBuildPersistentState(
     val buildUrlsByProjectPath: Map<String, List<String>> = emptyMap(),
 )
 
+private data class TypesafeConventionsGradlePendingCandidateKey(
+    val importProjectPath: String,
+    val candidateProjectPath: String,
+)
+
 @State(
     name = "TypesafeConventionsGradleBuildState",
     storages = [Storage(StoragePathMacros.CACHE_FILE, roamingType = RoamingType.LOCAL)],
@@ -184,35 +190,55 @@ internal class TypesafeConventionsGradleBuildState :
         TypesafeConventionsGradleBuildPersistentState(),
     ) {
 
-    private val pendingCandidates = linkedMapOf<String, TypesafeConventionsGradleBuildCandidate>()
+    private val pendingCandidates =
+        linkedMapOf<TypesafeConventionsGradlePendingCandidateKey, TypesafeConventionsGradleBuildCandidate>()
 
-    fun stageCandidate(projectPath: String, candidate: TypesafeConventionsGradleBuildCandidate) {
-        val normalizedProjectPath = projectPath.normalizedGradleProjectPath()
+    fun stageCandidate(projectPath: String, candidate: TypesafeConventionsGradleBuildCandidate) =
+        stageCandidate(projectPath, projectPath, candidate)
+
+    fun stageCandidate(
+        importProjectPath: String,
+        candidateProjectPath: String,
+        candidate: TypesafeConventionsGradleBuildCandidate,
+    ) {
+        val normalizedImportProjectPath = importProjectPath.normalizedGradleProjectPath()
+        val normalizedCandidateProjectPath = candidateProjectPath.normalizedGradleProjectPath()
         synchronized(pendingCandidates) {
-            pendingCandidates[normalizedProjectPath] = candidate.normalized()
+            pendingCandidates[
+                TypesafeConventionsGradlePendingCandidateKey(
+                    importProjectPath = normalizedImportProjectPath,
+                    candidateProjectPath = normalizedCandidateProjectPath,
+                ),
+            ] = candidate.normalized()
         }
     }
 
     fun commit(projectPath: String?): Set<String>? = synchronized(pendingCandidates) {
-        val projectPaths = if (projectPath == null) {
-            pendingCandidates.keys.toSet()
+        val importProjectPaths = if (projectPath == null) {
+            pendingCandidates.keys.mapTo(mutableSetOf()) { it.importProjectPath }
         } else {
-            setOf(projectPath.normalizedGradleProjectPath()).filterTo(mutableSetOf()) {
-                it in pendingCandidates
-            }
+            setOf(projectPath.normalizedGradleProjectPath())
         }
-        if (projectPaths.isEmpty()) {
+        val candidatesByImportProjectPath = pendingCandidates.entries
+            .filter { (candidateKey) -> candidateKey.importProjectPath in importProjectPaths }
+            .groupBy(
+                keySelector = { (candidateKey) -> candidateKey.importProjectPath },
+                valueTransform = { it },
+            )
+        if (candidatesByImportProjectPath.isEmpty()) {
             return@synchronized null
         }
 
-        val candidates = projectPaths.associateWith { pendingCandidates.getValue(it) }
         val currentState = state
         val nextBuildUrls = currentState.buildUrlsByProjectPath.toMutableMap()
-        for ((candidateProjectPath, candidate) in candidates) {
-            if (candidate.buildUrls.isEmpty()) {
-                nextBuildUrls.remove(candidateProjectPath)
+        for ((importProjectPath, candidates) in candidatesByImportProjectPath) {
+            val buildUrls = candidates.flatMapTo(mutableSetOf()) { (_, candidate) ->
+                candidate.buildUrls
+            }
+            if (buildUrls.isEmpty()) {
+                nextBuildUrls.remove(importProjectPath)
             } else {
-                nextBuildUrls[candidateProjectPath] = candidate.buildUrls.sorted()
+                nextBuildUrls[importProjectPath] = buildUrls.sorted()
             }
         }
         val nextState = currentState.copy(buildUrlsByProjectPath = nextBuildUrls.toSortedMap())
@@ -221,9 +247,11 @@ internal class TypesafeConventionsGradleBuildState :
         }
 
         buildSet {
-            for ((candidateProjectPath, candidate) in candidates) {
-                addAll(candidate.catalogUrls)
-                pendingCandidates.remove(candidateProjectPath)
+            for (candidates in candidatesByImportProjectPath.values) {
+                for ((candidateKey, candidate) in candidates) {
+                    addAll(candidate.catalogUrls)
+                    pendingCandidates.remove(candidateKey)
+                }
             }
         }
     }
@@ -233,7 +261,10 @@ internal class TypesafeConventionsGradleBuildState :
             if (projectPath == null) {
                 pendingCandidates.clear()
             } else {
-                pendingCandidates.remove(projectPath.normalizedGradleProjectPath())
+                val normalizedProjectPath = projectPath.normalizedGradleProjectPath()
+                pendingCandidates.entries.removeIf { (candidateKey) ->
+                    candidateKey.importProjectPath == normalizedProjectPath
+                }
             }
         }
     }
@@ -241,7 +272,9 @@ internal class TypesafeConventionsGradleBuildState :
     fun remove(projectPath: String): Boolean {
         val normalizedProjectPath = projectPath.normalizedGradleProjectPath()
         return synchronized(pendingCandidates) {
-            pendingCandidates.remove(normalizedProjectPath)
+            pendingCandidates.entries.removeIf { (candidateKey) ->
+                candidateKey.importProjectPath == normalizedProjectPath
+            }
             val currentState = state
             val nextState = currentState.copy(
                 buildUrlsByProjectPath = currentState.buildUrlsByProjectPath - normalizedProjectPath,

@@ -7,6 +7,7 @@
 package dev.ghostflyby.typesafeconventions.gradle
 
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
+import com.intellij.find.findUsages.FindUsagesHandlerFactory
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.backgroundWriteAction
 import com.intellij.openapi.application.readAction
@@ -26,6 +27,7 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.backend.observation.trackActivity
 import com.intellij.platform.backend.workspace.workspaceModel
 import com.intellij.platform.workspace.jps.entities.ModuleEntity
@@ -41,6 +43,7 @@ import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.projectFixture
 import com.intellij.testFramework.junit5.fixture.tempPathFixture
+import com.intellij.util.Processor
 import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -773,6 +776,49 @@ private class GradleTypesafeConventionsSyncedProject(
         )
     }
 
+    suspend fun assertKotlinCatalogDefaultFindUsagesHandlerFindsConventionSources(
+        versionCatalog: VersionCatalogCase,
+        declarationPath: String,
+        expectedScriptPaths: List<Path>,
+    ) {
+        val keySegment = requireTomlCatalogKeySegment(versionCatalog, declarationPath, segmentIndex = 0)
+        val expectedFiles = expectedScriptPaths.map { requirePsiFile(it).virtualFile }.toSet()
+        val (handlerName, searchScope, actualFiles) = readAction {
+            @Suppress("CAST_NEVER_SUCCEEDS")
+            val handler = (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>)
+                .getExtensionList(project)
+                .firstNotNullOfOrNull { factory ->
+                    if (factory.canFindUsages(keySegment)) {
+                        factory.createFindUsagesHandler(
+                            keySegment,
+                            FindUsagesHandlerFactory.OperationMode.USAGES_WITH_DEFAULT_OPTIONS,
+                        )
+                    } else {
+                        null
+                    }
+                }
+                ?: error("Expected a Find Usages handler for ${versionCatalog.catalogName}:$declarationPath")
+            val options = handler.getFindUsagesOptions(null)
+            val usageFiles = mutableSetOf<VirtualFile>()
+            handler.processElementUsages(
+                keySegment,
+                Processor { usage ->
+                    usage.virtualFile?.let(usageFiles::add)
+                    true
+                },
+                options,
+            )
+            Triple(handler.javaClass.name, options.searchScope.toString(), usageFiles.toSet())
+        }
+
+        assertTrue(
+            expectedFiles.all(actualFiles::contains),
+            "Expected the default Find Usages handler to include every convention source. " +
+                    "handler=$handlerName, scope=$searchScope, expected=${expectedFiles.map { it.path }}, " +
+                    "actual=${actualFiles.map { it.path }}",
+        )
+    }
+
     suspend fun assertKotlinCatalogSearchUsesBuildScopedWordRequest(
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
@@ -1174,6 +1220,29 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         }
     }
 
+    @Test
+    suspend fun `kotlin plugins block catalog accessor resolves and navigates to toml`() {
+        val projectRoot = projectPathFixture.get()
+        val versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" }
+        for (scriptPath in kotlinDslPluginBlockScriptPaths(projectRoot)) {
+            syncedProject.assertConventionBuildKotlinCatalogReferencesResolveToTomlSegments(
+                scriptPath = scriptPath,
+                versionCatalog = versionCatalog,
+                declarationPath = "plugins.kotlin.jvm",
+                expressionText = "libs.plugins.kotlin.jvm",
+            )
+            syncedProject.assertConventionBuildCatalogAccessorGotoDeclarationResolvesToTomlEntry(
+                scriptPath = scriptPath,
+                versionCatalog = versionCatalog,
+                referenceText = "jvm",
+                expectedEntryText = "kotlin-jvm",
+                expressionText = "libs.plugins.kotlin.jvm",
+            ) { sourceElement, offset ->
+                syncedProject.resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
+            }
+        }
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("versionCatalogCases")
     suspend fun `kotlin dsl find usages distinguishes catalogs with the same alias`(
@@ -1199,11 +1268,28 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         testCase: CatalogAccessorInCatalogCase,
     ) {
         val projectRoot = projectPathFixture.get()
+        val expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot) +
+                if (testCase.catalog.catalogName == "libs" && testCase.accessor.name == "plugins") {
+                    kotlinDslPluginBlockScriptPaths(projectRoot)
+                } else {
+                    emptyList()
+                }
         syncedProject.assertKotlinCatalogFindUsagesAreIsolatedToTargetCatalog(
             versionCatalog = testCase.catalog,
             declarationPath = testCase.accessor.declarationPath,
             expectedExpressionText = "${testCase.catalog.catalogName}.${testCase.accessor.declarationPath}",
-            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
+            expectedScriptPaths = expectedScriptPaths,
+        )
+    }
+
+    @Test
+    suspend fun `kotlin default find usages handler includes convention build sources`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinCatalogDefaultFindUsagesHandlerFindsConventionSources(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            declarationPath = "usage.target",
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot) +
+                    kotlinDslInternalExtensionScriptPaths(projectRoot),
         )
     }
 
@@ -1355,6 +1441,15 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         val projectRoot = projectPathFixture.get()
         syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
             scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/ProjectExtensionShadow.kt"),
+            expressionText = "libs.usage.target",
+        )
+    }
+
+    @Test
+    suspend fun `private PluginDependenciesSpecScope extension does not expose custom reference`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinExpressionHasNoCustomCatalogReferences(
+            scriptPath = projectRoot.resolve("buildSrc/src/main/kotlin/PluginScopeExtensionShadow.kt"),
             expressionText = "libs.usage.target",
         )
     }
@@ -1678,6 +1773,14 @@ private fun kotlinDslVersionCatalogInConventionBuildCases(): List<VersionCatalog
 private fun kotlinDslConventionScriptPaths(projectRoot: Path): List<Path> =
     kotlinDslConventionBuildCases().map { projectRoot.resolve(it.scriptPath) }
 
+private fun kotlinDslPluginBlockScriptPaths(projectRoot: Path): List<Path> =
+    kotlinDslConventionBuildCases()
+        .map { it.buildPath }
+        .distinct()
+        .map { buildPath ->
+            projectRoot.resolve(buildPath).resolve("src/main/kotlin/repo.plugins-block.gradle.kts")
+        }
+
 private fun kotlinDslInternalExtensionScriptPaths(projectRoot: Path): List<Path> =
     listOf(
         projectRoot.resolve("buildSrc/src/main/kotlin/InternalProjectExtension.kt"),
@@ -1837,6 +1940,14 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                 val renamePlugin = libs.plugins.rename.plugin
             """.trimIndent(),
         )
+    sourceRoot.resolve("repo.plugins-block.gradle.kts")
+        .writeText(
+            """
+                plugins {
+                    alias(libs.plugins.kotlin.jvm)
+                }
+            """.trimIndent(),
+        )
     sourceRoot.resolve("RepoConventionPlugin.kt").writeText(
         """
             import org.gradle.api.Plugin
@@ -1923,6 +2034,28 @@ private fun writeKotlinDslConventionBuild(buildRoot: Path, rootProjectName: Stri
                 get() = ProjectExtensionCatalog()
 
             private fun projectExtensionTarget(project: Project): String = with(project) {
+                libs.usage.target
+            }
+        """.trimIndent(),
+    )
+    sourceRoot.resolve("PluginScopeExtensionShadow.kt").writeText(
+        """
+            package fixture.shadow
+
+            import org.gradle.kotlin.dsl.PluginDependenciesSpecScope
+
+            private class PluginScopeCatalog {
+                val usage = PluginScopeUsage()
+            }
+
+            private class PluginScopeUsage {
+                val target = "not a generated typesafe-conventions entrypoint"
+            }
+
+            private val PluginDependenciesSpecScope.libs: PluginScopeCatalog
+                get() = PluginScopeCatalog()
+
+            private fun pluginScopeTarget(scope: PluginDependenciesSpecScope): String = with(scope) {
                 libs.usage.target
             }
         """.trimIndent(),
