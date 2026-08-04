@@ -1,0 +1,10 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <gotoDeclarationHandler
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGroovyCatalogGotoDeclarationHandler"/>
+    </extensions>
+</idea-plugin>
