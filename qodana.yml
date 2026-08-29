@@ -11,6 +11,7 @@ profile:
     - group: ALL
       ignore:
         - "scope#$gitignore"
+        - "scope#$spi" # false positive annotator errors, which cannot be suppressed
 plugins:
   - id: DevKit
 exclude:
