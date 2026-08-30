@@ -142,13 +142,13 @@ private suspend fun respondProblemReport(
     val diagnostics = collection.diagnostics.toMutableList()
     val problems = mutableListOf<RestProblemItem>()
     var truncated = false
-    for (target in collection.targets) {
+    for ((project, file) in collection.targets) {
         val remaining = options.limit - problems.size
         if (remaining <= 0) {
             truncated = true
             break
         }
-        val fileProblems = collectRestProblemsForFile(target.project, target.file)
+        val fileProblems = collectRestProblemsForFile(project, file)
             .filter { it.matches(options) }
         problems += fileProblems.take(remaining)
         if (fileProblems.size > remaining) truncated = true

@@ -205,7 +205,7 @@ internal object MarkdownDocumentRenderer {
     // ── structure tree from JSON tree ───────────────────────
 
     /**
-     * Renders a [FileStructure] directly from its JSON subtree, avoiding a deserialize roundtrip.
+     * Renders a [dev.ghostflyby.mcp.filecontent.FileStructure] directly from its JSON subtree, avoiding a deserialize roundtrip.
      */
     private fun renderStructureTreeFromJson(element: JsonElement): String = buildString {
         val elements = (element as? JsonObject)?.get("elements") as? JsonArray ?: return@buildString
