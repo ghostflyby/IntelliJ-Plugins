@@ -242,7 +242,7 @@ internal suspend fun readStructureResult(
     val document = readAction { getOrCreateDocument(file) }
         ?: return FileStructure(emptyList())
     val elements = readAction {
-        val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList<StructureElement>()
+        val psiFile = PsiManager.getInstance(project).findFile(file) ?: return@readAction emptyList()
         val builder = LanguageStructureViewBuilder.getInstance().getStructureViewBuilder(psiFile)
                 as? TreeBasedStructureViewBuilder
             ?: return@readAction fallbackTextStructure(document)

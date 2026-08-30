@@ -220,16 +220,16 @@ private suspend fun applyCodex(
     val appliedFiles = mutableListOf<VirtualFile>()
     val failed = mutableListOf<String>()
     val references = mutableListOf<FileRefactoringReference>()
-    for (section in sections) {
+    for ((operation, filePath, rawLines, moveTo) in sections) {
         try {
             val fileRelPath =
-                if (isDir) joinRelativePath(routeAccess.relativePath, section.filePath) else routeAccess.relativePath
+                if (isDir) joinRelativePath(routeAccess.relativePath, filePath) else routeAccess.relativePath
             val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
             val target = patchPathFor(access)
-            when (section.operation) {
+            when (operation) {
                 CodexFileOperation.ADD -> {
-                    createPatchedFile(project, target, parseCodexAddContent(section.rawLines))
+                    createPatchedFile(project, target, parseCodexAddContent(rawLines))
                 }
 
                 CodexFileOperation.DELETE -> {
@@ -243,12 +243,12 @@ private suspend fun applyCodex(
                 }
 
                 CodexFileOperation.UPDATE -> {
-                    if (section.rawLines.any { it.startsWith("@@") }) {
-                        applyFileUpdate(project, target, section.rawLines)
-                    } else if (section.moveTo == null) {
+                    if (rawLines.any { it.startsWith("@@") }) {
+                        applyFileUpdate(project, target, rawLines)
+                    } else if (moveTo == null) {
                         error("No valid hunks")
                     }
-                    section.moveTo?.let { moveTo ->
+                    moveTo?.let { moveTo ->
                         val moveRelPath = if (isDir) joinRelativePath(routeAccess.relativePath, moveTo) else moveTo
                         val moveAccess = resolvePatchSectionAccess(project, routeAccess, moveRelPath)
                         ensurePatchAllowed(moveAccess, force)
@@ -256,10 +256,10 @@ private suspend fun applyCodex(
                     }
                 }
             }
-            applied += mapOf("path" to fileRelPath, "operation" to section.operation.name.lowercase())
+            applied += mapOf("path" to fileRelPath, "operation" to operation.name.lowercase())
             access.file?.let { appliedFiles += it }
         } catch (e: Exception) {
-            failed += "${section.filePath}: ${e.message ?: "unknown"}"
+            failed += "$filePath: ${e.message ?: "unknown"}"
         }
     }
     val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
@@ -315,40 +315,40 @@ private suspend fun applyWorkspaceOperations(
     val appliedFiles = mutableListOf<VirtualFile>()
     val failed = mutableListOf<String>()
     val targets = linkedMapOf<String, WorkspaceOperationTarget>()
-    for (operation in operations) {
-        val pathForError = operation.filePath ?: routeAccess.relativePath.ifBlank { "." }
+    for ((kind, filePath) in operations) {
+        val pathForError = filePath ?: routeAccess.relativePath.ifBlank { "." }
         try {
-            val fileRelPath = operation.filePath?.let { opPath ->
+            val fileRelPath = filePath?.let { opPath ->
                 if (isDir) joinRelativePath(routeAccess.relativePath, opPath) else opPath
             } ?: routeAccess.relativePath.ifBlank {
-                error("${operation.kind.wireName} requires a file path when PATCH target is the session root")
+                error("${kind.wireName} requires a file path when PATCH target is the session root")
             }
-            targets.getOrPut(fileRelPath) { WorkspaceOperationTarget(fileRelPath) }.kinds += operation.kind
+            targets.getOrPut(fileRelPath) { WorkspaceOperationTarget(fileRelPath) }.kinds += kind
         } catch (e: Exception) {
             failed += "$pathForError: ${e.message ?: "unknown"}"
         }
     }
-    for (target in targets.values) {
+    for ((fileRelPath, kinds) in targets.values) {
         val access = try {
-            val access = resolvePatchSectionAccess(project, routeAccess, target.fileRelPath)
+            val access = resolvePatchSectionAccess(project, routeAccess, fileRelPath)
             ensurePatchAllowed(access, force)
             access.file?.let { appliedFiles += it }
             access
         } catch (e: Exception) {
-            failed += "${target.fileRelPath}: ${e.message ?: "unknown"}"
+            failed += "$fileRelPath: ${e.message ?: "unknown"}"
             continue
         }
         val file = access.file ?: run {
-            failed += "${target.fileRelPath}: File not found: ${target.fileRelPath}"
+            failed += "$fileRelPath: File not found: $fileRelPath"
             continue
         }
         val psiFile = try {
             resolveWritablePsiFile(project, file)
         } catch (e: Exception) {
-            failed += "${target.fileRelPath}: ${e.message ?: "unknown"}"
+            failed += "$fileRelPath: ${e.message ?: "unknown"}"
             continue
         }
-        val orderedKinds = WORKSPACE_OPERATION_ORDER.filter { it in target.kinds }
+        val orderedKinds = WORKSPACE_OPERATION_ORDER.filter { it in kinds }
         for (kind in orderedKinds) {
             try {
                 when (kind) {
@@ -368,9 +368,9 @@ private suspend fun applyWorkspaceOperations(
                         "Problem fixes are not supported without IntelliJ public APIs for problem quick-fix discovery.",
                     )
                 }
-                applied += mapOf("path" to target.fileRelPath, "operation" to kind.resultName)
+                applied += mapOf("path" to fileRelPath, "operation" to kind.resultName)
             } catch (e: Exception) {
-                failed += "${target.fileRelPath}: ${kind.wireName}: ${e.message ?: "unknown"}"
+                failed += "$fileRelPath: ${kind.wireName}: ${e.message ?: "unknown"}"
             }
         }
     }
