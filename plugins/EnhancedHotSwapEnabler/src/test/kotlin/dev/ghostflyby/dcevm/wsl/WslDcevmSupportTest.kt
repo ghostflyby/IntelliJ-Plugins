@@ -6,7 +6,6 @@
 
 package dev.ghostflyby.dcevm.wsl
 
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.testFramework.junit5.TestApplication
 import dev.ghostflyby.dcevm.DCEVMSupport
 import dev.ghostflyby.dcevm.getDcevmSupport
@@ -15,23 +14,14 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
- * End-to-end regression: runs the real `bin/java -XX:+PrintFlagsFinal -version` check against a JDK
- * living inside the WSL distribution (`\\wsl.localhost\...` UNC home). In 2026.1 GeneralCommandLine
- * routes the ELF execution into the distribution via EEL/IJent instead of hitting Windows
- * CreateProcess error=193.
+ * End-to-end regression: runs the production `javaOptionLines` routing (EEL exec -> WSL
+ * distribution patching -> local process) against a JDK living inside the WSL distribution
+ * (`\\wsl.localhost\...` UNC home). The WSL branch must execute the ELF inside the distribution
+ * instead of hitting Windows CreateProcess error=193.
  */
 @Tag("wsl")
 @TestApplication
 internal class WslDcevmSupportTest {
-
-    private fun optionLines(javaExecutable: String): Sequence<String> =
-        GeneralCommandLine(
-            javaExecutable,
-            "-XX:+PrintFlagsFinal",
-            "-version",
-        ).createProcess().inputStream.bufferedReader().use { reader ->
-            reader.readLines().asSequence()
-        }
 
     @Test
     fun `jdk with enabled dcevm flag resolves auto`() {
@@ -41,7 +31,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool AllowEnhancedClassRedefinition = true {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> optionLines(javaExecutable) }
+        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
         Assertions.assertEquals(DCEVMSupport.Auto, support)
     }
 
@@ -53,7 +43,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool AllowEnhancedClassRedefinition = false {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> optionLines(javaExecutable) }
+        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
         Assertions.assertEquals(DCEVMSupport.RequiresArg, support)
     }
 
@@ -65,7 +55,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool UseCompressedOops = true {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> optionLines(javaExecutable) }
+        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
         Assertions.assertEquals(DCEVMSupport.None, support)
     }
 

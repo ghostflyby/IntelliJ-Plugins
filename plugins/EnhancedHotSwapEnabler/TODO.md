@@ -13,9 +13,20 @@ Last Updated: 2026-09-08
     (coverage-plugin pattern). `DCEVMProgramPatcher` removed.
   - Gradle init-script classpath + agent env var converted via `toDaemonVisiblePath`
     (EEL descriptor detection + `WSLDistribution.getWslPath` fallback for `/mnt/c`).
+- Root cause found in first CI run: `WslEelProvider.getEelDescriptor` is gated by
+  `WslIjentAvailabilityService.useIjentForWslNioFileSystem()` (per-product build constant in real
+  IDEs), so WSL UNC paths may resolve to `LocalEelDescriptor` — GeneralCommandLine's implicit EEL
+  routing cannot be relied upon for WSL executables.
+- Routing (see `wsl/EelJavaSupport.kt`): flags check runs via explicit EEL exec (non-local
+  descriptor) -> WSL distribution patching (`WSLDistribution.patchCommandLine`, platform picks
+  IJent or wsl.exe) -> plain local process. `toDaemonVisiblePath` checks the WSL branch first,
+  independent of the gate.
+- Test env (`WslTestEnvironment`) performs all in-distro operations through the same patched
+  command line (`/bin/sh -c`); no raw `wsl.exe` calls mixed with 9P file operations (that mixing
+  caused a `wsl chmod` visibility race in the first run).
 - Pending CI validation:
-  - WSL job first run: project open from `\\wsl.localhost\...`, flags check via EEL routing,
-    `-javaagent` upload for target runs. On path-conversion failures: stop and report.
+  - WSL job rerun: flags check via the WSL branch, `/mnt/c` drive mapping, UNC project open.
+  - On remaining path-conversion failures: stop and report.
 - Next:
   - Docker/EEL spike (`workflow_dispatch` job, platform `@TestApplicationWithEel`/`@DockerTest`)
     to probe the container path; promote to PR trigger only if green.

@@ -28,6 +28,7 @@ import dev.ghostflyby.dcevm.agent.fixedJvmParameter
 import dev.ghostflyby.dcevm.agent.hotswapAgentParameter
 import dev.ghostflyby.dcevm.getDcevmSupport
 import dev.ghostflyby.dcevm.missingHotswapAgentAddOpensJvmArgs
+import dev.ghostflyby.dcevm.wsl.javaOptionLines
 import org.jdom.Element
 import java.nio.file.Path
 import javax.swing.JComponent
@@ -129,15 +130,8 @@ internal class HotswapRunConfigurationExtension : RunConfigurationExtension() {
 
         val support = getDcevmSupport(
             Path.of(javaHome),
-        ) { javaExecutable ->
-            GeneralCommandLine(
-                javaExecutable,
-                "-XX:+PrintFlagsFinal",
-                "-version",
-            ).createProcess().inputStream.bufferedReader().use { reader ->
-                reader.readLines().asSequence()
-            }
-        }
+            optionLinesProvider = ::javaOptionLines,
+        )
 
         val targetParameters = params.targetDependentParameters
         if (support is DCEVMSupport.NeedsArgs) {

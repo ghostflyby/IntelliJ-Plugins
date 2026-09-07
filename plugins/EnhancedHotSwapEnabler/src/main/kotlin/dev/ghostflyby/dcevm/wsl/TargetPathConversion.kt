@@ -36,23 +36,19 @@ private val transferredPaths = ConcurrentHashMap<String, String>()
  * Converts a host-side path into the form visible to the Gradle daemon running inside the
  * environment that hosts [projectPath] (local machine / WSL distribution / dev container).
  *
- * - Local project: the host path is returned as-is.
- * - WSL project: host drive paths (e.g. the bundled agent jar under the plugin lib dir) are mapped
- *   to `/mnt/<drive>/...` via [com.intellij.execution.wsl.WSLDistribution.getWslPath]; UNC paths
- *   inside the same distribution are converted to their Linux form. If the drive mapping is
- *   unavailable, falls back to the routed-NIO transfer below.
+ * - WSL project (checked first, independent of the EEL availability gate): host drive paths (e.g.
+ *   the bundled agent jar under the plugin lib dir) are mapped to `/mnt/<drive>/...` via
+ *   [com.intellij.execution.wsl.WSLDistribution.getWslPath]; UNC paths inside the same
+ *   distribution are converted to their Linux form. If the drive mapping is unavailable, falls
+ *   back to the routed-NIO transfer below.
  * - Other non-local environments (dev containers): no drive mapping exists — the host file is
  *   copied into the environment through its routed NIO filesystem (see [transferIntoTarget]) and
  *   the target-side path is returned.
+ * - Local project: the host path is returned as-is.
  *
  * Must be called off the EDT (the transfer and WSL resolution block on background I/O).
  */
 internal fun toDaemonVisiblePath(projectPath: String, hostPath: Path): String {
-    val projectDescriptor = Path.of(projectPath).getEelDescriptor()
-    if (projectDescriptor === LocalEelDescriptor) {
-        return hostPath.toString()
-    }
-
     val projectWsl = WslPath.parseWindowsUncPath(projectPath)
     if (projectWsl != null) {
         val hostWsl = WslPath.parseWindowsUncPath(hostPath.toString())
@@ -63,6 +59,10 @@ internal fun toDaemonVisiblePath(projectPath: String, hostPath: Path): String {
         // Drive mapping unavailable — fall through to the routed-NIO transfer below
     }
 
+    val projectDescriptor = Path.of(projectPath).getEelDescriptor()
+    if (projectDescriptor === LocalEelDescriptor) {
+        return hostPath.toString()
+    }
     return transferIntoTarget(projectDescriptor, hostPath, projectPath)
 }
 
