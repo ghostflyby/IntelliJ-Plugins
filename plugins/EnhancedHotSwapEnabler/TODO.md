@@ -22,6 +22,7 @@ Last Updated: 2026-09-08
   - Rollout to other plugins: any plugin adds `@Tag("wsl")` tests; switch the workflow to root
     `test -PwslDistro=...` when more plugins participate.
 - Known limitations:
-  - Container Gradle path is handled via `EelPathUtils.transferLocalContentToRemote` (cached);
-    pending real validation by the Docker/EEL spike job.
+  - Container Gradle path conversion copies host files through the routed NIO filesystem
+    (`EelPath.asNioPath` + `java.nio.file.Files`, public Experimental API only); pending real
+    validation by the Docker/EEL spike job.
   - JetBrains "Dev Containers" plugin is Ultimate-only; CI uses the EEL Docker backend instead.
