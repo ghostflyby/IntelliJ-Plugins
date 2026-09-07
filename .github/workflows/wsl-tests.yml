@@ -39,7 +39,8 @@ jobs:
           set-as-default: true
           use-cache: true
       - name: Run Tests
-        run: .\gradlew.bat --configuration-cache -PwslDistro=Ubuntu-24.04 :plugins:EnhancedHotSwapEnabler:test
+        # quote -PwslDistro: PowerShell splits unquoted `Ubuntu-24.04` into `Ubuntu-24` + `.04`
+        run: .\gradlew.bat --configuration-cache "-PwslDistro=Ubuntu-24.04" :plugins:EnhancedHotSwapEnabler:test
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
