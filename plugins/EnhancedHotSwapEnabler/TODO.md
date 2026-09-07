@@ -22,6 +22,6 @@ Last Updated: 2026-09-08
   - Rollout to other plugins: any plugin adds `@Tag("wsl")` tests; switch the workflow to root
     `test -PwslDistro=...` when more plugins participate.
 - Known limitations:
-  - dev containers have no drive mapping (agent path conversion unsupported); needs an EEL
-    transfer-based approach.
+  - Container Gradle path is handled via `EelPathUtils.transferLocalContentToRemote` (cached);
+    pending real validation by the Docker/EEL spike job.
   - JetBrains "Dev Containers" plugin is Ultimate-only; CI uses the EEL Docker backend instead.
