@@ -5,22 +5,26 @@
  */
 
 @file:Suppress("UnstableApiUsage")
-// EEL (Path.getEelDescriptor / LocalEelDescriptor / asEelPath / toEelApiBlocking / EelExecApi) and
-// WSL path APIs (WslPath / WSLDistribution.patchCommandLine) are still Experimental / evolving in
+// EEL (Path.getEelDescriptor / LocalEelDescriptor / asEelPath / toEelApi / EelExecApi) and WSL
+// path APIs (WslPath / WSLDistribution.patchCommandLine) are still Experimental / evolving in
 // 2026.1. Two platform facts drive the explicit routing below:
 //  - WslEelProvider.getEelDescriptor is gated by WslIjentAvailabilityService
 //    .useIjentForWslNioFileSystem(), which is a per-product build constant in real IDEs, so WSL
 //    UNC paths may resolve to LocalEelDescriptor;
 //  - GeneralCommandLine's implicit EEL routing honors the same gate, so it cannot be relied upon
-//    for WSL executables.
-// Therefore: EEL exec first (non-local descriptor), then explicit WSL distribution patching, then
-// a plain local process. Track platform API changes in this file.
+//    for WSL executables; and WSLDistribution.doPatchCommandLine resolves the distro shell path
+//    through runBlockingCancellable, which requires a ProgressIndicator on the current thread.
+// Therefore: EEL exec first (non-local descriptor), then explicit WSL distribution patching under
+// an empty progress indicator, then a plain local process. Track platform API changes here.
 
 package dev.ghostflyby.dcevm.wsl
 
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.wsl.WSLCommandLineOptions
 import com.intellij.execution.wsl.WslPath
+import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.util.Computable
 import com.intellij.platform.eel.provider.LocalEelDescriptor
 import com.intellij.platform.eel.provider.asEelPath
 import com.intellij.platform.eel.provider.getEelDescriptor
@@ -46,35 +50,38 @@ internal fun javaOptionLines(javaExecutable: String): Sequence<String> {
 
     val descriptor = path.getEelDescriptor()
     if (descriptor !== LocalEelDescriptor) {
-        // Plain runBlocking: the flags check is short-lived and runs on threads that have no
-        // ProgressIndicator/cancellation job (runBlockingMaybeCancellable would log an error there)
-        val process = runBlocking {
-            descriptor.toEelApi()
-                .exec
-                .spawnProcess(path.asEelPath().toString())
-                .args("-XX:+PrintFlagsFinal", "-version")
-                .eelIt()
+        // Plain runBlocking: the flags check is short-lived. The empty progress indicator is
+        // installed for nested runBlockingCancellable calls inside the EEL machinery.
+        return withEmptyProgress {
+            val process = runBlocking {
+                descriptor.toEelApi()
+                    .exec
+                    .spawnProcess(path.asEelPath().toString())
+                    .args("-XX:+PrintFlagsFinal", "-version")
+                    .eelIt()
+            }
+            process.convertToJavaProcess()
+                .inputStream
+                .bufferedReader()
+                .readLines()
+                .asSequence()
         }
-        return process.convertToJavaProcess()
-            .inputStream
-            .bufferedReader()
-            .readLines()
-            .asSequence()
     }
 
     val wsl = WslPath.parseWindowsUncPath(javaExecutable)
     if (wsl != null) {
         // Force the wsl.exe launch: the IJent launch path requires a cancellable context
-        val commandLine = wsl.distribution.patchCommandLine(
-            GeneralCommandLine(wsl.linuxPath, "-XX:+PrintFlagsFinal", "-version"),
-            null,
-            WSLCommandLineOptions().setLaunchWithWslExe(true),
-        )
-        return commandLine
-            .createProcess()
-            .inputStream
-            .bufferedReader()
-            .use { it.readLines().asSequence() }
+        return withEmptyProgress {
+            val commandLine = wsl.distribution.patchCommandLine(
+                GeneralCommandLine(wsl.linuxPath, "-XX:+PrintFlagsFinal", "-version"),
+                null,
+                WSLCommandLineOptions().setLaunchWithWslExe(true),
+            )
+            commandLine.createProcess()
+                .inputStream
+                .bufferedReader()
+                .use { it.readLines().asSequence() }
+        }
     }
 
     return GeneralCommandLine(javaExecutable, "-XX:+PrintFlagsFinal", "-version")
@@ -83,3 +90,6 @@ internal fun javaOptionLines(javaExecutable: String): Sequence<String> {
         .bufferedReader()
         .use { it.readLines().asSequence() }
 }
+
+private fun <T> withEmptyProgress(block: () -> T): T =
+    ProgressManager.getInstance().runProcess(Computable(block), EmptyProgressIndicator())

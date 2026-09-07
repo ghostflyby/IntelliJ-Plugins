@@ -17,6 +17,9 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.wsl.WSLCommandLineOptions
 import com.intellij.execution.wsl.WSLDistribution
 import com.intellij.execution.wsl.WslPath
+import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.util.Computable
 import com.intellij.util.system.OS
 import org.junit.jupiter.api.Assumptions
 import java.nio.file.Files
@@ -61,12 +64,20 @@ internal object WslTestEnvironment {
 
     /** Runs [command] via `/bin/sh -c` inside the distribution and fails on a non-zero exit code */
     fun execInDistro(command: String) {
-        val commandLine = distribution().patchCommandLine(
-            GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
-            null,
-            // force the wsl.exe launch: the IJent launch path requires a cancellable context,
-            // which plain test threads do not have
-            WSLCommandLineOptions().setLaunchWithWslExe(true),
+        // patchCommandLine resolves the distro shell path via runBlockingCancellable, which
+        // requires a ProgressIndicator on the current thread — install an empty one for the
+        // plain test thread
+        val commandLine = ProgressManager.getInstance().runProcess(
+            Computable {
+                distribution().patchCommandLine(
+                    GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
+                    null,
+                    // force the wsl.exe launch: the IJent launch path requires a cancellable
+                    // context, which plain test threads do not have
+                    WSLCommandLineOptions().setLaunchWithWslExe(true),
+                )
+            },
+            EmptyProgressIndicator(),
         )
         val process = commandLine.createProcess()
         val output = process.inputStream.bufferedReader().readText()
