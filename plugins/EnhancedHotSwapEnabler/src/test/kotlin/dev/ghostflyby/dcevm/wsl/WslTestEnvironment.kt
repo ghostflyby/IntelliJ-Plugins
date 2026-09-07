@@ -64,7 +64,9 @@ internal object WslTestEnvironment {
         val commandLine = distribution().patchCommandLine(
             GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
             null,
-            WSLCommandLineOptions(),
+            // force the wsl.exe launch: the IJent launch path requires a cancellable context,
+            // which plain test threads do not have
+            WSLCommandLineOptions().setLaunchWithWslExe(true),
         )
         val process = commandLine.createProcess()
         val output = process.inputStream.bufferedReader().readText()

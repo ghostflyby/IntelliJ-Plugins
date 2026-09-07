@@ -21,12 +21,12 @@ package dev.ghostflyby.dcevm.wsl
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.wsl.WSLCommandLineOptions
 import com.intellij.execution.wsl.WslPath
-import com.intellij.openapi.progress.runBlockingMaybeCancellable
 import com.intellij.platform.eel.provider.LocalEelDescriptor
 import com.intellij.platform.eel.provider.asEelPath
 import com.intellij.platform.eel.provider.getEelDescriptor
-import com.intellij.platform.eel.provider.toEelApiBlocking
+import com.intellij.platform.eel.provider.toEelApi
 import com.intellij.platform.eel.spawnProcess
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
 /**
@@ -46,9 +46,11 @@ internal fun javaOptionLines(javaExecutable: String): Sequence<String> {
 
     val descriptor = path.getEelDescriptor()
     if (descriptor !== LocalEelDescriptor) {
-        val eelApi = descriptor.toEelApiBlocking()
-        val process = runBlockingMaybeCancellable {
-            eelApi.exec
+        // Plain runBlocking: the flags check is short-lived and runs on threads that have no
+        // ProgressIndicator/cancellation job (runBlockingMaybeCancellable would log an error there)
+        val process = runBlocking {
+            descriptor.toEelApi()
+                .exec
                 .spawnProcess(path.asEelPath().toString())
                 .args("-XX:+PrintFlagsFinal", "-version")
                 .eelIt()
@@ -62,10 +64,11 @@ internal fun javaOptionLines(javaExecutable: String): Sequence<String> {
 
     val wsl = WslPath.parseWindowsUncPath(javaExecutable)
     if (wsl != null) {
+        // Force the wsl.exe launch: the IJent launch path requires a cancellable context
         val commandLine = wsl.distribution.patchCommandLine(
             GeneralCommandLine(wsl.linuxPath, "-XX:+PrintFlagsFinal", "-version"),
             null,
-            WSLCommandLineOptions(),
+            WSLCommandLineOptions().setLaunchWithWslExe(true),
         )
         return commandLine
             .createProcess()
