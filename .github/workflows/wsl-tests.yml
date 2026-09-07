@@ -1,0 +1,50 @@
+name: WSL Tests
+on:
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: pwsh
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wsl-tests:
+    name: WSL Tests (Windows + Ubuntu-24.04 in WSL)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: jetbrains
+          java-version: 21
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Setup WSL
+        uses: Vampire/setup-wsl@v7
+        with:
+          distribution: Ubuntu-24.04
+          set-as-default: true
+          use-cache: true
+      - name: Run Tests
+        run: .\gradlew.bat --configuration-cache -PwslDistro=Ubuntu-24.04 :plugins:EnhancedHotSwapEnabler:test
+      - name: Collect Tests Result
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: wsl-tests-result
+          path: |
+            ${{ github.workspace }}/plugins/EnhancedHotSwapEnabler/build/reports/tests
+          retention-days: 14

@@ -58,7 +58,19 @@ dependencies {
     }
 }
 
+val wslDistro = providers.gradleProperty("wslDistro")
+
 tasks.withType<Test> {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // WSL functional tests (@Tag("wsl")) only run in environments that pass -PwslDistro=<distro>
+        // (the CI WSL job / local WSL development); everywhere else they are excluded so macOS/Linux
+        // CI and local development are unaffected
+        if (!wslDistro.isPresent) {
+            excludeTags("wsl")
+        }
+    }
     systemProperty("java.awt.headless", true)
+    wslDistro.orNull?.let { distro ->
+        systemProperty("wsl.distro", distro)
+    }
 }

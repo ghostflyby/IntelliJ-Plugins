@@ -26,6 +26,7 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.dcevm.agent.BundledHotSwapAgentJarPath
 import dev.ghostflyby.dcevm.config.effectiveHotSwapConfig
+import dev.ghostflyby.dcevm.wsl.toDaemonVisiblePath
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -33,6 +34,7 @@ import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
+import java.nio.file.Path
 
 internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
     override fun configureTasks(
@@ -46,7 +48,11 @@ internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
             PathManager.getJarPathForClass(DCEVMSupport::class.java),
         ).distinct()
         if (classpathJars.isEmpty()) return
-        val classpathFiles = classpathJars.joinToString(", ") { it.toGroovyStringLiteral() }
+        // For WSL projects the Gradle daemon runs inside the distribution, so the init-script
+        // classpath must use daemon-visible paths
+        val classpathFiles = classpathJars
+            .map { toDaemonVisiblePath(projectPath, Path.of(it)) }
+            .joinToString(", ") { it.toGroovyStringLiteral() }
 
         settings.addInitScript(
             "ghostflyby.intellij.gradle.dcevm",
@@ -77,10 +83,11 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
             Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
         )
         if (resolved.enableHotswapAgent) {
-            // pass bundled agent jar path to Gradle when agent feature is enabled
+            // pass bundled agent jar path to Gradle when agent feature is enabled;
+            // the daemon side (inside the distribution for WSL projects) needs a resolvable path
             settings.addEnvironmentVariable(
                 HOTSWAP_AGENT_JAR_PATH_ENV_KEY,
-                BundledHotSwapAgentJarPath.toAbsolutePath().toString(),
+                toDaemonVisiblePath(projectPath, BundledHotSwapAgentJarPath.toAbsolutePath()),
             )
         }
         return false

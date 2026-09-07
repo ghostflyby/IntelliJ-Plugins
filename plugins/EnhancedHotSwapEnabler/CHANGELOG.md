@@ -6,6 +6,12 @@
 
 ### Added
 
+- support debug runs of projects hosted in WSL (Windows IDE + WSL project): the DCEVM flags
+  check executes inside the distribution via the platform EEL/IJent routing, and the bundled
+  HotSwapAgent jar is injected target-agnostically (uploaded and rewritten by the platform for
+  WSL/container targets); Gradle init-script classpath and agent env var are converted to
+  daemon-visible paths (`/mnt/<drive>/...`) for WSL-hosted Gradle daemons
+
 ### Changed
 
 ### Deprecated
