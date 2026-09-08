@@ -31,11 +31,11 @@ internal class WslAvailableCondition : ExecutionCondition {
 
     // JUnit Jupiter 6 renamed ExecutionCondition.evaluate to evaluateExecutionCondition
     override fun evaluateExecutionCondition(context: ExtensionContext): ConditionEvaluationResult {
-        val distributions = WslTestEnvironment.installedDistributions()
-        return if (distributions.isEmpty()) {
-            ConditionEvaluationResult.disabled("No WSL distribution found under \\\\wsl.localhost")
+        val discovery = WslTestEnvironment.describeDiscovery()
+        return if (WslTestEnvironment.installedDistributions().isNotEmpty()) {
+            ConditionEvaluationResult.enabled(discovery)
         } else {
-            ConditionEvaluationResult.enabled("WSL distributions: ${distributions.joinToString()}")
+            ConditionEvaluationResult.disabled("WSL tests disabled: $discovery")
         }
     }
 }
