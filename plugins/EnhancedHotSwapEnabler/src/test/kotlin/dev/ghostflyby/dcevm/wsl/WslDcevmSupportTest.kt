@@ -8,15 +8,16 @@ package dev.ghostflyby.dcevm.wsl
 
 import com.intellij.testFramework.junit5.TestApplication
 import dev.ghostflyby.dcevm.DCEVMSupport
-import dev.ghostflyby.dcevm.getDcevmSupport
+import dev.ghostflyby.dcevm.eel.detectDcevmSupport
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 /**
  * End-to-end WSL transport variant of `DcevmSupportDetectionTest`: runs the production
- * `javaOptionLines` routing (EEL exec -> WSL distribution patching -> local process) against a JDK
- * living inside the WSL distribution (`\\wsl.localhost\...` UNC home). The WSL branch must execute
- * the ELF inside the distribution instead of hitting Windows CreateProcess error=193.
+ * `detectDcevmSupport` routing (EEL exec for non-local descriptors) against a JDK living inside
+ * the WSL distribution (`\\wsl.localhost\...` UNC home). The WSL branch must execute the ELF
+ * inside the distribution instead of hitting Windows CreateProcess error=193.
  */
 @TestApplication
 @EnabledOnWsl
@@ -29,7 +30,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool AllowEnhancedClassRedefinition = true {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
+        val support = runBlocking { detectDcevmSupport(jdkHome) }
         Assertions.assertEquals(DCEVMSupport.Auto, support)
     }
 
@@ -40,7 +41,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool AllowEnhancedClassRedefinition = false {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
+        val support = runBlocking { detectDcevmSupport(jdkHome) }
         Assertions.assertEquals(DCEVMSupport.RequiresArg, support)
     }
 
@@ -51,7 +52,7 @@ internal class WslDcevmSupportTest {
             jdkHome,
             " bool UseCompressedOops = true {product}",
         )
-        val support = getDcevmSupport(jdkHome) { javaExecutable -> javaOptionLines(javaExecutable) }
+        val support = runBlocking { detectDcevmSupport(jdkHome) }
         Assertions.assertEquals(DCEVMSupport.None, support)
     }
 
@@ -59,7 +60,7 @@ internal class WslDcevmSupportTest {
     fun `alt-jvm layout resolves altJvm without process execution`() {
         val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-alt-")
         WslTestEnvironment.createAltJvmLayout(jdkHome)
-        val support = getDcevmSupport(jdkHome) { error("alt-jvm detection must not execute java") }
+        val support = runBlocking { detectDcevmSupport(jdkHome) }
         Assertions.assertEquals(DCEVMSupport.AltJvm, support)
     }
 }

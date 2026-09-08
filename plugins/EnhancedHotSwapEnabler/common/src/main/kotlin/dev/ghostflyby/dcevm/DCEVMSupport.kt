@@ -88,6 +88,13 @@ private fun hasAddOpensJvmArg(existingArgs: List<String>, target: String): Boole
 
 private val dcevmCheckCache = ConcurrentHashMap<Path, DCEVMSupport>()
 
+/**
+ * Whether a DCEVM installation in the alt-jvm layout (`lib/dcevm` and friends) is present under
+ * [javaHome]. Exposed for callers that detect the support level asynchronously and therefore
+ * classify the `bin/java` output themselves.
+ */
+public fun isDcevmInstalledAsAltJvm(javaHome: Path): Boolean = installedAsAltJvm(javaHome)
+
 public fun getDcevmSupport(
     javaHome: Path,
     execute: (Runnable) -> Unit = ForkJoinPool.commonPool()::execute,
