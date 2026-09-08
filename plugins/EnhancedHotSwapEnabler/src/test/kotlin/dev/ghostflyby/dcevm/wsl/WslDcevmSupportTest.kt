@@ -13,10 +13,10 @@ import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 
 /**
- * End-to-end regression: runs the production `javaOptionLines` routing (EEL exec -> WSL
- * distribution patching -> local process) against a JDK living inside the WSL distribution
- * (`\\wsl.localhost\...` UNC home). The WSL branch must execute the ELF inside the distribution
- * instead of hitting Windows CreateProcess error=193.
+ * End-to-end WSL transport variant of `DcevmSupportDetectionTest`: runs the production
+ * `javaOptionLines` routing (EEL exec -> WSL distribution patching -> local process) against a JDK
+ * living inside the WSL distribution (`\\wsl.localhost\...` UNC home). The WSL branch must execute
+ * the ELF inside the distribution instead of hitting Windows CreateProcess error=193.
  */
 @TestApplication
 @EnabledOnWsl

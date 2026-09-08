@@ -12,13 +12,13 @@ import org.junit.jupiter.api.Test
 import java.nio.file.Path
 
 /**
- * Verifies the path conversion used by the Gradle init script / env vars: for WSL projects the
- * daemon runs inside the distribution, so host drive paths must map to `/mnt/<drive>/...` and
- * same-distribution UNC paths must convert to Linux paths. The local case runs everywhere; the
- * WSL cases self-enable on Windows hosts with a WSL distribution.
+ * Verifies [toDaemonVisiblePath] — the path conversion used by the Gradle init script / env vars —
+ * across environments. The local case runs everywhere; the WSL cases self-enable on Windows hosts
+ * with a WSL distribution: for WSL projects the daemon runs inside the distribution, so host drive
+ * paths must map to `/mnt/<drive>/...` and same-distribution UNC paths must convert to Linux paths.
  */
 @TestApplication
-internal class WslGradlePathConversionTest {
+internal class DaemonPathConversionTest {
 
     @Test
     fun `local project keeps host path untouched`() {
