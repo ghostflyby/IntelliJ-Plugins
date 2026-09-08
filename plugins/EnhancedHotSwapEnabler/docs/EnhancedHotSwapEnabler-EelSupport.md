@@ -77,12 +77,18 @@ The init-script classpath and the `ijHotswapAgentJarPath` env var must be daemon
 
 ## CI
 
-- `.github/workflows/wsl-tests.yml` (PR-triggered): `windows-latest` + `Vampire/setup-wsl@v7`
-  (Ubuntu-24.04, set-as-default) running `@Tag("wsl")` tests via `-PwslDistro=Ubuntu-24.04`.
-  Note: quote the property value — PowerShell splits unquoted `Ubuntu-24.04`.
+- WSL tests run inside the main `Build and Check` workflow as a `windows-latest` matrix leg
+  (`matrix.wsl == true`): `Vampire/setup-wsl@v7` (Ubuntu-24.04, set-as-default) +
+  `.\gradlew.bat --configuration-cache "-PwslDistro=Ubuntu-24.04" :plugins:EnhancedHotSwapEnabler:test`
+  (quote the property value — PowerShell splits unquoted `Ubuntu-24.04`). All primary-leg steps
+  (kover/codecov, plugin verification, verifier reports) are guarded by `matrix.primary`.
+- Windows caches: setup-gradle saves GUH caches on main pushes (PRs restore only), and the
+  Windows leg saves an `ijpl-ides-v2-Windows-X64-<fingerprint>` IDEs-cache entry on main with a
+  no-op guard (same fingerprint-key pattern as inspect-code.yml). Note the workflow was moved
+  from the former standalone `wsl-tests.yml` so the main-push legs keep the caches warm.
 - Convention plugin (`repo.intellij-lib.gradle.kts`): `-PwslDistro` forwards to the `wsl.distro`
   system property; without it, `wsl`-tagged tests are excluded everywhere. Rollout to other
-  plugins = add tagged tests, then widen the workflow invocation to root `test`.
+  plugins = add tagged tests, then widen the Run WSL Tests step to the root `test` task.
 - `WslTestEnvironment` performs all in-distro setup through the same patched command line
   (`/bin/sh -c`); mixing raw `wsl.exe` calls with 9P file operations raced in the first run
   (files created via `\\wsl.localhost` were not immediately visible to `wsl chmod`).

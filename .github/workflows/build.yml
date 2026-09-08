@@ -15,7 +15,17 @@ concurrency:
 jobs:
   build-and-check:
     name: Build and Check
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            primary: true
+            wsl: false
+          - os: windows-latest
+            primary: false
+            wsl: true
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Fetch Sources
         uses: actions/checkout@v7
@@ -33,17 +43,27 @@ jobs:
         uses: gradle/actions/setup-gradle@v6.3.0
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: Setup WSL
+        if: ${{ matrix.wsl }}
+        uses: Vampire/setup-wsl@v7
+        with:
+          distribution: Ubuntu-24.04
+          set-as-default: true
+          use-cache: true
       - name: Configure IntelliJ Platform IDE Cache
         shell: bash
         run: |
           set -euo pipefail
           gradle_user_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
           ide_cache="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
-          mkdir -p "$gradle_user_home" "$ide_cache"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+              ide_cache="$(cygpath -m "$ide_cache")"
+          fi
+          mkdir -p "$gradle_user_home" "$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
           {
-            printf '\n'
-            printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
-            printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
+              printf '\n'
+              printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
+              printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
           } >> "$gradle_user_home/gradle.properties"
       - name: Restore IntelliJ Platform IDE Cache
         id: restore-intellij-platform-ides
@@ -54,6 +74,7 @@ jobs:
           restore-keys: |
             ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
       - name: Run Checks
+        if: ${{ matrix.primary }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -64,13 +85,21 @@ jobs:
               "./gradlew"
           }
           & $gradlew --configuration-cache check koverXmlReport
+      - name: Run WSL Tests
+        if: ${{ matrix.wsl }}
+        # rollout: swap the task list for the root `test` when more plugins ship `@Tag("wsl")`
+        # tests; the convention plugin enables them via -PwslDistro
+        run: >-
+          & .\gradlew.bat --configuration-cache "-PwslDistro=Ubuntu-24.04"
+          :plugins:EnhancedHotSwapEnabler:test
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result
+          name: tests-result-${{ matrix.os }}
           path: ${{ github.workspace }}/**/build/reports/tests
       - name: Collect Code Coverage Reports
+        if: ${{ matrix.primary }}
         id: coverage
         run: |
           $reports = Get-ChildItem `
@@ -92,6 +121,7 @@ jobs:
           files: ${{ steps.coverage.outputs.files }}
           token: ${{ secrets.CODECOV_TOKEN }}
       - name: Select Plugin Verification tasks
+        if: ${{ matrix.primary }}
         id: plugin-verification
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -164,6 +194,7 @@ jobs:
           Write-Host "Plugin verification tasks: $( $verificationTasks -join ', ' )"
           Write-Host "Plugin verification IDE selection: $verificationIdes"
       - name: Run Plugin Verification tasks
+        if: ${{ matrix.primary }}
         env:
           PLUGIN_VERIFICATION_TASKS: ${{ steps.plugin-verification.outputs.tasks }}
           PLUGIN_VERIFICATION_IDES: ${{ steps.plugin-verification.outputs.ides }}
@@ -188,27 +219,53 @@ jobs:
         if: ${{ always() && hashFiles('plugins/*/build/distributions/*.zip') != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: plugin-distributions
+          name: plugin-distributions-${{ matrix.os }}
           path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
           if-no-files-found: error
       - name: Collect Plugin Verifier Result
-        if: ${{ always() }}
+        if: ${{ always() && matrix.primary }}
         uses: actions/upload-artifact@v7
         with:
           name: pluginVerifier-result
           path: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
       - name: Plugin Verifier Summary
+        if: ${{ always() && matrix.primary }}
         env:
           reports: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
         run: |
           Get-ChildItem -Path $env:reports -Filter "*.md" -Recurse -File |
                   Get-Content |
                   Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      - name: Compute Windows IntelliJ Platform IDE Inventory
+        if: ${{ matrix.wsl }}
+        id: intellij-platform-ides
+        run: |
+          $cacheDir = Join-Path $env:USERPROFILE ".cache/JetBrains/IJPL-Gradle/IDEs"
+          $inventoryFile = Join-Path $env:RUNNER_TEMP "intellij-platform-ides-inventory"
+          Remove-Item -LiteralPath $inventoryFile -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $cacheDir -Directory -ErrorAction Stop |
+                  Sort-Object Name |
+                  ForEach-Object { [System.IO.File]::AppendAllText($inventoryFile, "$($_.Name)`0") }
+          if (-not (Test-Path -LiteralPath $inventoryFile) -or (Get-Item -LiteralPath $inventoryFile).Length -eq 0)
+          {
+              Write-Error "No IntelliJ Platform IDE distributions were resolved"
+              exit 1
+          }
+          $fingerprint = (Get-FileHash -Algorithm SHA256 -LiteralPath $inventoryFile).Hash.ToLowerInvariant()
+          $key = "ijpl-ides-v2-$env:RUNNER_OS-$env:RUNNER_ARCH-$fingerprint"
+          "fingerprint=$fingerprint" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "key=$key" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Save Windows IntelliJ Platform IDE Cache
+        if: ${{ matrix.wsl && success() && github.ref == 'refs/heads/main' && steps.intellij-platform-ides.outputs.key != steps.restore-intellij-platform-ides.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ${{ steps.intellij-platform-ides.outputs.key }}
       - name: Report disk space
         if: ${{ always() }}
         shell: bash
         run: df -h /
-  
+
 
   inspectCode:
     name: Inspect code

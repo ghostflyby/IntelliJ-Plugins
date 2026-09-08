@@ -8,7 +8,6 @@ package dev.ghostflyby.dcevm.config
 
 import com.intellij.execution.Executor
 import com.intellij.execution.RunConfigurationExtension
-import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.configurations.JavaParameters
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
@@ -19,15 +18,11 @@ import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.JavaSdkVersion
 import com.intellij.openapi.util.UserDataHolder
 import com.intellij.util.xmlb.XmlSerializer
-import dev.ghostflyby.dcevm.Bundle
-import dev.ghostflyby.dcevm.DCEVMSupport
-import dev.ghostflyby.dcevm.JVM_OPTION_EXTERNAL_HOTSWAP_AGENT
+import dev.ghostflyby.dcevm.*
 import dev.ghostflyby.dcevm.agent.BundledHotSwapAgentJarPath
 import dev.ghostflyby.dcevm.agent.JDWP_AGENTLIB_OPTION
 import dev.ghostflyby.dcevm.agent.fixedJvmParameter
 import dev.ghostflyby.dcevm.agent.hotswapAgentParameter
-import dev.ghostflyby.dcevm.getDcevmSupport
-import dev.ghostflyby.dcevm.missingHotswapAgentAddOpensJvmArgs
 import dev.ghostflyby.dcevm.wsl.javaOptionLines
 import org.jdom.Element
 import java.nio.file.Path

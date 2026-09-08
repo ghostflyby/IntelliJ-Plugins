@@ -46,9 +46,7 @@ internal object WslTestEnvironment {
     }
 
     private fun distribution(): WSLDistribution =
-        WslPath.parseWindowsUncPath("\\\\wsl.localhost\\${requireDistro()}\\tmp").let { parsed ->
-            requireNotNull(parsed?.distribution) { "Cannot resolve WSL distribution $distro" }
-        }
+        requireNotNull(WslPath.parseWindowsUncPath("\\\\wsl.localhost\\${requireDistro()}\\tmp")?.distribution) { "Cannot resolve WSL distribution $distro" }
 
     /** `\\wsl.localhost\<distro>\tmp`; falls back to a placeholder name when distro is unset (tests assume-skip first) */
     fun tmpRoot(): Path = Path.of("\\\\wsl.localhost", distro ?: "unset", "tmp")

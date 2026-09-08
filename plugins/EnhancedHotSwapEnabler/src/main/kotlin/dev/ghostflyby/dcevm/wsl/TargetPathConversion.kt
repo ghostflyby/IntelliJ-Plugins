@@ -17,6 +17,7 @@ import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.platform.eel.EelDescriptor
 import com.intellij.platform.eel.EelPathBoundDescriptor
+import com.intellij.platform.eel.fs.EelFiles
 import com.intellij.platform.eel.path.EelPath
 import com.intellij.platform.eel.path.EelPathException
 import com.intellij.platform.eel.provider.LocalEelDescriptor
@@ -25,7 +26,7 @@ import com.intellij.platform.eel.provider.getEelDescriptor
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 
 private val logger = Logger.getInstance("dev.ghostflyby.dcevm.wsl")
@@ -87,7 +88,7 @@ private fun transferIntoTarget(projectDescriptor: EelDescriptor, hostPath: Path,
             .resolve(hostPath.fileName.toString())
         val routedFile = targetFile.asNioPath()
         Files.createDirectories(routedFile.parent)
-        Files.write(routedFile, Files.readAllBytes(hostPath))
+        Files.write(routedFile, EelFiles.readAllBytes(hostPath))
         logger.info("Transferred $hostPath into $projectPath environment as $routedFile")
         val targetString = targetFile.toString()
         transferredPaths[cacheKey] = targetString
