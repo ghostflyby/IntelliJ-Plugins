@@ -20,36 +20,48 @@ import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.util.Computable
-import com.intellij.util.system.OS
-import org.junit.jupiter.api.Assumptions
 import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Environment for WSL functional tests: the distribution name is forwarded from the CI WSL job
- * (or local WSL development) via `-PwslDistro=<distro>` as the `wsl.distro` system property by the
- * `repo.intellij-lib` convention plugin; tests skip themselves via [assumeAvailable] when unset.
+ * Environment for WSL tests. Tests self-enable through [EnabledOnWsl] (JUnit's `EnabledOnOs`
+ * family): the distribution is discovered from the WSL UNC root `\\wsl.localhost` — no distro
+ * name property or tag switch involved.
  *
  * All in-distro operations run through [execInDistro] (the platform's patched WSL command line),
  * never through raw `wsl.exe` calls mixed with 9P file operations.
  */
 internal object WslTestEnvironment {
 
-    val distro: String?
-        get() = System.getProperty("wsl.distro")?.takeIf { it.isNotBlank() }
+    private const val WSL_UNC_ROOT = "\\\\wsl.localhost"
 
-    fun requireDistro(): String = requireNotNull(distro) { "wsl.distro is not set" }
+    /** Installed distribution names as seen through the WSL UNC root; empty when WSL is absent */
+    fun installedDistributions(): List<String> =
+        runCatching {
+            Files.newDirectoryStream(Path.of(WSL_UNC_ROOT)).use { stream ->
+                stream.asSequence().map { it.fileName.toString() }.sorted().toList()
+            }
+        }.getOrDefault(emptyList())
 
-    fun assumeAvailable() {
-        Assumptions.assumeTrue(OS.CURRENT == OS.Windows) { "WSL tests require a Windows host" }
-        Assumptions.assumeTrue(!distro.isNullOrBlank()) { "wsl.distro is not set; WSL tests are skipped" }
-    }
+    /**
+     * The distribution tests run against: an Ubuntu-based one when installed (utility distros
+     * such as `docker-desktop` otherwise sort first alphabetically), else the alphabetically
+     * first installed one.
+     */
+    fun defaultDistribution(): String? =
+        installedDistributions().firstOrNull { it.contains("ubuntu", ignoreCase = true) }
+            ?: installedDistributions().firstOrNull()
+
+    fun requireDistribution(): String =
+        requireNotNull(defaultDistribution()) { "No WSL distribution is installed" }
 
     private fun distribution(): WSLDistribution =
-        requireNotNull(WslPath.parseWindowsUncPath("\\\\wsl.localhost\\${requireDistro()}\\tmp")?.distribution) { "Cannot resolve WSL distribution $distro" }
+        WslPath.parseWindowsUncPath("$WSL_UNC_ROOT\\${requireDistribution()}\\tmp").let { parsed ->
+            requireNotNull(parsed?.distribution) { "Cannot resolve the WSL distribution" }
+        }
 
-    /** `\\wsl.localhost\<distro>\tmp`; falls back to a placeholder name when distro is unset (tests assume-skip first) */
-    fun tmpRoot(): Path = Path.of("\\\\wsl.localhost", distro ?: "unset", "tmp")
+    /** `\\wsl.localhost\<detected distro>\tmp` */
+    fun tmpRoot(): Path = Path.of(WSL_UNC_ROOT, requireDistribution(), "tmp")
 
     fun newIsolatedDir(prefix: String): Path = Files.createTempDirectory(tmpRoot(), prefix)
 

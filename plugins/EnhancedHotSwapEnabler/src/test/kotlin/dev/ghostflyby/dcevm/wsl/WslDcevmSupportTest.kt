@@ -10,7 +10,6 @@ import com.intellij.testFramework.junit5.TestApplication
 import dev.ghostflyby.dcevm.DCEVMSupport
 import dev.ghostflyby.dcevm.getDcevmSupport
 import org.junit.jupiter.api.Assertions
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 
 /**
@@ -19,13 +18,12 @@ import org.junit.jupiter.api.Test
  * (`\\wsl.localhost\...` UNC home). The WSL branch must execute the ELF inside the distribution
  * instead of hitting Windows CreateProcess error=193.
  */
-@Tag("wsl")
 @TestApplication
+@EnabledOnWsl
 internal class WslDcevmSupportTest {
 
     @Test
     fun `jdk with enabled dcevm flag resolves auto`() {
-        WslTestEnvironment.assumeAvailable()
         val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-auto-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
@@ -37,7 +35,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `jdk with disabled dcevm flag requires args`() {
-        WslTestEnvironment.assumeAvailable()
         val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-req-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
@@ -49,7 +46,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `jdk without dcevm flag resolves none`() {
-        WslTestEnvironment.assumeAvailable()
         val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-none-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
@@ -61,7 +57,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `alt-jvm layout resolves altJvm without process execution`() {
-        WslTestEnvironment.assumeAvailable()
         val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-alt-")
         WslTestEnvironment.createAltJvmLayout(jdkHome)
         val support = getDcevmSupport(jdkHome) { error("alt-jvm detection must not execute java") }

@@ -87,11 +87,10 @@ jobs:
           & $gradlew --configuration-cache check koverXmlReport
       - name: Run WSL Tests
         if: ${{ matrix.wsl }}
-        # rollout: swap the task list for the root `test` when more plugins ship `@Tag("wsl")`
-        # tests; the convention plugin enables them via -PwslDistro
-        run: >-
-          & .\gradlew.bat --configuration-cache "-PwslDistro=Ubuntu-24.04"
-          :plugins:EnhancedHotSwapEnabler:test
+        # WSL tests self-enable on Windows through the EnabledOnWsl condition (the distribution
+        # is discovered from the \\wsl.localhost UNC root — no property or tag switch).
+        # rollout: swap the task list for the root `test` when more plugins ship WSL tests
+        run: & .\gradlew.bat --configuration-cache :plugins:EnhancedHotSwapEnabler:test
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

@@ -11,8 +11,8 @@ Completed work is archived in
 - Docker/EEL spike: `workflow_dispatch` job on `ubuntu-latest` using the platform
   `@TestApplicationWithEel` / `@DockerTest` framework to validate the container path conversion
   (routed-NIO transfer). Promote to PR trigger only if green.
-- Rollout to other plugins: any plugin adds `@Tag("wsl")` tests; widen the `Run WSL Tests` step
-  in `build.yml` (matrix `windows-latest` leg) to root `test -PwslDistro=...`.
+- Rollout to other plugins: any plugin adds `@EnabledOnWsl` tests; widen the `Run WSL Tests`
+  step in `build.yml` (matrix `windows-latest` leg) to root `test`.
 
 ## Known limitations
 
