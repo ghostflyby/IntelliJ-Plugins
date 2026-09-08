@@ -110,8 +110,11 @@ internal object WslTestEnvironment {
             requireNotNull(parsed?.distribution) { "Cannot resolve the WSL distribution" }
         }
 
+    /** `\\wsl.localhost\<detected distro>` UNC root of the distribution */
+    fun distributionUncRoot(): Path = Path.of(WSL_UNC_ROOT, requireDistribution())
+
     /** `\\wsl.localhost\<detected distro>\tmp` */
-    fun tmpRoot(): Path = Path.of(WSL_UNC_ROOT, requireDistribution(), "tmp")
+    fun tmpRoot(): Path = distributionUncRoot().resolve("tmp")
 
     fun newIsolatedDir(prefix: String): Path = Files.createTempDirectory(tmpRoot(), prefix)
 

@@ -29,17 +29,16 @@ internal class WslGradlePathConversionTest {
     @Test
     @EnabledOnWsl
     fun `wsl project maps windows drive path to automount root`() {
-        val projectPath = "\\wsl.localhost\\${WslTestEnvironment.requireDistribution()}\\home\\ci\\project"
-        val mapped = toDaemonVisiblePath(projectPath, Path.of("C:\\Users\\ci\\hotswap-agent.jar"))
+        val root = WslTestEnvironment.distributionUncRoot().toString()
+        val mapped = toDaemonVisiblePath("$root\\home\\ci\\project", Path.of("C:\\Users\\ci\\hotswap-agent.jar"))
         Assertions.assertEquals("/mnt/c/Users/ci/hotswap-agent.jar", mapped)
     }
 
     @Test
     @EnabledOnWsl
     fun `unc path inside the same distro converts to linux path`() {
-        val distro = WslTestEnvironment.requireDistribution()
-        val projectPath = "\\wsl.localhost\\$distro\\home\\ci\\project"
-        val jar = Path.of("\\\\wsl.localhost\\$distro\\opt", "lib", "agent.jar")
+        val jar = WslTestEnvironment.distributionUncRoot().resolve("opt").resolve("lib").resolve("agent.jar")
+        val projectPath = "${WslTestEnvironment.distributionUncRoot()}\\home\\ci\\project"
         Assertions.assertEquals("/opt/lib/agent.jar", toDaemonVisiblePath(projectPath, jar))
     }
 }
