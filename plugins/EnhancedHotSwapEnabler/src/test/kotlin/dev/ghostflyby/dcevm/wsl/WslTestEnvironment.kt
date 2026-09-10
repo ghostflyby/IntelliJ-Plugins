@@ -19,10 +19,8 @@ import com.intellij.execution.wsl.WSLDistribution
 import com.intellij.execution.wsl.WslDistributionManager
 import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.components.service
-import com.intellij.openapi.progress.runBlockingCancellable
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
-import kotlinx.html.CommandType
 import java.nio.file.Path
 
 /**
@@ -66,11 +64,10 @@ internal object WslTestEnvironment {
 
     /** Runs [command] via `/bin/sh -c` inside the distribution and fails on a non-zero exit code */
     fun execInDistro(command: String) {
-        // patchCommandLine resolves the distro shell path via runBlockingCancellable, which
-        // requires a ProgressIndicator on the current thread — install an empty one for the
-        // plain test thread
-        val commandLine = runBlockingCancellable {
-
+        // runBlocking installs a Job on the test thread, which satisfies the runBlockingCancellable
+        // calls inside patchCommandLine (shell-path resolution) — plain test threads have neither
+        // a ProgressIndicator nor a Job of their own
+        val commandLine = runBlocking {
             distribution().patchCommandLine(
                 GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
                 null,
@@ -82,7 +79,7 @@ internal object WslTestEnvironment {
         val process = commandLine.createProcess()
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
-        check(exitCode == 0) { "in-distro command failed (exit=$exitCode): ${CommandType.command}\n$output" }
+        check(exitCode == 0) { "in-distro command failed (exit=$exitCode): $command\n$output" }
     }
 
     /**
