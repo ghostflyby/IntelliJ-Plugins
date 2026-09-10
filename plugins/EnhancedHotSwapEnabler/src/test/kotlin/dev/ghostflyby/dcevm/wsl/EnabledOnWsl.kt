@@ -9,8 +9,8 @@ package dev.ghostflyby.dcevm.wsl
 import org.junit.jupiter.api.condition.EnabledOnOs
 import org.junit.jupiter.api.condition.OS
 import org.junit.jupiter.api.extension.ConditionEvaluationResult
-import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.extension.ExecutionCondition
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.extension.ExtensionContext
 
 /**
@@ -29,13 +29,11 @@ internal annotation class EnabledOnWsl
 
 internal class WslAvailableCondition : ExecutionCondition {
 
-    // JUnit Jupiter 6 renamed ExecutionCondition.evaluate to evaluateExecutionCondition
     override fun evaluateExecutionCondition(context: ExtensionContext): ConditionEvaluationResult {
-        val discovery = WslTestEnvironment.describeDiscovery()
         return if (WslTestEnvironment.installedDistributions().isNotEmpty()) {
-            ConditionEvaluationResult.enabled(discovery)
+            ConditionEvaluationResult.enabled("Wsl distribution found")
         } else {
-            ConditionEvaluationResult.disabled("WSL tests disabled: $discovery")
+            ConditionEvaluationResult.disabled("WSL tests disabled")
         }
     }
 }

@@ -16,11 +16,13 @@ package dev.ghostflyby.dcevm.wsl
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.wsl.WSLCommandLineOptions
 import com.intellij.execution.wsl.WSLDistribution
+import com.intellij.execution.wsl.WslDistributionManager
 import com.intellij.execution.wsl.WslPath
-import com.intellij.openapi.progress.EmptyProgressIndicator
-import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.util.Computable
-import java.nio.file.Files
+import com.intellij.openapi.components.service
+import com.intellij.openapi.progress.runBlockingCancellable
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.runBlocking
+import kotlinx.html.CommandType
 import java.nio.file.Path
 
 /**
@@ -33,90 +35,27 @@ import java.nio.file.Path
  */
 internal object WslTestEnvironment {
 
-    private const val WSL_UNC_ROOT = "\\\\wsl.localhost"
-
-    /**
-     * Installed distribution names: enumerates the WSL UNC root first, falling back to
-     * `wsl.exe -l -q` (the bare-server UNC listing is not supported by every redirector);
-     * empty when WSL is absent.
-     */
-    fun installedDistributions(): List<String> {
-        val viaUncRoot = runCatching {
-            Files.newDirectoryStream(Path.of(WSL_UNC_ROOT)).use { stream ->
-                stream.asSequence().map { it.fileName.toString() }.filter { it.isNotBlank() }.sorted().toList()
-            }
-        }.getOrDefault(emptyList())
-        if (viaUncRoot.isNotEmpty()) {
-            return viaUncRoot
-        }
-        return wslListOutput()
-    }
-
-    /**
-     * Human-readable summary of the discovery state, for condition messages — distinguishes a
-     * failed UNC enumeration from a WSL host without distributions.
-     */
-    fun describeDiscovery(): String {
-        val uncError = runCatching {
-            Files.newDirectoryStream(Path.of(WSL_UNC_ROOT)).use { stream ->
-                stream.asSequence().map { it.fileName.toString() }.toList()
-            }
-        }.exceptionOrNull()
-        val distributions = installedDistributions()
-        return when {
-            distributions.isNotEmpty() -> "WSL distributions: ${distributions.joinToString()}"
-            uncError != null -> "UNC root listing failed ($uncError) and the wsl.exe fallback found none"
-            else -> "UNC root listed no distributions and the wsl.exe fallback found none"
+    fun installedDistributions(): List<WSLDistribution> {
+        return runBlocking {
+            service<WslDistributionManager>().installedDistributionsFuture.await()
         }
     }
-
-    private fun wslListOutput(): List<String> =
-        runCatching {
-            val bytes = ProcessBuilder("wsl.exe", "-l", "-q")
-                .redirectErrorStream(true)
-                .start()
-                .inputStream
-                .readBytes()
-            // `wsl.exe -l` historically writes UTF-16LE (with or without BOM); newer builds use UTF-8
-            val text = when {
-                bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte() ->
-                    String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
-                bytes.size >= 2 && bytes[1] == 0.toByte() ->
-                    String(bytes, Charsets.UTF_16LE)
-                else ->
-                    String(bytes, Charsets.UTF_8)
-            }
-            text.lineSequence()
-                .map { it.trim().replace("\u0000", "") }
-                .filter { it.isNotEmpty() && !it.contains(' ') }
-                .sorted()
-                .toList()
-        }.getOrDefault(emptyList())
 
     /**
      * The distribution tests run against: an Ubuntu-based one when installed (utility distros
      * such as `docker-desktop` otherwise sort first alphabetically), else the alphabetically
      * first installed one.
      */
-    fun defaultDistribution(): String? =
-        installedDistributions().firstOrNull { it.contains("ubuntu", ignoreCase = true) }
-            ?: installedDistributions().firstOrNull()
+    fun distribution(): WSLDistribution =
+        installedDistributions().firstOrNull { it.id.contains("ubuntu", ignoreCase = true) }
+            ?: installedDistributions().first()
 
-    fun requireDistribution(): String =
-        requireNotNull(defaultDistribution()) { "No WSL distribution is installed" }
-
-    private fun distribution(): WSLDistribution =
-        WslPath.parseWindowsUncPath("$WSL_UNC_ROOT\\${requireDistribution()}\\tmp").let { parsed ->
-            requireNotNull(parsed?.distribution) { "Cannot resolve the WSL distribution" }
-        }
 
     /** `\\wsl.localhost\<detected distro>` UNC root of the distribution */
-    fun distributionUncRoot(): Path = Path.of(WSL_UNC_ROOT, requireDistribution())
+    fun distributionUncRoot(): Path = distribution().getUNCRootPath()
 
     /** `\\wsl.localhost\<detected distro>\tmp` */
     fun tmpRoot(): Path = distributionUncRoot().resolve("tmp")
-
-    fun newIsolatedDir(prefix: String): Path = Files.createTempDirectory(tmpRoot(), prefix)
 
     /** Converts a `\\wsl.localhost\<distro>\...` UNC path into its in-distribution Linux path */
     fun toLinuxPath(wslUncPath: Path): String {
@@ -130,22 +69,20 @@ internal object WslTestEnvironment {
         // patchCommandLine resolves the distro shell path via runBlockingCancellable, which
         // requires a ProgressIndicator on the current thread — install an empty one for the
         // plain test thread
-        val commandLine = ProgressManager.getInstance().runProcess(
-            Computable {
-                distribution().patchCommandLine(
-                    GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
-                    null,
-                    // force the wsl.exe launch: the IJent launch path requires a cancellable
-                    // context, which plain test threads do not have
-                    WSLCommandLineOptions().setLaunchWithWslExe(true),
-                )
-            },
-            EmptyProgressIndicator(),
-        )
+        val commandLine = runBlockingCancellable {
+
+            distribution().patchCommandLine(
+                GeneralCommandLine("/bin/sh", "-c", command).withRedirectErrorStream(true),
+                null,
+                // force the wsl.exe launch: the IJent launch path requires a cancellable
+                // context, which plain test threads do not have
+                WSLCommandLineOptions().setLaunchWithWslExe(true),
+            )
+        }
         val process = commandLine.createProcess()
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
-        check(exitCode == 0) { "in-distro command failed (exit=$exitCode): $command\n$output" }
+        check(exitCode == 0) { "in-distro command failed (exit=$exitCode): ${CommandType.command}\n$output" }
     }
 
     /**

@@ -7,6 +7,7 @@
 package dev.ghostflyby.dcevm.wsl
 
 import com.intellij.testFramework.junit5.TestApplication
+import com.intellij.testFramework.junit5.fixture.tempPathFixture
 import dev.ghostflyby.dcevm.DCEVMSupport
 import dev.ghostflyby.dcevm.eel.detectDcevmSupport
 import kotlinx.coroutines.runBlocking
@@ -23,9 +24,10 @@ import org.junit.jupiter.api.Test
 @EnabledOnWsl
 internal class WslDcevmSupportTest {
 
+    private val jdkHome by tempPathFixture(root = WslTestEnvironment.tmpRoot(), prefix = "ijpl-wsl-jdk-")
+
     @Test
     fun `jdk with enabled dcevm flag resolves auto`() {
-        val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-auto-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
             " bool AllowEnhancedClassRedefinition = true {product}",
@@ -36,7 +38,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `jdk with disabled dcevm flag requires args`() {
-        val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-req-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
             " bool AllowEnhancedClassRedefinition = false {product}",
@@ -47,7 +48,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `jdk without dcevm flag resolves none`() {
-        val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-none-")
         WslTestEnvironment.createFakeJdk(
             jdkHome,
             " bool UseCompressedOops = true {product}",
@@ -58,7 +58,6 @@ internal class WslDcevmSupportTest {
 
     @Test
     fun `alt-jvm layout resolves altJvm without process execution`() {
-        val jdkHome = WslTestEnvironment.newIsolatedDir("ijpl-wsl-alt-")
         WslTestEnvironment.createAltJvmLayout(jdkHome)
         val support = runBlocking { detectDcevmSupport(jdkHome) }
         Assertions.assertEquals(DCEVMSupport.AltJvm, support)
