@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+@file:Suppress("UnstableApiUsage")
+// Mirrors the Experimental target-parameter surface the production injection
+// (HotswapAgentJvmArguments) is built on; the test exercises its resolution directly.
+
 package dev.ghostflyby.dcevm.agent
 
 import com.intellij.execution.target.value.TargetValue

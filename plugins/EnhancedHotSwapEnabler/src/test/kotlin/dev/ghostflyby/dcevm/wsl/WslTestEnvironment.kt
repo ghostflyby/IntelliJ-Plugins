@@ -19,9 +19,9 @@ import com.intellij.execution.wsl.WSLDistribution
 import com.intellij.execution.wsl.WslDistributionManager
 import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.components.service
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
+import java.util.concurrent.ExecutionException
 
 /**
  * Environment for WSL tests. Tests self-enable through [EnabledOnWsl] (JUnit's `EnabledOnOs`
@@ -34,8 +34,13 @@ import java.nio.file.Path
 internal object WslTestEnvironment {
 
     fun installedDistributions(): List<WSLDistribution> {
-        return runBlocking {
-            service<WslDistributionManager>().installedDistributionsFuture.await()
+        return try {
+            service<WslDistributionManager>().installedDistributionsFuture.get()
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            emptyList()
+        } catch (e: ExecutionException) {
+            emptyList()
         }
     }
 

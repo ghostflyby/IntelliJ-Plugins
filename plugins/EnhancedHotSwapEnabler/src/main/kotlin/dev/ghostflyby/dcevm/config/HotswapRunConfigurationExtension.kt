@@ -29,7 +29,6 @@ import dev.ghostflyby.dcevm.agent.hotswapAgentParameter
 import dev.ghostflyby.dcevm.eel.detectDcevmSupport
 import dev.ghostflyby.dcevm.missingHotswapAgentAddOpensJvmArgs
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.jdom.Element
 import java.nio.file.Path
