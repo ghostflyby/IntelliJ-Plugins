@@ -11,7 +11,6 @@
     <depends>com.intellij.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <java.programPatcher implementation="dev.ghostflyby.dcevm.DCEVMProgramPatcher"/>
         <runConfigurationExtension implementation="dev.ghostflyby.dcevm.config.HotswapRunConfigurationExtension"/>
         <applicationConfigurable bundle="messages.Bundle" id="dev.ghostflyby.dcevm.application"
                                  instance="dev.ghostflyby.dcevm.config.AppDCEVMConfigurable" key="configuration.title"
