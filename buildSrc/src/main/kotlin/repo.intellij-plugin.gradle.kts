@@ -19,7 +19,6 @@ plugins {
 }
 
 val buildLogic: BuildLogicSettings = extensions.getByType()
-val pluginVerificationIdes = providers.gradleProperty("pluginVerificationIdes").orElse("current")
 
 intellijPlatform {
     pluginConfiguration {
@@ -70,13 +69,10 @@ intellijPlatform {
             VerifyPluginTask.VerificationReportsFormats.PLAIN,
         )
         failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
-        when (val value = pluginVerificationIdes.get()) {
-            "current" -> ides.current()
-            "recommended" -> ides.recommended()
-            else -> throw GradleException(
-                "Unsupported pluginVerificationIdes value '$value'. Expected 'current' or 'recommended'.",
-            )
-        }
+        // Marketplace-resolved target sets ("recommended") are picked at execution time and
+        // change under a fixed commit, which made verification results non-reproducible;
+        // always verify against the compile-target IDE.
+        ides.current()
     }
 
 }
