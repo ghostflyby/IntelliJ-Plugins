@@ -6,6 +6,9 @@
 
 ### Added
 
+- support debug runs of projects hosted in WSL or dev containers
+  [#293](https://github.com/ghostflyby/IntelliJ-Plugins/pull/293)
+
 ### Changed
 
 ### Deprecated

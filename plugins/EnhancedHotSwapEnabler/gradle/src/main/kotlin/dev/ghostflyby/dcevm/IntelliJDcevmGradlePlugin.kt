@@ -50,11 +50,11 @@ public class IntelliJDcevmGradlePlugin : Plugin<Gradle> {
 
                 val dcevmSupportProvider = javaLauncher.map { launcher ->
                     val javaHome = launcher.metadata.installationPath.asFile.toPath()
-                    getDcevmSupport(javaHome) { exe ->
+                    getDcevmSupport(javaHome, optionLinesProvider = { exe ->
                         ProcessBuilder().command(
                             exe, "-XX:+PrintFlagsFinal", "-version",
                         ).start().inputStream.bufferedReader().use { it.readLines().asSequence() }
-                    }
+                    })
                 }
 
 
