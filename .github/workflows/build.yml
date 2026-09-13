@@ -32,6 +32,15 @@ jobs:
         with:
           fetch-depth: 0
           submodules: recursive
+      - name: Free disk space
+        # Full-repo `recommended` verification on main runs ~10 plugin verifiers in
+        # parallel, each with its own plugin-verifier-home; the peak fills the runner
+        # disk (ENOSPC seen in run 34758371488). Mirror the releaseDraft job.
+        if: ${{ matrix.primary }}
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
       - name: Setup Java
         uses: actions/setup-java@v6
         with:
