@@ -5,13 +5,11 @@
  */
 
 @file:Suppress("UnstableApiUsage")
-// EEL exec (com.intellij.platform.eel, @ApiStatus.Experimental) is the primary process surface
-// here: one code path serves local, WSL and container JDKs through their EelApi. The EEL fs /
-// MultiRoutingFileSystem layers are deliberately NOT used — fs is @ApiStatus.Internal and the
-// routing provider is product-gated in 2026.1, so WSL UNC paths may resolve to
-// LocalEelDescriptor; those fall back to WSLDistribution.executeOnWsl (the platform's WSL
-// execution mechanism, which internally picks IJent or wsl.exe). WslPath is used for that
-// detection only. Track platform API changes in this file.
+// This file is the EEL/WSL execution transport for common's core detection
+// (dev.ghostflyby.dcevm.getDcevmSupport): EEL exec (Experimental) for local, WSL and container
+// JDKs, with WSLDistribution.executeOnWsl as the fallback for the product-gated WSL layer. The
+// EEL fs / MultiRoutingFileSystem layers are deliberately NOT used — fs is @ApiStatus.Internal.
+// WslPath is referenced for the gated-layer detection only. Track platform API changes here.
 
 package dev.ghostflyby.dcevm.eel
 
@@ -25,9 +23,8 @@ import com.intellij.platform.eel.provider.asEelPath
 import com.intellij.platform.eel.provider.getEelDescriptor
 import com.intellij.platform.eel.provider.toEelApi
 import com.intellij.platform.eel.spawnProcess
-import dev.ghostflyby.dcevm.DCEVM_JVM_OPTION_NAME
 import dev.ghostflyby.dcevm.DCEVMSupport
-import dev.ghostflyby.dcevm.isDcevmInstalledAsAltJvm
+import dev.ghostflyby.dcevm.getDcevmSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.nio.file.Path
@@ -39,24 +36,23 @@ private const val PRINT_FLAGS_TIMEOUT_MS = 60_000
 /**
  * Detects the DCEVM support level of the JDK at [javaHome] by running
  * `<javaHome>/bin/java -XX:+PrintFlagsFinal -version` inside the environment hosting the JDK —
- * local machine, WSL distribution or dev container.
+ * local machine, WSL distribution or dev container. Delegates the detection core to common's
+ * suspend [getDcevmSupport]; this file only provides the execution transport.
  *
  * Suspend by design: callers must invoke it from a coroutine and never block the dispatching
- * thread (no `runBlocking`, no progress-indicator tricks). The WSL fallback blocks an IO
- * dispatcher thread through the platform's synchronous WSL execution API.
- * The EEL exec surface is `@ApiStatus.Experimental` in 2026.1.
+ * thread. The WSL fallback blocks an IO dispatcher thread through the platform's synchronous
+ * WSL execution API.
  */
-internal suspend fun detectDcevmSupport(javaHome: Path): DCEVMSupport {
-    if (isDcevmInstalledAsAltJvm(javaHome)) {
-        return DCEVMSupport.AltJvm
-    }
+internal suspend fun detectDcevmSupport(javaHome: Path): DCEVMSupport =
+    getDcevmSupport(javaHome, optionLines = { javaExecutable -> optionLines(javaExecutable) })
 
-    val javaExecutable = javaHome.resolve("bin/java")
-    val descriptor = javaExecutable.getEelDescriptor()
-    val lines: Sequence<String> = when {
-        descriptor !== LocalEelDescriptor -> execViaEel(descriptor, javaExecutable.asEelPath().toString())
+private suspend fun optionLines(javaExecutable: String): Sequence<String> {
+    val executablePath = Path.of(javaExecutable)
+    val descriptor = executablePath.getEelDescriptor()
+    return when {
+        descriptor !== LocalEelDescriptor -> execViaEel(descriptor, executablePath.asEelPath().toString())
         else -> {
-            val wsl = WslPath.parseWindowsUncPath(javaExecutable.toString())
+            val wsl = WslPath.parseWindowsUncPath(javaExecutable)
             if (wsl != null) {
                 // The EEL WSL layer is product-gated and unavailable here — fall back to the
                 // platform's WSL execution instead of CreateProcess-ing the Linux ELF locally.
@@ -64,11 +60,10 @@ internal suspend fun detectDcevmSupport(javaHome: Path): DCEVMSupport {
                     execViaWslDistribution(wsl.distribution, wsl.linuxPath)
                 }
             } else {
-                execViaEel(LocalEelDescriptor, javaExecutable.toString())
+                execViaEel(LocalEelDescriptor, javaExecutable)
             }
         }
     }
-    return classifyFlagsOutput(lines)
 }
 
 private suspend fun execViaEel(descriptor: EelDescriptor, exe: String): Sequence<String> {
@@ -96,12 +91,3 @@ private fun execViaWslDistribution(distribution: WSLDistribution, linuxJavaExecu
     }
     return output.stdoutLines.asSequence()
 }
-
-private fun classifyFlagsOutput(lines: Sequence<String>): DCEVMSupport =
-    lines.firstOrNull { it.contains(DCEVM_JVM_OPTION_NAME) }?.let { line ->
-        when {
-            line.contains("true") -> DCEVMSupport.Auto
-            line.contains("false") -> DCEVMSupport.RequiresArg
-            else -> DCEVMSupport.None
-        }
-    } ?: DCEVMSupport.None

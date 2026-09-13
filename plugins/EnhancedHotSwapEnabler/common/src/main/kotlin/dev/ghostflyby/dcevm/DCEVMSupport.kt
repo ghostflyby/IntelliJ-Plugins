@@ -24,7 +24,6 @@ package dev.ghostflyby.dcevm
 
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ForkJoinPool
 import kotlin.io.path.isDirectory
 
 public const val DCEVM_MANUAL_TASKS_KEY: String = "ijDcevmManualTasks"
@@ -89,39 +88,43 @@ private fun hasAddOpensJvmArg(existingArgs: List<String>, target: String): Boole
 private val dcevmCheckCache = ConcurrentHashMap<Path, DCEVMSupport>()
 
 /**
- * Whether a DCEVM installation in the alt-jvm layout (`lib/dcevm` and friends) is present under
- * [javaHome]. Exposed for callers that detect the support level asynchronously and therefore
- * classify the `bin/java` output themselves.
+ * Core DCEVM detection bound to a suspending execution provider: runs
+ * `<javaHome>/bin/java -XX:+PrintFlagsFinal -version` inside the environment hosting [javaHome]
+ * through [optionLines] (EEL exec, WSL distribution execution, ...) and classifies the output.
+ * This variant performs no caching — callers own their cache/refresh policy.
  */
-public fun isDcevmInstalledAsAltJvm(javaHome: Path): Boolean = installedAsAltJvm(javaHome)
-
-public fun getDcevmSupport(
+public suspend fun getDcevmSupport(
     javaHome: Path,
-    execute: (Runnable) -> Unit = ForkJoinPool.commonPool()::execute,
-    optionLinesProvider: (javaExecutable: String) -> Sequence<String>,
+    optionLines: suspend (javaExecutable: String) -> Sequence<String>,
 ): DCEVMSupport {
-    val result = dcevmCheckCache[javaHome]
-    return if (result == null) {
-        getDcevmSupport(javaHome, optionLinesProvider).also {
-            dcevmCheckCache[javaHome] = it
-        }
-    } else {
-        execute {
-            dcevmCheckCache[javaHome] = getDcevmSupport(javaHome, optionLinesProvider)
-        }
-        result
+    if (installedAsAltJvm(javaHome)) {
+        return DCEVMSupport.AltJvm
     }
+    return classifyFlagsOutput(optionLines(javaHome.resolve("bin/java").toString()))
 }
 
-private fun getDcevmSupport(
+/**
+ * Memoized synchronous variant for blocking callers (e.g. Gradle daemons): a JDK's DCEVM support
+ * level is resolved once per [dcevmCheckCache] lifetime.
+ */
+public fun getDcevmSupport(
+    javaHome: Path,
+    optionLinesProvider: (javaExecutable: String) -> Sequence<String>,
+): DCEVMSupport = dcevmCheckCache.computeIfAbsent(javaHome) { home ->
+    detectDcevmSupport(home, optionLinesProvider)
+}
+
+private fun detectDcevmSupport(
     javaHome: Path,
     optionLinesProvider: (javaExecutable: String) -> Sequence<String>,
 ): DCEVMSupport = if (installedAsAltJvm(javaHome)) {
     DCEVMSupport.AltJvm
-} else
-    optionLinesProvider(javaHome.resolve("bin/java").toString()).firstOrNull {
-        it.contains(DCEVM_JVM_OPTION_NAME)
-    }?.run {
+} else {
+    classifyFlagsOutput(optionLinesProvider(javaHome.resolve("bin/java").toString()))
+}
+
+private fun classifyFlagsOutput(lines: Sequence<String>): DCEVMSupport =
+    lines.firstOrNull { it.contains(DCEVM_JVM_OPTION_NAME) }?.run {
         when {
             contains("true") -> DCEVMSupport.Auto
             contains("false") -> DCEVMSupport.RequiresArg

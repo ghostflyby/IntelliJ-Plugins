@@ -6,12 +6,8 @@
 
 ### Added
 
-- support debug runs of projects hosted in WSL or dev containers (non-local targets): the DCEVM
-  flags check executes inside the target environment via the platform EEL/IJent routing, and the
-  bundled HotSwapAgent jar is injected target-agnostically (uploaded and rewritten by the platform
-  for WSL/container targets); Gradle init-script classpath and agent env var are converted to
-  daemon-visible paths for remote daemons (`/mnt/<drive>/...` mapping for WSL, EEL transfer for
-  containers)
+- support debug runs of projects hosted in WSL or dev containers
+  [#293](https://github.com/ghostflyby/IntelliJ-Plugins/pull/293)
 
 ### Changed
 

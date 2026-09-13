@@ -25,7 +25,7 @@ internal class DcevmSupportDetectionTest {
         val jdkHome = newJdkHome()
         Files.createDirectories(jdkHome.resolve("lib").resolve("dcevm"))
 
-        val support = getDcevmSupport(jdkHome) { error("alt-jvm detection must not execute java") }
+        val support = getDcevmSupport(jdkHome, optionLinesProvider = { error("alt-jvm detection must not execute java") })
 
         Assertions.assertEquals(DCEVMSupport.AltJvm, support)
     }
@@ -34,9 +34,9 @@ internal class DcevmSupportDetectionTest {
     fun `flag line with true resolves auto`() {
         val jdkHome = newJdkHome()
 
-        val support = getDcevmSupport(jdkHome) { _ ->
+        val support = getDcevmSupport(jdkHome, optionLinesProvider = { _ ->
             sequenceOf(" bool AllowEnhancedClassRedefinition = true {product}")
-        }
+        })
 
         Assertions.assertEquals(DCEVMSupport.Auto, support)
     }
@@ -45,9 +45,9 @@ internal class DcevmSupportDetectionTest {
     fun `flag line with false resolves requiresArgs`() {
         val jdkHome = newJdkHome()
 
-        val support = getDcevmSupport(jdkHome) { _ ->
+        val support = getDcevmSupport(jdkHome, optionLinesProvider = { _ ->
             sequenceOf(" bool AllowEnhancedClassRedefinition = false {product}")
-        }
+        })
 
         Assertions.assertEquals(DCEVMSupport.RequiresArg, support)
     }
@@ -56,9 +56,9 @@ internal class DcevmSupportDetectionTest {
     fun `absent dcevm flag line resolves none`() {
         val jdkHome = newJdkHome()
 
-        val support = getDcevmSupport(jdkHome) { _ ->
+        val support = getDcevmSupport(jdkHome, optionLinesProvider = { _ ->
             sequenceOf(" bool UseCompressedOops = true {product}")
-        }
+        })
 
         Assertions.assertEquals(DCEVMSupport.None, support)
     }
