@@ -4,20 +4,12 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-14
+
 ### Added
 
 - support debug runs of projects hosted in WSL or dev containers
   [#293](https://github.com/ghostflyby/IntelliJ-Plugins/pull/293)
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [1.5.7] - 2026-03-25
 
@@ -133,7 +125,8 @@
 - Not editing parameters for non-debug starts
 - Wrong Gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.5.7...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.6.0...HEAD
+[1.6.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.5.7...EnhancedHotSwapEnabler-v1.6.0
 [1.5.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.4.7...EnhancedHotSwapEnabler-v1.5.7
 [1.4.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...EnhancedHotSwapEnabler-v1.4.7
 [1.3.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.6...EnhancedHotSwapEnabler-v1.3.7
