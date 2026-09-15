@@ -11,12 +11,14 @@ hotswap-agent = "2.0.3"
 # plugins
 changelog = "2.5.0"
 intelliJPlatform = "2.17.0"
+# Kotlin Gradle plugin (compiler toolchain) version only — the Kotlin runtime at execution
+# time is the one bundled with the target IntelliJ Platform; compilerOptions in repo.module
+# pin languageVersion/apiVersion to it. Do not re-add a kotlin-stdlib library entry.
 kotlin = "2.4.10"
 ksp = "2.3.10"
 kover = "0.9.9"
 
 [libraries]
-kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junitJupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitJupiter" }
