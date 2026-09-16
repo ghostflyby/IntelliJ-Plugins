@@ -4,7 +4,7 @@
 
 <idea-plugin>
     <id>dev.ghostflyby.spotless</id>
-    <name>Spotless</name>
+    <name>Spotless Daemon</name>
     <vendor>ghostflyby</vendor>
 
     <depends>com.intellij.modules.platform</depends>
