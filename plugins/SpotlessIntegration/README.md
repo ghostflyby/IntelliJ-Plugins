@@ -1,4 +1,4 @@
-# Spotless Integration
+# Spotless Daemon
 
 <!-- Plugin description -->
 A IntelliJ IDEA plugin that automatically

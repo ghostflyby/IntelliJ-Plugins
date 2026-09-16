@@ -1,8 +1,12 @@
 <!-- Keep a Changelog guide -> https://keepachangelog.com -->
 
-# Spotless Integration IntelliJ Plugin Changelog
+# Spotless Daemon Changelog
 
 ## [Unreleased]
+
+### Changed
+
+- renamed the plugin to Spotless Daemon [#300](https://github.com/ghostflyby/IntelliJ-Plugins/pull/300)
 
 ## [2.0.0] - 2026-07-29
 
