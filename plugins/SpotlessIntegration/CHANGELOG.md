@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-09-16
+
 ### Changed
 
 - renamed the plugin to Spotless Daemon [#300](https://github.com/ghostflyby/IntelliJ-Plugins/pull/300)
@@ -80,7 +82,8 @@
 - Initial release of the Spotless Integration plugin for IntelliJ IDEA.
 - Support for automatic code formatting using Spotless.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.1...HEAD
+[2.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.0...SpotlessIntegration-v2.0.1
 [2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.1.0...SpotlessIntegration-v2.0.0
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.0.0...SpotlessIntegration-v1.1.0
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v0.4.0...SpotlessIntegration-v1.0.0
