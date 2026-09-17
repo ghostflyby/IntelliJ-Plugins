@@ -10,12 +10,13 @@ plugins {
     id("repo.intellij-lib")
 }
 
-kotlin {
-    compilerOptions.jvmTarget = JvmTarget.JVM_1_8
+// The tooling model builder is loaded inside arbitrary Gradle daemons, which may run an older JVM
+// than the IDE, so the published classes must stay on Java 8 bytecode.
+tasks.compileJava {
+    targetCompatibility = JavaVersion.VERSION_1_8.toString()
 }
-
-java {
-    targetCompatibility = JavaVersion.VERSION_1_8
+tasks.compileKotlin {
+    compilerOptions.jvmTarget = JvmTarget.JVM_1_8
 }
 
 dependencies.intellijPlatform {
