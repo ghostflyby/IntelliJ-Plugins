@@ -78,18 +78,196 @@ jobs:
           key: qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
             qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-refs/heads/main-
+      # The baseline is the accepted problem set of the default branch, so only healthy
+      # main runs write it back (see "Save Qodana baseline" below); every other run
+      # restores it and passes it to Qodana, which is what makes the health check count
+      # NEW problems rather than all of them.
+      - name: Restore Qodana baseline
+        id: restore-qodana-baseline
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/qodana/baseline
+          key: qodana-baseline-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            qodana-baseline-${{ runner.os }}-${{ runner.arch }}-
+      - name: Resolve Qodana baseline
+        id: qodana-baseline
+        shell: bash
+        env:
+          BASELINE: ${{ runner.temp }}/qodana/baseline/baseline.sarif.json
+        run: |
+          set -euo pipefail
+
+          args=''
+          if [[ -f "$BASELINE" ]]; then
+            # A baseline must be a SARIF whose results can actually be read; anything
+            # else (truncated JSON, a bare JSON object, a run without results) would be
+            # handed to Qodana and abort the analysis.
+            if jq -e '(.runs | type == "array") and (.runs | length > 0)
+                      and (.runs | all(.results == null or (.results | type == "array")))' \
+                 "$BASELINE" >/dev/null 2>&1; then
+              if accepted=$(jq -er '[.runs[].results[]?] | length' "$BASELINE" 2>/dev/null); then
+                # Quoted: the action re-parses this string with shell-quote, so an
+                # unquoted path containing a space would split into bogus arguments.
+                args="--baseline \"$BASELINE\""
+                echo "Using baseline $BASELINE ($accepted accepted problems)"
+              else
+                echo "::warning::Cannot count the results in $BASELINE; analysing without a baseline"
+              fi
+            else
+              echo "::warning::$BASELINE is not a usable SARIF; analysing without a baseline"
+            fi
+          else
+            echo "No baseline cached yet; analysing without one (every problem counts as new)"
+          fi
+          printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
       - name: Qodana - Code Inspection
         uses: JetBrains/qodana-action@v2026.2.1
         with:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
+          args: ${{ steps.qodana-baseline.outputs.args }}
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
+      # A degenerate analysis — Gradle import skipped, so dependency roots stay
+      # unresolved — reports 450-1500+ problems instead of the usual ~20-40, plus a
+      # large `qodana.sanity.results` block. Such a run both rewrites the branch's
+      # code-scanning alert set and signals a broken analysis, so it fails the job and
+      # its SARIF is withheld from the upload.
+      #
+      # The primary metric is NEW problems: results whose `baselineState` is neither
+      # `unchanged` (also in the baseline) nor `absent` (baseline only) — the same filter
+      # qodana-action's annotations use. The baseline is restored above and passed as
+      # `--baseline`; until one exists every problem counts as new, so the count equals
+      # the total. `MAX_TOTAL_PROBLEMS` bounds the report independently of the baseline,
+      # so a baseline that is itself degenerate cannot make a degenerate run look clean.
+      # Limits sit far above the healthy range (<=37 problems, <=12 sanity) and far below
+      # the degenerate one (>=454 problems, >=106 sanity).
+      - name: Verify Qodana analysis health
+        id: analysis-health
+        shell: bash
+        env:
+          SARIF: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          MAX_NEW_PROBLEMS: '150'
+          MAX_TOTAL_PROBLEMS: '250'
+          MAX_SANITY: '50'
+        run: |
+          set -euo pipefail
+
+          fail() {
+            printf 'sick=true\n' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Qodana analysis health'
+              echo
+              printf '**Failed:** %s\n' "$1"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$1"
+            exit 1
+          }
+
+          # Fail-closed: a missing report means the analysis produced nothing usable, and
+          # that must not be reported as healthy. Also avoids depending on upload-sarif's
+          # own error for a nonexistent path.
+          [[ -f "$SARIF" ]] || fail "Qodana produced no SARIF at $SARIF."
+
+          # [total, new] where new excludes baseline `unchanged`/`absent` results.
+          if ! counts=$(jq -er '
+                [
+                  ([.runs[].results[]?] | length),
+                  ([.runs[].results[]?
+                    | select(.baselineState != "unchanged" and .baselineState != "absent")] | length)
+                ] | @tsv' "$SARIF" 2>/dev/null); then
+            fail "Cannot parse the Qodana SARIF; failing the run and skipping the upload."
+          fi
+          read -r total new <<< "$counts"
+          total=${total:-0}
+          new=${new:-0}
+
+          # Guarded like the counts above: unguarded, a report whose runs[0].properties has
+          # an unexpected shape would abort the step under `set -e` before any output was
+          # written, so the degenerate-report artifact step could not run either.
+          if ! sanity=$(jq -er '(.runs[0].properties["qodana.sanity.results"] // []) | length' "$SARIF" 2>/dev/null); then
+            fail "Cannot read the sanity results from the Qodana SARIF."
+          fi
+          # `wc -c` rather than `du -h`: byte count, no locale- or platform-dependent spacing.
+          sarif_size=$(wc -c < "$SARIF" | tr -d '[:space:]')
+
+          # Reject non-numeric operands up front. `(( ))` errors are swallowed by the
+          # enclosing `if`, so without this a malformed limit would silently read as "not
+          # sick", and leading zeros would be taken as octal.
+          for value in "$new" "$total" "$sanity" \
+                       "$MAX_NEW_PROBLEMS" "$MAX_TOTAL_PROBLEMS" "$MAX_SANITY"; do
+            [[ $value =~ ^[0-9]+$ ]] || fail "Non-numeric problem count or limit: '$value'."
+          done
+
+          sick=false
+          if (( 10#$new >= 10#$MAX_NEW_PROBLEMS )) \
+             || (( 10#$total >= 10#$MAX_TOTAL_PROBLEMS )) \
+             || (( 10#$sanity >= 10#$MAX_SANITY )); then
+            sick=true
+          fi
+          {
+            printf 'sick=%s\n' "$sick"
+            printf 'new-problems=%s\n' "$new"
+            printf 'total-problems=%s\n' "$total"
+            printf 'sanity-problems=%s\n' "$sanity"
+            printf 'sarif-size=%s\n' "$sarif_size"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### Qodana analysis health'
+            echo
+            echo '| metric | value | limit |'
+            echo '| --- | --- | --- |'
+            printf '| new problems | %s | %s |\n' "$new" "$MAX_NEW_PROBLEMS"
+            printf '| total problems | %s | %s |\n' "$total" "$MAX_TOTAL_PROBLEMS"
+            printf '| sanity problems | %s | %s |\n' "$sanity" "$MAX_SANITY"
+            printf '| SARIF size (bytes) | %s | — |\n' "$sarif_size"
+            printf '| verdict | `%s` | |\n' "$sick"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$sick" == 'true' ]]; then
+            echo "::error::Degenerate Qodana analysis (${new} new of ${total} problems, ${sanity} sanity problems). Failing the run and withholding the SARIF so it cannot rewrite code scanning history; the report is uploaded as an artifact."
+            exit 1
+          fi
+          echo "Qodana analysis looks healthy (${new} new of ${total} problems, ${sanity} sanity problems)."
+      - name: Upload degenerate analysis results
+        if: ${{ always() && steps.analysis-health.outputs.sick == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: qodana-degenerate-${{ github.run_id }}
+          path: ${{ runner.temp }}/qodana/results
+          if-no-files-found: warn
+          retention-days: 7
       - name: Upload Qodana SARIF
+        if: ${{ steps.analysis-health.outputs.sick == 'false' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+      # Only main advances the baseline, and only from a healthy analysis: a partial or
+      # degenerate run would otherwise be frozen as "accepted" and hide real problems
+      # from every later run. PR branches read main's baseline but never replace it,
+      # so their own problems keep counting as new instead of being silently accepted.
+      # The full SARIF is stored as-is (no trimming) so Qodana's fingerprint matching
+      # sees exactly the document it produced.
+      - name: Save Qodana baseline
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.analysis-health.outputs.sick == 'false' }}
+        shell: bash
+        env:
+          SARIF: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          BASELINE_DIR: ${{ runner.temp }}/qodana/baseline
+        run: |
+          set -euo pipefail
+          mkdir -p "$BASELINE_DIR"
+          cp "$SARIF" "$BASELINE_DIR/baseline.sarif.json"
+          echo "Baseline updated from this run ($(jq '[.runs[].results[]?] | length' "$BASELINE_DIR/baseline.sarif.json") accepted problems)"
+      - name: Cache Qodana baseline
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.analysis-health.outputs.sick == 'false' && steps.restore-qodana-baseline.outputs.cache-matched-key != format('qodana-baseline-{0}-{1}-{2}', runner.os, runner.arch, github.sha) }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/qodana/baseline
+          key: qodana-baseline-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
       - name: Compute IntelliJ Platform IDE Inventory
         id: intellij-platform-ides
         shell: bash
