@@ -25,9 +25,10 @@ import org.junit.jupiter.api.Test
  * default): in unit-test mode `\\wsl.localhost` paths resolve through the ijent-backed EEL machine,
  * and the ijent plugin declares a `testServiceImplementation` (`TestIjentExecFileProvider`) that is
  * shipped in no IDE distribution, so the fixture fails with ClassNotFoundException (IJPL-178929 /
- * IJPL-222201). The `WSLDistribution` transport this test covers still exists in production and is
- * also exercised by `DaemonPathConversionTest`. Restore together with the TODO.md item once the
- * platform ships that class or removes `testServiceImplementation`.
+ * IJPL-222201). WSL path conversion stays covered by `DaemonPathConversionTest`, but the
+ * `WSLDistribution.executeOnWsl` transport this test exercises has no replacement coverage. Restore
+ * together with the TODO.md item once the platform ships that class or removes
+ * `testServiceImplementation`.
  */
 @TestApplication
 @EnabledOnWsl
