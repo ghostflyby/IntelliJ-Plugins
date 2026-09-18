@@ -1,7 +1,8 @@
 # EnhancedHotSwapEnabler — WSL / EEL Support
 
-Status: WSL validated in CI (PR #293)
-Last Updated: 2026-09-08
+Status: WSL validated in CI (PR #293); `WslDcevmSupportTest` temporarily disabled under the default
+test classpath (see CI below and `TODO.md`)
+Last Updated: 2026-09-18
 
 ## What this covers
 
@@ -67,6 +68,12 @@ The init-script classpath and the `ijHotswapAgentJarPath` env var must be daemon
   `LocalEelDescriptor`, and `GeneralCommandLine`'s implicit EEL routing (registry
   `ide.general.command.line.use.eel=true`) does not engage either. Do not rely on
   `getEelDescriptor` to detect WSL UNC paths; use `WslPath.parseWindowsUncPath` for the WSL case.
+- In unit-test mode the same gate returns `true` when `ApplicationInfo` is not created (the
+  `isUnitTestMode` fallback in `ProductionWslIjentAvailabilityService`). With the ijent plugin on
+  the test classpath (upstream default since 2.19) WSL UNC paths therefore resolve through the
+  ijent-backed `WslEelMachine`, whose chain instantiates `IjentExecFileProvider` — and the
+  `TestIjentExecFileProvider` that the plugin's descriptor asks for in test mode is shipped in no
+  IDE distribution (IJPL-178929 / IJPL-222201).
 - `mustRunCommandLineWithIjent = isIjentAvailable && !options.isLaunchWithWslExe && ...`;
   `setLaunchWithWslExe(true)` forces the deterministic wsl.exe path.
 - All EEL surface used here is `@ApiStatus.Experimental`
@@ -94,9 +101,16 @@ The init-script classpath and the `ijHotswapAgentJarPath` env var must be daemon
 - `WslTestEnvironment` performs all in-distro setup through the same patched command line
   (`/bin/sh -c`); mixing raw `wsl.exe` calls with 9P file operations raced in the first run
   (files created via `\\wsl.localhost` were not immediately visible to `wsl chmod`).
-- Validated green: project open + VFS + indexing from `\\wsl.localhost\...`, DCEVM detection
-  (Auto/RequiresArg/None/AltJvm) through the WSL branch, `/mnt/c` drive mapping, target-parameter
-  resolution (local host path vs uploaded target path).
+- Validated green (PR #293, platform 2.17 test classpath): project open + VFS + indexing from
+  `\\wsl.localhost\...`, DCEVM detection (Auto/RequiresArg/None/AltJvm) through the WSL branch,
+  `/mnt/c` drive mapping, target-parameter resolution (local host path vs uploaded target path).
+- Under the 2.19 default test classpath the DCEVM-detection WSL variant cannot run (ijent
+  `testServiceImplementation` above), so `WslDcevmSupportTest` is `@Disabled`; the remaining WSL
+  coverage (path conversion, distribution discovery) stays enabled. The test classpath opt-out
+  (`org.jetbrains.intellij.platform.testIdeBundledPluginsClasspathEnabled=false`) that kept it
+  green is deliberately not used: the default matches the real IDE plugin set, which is the point
+  of the test environment. Restore the test when the platform ships `TestIjentExecFileProvider`
+  (or drops `testServiceImplementation`) — see `TODO.md`.
 
 ## Known limitations / next steps
 
