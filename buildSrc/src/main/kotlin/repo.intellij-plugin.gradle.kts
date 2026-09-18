@@ -6,8 +6,8 @@
 
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.Constants
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
-import org.jetbrains.intellij.platform.gradle.models.kotlinStdlib
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
@@ -82,37 +82,33 @@ changelog {
     versionPrefix = project.name + "-v"
 }
 
-sourceSets.forEach {
-    listOf(
-        it.apiConfigurationName,
-        it.implementationConfigurationName,
-        it.compileOnlyApiConfigurationName,
-        it.compileOnlyConfigurationName,
-        it.runtimeOnlyConfigurationName,
-        it.runtimeClasspathConfigurationName,
-    ).forEach { config ->
-        configurations.findByName(config)?.apply {
-            (kotlinStdlib).forEach { coordinates ->
-                exclude(coordinates.groupId, coordinates.artifactId)
-            }
-            listOf("kotlin-reflect").forEach { dep ->
-                exclude("org.jetbrains.kotlin", dep)
-            }
-            listOf(
-                "kotlinx-coroutines-core",
-                "kotlinx-coroutines-slf4j",
-                "kotlinx-collections-immutable",
-                "kotlinx-serialization-core",
-                "kotlinx-serialization-json",
-                "kotlinx-serialization-json-io",
-                "kotlinx-io-core",
-                "kotlinx-io-bytestring",
+// Libraries the IntelliJ Platform provides at runtime must not be packaged into the plugin
+// distribution: the IDE already ships them, and a second copy on the plugin classpath risks
+// splitting classes across class loaders. IJPG collects plugin distributions from the sandbox
+// runtime classpaths (`PrepareSandboxTask`), so the exclusions are declared there and the project
+// compile/test classpaths keep resolving the regular dependency graph. Kotlin stdlib and Coroutines
+// are excluded on those configurations by the plugin itself
+// (`org.jetbrains.intellij.platform.useDefaultSandboxExclusions`, enabled by default); the
+// coordinates below are the remaining platform-provided libraries our dependencies drag in.
+listOf(
+    Constants.Configurations.INTELLIJ_PLATFORM_SANDBOX_RUNTIME_CLASSPATH,
+    Constants.Configurations.INTELLIJ_PLATFORM_TEST_SANDBOX_RUNTIME_CLASSPATH,
+).forEach { configurationName ->
+    configurations.named(configurationName) {
+        exclude(group = "org.jetbrains.kotlin", module = "kotlin-reflect")
 
-                ).forEach { dep ->
-                exclude(group = "org.jetbrains.kotlinx", module = dep)
-            }
-            exclude(group = "org.slf4j", module = "slf4j-api")
+        listOf(
+            "kotlinx-collections-immutable",
+            "kotlinx-serialization-core",
+            "kotlinx-serialization-json",
+            "kotlinx-serialization-json-io",
+            "kotlinx-io-core",
+            "kotlinx-io-bytestring",
+        ).forEach { module ->
+            exclude(group = "org.jetbrains.kotlinx", module = module)
         }
+
+        exclude(group = "org.slf4j", module = "slf4j-api")
     }
 }
 

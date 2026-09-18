@@ -14,6 +14,8 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.writeIntentReadAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.impl.ImaginaryEditor
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import com.intellij.openapi.externalSystem.util.ExternalSystemActivityKey
@@ -92,7 +94,11 @@ internal data class VersionCatalogCase(
     override fun toString(): String = catalogName
 }
 
-private val GRADLE_SYNC_TIMEOUT = 2.minutes
+// A hang guard, not a performance assertion: these tests sync a real Gradle project while the whole
+// test task runs next to every other module on a shared CI runner, and the default
+// bundled-plugins test classpath makes the test IDE load the full bundled plugin set.
+// Syncs that take seconds locally have been observed to exceed two minutes there.
+private val GRADLE_SYNC_TIMEOUT = 5.minutes
 
 internal data class ConventionBuildCase(
     val name: String,
@@ -961,14 +967,41 @@ private class GradleTypesafeConventionsSyncedProject(
     fun resolveTargetsWithRegisteredGotoDeclarationHandlers(
         sourceElement: PsiElement,
         offset: Int,
-    ): Array<PsiElement>? =
-        (GotoDeclarationHandler.EP_NAME as ExtensionPointName<GotoDeclarationHandler>)
+    ): Array<PsiElement>? {
+        val editor = mockEditorFor(sourceElement.containingFile)
+        return (GotoDeclarationHandler.EP_NAME as ExtensionPointName<GotoDeclarationHandler>)
             .extensionList
+            .filter { it.javaClass in catalogGotoDeclarationHandlers }
             .flatMap { handler ->
-                handler.getGotoDeclarationTargets(sourceElement, offset, null).orEmpty().asIterable()
+                handler.getGotoDeclarationTargets(sourceElement, offset, editor).orEmpty().asIterable()
             }
             .toTypedArray()
             .takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The handlers this plugin registers for catalog accessors, resolved through the extension point
+     * so the registration itself is covered. Unrelated handlers are skipped deliberately: they are
+     * contributed by IDE plugins (Angular, java-i18n, ...) that assume a fully functional editor and
+     * a real user context in ways this test cannot provide, and they have nothing to do with the
+     * navigation this plugin adds.
+     */
+    private val catalogGotoDeclarationHandlers = setOf(
+        TypesafeConventionsKotlinCatalogGotoDeclarationHandler::class.java,
+        TypesafeConventionsGroovyCatalogGotoDeclarationHandler::class.java,
+    )
+
+    /**
+     * `Editor` is a non-null parameter of [GotoDeclarationHandler.getGotoDeclarationTargets]; an
+     * imaginary editor over the element's own document satisfies the contract (the platform uses
+     * `ImaginaryEditor` for the same purpose in `com.intellij.model.psi.impl.mockEditor`).
+     */
+    private fun mockEditorFor(file: PsiFile): Editor {
+        val project = file.project
+        val document = PsiDocumentManager.getInstance(project).getDocument(file)
+            ?: error("No document for ${file.virtualFile?.url}")
+        return ImaginaryEditor(project, document)
+    }
 
     private fun findElementAtText(
         file: PsiFile,
