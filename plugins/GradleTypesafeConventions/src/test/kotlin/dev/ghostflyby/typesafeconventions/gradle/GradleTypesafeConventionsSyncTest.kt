@@ -94,7 +94,11 @@ internal data class VersionCatalogCase(
     override fun toString(): String = catalogName
 }
 
-private val GRADLE_SYNC_TIMEOUT = 2.minutes
+// A hang guard, not a performance assertion: these tests sync a real Gradle project while the whole
+// test task runs next to every other module on a shared CI runner, and the default
+// bundled-plugins test classpath makes the test IDE load the full bundled plugin set.
+// Syncs that take seconds locally have been observed to exceed two minutes there.
+private val GRADLE_SYNC_TIMEOUT = 5.minutes
 
 internal data class ConventionBuildCase(
     val name: String,
