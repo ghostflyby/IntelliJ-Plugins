@@ -6,14 +6,12 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import dev.ghostflyby.mcp.rest.refreshIntoVfs
+import dev.ghostflyby.mcp.rest.writeTextIntoVfs
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Path
-import kotlin.io.path.createDirectories
-import kotlin.io.path.writeText
 
 @TestApplication
 internal class WorkspaceGlobQueryTest {
@@ -33,17 +31,12 @@ internal class WorkspaceGlobQueryTest {
     @BeforeEach
     fun refreshFixtureContent() {
         val rootPath = projectPathFixture.get().resolve("globRoot")
-        rootPath.createDirectories()
-        rootPath.resolve("Foo.kt").writeText("class Foo")
-        rootPath.resolve("Bar.kt").writeText("class Bar")
-        rootPath.resolve("Note.txt").writeText("note")
-        rootPath.resolve("UserController").writeText("controller")
+        foo = writeTextIntoVfs(rootPath.resolve("Foo.kt"), "class Foo")
+        bar = writeTextIntoVfs(rootPath.resolve("Bar.kt"), "class Bar")
+        text = writeTextIntoVfs(rootPath.resolve("Note.txt"), "note")
+        controller = writeTextIntoVfs(rootPath.resolve("UserController"), "controller")
         root = sourceRootFixture.get().virtualFile
         root.refresh(false, true)
-        foo = refreshIntoVfs(rootPath.resolve("Foo.kt"))
-        bar = refreshIntoVfs(rootPath.resolve("Bar.kt"))
-        text = refreshIntoVfs(rootPath.resolve("Note.txt"))
-        controller = refreshIntoVfs(rootPath.resolve("UserController"))
     }
 
     @Test

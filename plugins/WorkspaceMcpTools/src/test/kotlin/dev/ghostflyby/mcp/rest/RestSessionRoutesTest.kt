@@ -10,13 +10,10 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.util.io.toCanonicalPath
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
-import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
-import com.intellij.util.TimeoutUtil
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -32,8 +29,6 @@ import java.net.URLEncoder
 import java.nio.file.Path
 import java.time.Duration
 import java.time.Instant
-import kotlin.io.path.createDirectories
-import kotlin.io.path.writeText
 import kotlin.time.Duration.Companion.milliseconds
 
 @TestApplication
@@ -44,31 +39,29 @@ internal class RestSessionRoutesTest {
     private val projectFixture = projectFixture(pathFixture = projectPathFixture, openAfterCreation = true)
     private val project by projectFixture
     private val moduleFixture = projectFixture.moduleFixture(name = "session-test")
-    private val blueprint = Path.of(
-        requireNotNull(javaClass.getResource("/fileContentIntegration")).toURI(),
-    )
     private val contentRootFixture = moduleFixture.sourceRootFixture(
         pathFixture = projectFixture.pathInProjectFixture(Path.of("")),
-        blueprintResourcePath = blueprint,
     )
     private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
-    fun refresh() {
-        val nestedRootPath = projectPathFixture.get().resolve("nested-session-root")
+    fun setupFiles() {
+        val projectPath = projectPathFixture.get()
+        val nestedRootPath = projectPath.resolve("nested-session-root")
         val nestedRoot = VfsUtil.createDirectories(nestedRootPath.toCanonicalPath())
-        nestedRootPath.resolve("NestedRootFile.kt").writeText("class NestedRootFile")
-        val globDir = projectPathFixture.get().resolve("glob")
-        globDir.resolve("nested").createDirectories()
-        globDir.resolve("RootFile.kt").writeText("class RootFile")
-        globDir.resolve("RootFile.txt").writeText("plain")
-        globDir.resolve("nested/NestedFile.kt").writeText("class NestedFile")
-        externalPathFixture.get().resolve("external.txt").writeText("external")
-        externalPathFixture.get().resolve("External.kt")
-            .writeText("""class External { fun ping() = "external needle" }""")
-        externalPathFixture.get().resolve("nested").createDirectories()
-        externalPathFixture.get().resolve("nested/ExternalSearch.kt")
-            .writeText("""class ExternalSearch { val marker = "external needle" }""")
+        writeTextIntoVfs(nestedRootPath.resolve("NestedRootFile.kt"), "class NestedRootFile")
+        val globDir = projectPath.resolve("glob")
+        writeTextIntoVfs(globDir.resolve("RootFile.kt"), "class RootFile")
+        writeTextIntoVfs(globDir.resolve("RootFile.txt"), "plain")
+        writeTextIntoVfs(globDir.resolve("nested/NestedFile.kt"), "class NestedFile")
+        val externalRoot = externalPathFixture.get()
+        writeTextIntoVfs(externalRoot.resolve("external.txt"), "external")
+        writeTextIntoVfs(externalRoot.resolve("External.kt"), """class External { fun ping() = "external needle" }""")
+        writeTextIntoVfs(
+            externalRoot.resolve("nested/ExternalSearch.kt"),
+            """class ExternalSearch { val marker = "external needle" }""",
+        )
+        writeTextIntoVfs(projectPath.resolve("plain.txt"), "hello sample")
         ApplicationManager.getApplication().runWriteAction {
             val model = ModuleRootManager.getInstance(moduleFixture.get()).modifiableModel
             var committed = false
@@ -80,14 +73,7 @@ internal class RestSessionRoutesTest {
                 if (!committed) model.dispose()
             }
         }
-        contentRootFixture.get().virtualFile.refresh(false, true)
-        refreshRequiredFile(projectPathFixture.get().resolve("plain.txt"))
-        refreshRequiredFile(globDir.resolve("RootFile.kt"))
-        refreshRequiredFile(globDir.resolve("RootFile.txt"))
-        refreshRequiredFile(globDir.resolve("nested/NestedFile.kt"))
-        refreshRequiredFile(externalPathFixture.get().resolve("external.txt"))
-        refreshRequiredFile(externalPathFixture.get().resolve("External.kt"))
-        refreshRequiredFile(externalPathFixture.get().resolve("nested/ExternalSearch.kt"))
+        contentRootFixture.get()
         IndexingTestUtil.waitUntilIndexesAreReady(project)
     }
 
@@ -549,11 +535,7 @@ internal class RestSessionRoutesTest {
     }
 
     private fun encodedVfsUrl(path: Path): String {
-        val file = refreshIntoVfs(path)
+        val file = requireNotNull(findInVfs(path)) { "not in VFS: $path" }
         return URLEncoder.encode(file.url, Charsets.UTF_8).replace("+", "%20")
-    }
-
-    private fun refreshRequiredFile(path: Path) {
-        refreshIntoVfs(path)
     }
 }

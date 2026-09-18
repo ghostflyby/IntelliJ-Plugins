@@ -6,9 +6,11 @@
 
 package dev.ghostflyby.mcp.rest
 
-import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.util.io.toCanonicalPath
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.util.TimeoutUtil
+import com.intellij.openapi.vfs.VirtualFileManager
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -22,46 +24,35 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.nio.file.Path
-import kotlin.time.Duration.Companion.seconds
 
 internal val TestMarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
 
-/** How long [refreshIntoVfs] keeps retrying a file that is on disk but not in the VFS yet. */
-private val VfsRefreshTimeout = 30.seconds
-
-private const val VfsRefreshRetryDelayMs = 10L
-
 /**
- * Refreshes [path] in the VFS and returns its [VirtualFile].
+ * Creates the directories leading to [path] and writes [text] there *through the VFS*.
  *
- * `refreshAndFindFileByNioFile` only refreshes a path that is *already* known to the VFS — it never
- * imports a file that exists on disk but is unknown to it — so one call can legitimately return
- * `null` for a file the test just wrote. Refresh the nearest ancestor that is in the VFS (test
- * fixtures create the roots, so one always exists) to import the rest, and retry briefly: the
- * platform file watcher sets its roots up asynchronously and races with refreshes inside tests.
+ * Writing through the VFS registers the file in it right away, so the test can pass the path to
+ * production code and resolve it without refreshing or retrying (the platform's own file fixtures
+ * are built the same way). A plain NIO write leaves the file unknown to the VFS until something
+ * imports it, and `refreshAndFindFileByNioFile` only refreshes paths that are *already* known, so a
+ * single call can legitimately miss a file that is definitely on disk — the platform file watcher
+ * also sets its roots up asynchronously, which is what `VfsTestUtil.waitForFileWatcher` exists for.
  */
-internal fun refreshIntoVfs(path: Path): VirtualFile {
-    val fileSystem = LocalFileSystem.getInstance()
-    val deadline = System.nanoTime() + VfsRefreshTimeout.inWholeNanoseconds
-    while (true) {
-        var ancestor = path.parent
-        while (ancestor != null) {
-            val ancestorFile = fileSystem.refreshAndFindFileByNioFile(ancestor)
-            if (ancestorFile != null) {
-                ancestorFile.refresh(false, true)
-                break
-            }
-            ancestor = ancestor.parent
+internal fun writeTextIntoVfs(path: Path, text: String): VirtualFile {
+    val parent = VfsUtil.createDirectories(path.parent.toCanonicalPath())
+    return ApplicationManager.getApplication().runWriteAction<VirtualFile> {
+        parent.createChildData(parent, path.fileName.toString()).also {
+            it.setBinaryContent(text.toByteArray())
         }
-        val file = fileSystem.refreshAndFindFileByNioFile(path)
-        if (file != null) {
-            file.refresh(false, file.isDirectory)
-            return file
-        }
-        if (System.nanoTime() >= deadline) error("missing test file: $path")
-        TimeoutUtil.sleep(VfsRefreshRetryDelayMs)
     }
 }
+
+/**
+ * Resolves [path] without refreshing; the file must already be registered in the VFS, for example
+ * because it was written with [writeTextIntoVfs].
+ */
+internal fun findInVfs(path: Path): VirtualFile? =
+    VirtualFileManager.getInstance().findFileByNioPath(path)
+
 internal val TestWorkspaceRestApplicationContext = WorkspaceRestApplicationContext(
     port = 63441,
     instanceKey = "test-63441",
