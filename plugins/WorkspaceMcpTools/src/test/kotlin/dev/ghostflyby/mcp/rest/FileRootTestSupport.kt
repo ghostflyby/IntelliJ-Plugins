@@ -6,6 +6,9 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.util.TimeoutUtil
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -18,8 +21,47 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.nio.file.Path
+import kotlin.time.Duration.Companion.seconds
 
 internal val TestMarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
+
+/** How long [refreshIntoVfs] keeps retrying a file that is on disk but not in the VFS yet. */
+private val VfsRefreshTimeout = 30.seconds
+
+private const val VfsRefreshRetryDelayMs = 10L
+
+/**
+ * Refreshes [path] in the VFS and returns its [VirtualFile].
+ *
+ * `refreshAndFindFileByNioFile` only refreshes a path that is *already* known to the VFS — it never
+ * imports a file that exists on disk but is unknown to it — so one call can legitimately return
+ * `null` for a file the test just wrote. Refresh the nearest ancestor that is in the VFS (test
+ * fixtures create the roots, so one always exists) to import the rest, and retry briefly: the
+ * platform file watcher sets its roots up asynchronously and races with refreshes inside tests.
+ */
+internal fun refreshIntoVfs(path: Path): VirtualFile {
+    val fileSystem = LocalFileSystem.getInstance()
+    val deadline = System.nanoTime() + VfsRefreshTimeout.inWholeNanoseconds
+    while (true) {
+        var ancestor = path.parent
+        while (ancestor != null) {
+            val ancestorFile = fileSystem.refreshAndFindFileByNioFile(ancestor)
+            if (ancestorFile != null) {
+                ancestorFile.refresh(false, true)
+                break
+            }
+            ancestor = ancestor.parent
+        }
+        val file = fileSystem.refreshAndFindFileByNioFile(path)
+        if (file != null) {
+            file.refresh(false, file.isDirectory)
+            return file
+        }
+        if (System.nanoTime() >= deadline) error("missing test file: $path")
+        TimeoutUtil.sleep(VfsRefreshRetryDelayMs)
+    }
+}
 internal val TestWorkspaceRestApplicationContext = WorkspaceRestApplicationContext(
     port = 63441,
     instanceKey = "test-63441",

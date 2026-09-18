@@ -12,9 +12,11 @@ import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.util.io.toCanonicalPath
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
+import com.intellij.util.TimeoutUtil
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -547,14 +549,11 @@ internal class RestSessionRoutesTest {
     }
 
     private fun encodedVfsUrl(path: Path): String {
-        val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
-            ?: error("missing test file: $path")
+        val file = refreshIntoVfs(path)
         return URLEncoder.encode(file.url, Charsets.UTF_8).replace("+", "%20")
     }
 
     private fun refreshRequiredFile(path: Path) {
-        val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(path)
-            ?: error("missing test file: $path")
-        file.refresh(false, file.isDirectory)
+        refreshIntoVfs(path)
     }
 }

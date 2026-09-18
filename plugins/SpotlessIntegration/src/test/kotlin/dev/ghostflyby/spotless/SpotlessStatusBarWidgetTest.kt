@@ -41,6 +41,17 @@ import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.StartContext as Spotle
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.State as SpotlessDaemonProviderState
 import dev.ghostflyby.spotless.api.SpotlessDaemonProvider.Target as SpotlessDaemonTarget
 
+/**
+ * Budget for the assertions that wait for the coordinator's state to propagate, such as the daemon
+ * status flow, provider subscriptions and the action presentations derived from them.
+ *
+ * These waits are hang guards, not latency assertions: the state is published by production
+ * coroutines on their own dispatchers, so a loaded CI runner can take far longer to converge than
+ * the few milliseconds it takes locally. Waits that the test itself drives deterministically keep a
+ * short budget, so a broken invariant still surfaces promptly instead of hiding behind this one.
+ */
+private val StatusPropagationTimeout = 30.seconds
+
 @Suppress("OverrideOnly")
 @TestApplication
 internal class SpotlessStatusBarWidgetTest {
@@ -67,7 +78,7 @@ internal class SpotlessStatusBarWidgetTest {
         val project = projectFixture.get()
         val service = project.service<SpotlessProjectService>()
         service.refreshDaemonProviders()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers.isEmpty()) {
                 delay(10.milliseconds)
             }
@@ -89,7 +100,7 @@ internal class SpotlessStatusBarWidgetTest {
 
         provider.updateProjects(listOf(projectPathFixture.get().resolve("detected")))
 
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers.size != 1) {
                 delay(10.milliseconds)
             }
@@ -103,7 +114,7 @@ internal class SpotlessStatusBarWidgetTest {
         val provider = TestStatusProvider(listOf(projectPathFixture.get().resolve("detected")))
         val providerDisposable = registerProvider(provider)
 
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (!provider.hasSubscriber()) {
                 delay(10.milliseconds)
             }
@@ -112,7 +123,7 @@ internal class SpotlessStatusBarWidgetTest {
 
         Disposer.dispose(providerDisposable)
 
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (provider.hasSubscriber()) {
                 delay(10.milliseconds)
             }
@@ -137,7 +148,7 @@ internal class SpotlessStatusBarWidgetTest {
 
             coordinator.providersLookup = { emptyList() }
 
-            withTimeout(5.seconds) {
+            withTimeout(StatusPropagationTimeout) {
                 while (provider.hasSubscriber()) {
                     delay(10.milliseconds)
                 }
@@ -222,7 +233,7 @@ internal class SpotlessStatusBarWidgetTest {
 
         service.restartDaemon(firstProvider.id, firstRoot).join()
 
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers
                     .single { it.providerId == firstProvider.id }
                     .runtimeStates
@@ -241,7 +252,7 @@ internal class SpotlessStatusBarWidgetTest {
         assertTrue(secondStatus.runtimeStates.isEmpty())
 
         firstProvider.requestClose()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers.any { it.runtimeStates.isNotEmpty() }) {
                 delay(10.milliseconds)
             }
@@ -268,7 +279,7 @@ internal class SpotlessStatusBarWidgetTest {
         maskProviders(provider)
         val service = projectFixture.get().service<SpotlessProjectService>()
         service.refreshDaemonProviders()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers.isEmpty()) {
                 delay(10.milliseconds)
             }
@@ -334,7 +345,7 @@ internal class SpotlessStatusBarWidgetTest {
         val service = projectFixture.get().service<SpotlessProjectService>()
         service.client = readyClient()
         service.refreshDaemonProviders()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (service.daemonStatus.value.providers.isEmpty()) {
                 delay(10.milliseconds)
             }
@@ -351,14 +362,14 @@ internal class SpotlessStatusBarWidgetTest {
         assertFalse(stopAction.updatedPresentation().isVisible)
 
         service.restartDaemon(provider.id, root).join()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (!stopAction.updatedPresentation().isEnabledAndVisible) {
                 delay(10.milliseconds)
             }
         }
 
         service.releaseDaemon(provider.id, root).join()
-        withTimeout(5.seconds) {
+        withTimeout(StatusPropagationTimeout) {
             while (stopAction.updatedPresentation().isVisible) {
                 delay(10.milliseconds)
             }

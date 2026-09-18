@@ -2,11 +2,11 @@ package dev.ghostflyby.mcp.filecontent
 
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.fileTypes.FileType
-import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
+import dev.ghostflyby.mcp.rest.refreshIntoVfs
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -40,12 +40,10 @@ internal class WorkspaceGlobQueryTest {
         rootPath.resolve("UserController").writeText("controller")
         root = sourceRootFixture.get().virtualFile
         root.refresh(false, true)
-        foo = requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(rootPath.resolve("Foo.kt")))
-        bar = requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(rootPath.resolve("Bar.kt")))
-        text = requireNotNull(LocalFileSystem.getInstance().refreshAndFindFileByNioFile(rootPath.resolve("Note.txt")))
-        controller = requireNotNull(
-            LocalFileSystem.getInstance().refreshAndFindFileByNioFile(rootPath.resolve("UserController")),
-        )
+        foo = refreshIntoVfs(rootPath.resolve("Foo.kt"))
+        bar = refreshIntoVfs(rootPath.resolve("Bar.kt"))
+        text = refreshIntoVfs(rootPath.resolve("Note.txt"))
+        controller = refreshIntoVfs(rootPath.resolve("UserController"))
     }
 
     @Test
