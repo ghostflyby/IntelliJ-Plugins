@@ -20,7 +20,6 @@
  * <https://www.gnu.org/licenses/>.
  */
 
-import dev.ghostflyby.buildlogic.BuildLogicProperties
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.ProviderFactory

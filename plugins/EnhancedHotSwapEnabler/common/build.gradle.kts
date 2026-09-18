@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-import dev.ghostflyby.buildlogic.configureBundledKotlinLevel
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {

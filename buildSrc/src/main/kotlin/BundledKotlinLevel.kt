@@ -4,8 +4,6 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.buildlogic
-
 import org.gradle.api.GradleException
 import org.gradle.api.provider.ProviderFactory
 import org.jetbrains.intellij.platform.gradle.utils.PlatformKotlinVersions
