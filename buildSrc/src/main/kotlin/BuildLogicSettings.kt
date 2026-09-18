@@ -27,6 +27,12 @@ import org.gradle.kotlin.dsl.property
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import javax.inject.Inject
 
+/** Gradle property names the [BuildLogicSettings] extension reads. */
+object BuildLogicProperties {
+    const val PLATFORM_VERSION = "platformVersion"
+    const val PLUGIN_SINCE_BUILD = "pluginSinceBuild"
+}
+
 abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory, providers: ProviderFactory) {
     val platformType: Property<IntelliJPlatformType> = objects.property<IntelliJPlatformType>()
         .convention(IntelliJPlatformType.IntellijIdea)
