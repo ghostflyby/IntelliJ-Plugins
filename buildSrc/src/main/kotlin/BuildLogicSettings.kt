@@ -20,6 +20,7 @@
  * <https://www.gnu.org/licenses/>.
  */
 
+import dev.ghostflyby.buildlogic.BuildLogicProperties
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.ProviderFactory
@@ -31,7 +32,7 @@ abstract class BuildLogicSettings @Inject constructor(objects: ObjectFactory, pr
     val platformType: Property<IntelliJPlatformType> = objects.property<IntelliJPlatformType>()
         .convention(IntelliJPlatformType.IntellijIdea)
     val platformVersion: Property<String> = objects.property<String>()
-        .convention(providers.gradleProperty("platformVersion"))
+        .convention(providers.gradleProperty(BuildLogicProperties.PLATFORM_VERSION))
     val pluginSinceBuild: Property<String> = objects.property<String>()
-        .convention(providers.gradleProperty("pluginSinceBuild"))
+        .convention(providers.gradleProperty(BuildLogicProperties.PLUGIN_SINCE_BUILD))
 }

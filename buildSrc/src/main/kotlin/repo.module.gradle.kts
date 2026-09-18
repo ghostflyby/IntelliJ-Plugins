@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+import dev.ghostflyby.buildlogic.BuildLogicProperties
+import dev.ghostflyby.buildlogic.BundledKotlinLevel
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     java
@@ -16,17 +17,20 @@ plugins {
 
 group = providers.gradleProperty("pluginGroup").get()
 
+// The Kotlin runtime comes from the IDE, so compile against the Kotlin bundled with the oldest
+// supported platform: newer stdlib APIs then fail the build instead of surfacing as a
+// NoSuchMethodError at runtime. The level is derived from the platform's own version mapping, so
+// a platform bump needs no change here.
+val bundledKotlin = providers.gradleProperty(BuildLogicProperties.PLUGIN_SINCE_BUILD)
+    .map { sinceBuild -> BundledKotlinLevel.forSinceBuild(sinceBuild.toInt()) }
+
 kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget = JvmTarget.fromTarget("21")
         jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
-        // The Kotlin runtime is provided by the IDE, not Gradle. Pin the language and API
-        // surface to the Kotlin bundled with the current platformVersion (2026.1 = 2.3) so
-        // newer stdlib/language features fail at compile time instead of at runtime.
-        // Bump together with platformVersion in gradle.properties.
-        languageVersion = KotlinVersion.KOTLIN_2_3
-        apiVersion = KotlinVersion.KOTLIN_2_3
+        languageVersion.set(bundledKotlin)
+        apiVersion.set(bundledKotlin)
     }
     explicitApi()
 }
