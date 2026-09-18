@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-import dev.ghostflyby.buildlogic.BuildLogicProperties
-import dev.ghostflyby.buildlogic.BundledKotlinLevel
+import dev.ghostflyby.buildlogic.configureBundledKotlinLevel
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
@@ -17,20 +16,15 @@ plugins {
 
 group = providers.gradleProperty("pluginGroup").get()
 
-// The Kotlin runtime comes from the IDE, so compile against the Kotlin bundled with the oldest
-// supported platform: newer stdlib APIs then fail the build instead of surfacing as a
-// NoSuchMethodError at runtime. The level is derived from the platform's own version mapping, so
-// a platform bump needs no change here.
-val bundledKotlin = providers.gradleProperty(BuildLogicProperties.PLUGIN_SINCE_BUILD)
-    .map { sinceBuild -> BundledKotlinLevel.forSinceBuild(sinceBuild.toInt()) }
-
 kotlin {
     jvmToolchain(21)
     compilerOptions {
         jvmTarget = JvmTarget.fromTarget("21")
         jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
-        languageVersion.set(bundledKotlin)
-        apiVersion.set(bundledKotlin)
+        // The Kotlin runtime comes from the IDE, so compile against the Kotlin bundled with the
+        // oldest supported platform: newer stdlib APIs then fail the build instead of surfacing as
+        // a NoSuchMethodError at runtime.
+        configureBundledKotlinLevel(providers)
     }
     explicitApi()
 }

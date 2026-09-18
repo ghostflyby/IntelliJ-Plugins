@@ -7,8 +7,10 @@
 package dev.ghostflyby.buildlogic
 
 import org.gradle.api.GradleException
+import org.gradle.api.provider.ProviderFactory
 import org.jetbrains.intellij.platform.gradle.utils.PlatformKotlinVersions
 import org.jetbrains.intellij.platform.gradle.utils.Version
+import org.jetbrains.kotlin.gradle.dsl.KotlinCommonCompilerOptions
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 /** Gradle property names the `BuildLogicSettings` extension reads. */
@@ -57,4 +59,15 @@ object BundledKotlinLevel {
                 )
             }
     }
+}
+
+/**
+ * Pins both compiler options to the level of [BundledKotlinLevel], for projects that compile Kotlin
+ * but do not apply the `repo.module` conventions.
+ */
+fun KotlinCommonCompilerOptions.configureBundledKotlinLevel(providers: ProviderFactory) {
+    val level = providers.gradleProperty(BuildLogicProperties.PLUGIN_SINCE_BUILD)
+        .map { sinceBuild -> BundledKotlinLevel.forSinceBuild(sinceBuild.toInt()) }
+    languageVersion.set(level)
+    apiVersion.set(level)
 }
