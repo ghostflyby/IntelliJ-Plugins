@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-19
+
 ### Added
 
 - Initial integration for Gradle
@@ -16,10 +18,6 @@
 
 - Reduced Kotlin catalog navigation and Find Usages overhead by reusing synchronized catalog and TOML alias indexes and
   limiting indexed usage searches to the Gradle builds that consume the target catalog.
-
-### Deprecated
-
-### Removed
 
 ### Fixed
 
@@ -47,6 +45,5 @@
 - Restore catalog navigation after Gradle sync when version catalog models are reported by `buildSrc` or another
   resolver beneath the linked Gradle root.
 
-### Security
-
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/HEAD/plugins/GradleTypesafeConventions
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.0...HEAD
+[0.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/GradleTypesafeConventions-v0.1.0
