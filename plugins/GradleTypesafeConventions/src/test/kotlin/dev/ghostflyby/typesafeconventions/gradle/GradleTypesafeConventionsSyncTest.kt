@@ -155,6 +155,13 @@ internal data class CatalogSectionInConventionBuildCase(
     override fun toString(): String = "${conventionBuild.name}: ${catalog.catalogName} ${section.section.tomlName}"
 }
 
+internal data class CatalogSectionInCatalogCase(
+    val catalog: VersionCatalogCase,
+    val section: CatalogSectionCase,
+) {
+    override fun toString(): String = "${catalog.catalogName} ${section.section.tomlName}"
+}
+
 internal data class CatalogRenameCase(
     val name: String,
     val oldDeclarationPath: String,
@@ -391,7 +398,7 @@ private class GradleTypesafeConventionsSyncedProject(
                 referenceText,
             )
             val targets = resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset).orEmpty()
-            targets to targets.map(::describeGotoTarget).joinToString(prefix = "[", postfix = "]")
+            targets to targets.joinToString(prefix = "[", postfix = "]", transform = ::describeGotoTarget)
         }
 
         assertTrue(
@@ -399,6 +406,114 @@ private class GradleTypesafeConventionsSyncedProject(
             "Expected $referenceText in $expressionText to resolve to the ${section.tomlName} TOML section. " +
                     "resolvedTargets=$resolvedTargetDescription " +
                     "${workspaceModelState()} ${moduleGradleState()}",
+        )
+    }
+
+    /**
+     * Finds every Kotlin usage of a TOML section name (`[bundles]`, `[versions]`, `[plugins]`), which appear
+     * as the section token of a catalog accessor (`libs.bundles.junit.bundle`).
+     */
+    suspend fun assertKotlinCatalogSectionFindUsagesFindsConventionSources(
+        versionCatalog: VersionCatalogCase,
+        section: TypesafeConventionsCatalogSection,
+        expectedScriptPaths: List<Path>,
+    ) {
+        val sectionNameSegment = requireTomlCatalogSectionNameSegment(versionCatalog, section)
+        val references = readAction {
+            ReferencesSearch.search(sectionNameSegment, GlobalSearchScope.projectScope(project)).findAll()
+        }
+        val rawUsages = readAction {
+            references.mapNotNull { reference ->
+                val expression = reference.element as? KtDotQualifiedExpression ?: return@mapNotNull null
+                val path = expression.containingFile.virtualFile?.toNioPath() ?: return@mapNotNull null
+                path to expression.text
+            }.toSet()
+        }
+        val actualUsages = withContext(Dispatchers.IO) {
+            rawUsages.map { (path, text) -> path.toRealPath() to text }.toSet()
+        }
+        val expectedPrefix = "${versionCatalog.catalogName}.${section.tomlName}."
+        val expectedUsages = expectedScriptPaths.map { it.realPath() }.toSet()
+
+        assertEquals(
+            expectedUsages,
+            actualUsages.map { (path, _) -> path }.toSet(),
+            "Expected Find Usages on the ${section.tomlName} section of ${versionCatalog.catalogPath} to find " +
+                    "every convention source using ${versionCatalog.catalogName}.${section.tomlName}. " +
+                    "usages=$actualUsages, references=${references.map { it.javaClass.name }}",
+        )
+        assertTrue(
+            actualUsages.all { (_, text) -> text.startsWith(expectedPrefix) },
+            "Expected every usage of the ${section.tomlName} section to use ${versionCatalog.catalogName}." +
+                    "${section.tomlName}. usages=$actualUsages",
+        )
+    }
+
+    /**
+     * The default Find Usages pipeline (`FindUsagesHandlerFactory` plus the use-scope enlarger) rather than a
+     * bare `ReferencesSearch` call, so the section search scope is covered too.
+     */
+    suspend fun assertKotlinCatalogSectionDefaultFindUsagesHandlerFindsConventionSources(
+        versionCatalog: VersionCatalogCase,
+        section: TypesafeConventionsCatalogSection,
+        expectedScriptPaths: List<Path>,
+    ) {
+        val sectionNameSegment = requireTomlCatalogSectionNameSegment(versionCatalog, section)
+        val expectedFiles = expectedScriptPaths.map { requirePsiFile(it).virtualFile }.toSet()
+        val (handlerName, searchScope, actualFiles) = readAction {
+            @Suppress("CAST_NEVER_SUCCEEDS")
+            val handler = (FindUsagesHandlerFactory.EP_NAME as ExtensionPointName<FindUsagesHandlerFactory>)
+                .getExtensionList(project)
+                .firstNotNullOfOrNull { factory ->
+                    if (factory.canFindUsages(sectionNameSegment)) {
+                        factory.createFindUsagesHandler(
+                            sectionNameSegment,
+                            FindUsagesHandlerFactory.OperationMode.USAGES_WITH_DEFAULT_OPTIONS,
+                        )
+                    } else {
+                        null
+                    }
+                }
+                ?: error("Expected a Find Usages handler for ${versionCatalog.catalogName}:${section.tomlName}")
+            val options = handler.getFindUsagesOptions(null)
+            val usageFiles = mutableSetOf<VirtualFile>()
+            handler.processElementUsages(
+                sectionNameSegment,
+                Processor { usage ->
+                    usage.virtualFile?.let(usageFiles::add)
+                    true
+                },
+                options,
+            )
+            Triple(handler.javaClass.name, options.searchScope.toString(), usageFiles.toSet())
+        }
+
+        assertTrue(
+            expectedFiles.all(actualFiles::contains),
+            "Expected the default Find Usages handler to include every convention source using " +
+                    "${versionCatalog.catalogName}.${section.tomlName}. handler=$handlerName, scope=$searchScope, " +
+                    "expected=${expectedFiles.map { it.path }}, actual=${actualFiles.map { it.path }}",
+        )
+    }
+
+    suspend fun assertKotlinCatalogSectionFindUsagesIsolatedToTargetCatalog(
+        versionCatalog: VersionCatalogCase,
+        section: TypesafeConventionsCatalogSection,
+        foreignExpressionText: String,
+    ) {
+        val sectionNameSegment = requireTomlCatalogSectionNameSegment(versionCatalog, section)
+        val foundExpressions = readAction {
+            ReferencesSearch.search(sectionNameSegment, GlobalSearchScope.projectScope(project))
+                .findAll()
+                .mapNotNull { reference ->
+                    (reference.element as? KtDotQualifiedExpression)?.text
+                }
+        }
+
+        assertFalse(
+            foreignExpressionText in foundExpressions,
+            "Expected Find Usages on the ${section.tomlName} section of ${versionCatalog.catalogPath} to stay in " +
+                    "that catalog, but found $foreignExpressionText. found=$foundExpressions",
         )
     }
 
@@ -1156,6 +1271,22 @@ private class GradleTypesafeConventionsSyncedProject(
         } ?: error("Cannot find $declarationPath in ${tomlFile.virtualFile.url}")
     }
 
+    /**
+     * The TOML key segment naming a catalog section, which is what Find Usages is invoked on: the header of a
+     * standard table (`[bundles]`), an inline table key (`bundles = { ... }`), or the leading segment of a
+     * top-level dotted key (`bundles.foo = ...`).
+     */
+    private suspend fun requireTomlCatalogSectionNameSegment(
+        versionCatalog: VersionCatalogCase,
+        section: TypesafeConventionsCatalogSection,
+    ): TomlKeySegment {
+        val tomlFile = requirePsiFile(projectRoot.resolve(versionCatalog.catalogPath)) as? TomlFile
+            ?: error("Expected ${versionCatalog.catalogPath} to be a TOML PSI file")
+        return readAction {
+            typesafeConventionsTomlCatalogAliasIndex(tomlFile).sectionNameSegment(section)
+        } ?: error("Cannot find the ${section.tomlName} section in ${versionCatalog.catalogPath}")
+    }
+
     private suspend fun requireTomlCatalogKeySegment(
         versionCatalog: VersionCatalogCase,
         declarationPath: String,
@@ -1324,6 +1455,63 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
             referenceText = testCase.section.referenceText,
             section = testCase.section.section,
             expressionText = "${testCase.catalog.catalogName}.${testCase.section.declarationPath}",
+        )
+    }
+
+    @ParameterizedTest(name = "{0} (section find usages)")
+    @MethodSource("catalogSectionsInCatalogCases")
+    suspend fun `kotlin dsl catalog section find usages finds convention sources`(
+        testCase: CatalogSectionInCatalogCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        // Section tokens appear in the convention scripts, plus the `plugins` block of the builds declaring
+        // precompiled script plugins (only for the default catalog, which those blocks reference); the
+        // internal-extension sources use library aliases, which have no section token.
+        val expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot) +
+                if (testCase.section.section == TypesafeConventionsCatalogSection.PLUGINS &&
+                    testCase.catalog.catalogName == "libs"
+                ) {
+                    kotlinDslPluginBlockScriptPaths(projectRoot)
+                } else {
+                    emptyList()
+                }
+        syncedProject.assertKotlinCatalogSectionFindUsagesFindsConventionSources(
+            versionCatalog = testCase.catalog,
+            section = testCase.section.section,
+            expectedScriptPaths = expectedScriptPaths,
+        )
+    }
+
+    @Test
+    suspend fun `kotlin dsl catalog section find usages distinguishes catalogs`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinCatalogSectionFindUsagesIsolatedToTargetCatalog(
+            versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
+            section = TypesafeConventionsCatalogSection.VERSIONS,
+            foreignExpressionText = "customLibs.versions.junit.jupiter",
+        )
+    }
+
+    @ParameterizedTest(name = "{0} (section default handler)")
+    @MethodSource("catalogSectionsInCatalogCases")
+    suspend fun `kotlin default find usages handler finds section usages in convention sources`(
+        testCase: CatalogSectionInCatalogCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        // The `plugins` section is also used from precompiled script `plugins` blocks, but only for the
+        // default catalog, which those blocks reference.
+        val expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot) +
+                if (testCase.section.section == TypesafeConventionsCatalogSection.PLUGINS &&
+                    testCase.catalog.catalogName == "libs"
+                ) {
+                    kotlinDslPluginBlockScriptPaths(projectRoot)
+                } else {
+                    emptyList()
+                }
+        syncedProject.assertKotlinCatalogSectionDefaultFindUsagesHandlerFindsConventionSources(
+            versionCatalog = testCase.catalog,
+            section = testCase.section.section,
+            expectedScriptPaths = expectedScriptPaths,
         )
     }
 
@@ -1664,6 +1852,11 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
                     CatalogSectionInConventionBuildCase(catalog, conventionBuild, section)
                 }
             }
+        }
+
+    fun catalogSectionsInCatalogCases(): List<CatalogSectionInCatalogCase> =
+        versionCatalogCasesForTypesafeConventions().flatMap { catalog ->
+            catalogSectionCases().map { section -> CatalogSectionInCatalogCase(catalog, section) }
         }
 
 

@@ -31,8 +31,10 @@ import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.references.KotlinPsiReferenceProviderContributor
 import org.toml.lang.psi.TomlFile
+import org.toml.lang.psi.TomlInlineTable
 import org.toml.lang.psi.TomlKeySegment
 import org.toml.lang.psi.TomlKeyValue
+import org.toml.lang.psi.TomlTable
 import java.util.concurrent.ConcurrentHashMap
 
 internal data class TypesafeConventionsKotlinCatalogAccessor(
@@ -69,11 +71,25 @@ internal data class TypesafeConventionsKotlinCatalogSelectorGroup(
     val targetSegment: TomlKeySegment,
 )
 
-private data class TypesafeConventionsKotlinCatalogSearchTarget(
-    val section: TypesafeConventionsCatalogSection,
-    val searchWord: String,
-    val catalogBuildRoots: List<VirtualFile>,
-)
+internal sealed interface TypesafeConventionsKotlinCatalogSearchTarget {
+    val section: TypesafeConventionsCatalogSection
+    val searchWord: String
+    val catalogBuildRoots: List<VirtualFile>
+}
+
+private data class TypesafeConventionsKotlinCatalogAliasSearchTarget(
+    override val section: TypesafeConventionsCatalogSection,
+    override val searchWord: String,
+    override val catalogBuildRoots: List<VirtualFile>,
+    val keySegment: TomlKeySegment,
+) : TypesafeConventionsKotlinCatalogSearchTarget
+
+private data class TypesafeConventionsKotlinCatalogSectionSearchTarget(
+    override val section: TypesafeConventionsCatalogSection,
+    override val searchWord: String,
+    override val catalogBuildRoots: List<VirtualFile>,
+    val catalogUrl: String,
+) : TypesafeConventionsKotlinCatalogSearchTarget
 
 internal open class TypesafeConventionsKotlinCatalogReference(
     expression: KtDotQualifiedExpression,
@@ -160,8 +176,8 @@ internal class TypesafeConventionsKotlinCatalogUseScopeEnlarger : UseScopeEnlarg
 
     @RequiresReadLock
     override fun getAdditionalUseScope(element: PsiElement): SearchScope? {
-        val keySegment = element as? TomlKeySegment ?: return null
-        val target = keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return null
+        // Section names are addressed through the owning table or inline table, not through a key segment.
+        val target = element.typesafeConventionsKotlinCatalogSearchTarget() ?: return null
         return typesafeConventionsCatalogBuildRootsSearchScope(element.project, target.catalogBuildRoots)
     }
 }
@@ -196,22 +212,25 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
         queryParameters: ReferencesSearch.SearchParameters,
         consumer: Processor<in PsiReference>,
     ) {
-        val keySegment = queryParameters.elementToSearch as? TomlKeySegment ?: return
-        val target = keySegment.typesafeConventionsKotlinCatalogSearchTarget() ?: return
+        val searchedElement = queryParameters.elementToSearch
+        val target = searchedElement.typesafeConventionsKotlinCatalogSearchTarget() ?: return
         val searchSession = queryParameters.optimizer.searchSession
-        val processedGroups = synchronized(searchSession) {
-            searchSession.getUserData(PROCESSED_CATALOG_SELECTOR_GROUPS_KEY)
-                ?: ConcurrentHashMap.newKeySet<ProcessedSelectorGroup>().also { groups ->
-                    searchSession.putUserData(PROCESSED_CATALOG_SELECTOR_GROUPS_KEY, groups)
-                }
+        val resultProcessor = when (target) {
+            is TypesafeConventionsKotlinCatalogAliasSearchTarget -> CatalogReferenceRequestProcessor(
+                searchedSegment = target.keySegment,
+                section = target.section,
+                processedGroups = searchSession.processedOccurrences(PROCESSED_CATALOG_SELECTOR_GROUPS_KEY),
+            )
+
+            is TypesafeConventionsKotlinCatalogSectionSearchTarget -> CatalogSectionRequestProcessor(
+                searchedSection = target.section,
+                searchedSectionElement = searchedElement,
+                searchedCatalogUrl = target.catalogUrl,
+                processedOccurrences = searchSession.processedOccurrences(PROCESSED_CATALOG_SECTION_TOKENS_KEY),
+            )
         }
-        val resultProcessor = CatalogReferenceRequestProcessor(
-            keySegment,
-            target.section,
-            processedGroups,
-        )
         val buildScope = typesafeConventionsCatalogBuildRootsSearchScope(
-            keySegment.project,
+            searchedElement.project,
             target.catalogBuildRoots,
         )
         val searchScope = queryParameters.scopeDeterminedByUser.intersectWith(buildScope)
@@ -220,7 +239,7 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
             searchScope,
             UsageSearchContext.IN_CODE,
             false,
-            keySegment,
+            searchedElement,
             resultProcessor,
         )
     }
@@ -273,6 +292,100 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
             )
         }
     }
+
+    /**
+     * Reports every Kotlin usage of a catalog section token (`libs.versions` / `libs.bundles` /
+     * `libs.plugins`). The token is not an alias segment, so it cannot be matched through the TOML alias
+     * index; usages are matched by section plus the catalog the accessor resolves to.
+     */
+    private class CatalogSectionRequestProcessor(
+        private val searchedSection: TypesafeConventionsCatalogSection,
+        private val searchedSectionElement: PsiElement,
+        private val searchedCatalogUrl: String,
+        private val processedOccurrences: MutableSet<ProcessedCatalogSectionToken>,
+    ) : RequestResultProcessor(searchedSection, searchedCatalogUrl) {
+        @RequiresReadLock
+        override fun processTextOccurrence(
+            element: PsiElement,
+            offsetInElement: Int,
+            consumer: Processor<in PsiReference>,
+        ): Boolean {
+            val occurrence = element as? KtNameReferenceExpression ?: return true
+            val expression = occurrence.findTypesafeConventionsCatalogExpression() ?: return true
+            val accessor = expression.typesafeConventionsCatalogAccessor() ?: return true
+            if (accessor.section != searchedSection) {
+                return true
+            }
+            val sectionExpression = accessor.sectionExpression ?: return true
+            val absoluteOffset = occurrence.textRange.startOffset + offsetInElement
+            if (!(sectionExpression === occurrence || sectionExpression.textRange.containsOffset(absoluteOffset))) {
+                return true
+            }
+            val expressionFileUrl = expression.containingFile.virtualFile?.url ?: return true
+            if (!processedOccurrences.add(
+                    ProcessedCatalogSectionToken(
+                        expressionFileUrl,
+                        sectionExpression.textRange.startOffset,
+                        searchedSection,
+                    ),
+                )
+            ) {
+                return true
+            }
+            if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
+                return true
+            }
+            val catalogUrl = findTypesafeConventionsCatalogTomlFile(expression, accessor.catalogName)
+                ?.originalFile
+                ?.virtualFile
+                ?.url
+                ?: return true
+            if (catalogUrl != searchedCatalogUrl) {
+                return true
+            }
+            return consumer.process(
+                TypesafeConventionsKotlinCatalogSectionUsageReference(
+                    expression,
+                    expression.relativeRange(sectionExpression, sectionExpression),
+                    searchedSectionElement,
+                ),
+            )
+        }
+    }
+}
+
+/**
+ * A Kotlin usage of a catalog section token reported to Find Usages. The token addresses the TOML section
+ * itself, so the reference resolves to the searched section element and leaves the token text alone: a
+ * section name is a structural Gradle catalog key, and rewriting it here would change what the expression
+ * selects.
+ */
+internal class TypesafeConventionsKotlinCatalogSectionUsageReference(
+    expression: KtDotQualifiedExpression,
+    rangeInElement: TextRange,
+    private val searchedSectionElement: PsiElement,
+) : PsiReferenceBase<KtDotQualifiedExpression>(expression, rangeInElement, true) {
+
+    override fun resolve(): PsiElement? = searchedSectionElement.takeIf(PsiElement::isValid)
+
+    override fun handleElementRename(newElementName: String): PsiElement = element
+
+    override fun equals(other: Any?): Boolean =
+        this === other || other is TypesafeConventionsKotlinCatalogSectionUsageReference && identity == other.identity
+
+    override fun hashCode(): Int = identity.hashCode()
+
+    private val identity = UsageReferenceIdentity(
+        fileUrl = expression.containingFile.virtualFile?.url,
+        expressionStartOffset = expression.textRange.startOffset,
+        rangeInElement = rangeInElement,
+    )
+
+    private data class UsageReferenceIdentity(
+        val fileUrl: String?,
+        val expressionStartOffset: Int,
+        val rangeInElement: TextRange,
+    )
 }
 
 private data class ProcessedSelectorGroup(
@@ -282,8 +395,44 @@ private data class ProcessedSelectorGroup(
     val selectorEndIndex: Int,
 )
 
+private data class ProcessedCatalogSectionToken(
+    val expressionFileUrl: String,
+    val sectionTokenStartOffset: Int,
+    val section: TypesafeConventionsCatalogSection,
+)
+
+/**
+ * The per-search set of already reported occurrences. A word occurrence reaches
+ * [RequestResultProcessor.processTextOccurrence] once per enclosing PSI element, so reporting is deduplicated
+ * per occurrence instead of per callback.
+ */
+private fun <T> SearchSession.processedOccurrences(
+    key: Key<MutableSet<T>>,
+): MutableSet<T> =
+    synchronized(this) {
+        getUserData(key)
+            ?: ConcurrentHashMap.newKeySet<T>().also { occurrences ->
+                putUserData(key, occurrences)
+            }
+    }
+
 @RequiresReadLock
-private fun TomlKeySegment.typesafeConventionsKotlinCatalogSearchTarget():
+internal fun PsiElement.typesafeConventionsKotlinCatalogSearchTarget():
+        TypesafeConventionsKotlinCatalogSearchTarget? =
+    when (this) {
+        is TomlKeySegment -> typesafeConventionsKotlinCatalogAliasSearchTarget()
+            ?: typesafeConventionsKotlinCatalogSectionSearchTarget()
+
+        is TomlTable -> typesafeConventionsKotlinCatalogSectionSearchTarget()
+        is TomlInlineTable -> typesafeConventionsKotlinCatalogSectionSearchTarget()
+        else -> null
+    }
+
+/**
+ * A TOML alias key segment, resolved through the catalog alias index.
+ */
+@RequiresReadLock
+private fun TomlKeySegment.typesafeConventionsKotlinCatalogAliasSearchTarget():
         TypesafeConventionsKotlinCatalogSearchTarget? {
     val keyValue = parentOfType<TomlKeyValue>(withSelf = false) ?: return null
     val alias = findTypesafeConventionsTomlCatalogAlias(keyValue) ?: return null
@@ -299,10 +448,45 @@ private fun TomlKeySegment.typesafeConventionsKotlinCatalogSearchTarget():
     if (catalogBuildRoots.isEmpty()) {
         return null
     }
-    return TypesafeConventionsKotlinCatalogSearchTarget(
+    return TypesafeConventionsKotlinCatalogAliasSearchTarget(
         section = alias.section,
         searchWord = searchWord,
         catalogBuildRoots = catalogBuildRoots,
+        keySegment = this,
+    )
+}
+
+/**
+ * A TOML section name, in any of the shapes the alias index understands: a standard table header, an inline
+ * table key, or the leading segment of a top-level dotted key. Kotlin usages of such a section appear as the
+ * section token of an accessor (`libs.bundles.junit.bundle`), so the searched word is the section name.
+ */
+@RequiresReadLock
+private fun PsiElement.typesafeConventionsKotlinCatalogSectionSearchTarget():
+        TypesafeConventionsKotlinCatalogSearchTarget? {
+    val catalogFile = containingFile as? TomlFile ?: return null
+    val aliasIndex = typesafeConventionsTomlCatalogAliasIndex(catalogFile)
+    val section = when (this) {
+        is TomlKeySegment -> aliasIndex.sectionForSectionNameSegment(this)
+        is TomlTable -> aliasIndex.sectionForSectionOwner(this)
+        is TomlInlineTable -> aliasIndex.sectionForSectionOwner(this)
+        else -> null
+    } ?: return null
+    // `libraries` has no accessor token (`libs.foo`, not `libs.libraries.foo`), so no Kotlin usage can name it.
+    if (section == TypesafeConventionsCatalogSection.LIBRARIES) {
+        return null
+    }
+    val searchWord = section.tomlName
+    val catalogBuildRoots = findTypesafeConventionsCatalogBuildRoots(catalogFile)
+    if (catalogBuildRoots.isEmpty()) {
+        return null
+    }
+    val catalogUrl = catalogFile.originalFile.virtualFile?.url ?: return null
+    return TypesafeConventionsKotlinCatalogSectionSearchTarget(
+        section = section,
+        searchWord = searchWord,
+        catalogBuildRoots = catalogBuildRoots,
+        catalogUrl = catalogUrl,
     )
 }
 
@@ -600,6 +784,11 @@ private val TYPESAFE_CONVENTIONS_CATALOG_SELECTOR_GROUPS_KEY =
 private val PROCESSED_CATALOG_SELECTOR_GROUPS_KEY =
     Key.create<MutableSet<ProcessedSelectorGroup>>(
         "typesafe.conventions.kotlin.catalog.processed.selector.groups",
+    )
+
+private val PROCESSED_CATALOG_SECTION_TOKENS_KEY =
+    Key.create<MutableSet<ProcessedCatalogSectionToken>>(
+        "typesafe.conventions.kotlin.catalog.processed.section.tokens",
     )
 
 private val GRADLE_ENTRYPOINT_RECEIVER_FQ_NAMES =
