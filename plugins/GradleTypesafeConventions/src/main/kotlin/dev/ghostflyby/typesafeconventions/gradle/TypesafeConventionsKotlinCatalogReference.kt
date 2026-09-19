@@ -332,17 +332,13 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
             // session-scoped, and a single search session can batch requests for several catalogs, so marking an
             // occurrence for the wrong catalog would silence the request that legitimately owns it.
             val expressionFileUrl = expression.containingFile.virtualFile?.url ?: return true
-            if (!processedOccurrences.add(
-                    ProcessedCatalogSectionToken(
-                        expressionFileUrl,
-                        sectionExpression.textRange.startOffset,
-                        searchedSection,
-                    ),
-                )
-            ) {
-                return true
-            }
-            return consumer.process(
+            return !processedOccurrences.add(
+                ProcessedCatalogSectionToken(
+                    expressionFileUrl,
+                    sectionExpression.textRange.startOffset,
+                    searchedSection,
+                ),
+            ) || consumer.process(
                 TypesafeConventionsKotlinCatalogSectionUsageReference(
                     expression,
                     expression.relativeRange(sectionExpression, sectionExpression),
