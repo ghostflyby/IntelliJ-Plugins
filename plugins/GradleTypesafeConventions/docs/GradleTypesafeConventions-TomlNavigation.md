@@ -33,6 +33,10 @@ marker required before optional Kotlin configuration is loaded.
 
 - Kotlin catalog accessors resolve to the concrete `TomlKeySegment` declaration.
 - Goto Declaration targets the exact catalog key segment under the caret.
+- The `versions` / `bundles` / `plugins` token of a Kotlin accessor selects a TOML section rather than an alias
+  segment, so the resolver maps it to the section owner recorded by the alias index: a standard table header, a
+  top-level dotted key, or an inline table. Only the alias selectors carry `TypesafeConventionsKotlinCatalogReference`
+  instances, so section tokens are handled by the goto handler after reference lookup misses.
 - Find Usages filters candidates by their resolved catalog file and entry, so catalogs with identical aliases do not
   cross-match.
 - Renaming from either a TOML key segment or Kotlin usage updates only the matching selector slice and preserves the
@@ -74,7 +78,9 @@ project files from becoming search candidates.
 Coverage includes focused TOML PSI tests and real Gradle sync tests for
 `buildSrc` and included build logic. The integration tests directly inspect
 `KtDotQualifiedExpression.references`, exercise registered goto handlers, perform `ReferencesSearch`, and run
-`RenameProcessor` from TOML and Kotlin segments for both precompiled script and binary Kotlin convention plugins. State
+`RenameProcessor` from TOML and Kotlin segments for both precompiled script and binary Kotlin convention plugins.
+Section-token navigation is covered for both default and custom catalogs across every convention build, asserting the
+resolved target is the section owner from the TOML alias index. State
 coverage includes sequential linked roots, successful disable, failed and cancelled imports, null-path commits, unlink
 cleanup, restart recovery, and rejection of incomplete Workspace Model candidates. Structural performance coverage
 verifies Workspace Model index reuse and invalidation, TOML PSI cache invalidation, build-root search scoping, and

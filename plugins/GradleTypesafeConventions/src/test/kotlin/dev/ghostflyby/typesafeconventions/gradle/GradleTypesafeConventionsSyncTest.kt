@@ -139,6 +139,22 @@ internal data class CatalogAccessorInCatalogCase(
     override fun toString(): String = "${catalog.catalogName} ${accessor.name}"
 }
 
+internal data class CatalogSectionCase(
+    val section: TypesafeConventionsCatalogSection,
+    val declarationPath: String,
+    val referenceText: String,
+) {
+    override fun toString(): String = section.tomlName
+}
+
+internal data class CatalogSectionInConventionBuildCase(
+    val catalog: VersionCatalogCase,
+    val conventionBuild: ConventionBuildCase,
+    val section: CatalogSectionCase,
+) {
+    override fun toString(): String = "${conventionBuild.name}: ${catalog.catalogName} ${section.section.tomlName}"
+}
+
 internal data class CatalogRenameCase(
     val name: String,
     val oldDeclarationPath: String,
@@ -350,6 +366,39 @@ private class GradleTypesafeConventionsSyncedProject(
             realResolvedTargets.any { (path, text) -> path == tomlPath && text.startsWith(expectedEntryText) },
             "Expected $referenceText in $expressionText to resolve to TOML entry $expectedEntryText. " +
                     "resolvedTargets=$realResolvedTargets ${workspaceModelState()} ${moduleGradleState()}",
+        )
+    }
+
+    suspend fun assertConventionBuildCatalogSectionGotoResolvesToTomlSectionOwner(
+        scriptPath: Path,
+        versionCatalog: VersionCatalogCase,
+        referenceText: String,
+        section: TypesafeConventionsCatalogSection,
+        expressionText: String,
+    ) {
+        val tomlFile = requirePsiFile(projectRoot.resolve(versionCatalog.catalogPath)) as TomlFile
+        val expectedSectionOwner = readAction {
+            requireNotNull(typesafeConventionsTomlCatalogAliasIndex(tomlFile).sectionOwner(section)) {
+                "Expected ${versionCatalog.catalogPath} to declare a ${section.tomlName} section"
+            }
+        }
+        val conventionBuildScript = requirePsiFile(scriptPath)
+
+        val (resolvedTargets, resolvedTargetDescription) = readAction {
+            val (sourceElement, offset) = findElementAtText(
+                conventionBuildScript,
+                expressionText,
+                referenceText,
+            )
+            val targets = resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset).orEmpty()
+            targets to targets.map(::describeGotoTarget).joinToString(prefix = "[", postfix = "]")
+        }
+
+        assertTrue(
+            resolvedTargets.any { target -> target == expectedSectionOwner },
+            "Expected $referenceText in $expressionText to resolve to the ${section.tomlName} TOML section. " +
+                    "resolvedTargets=$resolvedTargetDescription " +
+                    "${workspaceModelState()} ${moduleGradleState()}",
         )
     }
 
@@ -1003,6 +1052,16 @@ private class GradleTypesafeConventionsSyncedProject(
         return ImaginaryEditor(project, document)
     }
 
+    private fun describeGotoTarget(target: PsiElement?): String {
+        target ?: return "none"
+        val file = target.containingFile ?: return target.javaClass.simpleName
+        val document = PsiDocumentManager.getInstance(target.project).getDocument(file)
+        val line = document?.getLineNumber(target.textRange.startOffset)?.plus(1)
+        val column = document?.getLineStartOffset(line?.minus(1) ?: 0)
+            ?.let { target.textRange.startOffset - it + 1 }
+        return "${file.virtualFile?.path}:$line:$column"
+    }
+
     private fun findElementAtText(
         file: PsiFile,
         text: String,
@@ -1251,6 +1310,21 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         ) { sourceElement, offset ->
             syncedProject.resolveTargetsWithRegisteredGotoDeclarationHandlers(sourceElement, offset)
         }
+    }
+
+    @ParameterizedTest(name = "{0} (section)")
+    @MethodSource("catalogSectionsInConventionBuildCases")
+    suspend fun `kotlin dsl catalog section names navigate to toml section`(
+        testCase: CatalogSectionInConventionBuildCase,
+    ) {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertConventionBuildCatalogSectionGotoResolvesToTomlSectionOwner(
+            scriptPath = projectRoot.resolve(testCase.conventionBuild.scriptPath),
+            versionCatalog = testCase.catalog,
+            referenceText = testCase.section.referenceText,
+            section = testCase.section.section,
+            expressionText = "${testCase.catalog.catalogName}.${testCase.section.declarationPath}",
+        )
     }
 
     @Test
@@ -1583,6 +1657,16 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
         }
 
 
+    fun catalogSectionsInConventionBuildCases(): List<CatalogSectionInConventionBuildCase> =
+        kotlinDslConventionBuildCases().flatMap { conventionBuild ->
+            versionCatalogCasesForTypesafeConventions().flatMap { catalog ->
+                catalogSectionCases().map { section ->
+                    CatalogSectionInConventionBuildCase(catalog, conventionBuild, section)
+                }
+            }
+        }
+
+
     fun catalogAccessorsInCatalogCases(): List<CatalogAccessorInCatalogCase> =
         versionCatalogCasesForTypesafeConventions().flatMap { catalog ->
             catalogAccessorCases().map { accessor -> CatalogAccessorInCatalogCase(catalog, accessor) }
@@ -1905,6 +1989,25 @@ private fun catalogAccessorCases(): List<CatalogAccessorCase> =
             declarationPath = "plugins.kotlin.jvm",
             referenceText = "jvm",
             expectedEntryText = "kotlin-jvm",
+        ),
+    )
+
+private fun catalogSectionCases(): List<CatalogSectionCase> =
+    listOf(
+        CatalogSectionCase(
+            section = TypesafeConventionsCatalogSection.VERSIONS,
+            declarationPath = "versions",
+            referenceText = "versions",
+        ),
+        CatalogSectionCase(
+            section = TypesafeConventionsCatalogSection.BUNDLES,
+            declarationPath = "bundles",
+            referenceText = "bundles",
+        ),
+        CatalogSectionCase(
+            section = TypesafeConventionsCatalogSection.PLUGINS,
+            declarationPath = "plugins",
+            referenceText = "plugins",
         ),
     )
 

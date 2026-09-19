@@ -49,6 +49,17 @@ internal data class TypesafeConventionsKotlinCatalogAccessor(
 
     val aliasPath: String
         get() = aliasSelectorNames.joinToString(".")
+
+    /**
+     * The `versions` / `bundles` / `plugins` token selecting the catalog section. It is not an alias
+     * segment: it names the TOML section itself. `null` for `libraries`, which has no such token.
+     */
+    val sectionExpression: KtNameReferenceExpression?
+        get() = if (section == TypesafeConventionsCatalogSection.LIBRARIES) {
+            null
+        } else {
+            nameExpressions.getOrNull(1)
+        }
 }
 
 internal data class TypesafeConventionsKotlinCatalogSelectorGroup(
@@ -117,9 +128,32 @@ internal class TypesafeConventionsKotlinCatalogGotoDeclarationHandler : GotoDecl
         val reference = expression.references
             .filterIsInstance<TypesafeConventionsKotlinCatalogReference>()
             .firstOrNull { it.rangeInElement.containsOffset(relativeOffset) }
-            ?: return null
-        return reference.resolve()?.let { arrayOf(it) }
+        return reference?.resolve()?.let { arrayOf(it) }
+            ?: resolveTypesafeConventionsCatalogSection(expression, relativeOffset)?.let { arrayOf(it) }
     }
+}
+
+/**
+ * Resolves the section token of `libs.versions.foo` / `libs.bundles.foo.bar` / `libs.plugins.foo` to
+ * its TOML section. Alias selectors carry references, but the section token does not, so without this
+ * the caret on `versions` or `bundles` has no target at all.
+ */
+@RequiresReadLock
+@RequiresBackgroundThread
+private fun resolveTypesafeConventionsCatalogSection(
+    expression: KtDotQualifiedExpression,
+    relativeOffset: Int,
+): PsiElement? {
+    val accessor = expression.typesafeConventionsCatalogAccessor() ?: return null
+    val sectionExpression = accessor.sectionExpression ?: return null
+    if (!expression.relativeRange(sectionExpression, sectionExpression).containsOffset(relativeOffset)) {
+        return null
+    }
+    if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
+        return null
+    }
+    val tomlFile = findTypesafeConventionsCatalogTomlFile(expression, accessor.catalogName) ?: return null
+    return typesafeConventionsTomlCatalogAliasIndex(tomlFile).sectionOwner(accessor.section)
 }
 
 internal class TypesafeConventionsKotlinCatalogUseScopeEnlarger : UseScopeEnlarger() {
@@ -305,8 +339,10 @@ internal fun KtDotQualifiedExpression.typesafeConventionsCatalogAccessor():
     }
     val section = TypesafeConventionsCatalogSection.fromAccessorPrefix(names[1])
         ?: TypesafeConventionsCatalogSection.LIBRARIES
+    // A section token (`libs.versions`, `libs.bundles`, `libs.plugins`) may carry no alias selector:
+    // it addresses the TOML section itself.
     val aliasSelectorStartIndex = if (section == TypesafeConventionsCatalogSection.LIBRARIES) 1 else 2
-    if (aliasSelectorStartIndex >= names.size) {
+    if (aliasSelectorStartIndex > names.size) {
         return null
     }
     return TypesafeConventionsKotlinCatalogAccessor(
