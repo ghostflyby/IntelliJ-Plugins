@@ -33,8 +33,16 @@ marker required before optional Kotlin configuration is loaded.
 
 - Kotlin catalog accessors resolve to the concrete `TomlKeySegment` declaration.
 - Goto Declaration targets the exact catalog key segment under the caret.
+- The `versions` / `bundles` / `plugins` token of a Kotlin accessor selects a TOML section rather than an alias
+  segment, so the resolver maps it to the section owner recorded by the alias index: a standard table header, a
+  top-level dotted key, or an inline table. Only the alias selectors carry `TypesafeConventionsKotlinCatalogReference`
+  instances, so section tokens are handled by the goto handler after reference lookup misses.
 - Find Usages filters candidates by their resolved catalog file and entry, so catalogs with identical aliases do not
   cross-match.
+- Find Usages on a section name resolves the usages whose accessor carries that section token. Section names are keyed
+  by the section plus the catalog the accessor resolves to, because the token is not an alias segment and therefore has
+  no TOML key to match against. A section name is a structural Gradle catalog key, so the reported usage references
+  resolve to the searched section but leave the token text untouched on rename.
 - Renaming from either a TOML key segment or Kotlin usage updates only the matching selector slice and preserves the
   remaining dotted alias.
 - Local variables that shadow catalog roots and programmatic-only aliases retain their native Kotlin references without
@@ -61,20 +69,29 @@ rebuild the index, while an explicit catalog-file refresh advances the same gene
 entries are unchanged, invalidating PSI resolution caches exactly once for that publication.
 
 Each TOML catalog file keeps a PSI-dependent alias index by section, normalized alias, generated Groovy accessor name,
-entry, and exact key segments. Kotlin reference creation caches immutable selector groups against the catalog-index
+entry, and exact key segments. The same index records the key segment naming each section and the element owning it, so
+section navigation, Find Usages, and the TOML use-scope enlargement share one section-to-catalog mapping instead of
+re-deriving it per feature. Kotlin reference creation caches immutable selector groups against the catalog-index
 generation and TOML PSI; Groovy navigation reuses the same alias and section-owner mappings instead of scanning tables
 independently.
 
 Find Usages registers an indexed word request whose scope is the intersection of the user-selected scope and the Gradle
 build roots associated with the target catalog. The TOML use-scope enlargement uses the same roots, preventing unrelated
-project files from becoming search candidates.
+project files from becoming search candidates. Request results are deduplicated per occurrence inside the search session
+after the usage is confirmed to belong to the searched catalog, so batching requests for several catalogs in one session
+cannot let one catalog's claim silence another's.
 
 ## Verification
 
 Coverage includes focused TOML PSI tests and real Gradle sync tests for
 `buildSrc` and included build logic. The integration tests directly inspect
 `KtDotQualifiedExpression.references`, exercise registered goto handlers, perform `ReferencesSearch`, and run
-`RenameProcessor` from TOML and Kotlin segments for both precompiled script and binary Kotlin convention plugins. State
+`RenameProcessor` from TOML and Kotlin segments for both precompiled script and binary Kotlin convention plugins.
+Section-token navigation is covered for both default and custom catalogs across every convention build, asserting the
+resolved target is the section owner from the TOML alias index. Section Find Usages is covered both through
+`ReferencesSearch` and through the default Find Usages pipeline, including the `plugins` section used from precompiled
+script `plugins` blocks, isolation between same-named sections of different catalogs, and several catalogs batched into
+one search session. State
 coverage includes sequential linked roots, successful disable, failed and cancelled imports, null-path commits, unlink
 cleanup, restart recovery, and rejection of incomplete Workspace Model candidates. Structural performance coverage
 verifies Workspace Model index reuse and invalidation, TOML PSI cache invalidation, build-root search scoping, and

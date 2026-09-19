@@ -11,6 +11,8 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiFileFactory
+import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.psi.util.parentOfType
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.moduleFixture
 import com.intellij.testFramework.junit5.fixture.projectFixture
@@ -24,6 +26,10 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.toml.lang.psi.TomlFile
 import org.toml.lang.psi.TomlFileType
+import org.toml.lang.psi.TomlInlineTable
+import org.toml.lang.psi.TomlKeySegment
+import org.toml.lang.psi.TomlKeyValue
+import org.toml.lang.psi.TomlTable
 
 @TestApplication
 internal class TypesafeConventionsTomlCatalogResolverTest {
@@ -40,6 +46,99 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
         """.trimIndent(),
     )
     private val cachedTomlFile by cachedTomlFileFixture
+
+    @Test
+    suspend fun `indexes section name segments and section owners for every toml shape`() = readAction {
+        val standard = createTomlFile(
+            """
+                [bundles]
+                junit-bundle = ["junit-jupiter"]
+            """.trimIndent(),
+        )
+        val dotted = createTomlFile(
+            """
+                bundles.junit-bundle = ["junit-jupiter"]
+            """.trimIndent(),
+        )
+        val inline = createTomlFile(
+            """
+                bundles = { junit-bundle = ["junit-jupiter"] }
+            """.trimIndent(),
+        )
+
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            typesafeConventionsTomlCatalogAliasIndex(standard)
+                .sectionForSectionNameSegment(standard.singleSectionNameSegment()),
+        )
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            typesafeConventionsTomlCatalogAliasIndex(dotted)
+                .sectionForSectionNameSegment(dotted.singleSectionNameSegment()),
+        )
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            typesafeConventionsTomlCatalogAliasIndex(inline)
+                .sectionForSectionNameSegment(inline.singleSectionNameSegment()),
+        )
+
+        // Standard tables own their section; dotted keys and inline tables record the declaring key as owner,
+        // which is what the goto handler resolves a section token to.
+        val standardIndex = typesafeConventionsTomlCatalogAliasIndex(standard)
+        val standardTable = PsiTreeUtil.findChildOfType(standard, TomlTable::class.java)
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            standardTable?.let(standardIndex::sectionForSectionOwner),
+        )
+        val dottedIndex = typesafeConventionsTomlCatalogAliasIndex(dotted)
+        val dottedTable = PsiTreeUtil.findChildOfType(dotted, TomlInlineTable::class.java)
+        assertNull(dottedTable?.let(dottedIndex::sectionForSectionOwner))
+        val inlineIndex = typesafeConventionsTomlCatalogAliasIndex(inline)
+        val inlineTable = PsiTreeUtil.findChildOfType(inline, TomlInlineTable::class.java)
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            inlineTable?.let(inlineIndex::sectionForSectionOwner),
+        )
+    }
+
+    @Test
+    suspend fun `alias segments are not reported as section name segments`() = readAction {
+        val file = createTomlFile(
+            """
+                [bundles]
+                junit-bundle = ["junit-jupiter"]
+            """.trimIndent(),
+        )
+        val index = typesafeConventionsTomlCatalogAliasIndex(file)
+        val entry = requireNotNull(findCatalogEntry(file, "bundles.junit-bundle"))
+        val aliasSegment = entry.key.segments.single()
+
+        assertNull(index.sectionForSectionNameSegment(aliasSegment))
+        assertEquals(
+            TypesafeConventionsCatalogSection.BUNDLES,
+            index.sectionForSectionNameSegment(file.singleSectionNameSegment()),
+        )
+    }
+
+    @Test
+    suspend fun `a library alias named like a section is not a section name`() = readAction {
+        val file = createTomlFile(
+            """
+                [libraries]
+                bundles = { module = "example:bundles", version = "1.0" }
+            """.trimIndent(),
+        )
+        val index = typesafeConventionsTomlCatalogAliasIndex(file)
+        val alias = requireNotNull(index.find(TypesafeConventionsCatalogSection.LIBRARIES, "bundles"))
+        val aliasSegment = alias.segments.single()
+
+        // The key is a normal library alias, and the file declares no bundles section, so nothing may claim
+        // that section for it: section navigation and section Find Usages resolve through these lookups.
+        assertEquals("bundles", aliasSegment.name)
+        assertNull(index.sectionForSectionNameSegment(aliasSegment))
+        assertNull(index.sectionNameSegment(TypesafeConventionsCatalogSection.BUNDLES))
+        assertNull(index.sectionOwner(TypesafeConventionsCatalogSection.BUNDLES))
+    }
 
     @Test
     suspend fun `resolves all version catalog sections`() = readAction {
@@ -348,6 +447,27 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
     private fun createTomlFile(text: String): TomlFile =
         PsiFileFactory.getInstance(project)
             .createFileFromText("libs.versions.toml", TomlFileType, text) as TomlFile
+
+    /**
+     * The `bundles` segment of a single-section catalog, in whichever shape the file declares it: a table
+     * header, an inline table key, or the leading segment of a top-level dotted key.
+     */
+    private fun TomlFile.singleSectionNameSegment(): TomlKeySegment {
+        val headerSegment = PsiTreeUtil.findChildOfType(this, TomlTable::class.java)
+            ?.header
+            ?.key
+            ?.segments
+            ?.singleOrNull()
+        return PsiTreeUtil.findChildrenOfType(this, TomlKeySegment::class.java)
+            .single { segment ->
+                segment.name == "bundles" &&
+                        (segment == headerSegment ||
+                                segment.parentOfType<TomlKeyValue>(withSelf = false)
+                                    ?.key
+                                    ?.segments
+                                    ?.firstOrNull() == segment)
+            }
+    }
 
     private fun findCatalogEntry(tomlFile: TomlFile, declarationPath: String) =
         findCatalogAlias(tomlFile, declarationPath)?.entry

@@ -29,6 +29,11 @@
   rename support for version catalogs used from `buildSrc` and included build logic.
 - Resolve dotted and separator-normalized Kotlin catalog accessors to the exact TOML key segment, so Goto Declaration,
   Find Usages, and rename preserve the unaffected parts of an alias and ignore shadowed or programmatic-only accessors.
+- Goto Declaration on the `versions`, `bundles`, and `plugins` token of a Kotlin catalog accessor now reaches the
+  matching TOML section instead of falling through to the generated accessor code.
+- Find Usages on a `versions`, `bundles`, or `plugins` section name in a version catalog now finds the Kotlin
+  accessors using that section, including usages in `buildSrc` and included build logic, and reports usages of every
+  catalog even when several catalogs are searched together.
 - Preserve catalog navigation across sequential linked Gradle root syncs, failed or cancelled imports, IDE restarts, and
   unlink operations without replacing last-known-good state with partial model data.
 - Avoid blocking dynamic plugin unload by reusing Gradle-owned Workspace Model
