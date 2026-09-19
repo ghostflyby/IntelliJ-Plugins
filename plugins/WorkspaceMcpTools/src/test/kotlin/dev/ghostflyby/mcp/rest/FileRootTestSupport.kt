@@ -6,6 +6,11 @@
 
 package dev.ghostflyby.mcp.rest
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.util.io.toCanonicalPath
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
 import io.ktor.client.*
 import io.ktor.client.plugins.*
 import io.ktor.client.request.*
@@ -18,8 +23,36 @@ import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.nio.file.Path
 
 internal val TestMarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
+
+/**
+ * Creates the directories leading to [path] and writes [text] there *through the VFS*.
+ *
+ * Writing through the VFS registers the file in it right away, so the test can pass the path to
+ * production code and resolve it without refreshing or retrying (the platform's own file fixtures
+ * are built the same way). A plain NIO write leaves the file unknown to the VFS until something
+ * imports it, and `refreshAndFindFileByNioFile` only refreshes paths that are *already* known, so a
+ * single call can legitimately miss a file that is definitely on disk — the platform file watcher
+ * also sets its roots up asynchronously, which is what `VfsTestUtil.waitForFileWatcher` exists for.
+ */
+internal fun writeTextIntoVfs(path: Path, text: String): VirtualFile {
+    val parent = VfsUtil.createDirectories(path.parent.toCanonicalPath())
+    return ApplicationManager.getApplication().runWriteAction<VirtualFile> {
+        parent.createChildData(parent, path.fileName.toString()).also {
+            it.setBinaryContent(text.toByteArray())
+        }
+    }
+}
+
+/**
+ * Resolves [path] without refreshing; the file must already be registered in the VFS, for example
+ * because it was written with [writeTextIntoVfs].
+ */
+internal fun findInVfs(path: Path): VirtualFile? =
+    VirtualFileManager.getInstance().findFileByNioPath(path)
+
 internal val TestWorkspaceRestApplicationContext = WorkspaceRestApplicationContext(
     port = 63441,
     instanceKey = "test-63441",

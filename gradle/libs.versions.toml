@@ -12,8 +12,9 @@ hotswap-agent = "2.0.3"
 changelog = "2.5.0"
 intelliJPlatform = "2.19.0"
 # Kotlin Gradle plugin (compiler toolchain) version only — the Kotlin runtime at execution
-# time is the one bundled with the target IntelliJ Platform; compilerOptions in repo.module
-# pin languageVersion/apiVersion to it. Do not re-add a kotlin-stdlib library entry.
+# time is the one bundled with the IntelliJ Platform, and compilerOptions pin
+# languageVersion/apiVersion to it (derived in buildSrc's BundledKotlinLevel from the platform
+# itself, so they need no manual bump). Do not re-add a kotlin-stdlib library entry.
 kotlin = "2.4.10"
 ksp = "2.3.10"
 kover = "0.9.9"

@@ -5,7 +5,6 @@
  */
 
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     kotlin("jvm")
@@ -19,12 +18,9 @@ dependencies {
 kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.JVM_1_8
-        // No IntelliJ Platform dependency here: compilation resolves the KGP-provided
-        // stdlib while the runtime stdlib comes from the IDE (2026.1 = Kotlin 2.3).
-        // apiVersion turns usage of newer stdlib APIs into a compile error instead of a
-        // runtime NoSuchMethodError. Bump together with platformVersion in gradle.properties.
-        languageVersion = KotlinVersion.KOTLIN_2_3
-        apiVersion = KotlinVersion.KOTLIN_2_3
+        // No IntelliJ Platform dependency here: compilation resolves the KGP-provided stdlib while
+        // the runtime stdlib comes from the IDE, so the level has to be pinned here as well.
+        configureBundledKotlinLevel(providers)
     }
     explicitApi()
 }
