@@ -36,6 +36,7 @@ import com.intellij.platform.workspace.jps.entities.ModuleEntity
 import com.intellij.platform.workspace.storage.entities
 import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.PsiSearchHelper
 import com.intellij.psi.search.SearchRequestCollector
 import com.intellij.psi.search.SearchSession
 import com.intellij.psi.search.searches.ReferencesSearch
@@ -494,6 +495,57 @@ private class GradleTypesafeConventionsSyncedProject(
                     "${versionCatalog.catalogName}.${section.tomlName}. handler=$handlerName, scope=$searchScope, " +
                     "expected=${expectedFiles.map { it.path }}, actual=${actualFiles.map { it.path }}",
         )
+    }
+
+    /**
+     * Batches section-name requests for several catalogs into one [SearchSession], which is how a single search
+     * can query more than one catalog over the same search word. Per-session occurrence deduplication must not let
+     * an occurrence claimed for one catalog silence the request that actually owns it.
+     */
+    suspend fun assertKotlinCatalogSectionFindUsagesSurvivesSharedSearchSession(
+        searches: List<Pair<VersionCatalogCase, TypesafeConventionsCatalogSection>>,
+        expectedScriptPaths: List<Path>,
+    ) {
+        val expectedFiles = expectedScriptPaths.map { requirePsiFile(it).virtualFile.path }.toSet()
+        val sectionNameSegments = searches.map { (catalog, section) ->
+            catalog.catalogName to requireTomlCatalogSectionNameSegment(catalog, section)
+        }
+        val (foundExpressions, actualFiles) = readAction {
+            // One collector, one session, one request per catalog: distinct searchers, shared deduplication state.
+            val collector = SearchRequestCollector(SearchSession(sectionNameSegments.first().second))
+            val projectScope = GlobalSearchScope.projectScope(project)
+            sectionNameSegments.forEach { (_, segment) ->
+                ReferencesSearch.search(
+                    ReferencesSearch.SearchParameters(segment, projectScope, false, collector),
+                ).findAll()
+            }
+            val expressions = mutableListOf<String>()
+            val files = mutableSetOf<String>()
+            PsiSearchHelper.getInstance(project).processRequests(collector) { reference ->
+                (reference.element as? KtDotQualifiedExpression)
+                    ?.let { expression ->
+                        expressions += expression.text
+                        expression.containingFile.virtualFile?.path?.let(files::add)
+                    }
+                true
+            }
+            expressions to files
+        }
+
+        assertTrue(
+            expectedFiles.all(actualFiles::contains),
+            "Expected a shared search session batching several catalogs to still report usages in every " +
+                    "convention source. expected=${expectedFiles.sorted()}, actual=${actualFiles.sorted()}, " +
+                    "expressions=$foundExpressions",
+        )
+        searches.forEach { (catalog, section) ->
+            val expectedPrefix = "${catalog.catalogName}.${section.tomlName}."
+            assertTrue(
+                foundExpressions.any { it.startsWith(expectedPrefix) },
+                "Expected the shared session to report usages of ${catalog.catalogName}.${section.tomlName}. " +
+                        "expressions=$foundExpressions",
+            )
+        }
     }
 
     suspend fun assertKotlinCatalogSectionFindUsagesIsolatedToTargetCatalog(
@@ -1484,11 +1536,22 @@ internal class KotlinDslGradleTypesafeConventionsSyncTest {
 
     @Test
     suspend fun `kotlin dsl catalog section find usages distinguishes catalogs`() {
-        val projectRoot = projectPathFixture.get()
+        projectPathFixture.get()
         syncedProject.assertKotlinCatalogSectionFindUsagesIsolatedToTargetCatalog(
             versionCatalog = versionCatalogCasesForTypesafeConventions().single { it.catalogName == "libs" },
             section = TypesafeConventionsCatalogSection.VERSIONS,
             foreignExpressionText = "customLibs.versions.junit.jupiter",
+        )
+    }
+
+    @Test
+    suspend fun `kotlin dsl catalog section find usages survives a shared search session`() {
+        val projectRoot = projectPathFixture.get()
+        syncedProject.assertKotlinCatalogSectionFindUsagesSurvivesSharedSearchSession(
+            searches = versionCatalogCasesForTypesafeConventions().map {
+                it to TypesafeConventionsCatalogSection.VERSIONS
+            },
+            expectedScriptPaths = kotlinDslConventionScriptPaths(projectRoot),
         )
     }
 

@@ -77,7 +77,9 @@ independently.
 
 Find Usages registers an indexed word request whose scope is the intersection of the user-selected scope and the Gradle
 build roots associated with the target catalog. The TOML use-scope enlargement uses the same roots, preventing unrelated
-project files from becoming search candidates.
+project files from becoming search candidates. Request results are deduplicated per occurrence inside the search session
+after the usage is confirmed to belong to the searched catalog, so batching requests for several catalogs in one session
+cannot let one catalog's claim silence another's.
 
 ## Verification
 
@@ -88,7 +90,8 @@ Coverage includes focused TOML PSI tests and real Gradle sync tests for
 Section-token navigation is covered for both default and custom catalogs across every convention build, asserting the
 resolved target is the section owner from the TOML alias index. Section Find Usages is covered both through
 `ReferencesSearch` and through the default Find Usages pipeline, including the `plugins` section used from precompiled
-script `plugins` blocks and isolation between same-named sections of different catalogs. State
+script `plugins` blocks, isolation between same-named sections of different catalogs, and several catalogs batched into
+one search session. State
 coverage includes sequential linked roots, successful disable, failed and cancelled imports, null-path commits, unlink
 cleanup, restart recovery, and rejection of incomplete Workspace Model candidates. Structural performance coverage
 verifies Workspace Model index reuse and invalidation, TOML PSI cache invalidation, build-root search scoping, and

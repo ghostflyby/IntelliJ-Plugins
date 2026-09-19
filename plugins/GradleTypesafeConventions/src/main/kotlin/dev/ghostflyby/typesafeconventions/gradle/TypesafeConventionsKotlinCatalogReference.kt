@@ -30,11 +30,7 @@ import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.references.KotlinPsiReferenceProviderContributor
-import org.toml.lang.psi.TomlFile
-import org.toml.lang.psi.TomlInlineTable
-import org.toml.lang.psi.TomlKeySegment
-import org.toml.lang.psi.TomlKeyValue
-import org.toml.lang.psi.TomlTable
+import org.toml.lang.psi.*
 import java.util.concurrent.ConcurrentHashMap
 
 internal data class TypesafeConventionsKotlinCatalogAccessor(
@@ -321,17 +317,6 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
             if (!(sectionExpression === occurrence || sectionExpression.textRange.containsOffset(absoluteOffset))) {
                 return true
             }
-            val expressionFileUrl = expression.containingFile.virtualFile?.url ?: return true
-            if (!processedOccurrences.add(
-                    ProcessedCatalogSectionToken(
-                        expressionFileUrl,
-                        sectionExpression.textRange.startOffset,
-                        searchedSection,
-                    ),
-                )
-            ) {
-                return true
-            }
             if (!accessor.resolvesToTypesafeConventionsEntrypoint()) {
                 return true
             }
@@ -341,6 +326,20 @@ internal class TypesafeConventionsKotlinCatalogReferencesSearcher :
                 ?.url
                 ?: return true
             if (catalogUrl != searchedCatalogUrl) {
+                return true
+            }
+            // Deduplicate only once the usage is known to belong to the searched catalog: the occurrence set is
+            // session-scoped, and a single search session can batch requests for several catalogs, so marking an
+            // occurrence for the wrong catalog would silence the request that legitimately owns it.
+            val expressionFileUrl = expression.containingFile.virtualFile?.url ?: return true
+            if (!processedOccurrences.add(
+                    ProcessedCatalogSectionToken(
+                        expressionFileUrl,
+                        sectionExpression.textRange.startOffset,
+                        searchedSection,
+                    ),
+                )
+            ) {
                 return true
             }
             return consumer.process(
