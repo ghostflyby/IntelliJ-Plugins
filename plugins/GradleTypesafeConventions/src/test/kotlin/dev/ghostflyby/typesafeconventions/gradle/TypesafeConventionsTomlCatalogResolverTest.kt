@@ -121,6 +121,26 @@ internal class TypesafeConventionsTomlCatalogResolverTest {
     }
 
     @Test
+    suspend fun `a library alias named like a section is not a section name`() = readAction {
+        val file = createTomlFile(
+            """
+                [libraries]
+                bundles = { module = "example:bundles", version = "1.0" }
+            """.trimIndent(),
+        )
+        val index = typesafeConventionsTomlCatalogAliasIndex(file)
+        val alias = requireNotNull(index.find(TypesafeConventionsCatalogSection.LIBRARIES, "bundles"))
+        val aliasSegment = alias.segments.single()
+
+        // The key is a normal library alias, and the file declares no bundles section, so nothing may claim
+        // that section for it: section navigation and section Find Usages resolve through these lookups.
+        assertEquals("bundles", aliasSegment.name)
+        assertNull(index.sectionForSectionNameSegment(aliasSegment))
+        assertNull(index.sectionNameSegment(TypesafeConventionsCatalogSection.BUNDLES))
+        assertNull(index.sectionOwner(TypesafeConventionsCatalogSection.BUNDLES))
+    }
+
+    @Test
     suspend fun `resolves all version catalog sections`() = readAction {
         val file = createTomlFile(
             """
