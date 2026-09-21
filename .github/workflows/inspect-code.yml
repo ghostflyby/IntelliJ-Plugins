@@ -65,7 +65,8 @@ jobs:
       # Cold-cache experiment (JetBrains support request): the Qodana native cache
       # restore/save steps are removed on this branch and --clear-cache is passed to
       # the analysis below, so Qodana rebuilds its cache from scratch and we can check
-      # whether the GradleTypesafeConventions XmlHighlighting problems survive a cold run.
+      # whether the GradleTypesafeConventions XmlHighlighting problems survive a cold,
+      # full (pr-mode off), baseline-free run that exposes every reported problem.
       # The baseline is the accepted problem set of the default branch, so only healthy
       # main runs write it back (see "Save Qodana baseline" below); every other run
       # restores it and passes it to Qodana, which is what makes the health check count
@@ -114,7 +115,14 @@ jobs:
         with:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
-          args: ${{ steps.qodana-baseline.outputs.args }} --clear-cache --log-level debug
+          # Run 35611900107 (scoped PR mode) only analysed the diff scope and merged
+          # the baseline SARIF into its results, so it could not answer whether a cold
+          # full analysis reports the XmlHighlighting problems. Full scope, no baseline.
+          pr-mode: false
+          # Baseline deliberately omitted: with it every result is labelled `unchanged`
+          # and both the SARIF and the report UI show an empty problem list; without it
+          # every problem the cold analysis finds is exposed.
+          args: --clear-cache --log-level debug
           upload-result: true
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
