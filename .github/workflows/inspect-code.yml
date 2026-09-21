@@ -62,22 +62,10 @@ jobs:
           key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
           restore-keys: |
             ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
-      - name: Compute Qodana Cache Layout
-        id: qodana-cache-layout
-        shell: bash
-        run: |
-          set -euo pipefail
-          fingerprint="$(printf '%s\0%s' "$HOME" "$GITHUB_WORKSPACE" | sha256sum | cut -d ' ' -f 1)"
-          printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
-      - name: Restore Qodana Cache
-        id: restore-qodana-cache
-        if: ${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key != '' }}
-        uses: actions/cache/restore@v6
-        with:
-          path: ${{ runner.temp }}/qodana/caches
-          key: qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ github.ref }}-${{ github.sha }}
-          restore-keys: |
-            qodana-native-v3-2026.1-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-refs/heads/main-
+      # Cold-cache experiment (JetBrains support request): the Qodana native cache
+      # restore/save steps are removed on this branch and --clear-cache is passed to
+      # the analysis below, so Qodana rebuilds its cache from scratch and we can check
+      # whether the GradleTypesafeConventions XmlHighlighting problems survive a cold run.
       # The baseline is the accepted problem set of the default branch, so only healthy
       # main runs write it back (see "Save Qodana baseline" below); every other run
       # restores it and passes it to Qodana, which is what makes the health check count
@@ -126,7 +114,8 @@ jobs:
         with:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
-          args: ${{ steps.qodana-baseline.outputs.args }}
+          args: ${{ steps.qodana-baseline.outputs.args }} --clear-cache --log-level debug
+          upload-result: true
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
@@ -293,25 +282,9 @@ jobs:
             printf 'fingerprint=%s\n' "$fingerprint"
             printf 'key=%s\n' "$key"
           } >> "$GITHUB_OUTPUT"
-      - name: Compute Qodana Cache Key
-        id: qodana-cache-key
-        shell: bash
-        env:
-          IDE_CACHE_KEY: ${{ steps.intellij-platform-ides.outputs.key }}
-          LAYOUT_FINGERPRINT: ${{ steps.qodana-cache-layout.outputs.fingerprint }}
-        run: |
-          set -euo pipefail
-          key="qodana-native-v3-2026.1-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-refs/heads/main-${GITHUB_SHA}"
-          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Save IntelliJ Platform IDE Cache
         if: ${{ success() && github.ref == 'refs/heads/main' && steps.intellij-platform-ides.outputs.key != steps.restore-intellij-platform-ides.outputs.cache-matched-key }}
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
           key: ${{ steps.intellij-platform-ides.outputs.key }}
-      - name: Save Qodana Cache
-        if: ${{ success() && github.ref == 'refs/heads/main' && steps.qodana-cache-key.outputs.key != steps.restore-qodana-cache.outputs.cache-matched-key }}
-        uses: actions/cache/save@v6
-        with:
-          path: ${{ runner.temp }}/qodana/caches
-          key: ${{ steps.qodana-cache-key.outputs.key }}

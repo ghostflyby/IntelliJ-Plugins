@@ -18,11 +18,3 @@ exclude:
   - name: All
     paths:
       - plugins/IdeaVimToggleIME
-  # The Kotlin plugin EPs (psiReferenceProvider, supportsKotlinPluginMode) are not
-  # resolvable in the qodana batch analysis, so every attribute of these registrations
-  # is flagged as "not allowed here" by the XML highlighting annotator. The IDE
-  # resolves them fine; DevKit PluginXmlValidity still runs on these files.
-  - name: XmlHighlighting
-    paths:
-      - plugins/GradleTypesafeConventions/src/main/resources/META-INF/plugin.xml
-      - plugins/GradleTypesafeConventions/src/main/resources/META-INF/gradle-typesafe-conventions-kotlin-k2.xml
