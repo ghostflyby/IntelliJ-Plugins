@@ -19,16 +19,15 @@
 
 - [x] `SkillNameInspection` unified fix decision system (one state calc → three problem types → filtered fix candidates)
 - [x] QuickFix priority via `PriorityAction` (AutoSetName=TOP, AutoRenameDir=HIGH, AutoRenameBoth=NORMAL, ManualRename=LOW)
-- [x] `SkillNameInlineElement` PsiNamedElement delegate for inline rename
-- [x] `SkillNameInlineRenamer` custom VariableInplaceRenamer subclass
-- [x] Shared `performSkillNameInlineRename()` utility (handler + quickfix)
-- [x] `SkillNameRenameHandler` uses inline rename instead of dialog
+- [x] `AgentSkillSymbol` declaration from SKILL.md `name` scalar
+- [x] `SkillNameRenameUsageSearcher` bridges Symbol rename to directory references and directory rename
+- [x] Shared `renameSkillDirectory()` helper for refactoring-aware directory quick fixes
+- [x] Manual rename quick fix delegates to the platform rename handler
 - [x] `NameQuality` / `NamePart` / `analyzeSkillName()` name analysis model
 - [x] `normalizeSkillNameOrNull()` safe normalization
 - [x] `SKILL_NAME_REGEX` disallows consecutive hyphens
 - [x] `GotoDeclarationHandler` for scalar → directory navigation
 - [x] `SkillDirRenameSearchExecutor` + `SkillDirectoryNameReference` for directory→YAML sync
-- [x] `SkillNameRenamePsiElementProcessor` for scalar→directory rename forwarding
 - [x] `SkillMdPsiUtil` extraction of shared PSI helpers
 - [x] Real fixture tests with `mcp-sdk` skill samples
 - [x] Remove old `psi.referenceContributor` (forward PsiReference) from plugin.xml
