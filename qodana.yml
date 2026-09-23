@@ -16,6 +16,10 @@ profile:
         # produce qodana.sanity.results entries outside pr-mode.
 plugins:
   - id: DevKit
+  # QDJVM Community does not load these by default, so PluginXmlValidity cannot
+  # resolve language="Markdown"/"yaml" in plugin.xml (Radmir Baembitov).
+  - id: org.intellij.plugins.markdown
+  - id: org.jetbrains.plugins.yaml
 exclude:
   - name: All
     paths:
