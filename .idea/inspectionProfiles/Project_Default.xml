@@ -68,6 +68,7 @@
           <option value="java.nio.ByteBuffer.getShort" />
           <option value="com.intellij.openapi.editor.Document.setText" />
           <option value="com.intellij.openapi.ide.CopyPasteManager.setContents" />
+          <option value="org.jetbrains.yaml.psi.YAMLKeyValue.setValue" />
         </list>
       </option>
     </inspection_tool>
