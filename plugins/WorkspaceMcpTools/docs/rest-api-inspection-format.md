@@ -22,9 +22,9 @@ truncated: false
 timedOut: false
 ---
 ## Problems
-| severity | file | line | inspection | message | fixes |
-| --- | --- | ---: | --- | --- | --- |
-| ERROR | src/Broken.xml | 1 | SyntaxError | Element root is not closed |  |
+| severity | file           | line | inspection  | message                    | fixes |
+|----------|----------------|-----:|-------------|----------------------------|-------|
+| ERROR    | src/Broken.xml |    1 | SyntaxError | Element root is not closed |       |
 ```
 
 Supported filters:

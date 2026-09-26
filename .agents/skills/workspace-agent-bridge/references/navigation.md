@@ -26,11 +26,11 @@ when the exact hunk format is unknown or a request fails because of formatting.
 @@ hunk
 ```
 
-| Prefix | Action | Result |
-|--------|--------|--------|
-| `*** Goto:` | Go to declaration/definition | Single target `{fileUrl, encodedFileUrl, lineNumber, column}` |
-| `*** Usages:` | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag |
-| `*** Documentation:` | Read element documentation | Element name + documentation text |
+| Prefix               | Action                                           | Result                                                        |
+|----------------------|--------------------------------------------------|---------------------------------------------------------------|
+| `*** Goto:`          | Go to declaration/definition                     | Single target `{fileUrl, encodedFileUrl, lineNumber, column}` |
+| `*** Usages:`        | Find usages/implementations/overrides/inheritors | Multiple targets with `truncated` flag                        |
+| `*** Documentation:` | Read element documentation                       | Element name + documentation text                             |
 
 ## Example
 

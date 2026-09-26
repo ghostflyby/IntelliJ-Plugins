@@ -100,17 +100,17 @@ curl -i "$BASE/projects/$PROJECT_KEY/roots/$ROOT_ID"
 Example project list body:
 
 ```markdown
-| projectKey | name | basePath |
-| --- | --- | --- |
+| projectKey       | name             | basePath                                       |
+|------------------|------------------|------------------------------------------------|
 | intellij-plugins | IntelliJ-Plugins | /Users/ghostflyby/repos/learn/IntelliJ-Plugins |
 ```
 
 Example roots body:
 
 ```markdown
-| id | displayName | kind | readable | writable | url |
-| --- | --- | --- | --- | --- | --- |
-| workspace-intellij-plugins | /Users/ghostflyby/repos/learn/IntelliJ-Plugins | workspace | true | true | file:///Users/ghostflyby/repos/learn/IntelliJ-Plugins |
+| id                         | displayName                                    | kind      | readable | writable | url                                                   |
+|----------------------------|------------------------------------------------|-----------|----------|----------|-------------------------------------------------------|
+| workspace-intellij-plugins | /Users/ghostflyby/repos/learn/IntelliJ-Plugins | workspace | true     | true     | file:///Users/ghostflyby/repos/learn/IntelliJ-Plugins |
 ```
 
 ## Error Handling

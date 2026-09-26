@@ -66,11 +66,11 @@ matching. It returns files only; directories are omitted.
 
 ## File Query Parameters
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `query` | string | required | File name pattern. |
-| `limit` | integer | `50` | Maximum files to return, capped at `200`. |
-| `timeoutMillis` | integer | `20000` | Search timeout in milliseconds. |
+| Param           | Type    | Default  | Description                               |
+|-----------------|---------|----------|-------------------------------------------|
+| `query`         | string  | required | File name pattern.                        |
+| `limit`         | integer | `50`     | Maximum files to return, capped at `200`. |
+| `timeoutMillis` | integer | `20000`  | Search timeout in milliseconds.           |
 
 Examples:
 
@@ -95,9 +95,9 @@ truncated: false
 timedOut: false
 ---
 ## Files
-| name | path | encodedFileUrl | fileType | score |
-| --- | --- | --- | --- | ---: |
-| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | Kotlin | 0 |
+| name                  | path                                                          | encodedFileUrl | fileType | score |
+|-----------------------|---------------------------------------------------------------|----------------|----------|------:|
+| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
 ```
 
 Structured file search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
@@ -115,13 +115,13 @@ Symbol search uses the current session project and IntelliJ symbol indexes. It d
 
 ## Symbol Query Parameters
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `query` | string | required | Symbol name pattern. |
-| `libraries` | boolean | `false` | Include project libraries and dependency symbols. |
-| `kind` | string | none | Optional returned-kind filter: `class`, `method`, `field`, `symbol`, or `unknown`. |
-| `limit` | integer | `50` | Maximum symbols to return, capped at `200`. |
-| `timeoutMillis` | integer | `20000` | Search timeout in milliseconds. |
+| Param           | Type    | Default  | Description                                                                        |
+|-----------------|---------|----------|------------------------------------------------------------------------------------|
+| `query`         | string  | required | Symbol name pattern.                                                               |
+| `libraries`     | boolean | `false`  | Include project libraries and dependency symbols.                                  |
+| `kind`          | string  | none     | Optional returned-kind filter: `class`, `method`, `field`, `symbol`, or `unknown`. |
+| `limit`         | integer | `50`     | Maximum symbols to return, capped at `200`.                                        |
+| `timeoutMillis` | integer | `20000`  | Search timeout in milliseconds.                                                    |
 
 Examples:
 
@@ -146,9 +146,9 @@ truncated: false
 timedOut: false
 ---
 ## Symbols
-| name | kind | path | encodedFileUrl | line | qualifiedName |
-| --- | --- | --- | --- | ---: | --- |
-| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |  | 43 | dev.ghostflyby.mcp.rest.RestSessionService |
+| name               | kind   | path                                                                                    | encodedFileUrl | line | qualifiedName                              |
+|--------------------|--------|-----------------------------------------------------------------------------------------|----------------|-----:|--------------------------------------------|
+| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 
 Structured symbol search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
