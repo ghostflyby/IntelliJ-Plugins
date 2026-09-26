@@ -134,6 +134,11 @@ jobs:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
           args: ${{ steps.qodana-baseline.outputs.args }}
+          # The report artifact carries the analysis-environment forensics (logs,
+          # effective profile, per-inspection coverage, scoped-flow snapshots) that
+          # neither code scanning nor Qodana Cloud keeps; the 2026-09 stale-cache
+          # investigation leaned on it five times. Small and expires — always on.
+          upload-result: true
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
