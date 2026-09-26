@@ -62,11 +62,29 @@ jobs:
           key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
           restore-keys: |
             ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
-      # Cold-cache experiment (JetBrains support request): the Qodana native cache
-      # restore/save steps are removed on this branch and --clear-cache is passed to
-      # the analysis below, so Qodana rebuilds its cache from scratch and we can check
-      # whether the GradleTypesafeConventions XmlHighlighting problems survive a cold,
-      # full (pr-mode off), baseline-free run that exposes every reported problem.
+      - name: Compute Qodana Cache Layout
+        id: qodana-cache-layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          fingerprint="$(printf '%s\0%s' "$HOME" "$GITHUB_WORKSPACE" | sha256sum | cut -d ' ' -f 1)"
+          printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
+      # Cache lineage is pinned to (IDE set, Gradle build files, ref). The Gradle hash
+      # moves the key whenever build logic or dependencies change, and the restore-keys
+      # prefix stays on github.ref so a PR can never restore the cache built on main —
+      # with the old refs/heads/main fallback a PR that added a plugin analysed a stale
+      # project, which is where the Kotlin EP XmlHighlighting false positives came from
+      # (JetBrains support, 2026-09). PR refs never save caches, so the prefix can only
+      # ever hit a cache saved by the same ref.
+      - name: Restore Qodana Cache
+        id: restore-qodana-cache
+        if: ${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}-${{ github.ref }}-
       # The baseline is the accepted problem set of the default branch, so only healthy
       # main runs write it back (see "Save Qodana baseline" below); every other run
       # restores it and passes it to Qodana, which is what makes the health check count
@@ -115,15 +133,7 @@ jobs:
         with:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
-          # Run 35611900107 (scoped PR mode) only analysed the diff scope and merged
-          # the baseline SARIF into its results, so it could not answer whether a cold
-          # full analysis reports the XmlHighlighting problems. Full scope, no baseline.
-          pr-mode: false
-          # Baseline deliberately omitted: with it every result is labelled `unchanged`
-          # and both the SARIF and the report UI show an empty problem list; without it
-          # every problem the cold analysis finds is exposed.
-          args: --clear-cache --log-level debug
-          upload-result: true
+          args: ${{ steps.qodana-baseline.outputs.args }}
         env:
           QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
           QODANA_ENDPOINT: 'https://qodana.cloud'
@@ -296,3 +306,20 @@ jobs:
         with:
           path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
           key: ${{ steps.intellij-platform-ides.outputs.key }}
+      - name: Compute Qodana Cache Key
+        id: qodana-cache-key
+        shell: bash
+        env:
+          IDE_CACHE_KEY: ${{ steps.intellij-platform-ides.outputs.key }}
+          LAYOUT_FINGERPRINT: ${{ steps.qodana-cache-layout.outputs.fingerprint }}
+          GRADLE_HASH: ${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}
+        run: |
+          set -euo pipefail
+          key="qodana-native-v4-2026.2-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-${GRADLE_HASH}-refs/heads/main-${GITHUB_SHA}"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Save Qodana Cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.qodana-cache-key.outputs.key != steps.restore-qodana-cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: ${{ steps.qodana-cache-key.outputs.key }}
