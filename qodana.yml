@@ -11,9 +11,6 @@ profile:
     - group: ALL
       ignore:
         - "scope#$gitignore"
-        # scope#$spi (META-INF/services) temporarily removed on this diagnostic branch:
-        # re-expose the SPI annotator false positives to check whether they also
-        # produce qodana.sanity.results entries outside pr-mode.
 plugins:
   - id: DevKit
   # QDJVM Community does not load these by default, so PluginXmlValidity cannot
