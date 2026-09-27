@@ -36,7 +36,7 @@ jobs:
         # Build outputs plus full-repo verification fill most of the runner disk
         # (ENOSPC seen in run 34758371488). Mirror the releaseDraft job.
         if: ${{ matrix.primary }}
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           large-packages: false
@@ -288,7 +288,7 @@ jobs:
       contents: write
     steps:
       - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           large-packages: false
