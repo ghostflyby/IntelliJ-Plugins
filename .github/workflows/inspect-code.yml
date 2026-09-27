@@ -68,7 +68,14 @@ jobs:
         run: |
           set -euo pipefail
           fingerprint="$(printf '%s\0%s' "$HOME" "$GITHUB_WORKSPACE" | sha256sum | cut -d ' ' -f 1)"
+          # Hash only VCS-tracked Gradle build files, evaluated once here before any
+          # build runs. hashFiles('**/*.gradle.kts', …) also matched build-generated
+          # files (the Kotlin-DSL extracted plugin blocks under buildSrc/build/), so
+          # its save-time re-evaluation produced a different value than the next run's
+          # fresh-checkout one and the cache could never warm-hit.
+          gradle_hash="$(git ls-files -z '*.gradle.kts' 'gradle/libs.versions.toml' | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d ' ' -f 1)"
           printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
+          printf 'gradle-hash=%s\n' "$gradle_hash" >> "$GITHUB_OUTPUT"
       # Cache lineage is pinned to (IDE set, Gradle build files, ref). The Gradle hash
       # moves the key whenever build logic or dependencies change, and the restore-keys
       # prefix stays on github.ref so a PR can never restore the cache built on main —
@@ -82,9 +89,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/qodana/caches
-          key: qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}-${{ github.ref }}-${{ github.sha }}
+          key: qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
-            qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}-${{ github.ref }}-
+            qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-
       # The baseline is the accepted problem set of the default branch, so only healthy
       # main runs write it back (see "Save Qodana baseline" below); every other run
       # restores it and passes it to Qodana, which is what makes the health check count
@@ -317,7 +324,7 @@ jobs:
         env:
           IDE_CACHE_KEY: ${{ steps.intellij-platform-ides.outputs.key }}
           LAYOUT_FINGERPRINT: ${{ steps.qodana-cache-layout.outputs.fingerprint }}
-          GRADLE_HASH: ${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}
+          GRADLE_HASH: ${{ steps.qodana-cache-layout.outputs.gradle-hash }}
         run: |
           set -euo pipefail
           key="qodana-native-v4-2026.2-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-${GRADLE_HASH}-refs/heads/main-${GITHUB_SHA}"
