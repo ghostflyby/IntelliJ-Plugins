@@ -48,7 +48,7 @@ truncated: false
 hitCount: 1
 ---
 ## Hits
-plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/FileRoutes.kt:73:14
+plugins/WorkspaceMcpTools/backend/src/main/kotlin/dev/ghostflyby/mcp/rest/FileRoutes.kt:73:14
   get<Api.FilesEntry.File> { resource ->
   match: Api.FilesEntry.File
   occurrenceId: 7f3a0d8c21a4b912
@@ -97,7 +97,7 @@ timedOut: false
 ## Files
 | name                  | path                                                          | encodedFileUrl | fileType | score |
 |-----------------------|---------------------------------------------------------------|----------------|----------|------:|
-| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
+| RestSessionService.kt | backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
 ```
 
 Structured file search items include both raw `fileUrl` and route-ready `encodedFileUrl`.
@@ -148,7 +148,7 @@ timedOut: false
 ## Symbols
 | name               | kind   | path                                                                                    | encodedFileUrl | line | qualifiedName                              |
 |--------------------|--------|-----------------------------------------------------------------------------------------|----------------|-----:|--------------------------------------------|
-| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
+| RestSessionService | symbol | plugins/WorkspaceMcpTools/backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 
 Structured symbol search items include both raw `fileUrl` and route-ready `encodedFileUrl`.

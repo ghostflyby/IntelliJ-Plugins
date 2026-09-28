@@ -51,7 +51,7 @@ timedOut: false
 ## Symbols
 | name               | kind   | path                                                                                    | encodedFileUrl | line | qualifiedName                              |
 |--------------------|--------|-----------------------------------------------------------------------------------------|----------------|-----:|--------------------------------------------|
-| RestSessionService | symbol | plugins/WorkspaceMcpTools/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
+| RestSessionService | symbol | plugins/WorkspaceMcpTools/backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 
 Structured responses contain the same route-local DTO fields: `name`,
