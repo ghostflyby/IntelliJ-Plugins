@@ -29,6 +29,9 @@ kotlin {
 }
 
 tasks {
+    test {
+        systemProperty("java.awt.headless", true)
+    }
     withType<Test> {
         testLogging {
             exceptionFormat = TestExceptionFormat.FULL
