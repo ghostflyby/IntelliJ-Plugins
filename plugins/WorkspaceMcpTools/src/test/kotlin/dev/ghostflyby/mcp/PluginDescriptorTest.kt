@@ -8,23 +8,36 @@ package dev.ghostflyby.mcp
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.Collections
 
 internal class PluginDescriptorTest {
 
     @Test
-    fun `root descriptor declares the split content modules`() {
+    fun `root descriptor declares product modules and the split content modules`() {
         val descriptor = rootPluginDescriptor()
-        val modules = Regex("""<module name="([^"]+)""").findAll(descriptor).map { it.groupValues[1] }.toList()
+        val contentStart = descriptor.indexOf("<content>")
+        val contentEnd = descriptor.indexOf("</content>")
+        check(contentStart >= 0 && contentEnd > contentStart) { "root descriptor must declare a content block" }
+        val contentModules = Regex("""<module name="([^"]+)"""")
+            .findAll(descriptor.substring(contentStart, contentEnd))
+            .map { it.groupValues[1] }
+            .toList()
         assertEquals(
             listOf(
                 "dev.ghostflyby.mcp.workspace.shared",
                 "dev.ghostflyby.mcp.workspace.frontend",
                 "dev.ghostflyby.mcp.workspace.backend",
             ),
-            modules,
+            contentModules,
             "the root descriptor must declare the shared/frontend/backend content modules",
+        )
+        // patchPluginXml reformats the processed descriptor, so assert without the closing tag.
+        assertTrue(
+            "<module name=\"com.intellij.modules.platform\"" in descriptor &&
+                    "<module name=\"com.intellij.modules.lang\"" in descriptor,
+            "product-module compatibility markers belong in the root dependencies",
         )
     }
 

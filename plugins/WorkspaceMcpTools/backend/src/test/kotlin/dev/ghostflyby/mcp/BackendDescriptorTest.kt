@@ -23,6 +23,10 @@ internal class BackendDescriptorTest {
             "<module name=\"intellij.platform.backend\"/>" in descriptor,
             "the backend module must require intellij.platform.backend so split-mode frontends skip it",
         )
+        assertFalse(
+            "com.intellij.modules.lang" in descriptor,
+            "product-module markers live in the root descriptor dependencies",
+        )
         assertTrue("dev.ghostflyby.mcp.WorkspaceMcpStartupActivity" in descriptor)
         assertFalse(
             "notificationGroup" in descriptor,

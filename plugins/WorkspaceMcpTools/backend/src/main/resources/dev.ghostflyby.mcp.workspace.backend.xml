@@ -6,7 +6,6 @@
     <dependencies>
         <module name="intellij.platform.backend"/>
         <module name="intellij.platform.vcs.impl"/>
-        <module name="com.intellij.modules.lang"/>
         <module name="dev.ghostflyby.mcp.workspace.shared"/>
     </dependencies>
 
