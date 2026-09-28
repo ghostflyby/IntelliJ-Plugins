@@ -13,10 +13,14 @@ import io.ktor.http.content.*
 import io.ktor.serialization.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.request.contentCharset
+import io.ktor.server.request.receiveChannel
 import io.ktor.util.reflect.*
 import io.ktor.utils.io.*
 import io.ktor.utils.io.charsets.*
+import io.ktor.utils.io.core.readText
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import kotlin.reflect.KClass
@@ -24,6 +28,22 @@ import kotlin.reflect.KClass
 internal val MarkdownContentType: ContentType = ContentType("text", "markdown").withCharset(Charsets.UTF_8)
 internal val XMarkdownContentType: ContentType = ContentType("text", "x-markdown").withCharset(Charsets.UTF_8)
 private val PlainTextContentType: ContentType = ContentType.Text.Plain.withCharset(Charsets.UTF_8)
+
+/**
+ * Local replacement for [io.ktor.server.request.receiveText]: that Ktor function is public inline
+ * and its body compiles a call to the deprecated `HttpHeaders.getContentType` getter into every
+ * caller, which the plugin verifier attributes to this plugin and fails the build on
+ * ([DEPRECATED_API_USAGES], Ktor 3.4 `HttpHeaders` const migration). Reading the channel directly
+ * keeps the deprecated symbol out of our bytecode. The literal in the error message mirrors the
+ * upstream text without referencing the deprecated constant.
+ */
+internal suspend fun ApplicationCall.receiveBodyText(): String {
+    return try {
+        receiveChannel().readRemaining().readText(request.contentCharset() ?: Charsets.UTF_8)
+    } catch (cause: BadContentTypeFormatException) {
+        throw BadRequestException("Illegal Content-Type format: ${request.headers["Content-Type"]}", cause)
+    }
+}
 
 internal val RestJson: Json = Json {
     ignoreUnknownKeys = true

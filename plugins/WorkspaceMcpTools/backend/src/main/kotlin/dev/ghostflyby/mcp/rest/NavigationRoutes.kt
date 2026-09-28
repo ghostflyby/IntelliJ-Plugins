@@ -160,7 +160,7 @@ private suspend fun handleNavigation(
     file: VirtualFile,
     filePath: String,
 ) {
-    val body = call.receiveText()
+    val body = call.receiveBodyText()
     val sections = splitNavigationSections(body)
     if (sections.isEmpty()) {
         call.respond(HttpStatusCode.BadRequest, RestError("No valid navigation sections"))

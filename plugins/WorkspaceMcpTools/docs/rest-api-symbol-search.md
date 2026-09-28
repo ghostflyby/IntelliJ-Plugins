@@ -49,8 +49,8 @@ truncated: false
 timedOut: false
 ---
 ## Symbols
-| name               | kind   | path                                                                                    | encodedFileUrl | line | qualifiedName                              |
-|--------------------|--------|-----------------------------------------------------------------------------------------|----------------|-----:|--------------------------------------------|
+| name               | kind   | path                                                                                            | encodedFileUrl | line | qualifiedName                              |
+|--------------------|--------|-------------------------------------------------------------------------------------------------|----------------|-----:|--------------------------------------------|
 | RestSessionService | symbol | plugins/WorkspaceMcpTools/backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                |   43 | dev.ghostflyby.mcp.rest.RestSessionService |
 ```
 

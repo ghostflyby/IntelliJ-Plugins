@@ -8,11 +8,11 @@ Supersedes: the classic single-descriptor layout described in `WorkspaceMcpTools
 
 The plugin is now a modular (Plugin Model v2) plugin with three content modules loaded per process side:
 
-| Module | Gradle project | Loads in | Content |
-|---|---|---|---|
-| `dev.ghostflyby.mcp.workspace.shared` | `shared` | monolith + backend + frontend | `message()` bundle, `pluginVersion`, `runsOnIdeBackendSide()` |
-| `dev.ghostflyby.mcp.workspace.frontend` | `frontend` | monolith + frontend | skill notification activity, notification group, notify-once settings |
-| `dev.ghostflyby.mcp.workspace.backend` | `backend` | monolith + backend | REST server, all routes, project resolver, startup activity |
+| Module                                  | Gradle project | Loads in                      | Content                                                               |
+|-----------------------------------------|----------------|-------------------------------|-----------------------------------------------------------------------|
+| `dev.ghostflyby.mcp.workspace.shared`   | `shared`       | monolith + backend + frontend | `message()` bundle, `pluginVersion`, `runsOnIdeBackendSide()`         |
+| `dev.ghostflyby.mcp.workspace.frontend` | `frontend`     | monolith + frontend           | skill notification activity, notification group, notify-once settings |
+| `dev.ghostflyby.mcp.workspace.backend`  | `backend`      | monolith + backend            | REST server, all routes, project resolver, startup activity           |
 
 - Root `plugin.xml` declares only metadata plus `<content>`; extensions moved into the module
   descriptors at `src/main/resources/<module-id>.xml` of each subproject (registered via

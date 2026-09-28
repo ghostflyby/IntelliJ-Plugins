@@ -101,7 +101,7 @@ internal fun Route.inspectionRoutes() {
     post<Api.InspectionsEntry.Path> { resource ->
         val target = call.resolveFileRouteTarget(resource.path.toRoutePath())
             ?: return@post
-        val body = call.receiveText()
+        val body = call.receiveBodyText()
         respondInspectionRequest(
             call = call,
             target = target,

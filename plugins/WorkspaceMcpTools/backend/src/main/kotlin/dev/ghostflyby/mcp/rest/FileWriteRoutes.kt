@@ -143,7 +143,7 @@ private suspend fun projectExec(
     op: suspend (ProjectFileAccess, Project, String, Boolean) -> WriteResult,
 ) {
     val access = resolveProjectFileAccess(target.project, target.root, target.relativePath)
-    val body = call.receiveText()
+    val body = call.receiveBodyText()
     respondResult(call, op(access, target.project, body, force), force)
 }
 

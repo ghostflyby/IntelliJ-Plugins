@@ -185,7 +185,7 @@ internal suspend fun handleSessionPatch(
     }
     val targetFile = access.file
     val isDir = targetFile?.isDirectory == true
-    val body = call.receiveText()
+    val body = call.receiveBodyText()
     when (val format = detectFormat(body, call.request.contentType())) {
         is PatchFormat.Unknown -> call.respond(
             HttpStatusCode.BadRequest,
