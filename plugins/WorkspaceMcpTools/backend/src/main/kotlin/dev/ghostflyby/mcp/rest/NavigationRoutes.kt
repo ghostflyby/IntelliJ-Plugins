@@ -26,7 +26,6 @@ import dev.ghostflyby.mcp.filecontent.getOrCreateDocument
 import dev.ghostflyby.mcp.filecontent.resolveProjectFileAccess
 import dev.ghostflyby.mcp.rest.markdown.TextBody
 import io.ktor.http.*
-import io.ktor.server.request.*
 import io.ktor.server.resources.post
 import io.ktor.server.response.*
 import io.ktor.server.routing.*

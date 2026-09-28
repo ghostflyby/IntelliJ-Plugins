@@ -32,10 +32,10 @@ private val PlainTextContentType: ContentType = ContentType.Text.Plain.withChars
 /**
  * Local replacement for [io.ktor.server.request.receiveText]: that Ktor function is public inline
  * and its body compiles a call to the deprecated `HttpHeaders.getContentType` getter into every
- * caller, which the plugin verifier attributes to this plugin and fails the build on
- * ([DEPRECATED_API_USAGES], Ktor 3.4 `HttpHeaders` const migration). Reading the channel directly
- * keeps the deprecated symbol out of our bytecode. The literal in the error message mirrors the
- * upstream text without referencing the deprecated constant.
+ * caller, which the plugin verifier attributes to this plugin and fails the build on (the
+ * DEPRECATED_API_USAGES failure level, Ktor 3.4 `HttpHeaders` const migration). Reading the channel
+ * directly keeps the deprecated symbol out of our bytecode. The literal in the error message mirrors
+ * the upstream text without referencing the deprecated constant.
  */
 internal suspend fun ApplicationCall.receiveBodyText(): String {
     return try {
