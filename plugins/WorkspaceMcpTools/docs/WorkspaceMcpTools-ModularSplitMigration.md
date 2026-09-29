@@ -14,13 +14,13 @@ The plugin is now a modular (Plugin Model v2) plugin with three content modules 
 | `dev.ghostflyby.mcp.workspace.frontend` | `frontend`     | monolith + frontend           | skill notification activity, notification group, notify-once settings |
 | `dev.ghostflyby.mcp.workspace.backend`  | `backend`      | monolith + backend            | REST server, all routes, project resolver, startup activity           |
 
-- Root `plugin.xml` declares metadata, the product-module compatibility markers
-  (`com.intellij.modules.platform`/`lang`, per v2 convention — product modules have no descriptor
-  files), and the `<content>` modules; extensions moved into the module descriptors at
-  `src/main/resources/<module-id>.xml` of each subproject (registered via `projects.txt`,
-  convention `repo.intellij-module`, packaged with IJPG `pluginModule`).
+- Root `plugin.xml` declares only metadata plus the `<content>` modules (the official modular
+  template declares no product-module dependencies at the root); extensions moved into the module
+  descriptors at `src/main/resources/<module-id>.xml` of each subproject (registered via
+  `projects.txt`, convention `repo.intellij-module`, packaged with IJPG `pluginModule`).
 - The backend module requires `intellij.platform.backend` (plus `intellij.platform.vcs.impl` for
-  `GenericPatchApplier`); the frontend module requires `intellij.platform.frontend`. Monolith
+  `GenericPatchApplier`) and is pinned with `required-if-available="intellij.platform.backend"` in
+  the root content entry; the frontend module requires `intellij.platform.frontend`. Monolith
   behavior is unchanged; in split mode the REST server runs
   only in the backend and the skill notification renders in the frontend, where Copy/Reveal act on
   the frontend machine's own plugin sandbox copy of `agent-skills/`.

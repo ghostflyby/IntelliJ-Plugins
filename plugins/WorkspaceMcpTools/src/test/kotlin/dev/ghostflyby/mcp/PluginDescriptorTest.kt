@@ -6,20 +6,18 @@
 
 package dev.ghostflyby.mcp
 
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
-import java.util.Collections
+import java.util.*
 
 internal class PluginDescriptorTest {
 
     @Test
-    fun `root descriptor declares product modules and the split content modules`() {
+    fun `root descriptor declares the split content modules`() {
         val descriptor = rootPluginDescriptor()
         val contentStart = descriptor.indexOf("<content>")
         val contentEnd = descriptor.indexOf("</content>")
-        check(contentStart >= 0 && contentEnd > contentStart) { "root descriptor must declare a content block" }
+        check(contentStart in 0..<contentEnd) { "root descriptor must declare a content block" }
         val contentModules = Regex("""<module name="([^"]+)"""")
             .findAll(descriptor.substring(contentStart, contentEnd))
             .map { it.groupValues[1] }
@@ -33,11 +31,11 @@ internal class PluginDescriptorTest {
             contentModules,
             "the root descriptor must declare the shared/frontend/backend content modules",
         )
-        // patchPluginXml reformats the processed descriptor, so assert without the closing tag.
+        val backendModule = Regex("""<module name="dev\.ghostflyby\.mcp\.workspace\.backend"[^>]*/>""")
+            .find(descriptor)?.value.orEmpty()
         assertTrue(
-            "<module name=\"com.intellij.modules.platform\"" in descriptor &&
-                    "<module name=\"com.intellij.modules.lang\"" in descriptor,
-            "product-module compatibility markers belong in the root dependencies",
+            """required-if-available="intellij.platform.backend"""" in backendModule,
+            "the backend module must be required wherever the platform provides intellij.platform.backend",
         )
     }
 
