@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Split-mode and remote-development support: the REST server now runs only in the IDE backend, and the agent-skill
+  notification renders in the frontend (JetBrains Client) with copy/reveal actions pointing at the local machine's
+  bundled skill folder.
+- In remote development, agents must run on the backend host or forward the backend port manually (Backend Control
+  Center → Ports); there is no programmatic port-forwarding API.
+
 ## [2.0.2] - 2026-07-26
 
 ### Fixed

@@ -17,6 +17,9 @@ BASE=http://127.0.0.1:63441/api/v1
 
 Default port is 63441. If already in use, the server scans upward and uses the first available port.
 
+The server runs only in the IDE backend process. In a monolithic IDE that is the IDE itself; in remote development it
+binds on the backend host, so the agent must run on that host or reach the port through a tunnel.
+
 ## Core Contract
 
 - Create a session before file operations with `POST /sessions` and a `pathPrefix`, then send

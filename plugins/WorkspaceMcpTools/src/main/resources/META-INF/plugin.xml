@@ -7,17 +7,10 @@
     <name>Workspace Agent Bridge</name>
     <vendor>ghostflyby</vendor>
 
-    <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.lang</depends>
-    <depends>com.intellij.modules.vcs</depends>
-
-    <extensions defaultExtensionNs="com.intellij">
-        <notificationGroup id="Workspace Agent Bridge"
-                           displayType="BALLOON"
-                           bundle="messages.Bundle"
-                           key="sdk.notification.group.name"/>
-        <postStartupActivity implementation="dev.ghostflyby.mcp.WorkspaceMcpStartupActivity"/>
-        <postStartupActivity implementation="dev.ghostflyby.mcp.sdk.SkillNotificationActivity"/>
-    </extensions>
+    <content>
+        <module name="dev.ghostflyby.mcp.workspace.shared" loading="required"/>
+        <module name="dev.ghostflyby.mcp.workspace.frontend"/>
+        <module name="dev.ghostflyby.mcp.workspace.backend" required-if-available="intellij.platform.backend"/>
+    </content>
 
 </idea-plugin>
