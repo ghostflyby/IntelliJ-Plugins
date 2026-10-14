@@ -18,7 +18,11 @@ dependencies {
     intellijPlatform {
         pluginModule(implementation(project(":plugins:WorkspaceMcpTools:shared")))
         pluginModule(implementation(project(":plugins:WorkspaceMcpTools:frontend")))
-        pluginModule(implementation(project(":plugins:WorkspaceMcpTools:backend")))
+        // The backend module's classes are composed into the main plugin jar (embedded content
+        // module) so its classloader is the main one, which also sees lib/*.jar — the documented
+        // plugin-with-dependencies model. A separate content-module classloader only sees its own
+        // lib/modules/<module-id>.jar, where our ktor jars do not live.
+        pluginComposedModule(implementation(project(":plugins:WorkspaceMcpTools:backend")))
         testFramework(TestFrameworkType.JUnit5)
     }
 
@@ -34,6 +38,12 @@ intellijPlatform {
 }
 
 tasks.withType<PrepareSandboxTask>().configureEach {
+    // The backend module composes its full runtime classpath (ktor family, snakeyaml, config,
+    // jansi) into the main plugin jar; the lib/ copies collected from the root runtime classpath
+    // are duplicates on the same classloader and pure dead weight.
+    exclude { element ->
+        element.name.matches(Regex("(ktor|snakeyaml|config|jansi)-.*\\.jar"))
+    }
     from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-agent-bridge")) {
         into(pluginName.map { "$it/agent-skills/workspace-agent-bridge" })
     }
