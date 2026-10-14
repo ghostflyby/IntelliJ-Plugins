@@ -26,8 +26,6 @@ dependencies {
         testFramework(TestFrameworkType.JUnit5)
     }
 
-    // BundledSkillPathTest resolves the bundled skill path through the frontend module classes.
-    testImplementation(project(":plugins:WorkspaceMcpTools:frontend"))
 }
 
 intellijPlatform {
