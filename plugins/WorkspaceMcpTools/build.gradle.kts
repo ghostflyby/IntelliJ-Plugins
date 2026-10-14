@@ -36,12 +36,6 @@ intellijPlatform {
 }
 
 tasks.withType<PrepareSandboxTask>().configureEach {
-    // The backend module composes its full runtime classpath (ktor family, snakeyaml, config,
-    // jansi) into the main plugin jar; the lib/ copies collected from the root runtime classpath
-    // are duplicates on the same classloader and pure dead weight.
-    exclude { element ->
-        element.name.matches(Regex("(ktor|snakeyaml|config|jansi)-.*\\.jar"))
-    }
     from(rootProject.layout.projectDirectory.dir(".agents/skills/workspace-agent-bridge")) {
         into(pluginName.map { "$it/agent-skills/workspace-agent-bridge" })
     }
