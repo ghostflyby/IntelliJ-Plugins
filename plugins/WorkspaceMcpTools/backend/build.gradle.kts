@@ -30,4 +30,14 @@ dependencies {
     implementation(libs.snakeyaml)
 
     testImplementation(libs.ktor.server.test.host)
+
+    // ktor-server-test-host 3.6.0 pulls kotlinx-coroutines-test 1.11.0, whose API calls are not
+    // satisfied by the JetBrains-patched coroutines jar the test framework injects (fork of
+    // 1.10.x without runBlockingK$default) — pin the test coroutines back to the fork's baseline.
+    configurations.all {
+        resolutionStrategy.force(
+            "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2",
+            "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2",
+        )
+    }
 }
