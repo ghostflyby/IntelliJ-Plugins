@@ -1,20 +1,20 @@
-# Skill Name Inline Rename
+# Skill Name Rename
 
 ## Architecture
 
-The skill name rename system has three entry points, all converging on the same inline rename:
+The skill name rename system has three entry points, all converging on refactoring-aware rename paths:
 
-1. **Rename shortcut** (Shift+F6) -> `SkillNameRenameHandler` -> `performSkillNameInlineRename()`
-2. **Inspection manual fix** -> `ManualRenameQuickFix` -> `performSkillNameInlineRename()`
+1. **Name scalar rename** -> `SkillNameDeclarationProvider` exposes an `AgentSkillSymbol`
+2. **Inspection directory fixes** -> `renameSkillDirectory()` -> `RenameProcessor(project, directory, ...)`
 3. **Directory rename** -> `SkillDirRenameSearchExecutor` + `SkillDirectoryNameReference` -> updates YAML name
 
 ### Key components
 
-- `SkillNameInlineElement` - `PsiNamedElement` wrapper for a `YAMLScalar`, provides host-file-relative text range
-- `SkillNameInlineReference` - precise `PsiReference` covering only the scalar value range
-- `SkillNameInlineRenamer` - extends `VariableInplaceRenamer`, handles template building and directory sync
-- `performSkillNameInlineRename()` - shared utility that positions caret and starts inline rename
-- `SkillNameRenamePsiElementProcessor` - converts scalar rename into directory rename
+- `AgentSkillSymbol` - Symbol rename target backed by the skill directory `VirtualFile`
+- `SkillNameRenameUsageSearcher` - bridges Symbol rename into directory-name references and a directory file rename
+- `SkillDirRenameSearchExecutor` - `referencesSearch` bridge for `PsiDirectory` rename
+- `SkillDirectoryNameReference` - precise `PsiReference` covering only the YAML scalar value range
+- `renameSkillDirectory()` - shared helper for quick fixes that must rename the directory through IntelliJ refactoring
 
 ## Inspection Fix Decision System
 
@@ -26,14 +26,15 @@ The skill name rename system has three entry points, all converging on the same 
 
 QuickFix priorities:
 - `TOP` - AutoSetName (change YAML value)
-- `HIGH` - AutoRenameDir (VFS rename directory)
+- `HIGH` - AutoRenameDir (rename the directory through `RenameProcessor`)
 - `NORMAL` - AutoRenameBoth (change both)
-- `LOW` - ManualRename (inline rename)
+- `LOW` - ManualRename (delegate to the platform rename handler)
 
 ## References
 
 - `SkillNameRenameHandler.kt` - rename handler entry point
-- `SkillNameInlineRename.kt` - inline rename infrastructure
+- `SkillNameSymbolRename.kt` - Symbol declaration and rename usage bridge
+- `SkillDirRenameSearchExecutor.kt` - directory-target reference search
 - `SkillNameInspection.kt` - unified inspection with fix decision system
 - `SkillMdPsiUtil.kt` - shared PSI utilities and name analysis
 - `plugin.xml` - extension registrations
