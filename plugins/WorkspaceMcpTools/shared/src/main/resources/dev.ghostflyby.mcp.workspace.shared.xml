@@ -2,7 +2,7 @@
 <!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
-<!-- Shared content module: exists to define the module classloader; product-module compatibility
-     markers are declared in the root descriptor's dependencies. -->
+<!-- Shared content module: exists to define the module classloader. The root descriptor declares
+     no product-module dependencies; each content module's own dependencies block gates its loading. -->
 <idea-plugin>
 </idea-plugin>

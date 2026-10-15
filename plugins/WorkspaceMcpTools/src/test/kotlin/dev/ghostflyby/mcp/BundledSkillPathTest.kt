@@ -14,6 +14,9 @@ import org.junit.jupiter.api.Test
 import java.nio.file.Files
 
 @TestApplication
+// Lives in the root project: the assertion needs the full plugin registered in the test
+// application (META-INF/plugin.xml + the prepareTest sandbox with the agent-skills copy),
+// which only the product project's test run provides.
 class BundledSkillPathTest {
 
     @Test

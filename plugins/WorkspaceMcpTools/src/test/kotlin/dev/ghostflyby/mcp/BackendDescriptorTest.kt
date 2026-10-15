@@ -25,7 +25,7 @@ internal class BackendDescriptorTest {
         )
         assertFalse(
             "com.intellij.modules.lang" in descriptor,
-            "product-module markers live in the root descriptor dependencies",
+            "each content module declares its own runtime-module dependencies",
         )
         assertTrue("dev.ghostflyby.mcp.WorkspaceMcpStartupActivity" in descriptor)
         assertFalse(

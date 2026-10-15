@@ -47,9 +47,12 @@ The plugin is now a modular (Plugin Model v2) plugin with three content modules 
    `<rootProjectName>.<project-path>.jar` (the official template matches its module ids to this by
    having `rootProject.name == "modular.plugin"`), so each subproject overrides the `composedJar`
    archive name with its module id.
-2. Content-module classloaders get the whole plugin `lib/` classpath (ktor/snakeyaml land there
-   and are visible), while classes of *sibling modules* are reachable only through the
-   `<dependencies><module/></dependencies>` declarations, which double as the loading gate.
+2. Content-module classloaders see only their own `lib/modules/<module-id>.jar`, the platform core
+   classpath, and their declared `<dependencies><module/></dependencies>` parents — **never the
+   plugin's `lib/*.jar`** (runtime-proven: `NoClassDefFoundError` on `ContentNegotiationKt` in the
+   first installed build). The platform partially covers Ktor via core-reachable
+   `intellij.libraries.ktor.*` modules (io.ktor 3.4.1), which is why the backend is embedded in the
+   main jar instead.
 3. `GenericPatchApplier` and the rest of `com.intellij.openapi.diff.impl` live in
    `intellij.platform.vcs.impl` — the pre-migration `com.intellij.modules.vcs` dependency was
    load-bearing for PATCH routes, not dead as suspected in the backend-only note.
@@ -64,13 +67,14 @@ The plugin is now a modular (Plugin Model v2) plugin with three content modules 
 
 - All tests green after the split (root 2, frontend 6, backend 165); `@TestApplication`,
   platform fixtures, and the ktor test host work inside `repo.intellij-module` subprojects.
-- Distribution zip layout verified: `lib/modules/{shared,frontend,backend}.jar` plus `lib/`
-  third-party jars and the bundled `agent-skills/` directory.
+- Distribution zip layout verified: backend classes and the full runtime classpath composed into
+  the main jar, `lib/modules/{shared,frontend}.jar`, and the bundled `agent-skills/` directory;
+  `lib/` carries no duplicate third-party jars (excluded in the root `PrepareSandboxTask`).
 - Interactive split-mode verification (backend binds 63441+, notification on the frontend,
-  descriptor loading with the renamed module jars) still needs one `runIdeSplitMode` pass — run
-  the generated `.run/runIdeSplitMode.run.xml`, or `runIdeBackend` + `runIdeFrontend` Gradle tasks
-  in two terminals. The only runtime attempt so far was aborted before the jar-naming fix, so
-  treat this pass as pending.
+  descriptor loading with the renamed module jars) still needs one `runIdeSplitMode` pass — IJPG
+  generates the `.run/runIdeSplitMode.run.xml` configuration (and `runIdeBackend` +
+  `runIdeFrontend` Gradle tasks work in two terminals). The only runtime attempt so far was
+  aborted before the jar-naming fix, so treat this pass as pending.
 
 ## Remote-Development Reachability (unchanged limitation)
 

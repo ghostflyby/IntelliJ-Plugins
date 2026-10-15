@@ -18,7 +18,7 @@ split-mode frontend (JetBrains Client).
 2. Startup activities additionally gate on `IdeProductMode.isFrontend` (2026.1: only `ProductMode.FRONTEND`), so the
    REST server and the skill notification stay backend-side even if the descriptor gate ever changes. The helper is
    `runsOnIdeBackendSide()` in `PluginInfo.kt`.
-3. Regression test `PluginDescriptorTest` pins the descriptor dependency.
+3. Regression test `BackendDescriptorTest` pins the descriptor dependency.
 
 The plugin stays a classic single-descriptor plugin on purpose: the modular plugin model (content modules) is
 Experimental and buys nothing here because there is no frontend half to ship.
