@@ -48,7 +48,7 @@ timedOut: false
 ## Files
 | name                  | path                                                          | encodedFileUrl | fileType | score |
 |-----------------------|---------------------------------------------------------------|----------------|----------|------:|
-| RestSessionService.kt | src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
+| RestSessionService.kt | backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
 ```
 
 Structured responses contain the same route-local DTO fields: `name`, `fileUrl`, `encodedFileUrl`, `filePath`,

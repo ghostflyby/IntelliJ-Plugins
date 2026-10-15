@@ -1,0 +1,4 @@
+public final class dev/ghostflyby/mcp/sdk/SkillNotificationServiceKt {
+	public static final fun bundledSkillPath ()Ljava/nio/file/Path;
+}
+

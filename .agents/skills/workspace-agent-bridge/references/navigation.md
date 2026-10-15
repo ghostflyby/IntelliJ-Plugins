@@ -19,6 +19,11 @@ The body uses the same hunk selection style as the OpenAI Responses API
 `apply_patch` format to select a text target. Load `apply-patch-format.md` only
 when the exact hunk format is unknown or a request fails because of formatting.
 
+The selection offset is the end of the longest common prefix of the `-`/`+`
+lines: place the diff in the middle of the identifier you want resolved
+(`userRepo.XXXXXXXX(request.id)`), never at line end — an end-of-line diff
+leaves the cursor on punctuation and Goto/Usages fall back to the whole file.
+
 ## Operations
 
 ```text
