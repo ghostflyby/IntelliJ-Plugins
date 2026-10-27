@@ -46,7 +46,6 @@ truncated: false
 timedOut: false
 ---
 ## Files
-
 | name                  | path                                                                  | encodedFileUrl | fileType | score |
 |-----------------------|-----------------------------------------------------------------------|----------------|----------|------:|
 | RestSessionService.kt | backend/src/main/kotlin/dev/ghostflyby/mcp/rest/RestSessionService.kt |                | Kotlin   |     0 |
