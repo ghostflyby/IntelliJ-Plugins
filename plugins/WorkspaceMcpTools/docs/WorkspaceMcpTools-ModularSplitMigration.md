@@ -15,12 +15,13 @@ The plugin is now a modular (Plugin Model v2) plugin with three content modules 
 | `dev.ghostflyby.mcp.workspace.backend`  | `backend`      | monolith + backend            | REST server, all routes, project resolver, startup activity           |
 
 - Root `plugin.xml` declares only metadata plus the `<content>` modules (the official modular
-  template declares no product-module dependencies at the root); the frontend/shared module
-  descriptors live at `<subproject>/src/main/resources/<module-id>.xml` (registered via
-  `projects.txt`, convention `repo.intellij-module`, packaged with IJPG `pluginModule`).
+  template declares no product-module dependencies at the root); every content-module descriptor
+  lives at `<subproject>/src/main/resources/<module-id>.xml` (registered via `projects.txt`,
+  convention `repo.intellij-module`, packaged with IJPG `pluginModule`).
 - The **backend** is an `loading="embedded"` content module whose classes are composed into the
-  main plugin jar (`pluginComposedModule`) and whose descriptor lives in the root resources, so it
-  runs on the MAIN plugin classloader — the documented "plugin with dependencies" model where all
+  main plugin jar (`pluginComposedModule`) and whose descriptor ships in the backend subproject's
+  own resources (`backend/src/main/resources/`), so it runs on the MAIN plugin classloader — the
+  documented "plugin with dependencies" model where all
   `lib/` jars are on the classpath ("All JARs from the /lib folder are automatically added to the
   classpath"; "Do Not Repackage Libraries"). A separate content-module classloader sees only its
   own `lib/modules/<module-id>.jar` (+ platform core), which is why backend cannot stay a separate
