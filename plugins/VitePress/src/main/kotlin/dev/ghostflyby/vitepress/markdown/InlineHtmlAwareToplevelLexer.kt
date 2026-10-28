@@ -116,7 +116,7 @@ internal class InlineHtmlAwareToplevelLexer(
 
             if (nextLt >= tokenEnd) break
 
-            val htmlRange = findInlineHtmlRange(nextLt, tokenEnd)
+            val htmlRange = findVitePressHtmlRange(buffer, nextLt, tokenEnd)
             if (htmlRange != null) {
                 val end = htmlRange.endOffset.coerceAtMost(tokenEnd)
                 if (end > htmlRange.startOffset) {
@@ -151,15 +151,7 @@ internal class InlineHtmlAwareToplevelLexer(
     }
 
     private fun findTopLevelHtmlRange(start: Int): TextRange? {
-        return findHtmlRange(start, endOffset)?.takeIf { it.startOffset == start }
-    }
-
-    private fun findInlineHtmlRange(start: Int, tokenEnd: Int): TextRange? {
-        return findHtmlRange(start, tokenEnd)
-    }
-
-    private fun findHtmlRange(start: Int, searchEnd: Int): TextRange? {
-        return findVitePressHtmlRange(buffer, start, searchEnd)
+        return findVitePressHtmlRange(buffer, start, endOffset)?.takeIf { it.startOffset == start }
     }
 
     private data class Segment(val start: Int, val end: Int, val type: IElementType)

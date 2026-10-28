@@ -157,7 +157,7 @@ private fun collectHtmlGuestRanges(sourceCode: CharSequence, hostRange: TextRang
     var cursor = hostRange.startOffset
     while (cursor < hostRange.endOffset) {
         val nextLt = sourceCode.indexOf('<', cursor).takeIf { it in cursor until hostRange.endOffset } ?: break
-        val htmlRange = findHtmlGuestRange(sourceCode, nextLt, hostRange.endOffset)
+        val htmlRange = findVitePressHtmlRange(sourceCode, nextLt, hostRange.endOffset)
         if (htmlRange != null) {
             result += htmlRange
             cursor = htmlRange.endOffset
@@ -166,14 +166,6 @@ private fun collectHtmlGuestRanges(sourceCode: CharSequence, hostRange: TextRang
         }
     }
     return mergeRanges(result)
-}
-
-private fun findHtmlGuestRange(
-    sourceCode: CharSequence,
-    startOffset: Int,
-    endOffset: Int,
-): TextRange? {
-    return findVitePressHtmlRange(sourceCode, startOffset, endOffset)
 }
 
 private fun collectMustacheRanges(sourceCode: CharSequence, hostRange: TextRange): List<TextRange> {
@@ -234,11 +226,11 @@ private fun buildTemplateInterpolationHost(
     sourceCode: CharSequence,
     hostRange: TextRange,
 ): VitePressTemplateInterpolationHost? {
-    if (!isPlainTextTemplateHost(sourceCode, hostRange)) {
+    val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
+    if (!isPlainTextTemplateHost(sourceCode, hostRange, interpolationRanges)) {
         return null
     }
 
-    val interpolationRanges = collectMustacheRanges(sourceCode, hostRange)
     val htmlGuestRanges = collectHtmlGuestRanges(sourceCode, hostRange)
     val guestRanges = mergeRanges(interpolationRanges + htmlGuestRanges)
     if (guestRanges.isEmpty()) {
@@ -298,8 +290,11 @@ private fun collectInlineLinkTextRanges(sourceCode: CharSequence): List<TextRang
     return result
 }
 
-private fun isPlainTextTemplateHost(sourceCode: CharSequence, hostRange: TextRange): Boolean {
-    val mustacheRanges = collectMustacheRanges(sourceCode, hostRange)
+private fun isPlainTextTemplateHost(
+    sourceCode: CharSequence,
+    hostRange: TextRange,
+    mustacheRanges: List<TextRange>,
+): Boolean {
     if (mustacheRanges.isEmpty()) {
         return !containsMarkdownInlineMarker(sourceCode, hostRange.startOffset, hostRange.endOffset)
     }

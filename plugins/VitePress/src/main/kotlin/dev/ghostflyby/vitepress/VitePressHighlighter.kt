@@ -49,7 +49,7 @@ private object VPMarkdownHighlighter : MarkdownSyntaxHighlighter() {
     }
 }
 
-internal class VitePressSyntaxHighlighterLexer :
+private class VitePressSyntaxHighlighterLexer :
     LayeredLexer(InlineHtmlAwareToplevelLexer(VitePressFlavourDescriptor)) {
     init {
         registerSelfStoppingLayer(
