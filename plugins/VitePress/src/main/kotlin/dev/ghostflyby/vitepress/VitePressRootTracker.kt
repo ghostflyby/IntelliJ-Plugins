@@ -119,19 +119,11 @@ internal class VitePressRootTracker(
 
     private fun updateCurrent(roots: Collection<VirtualFile>, isAdd: Boolean): Boolean {
         if (roots.isEmpty()) return false
-        val update: (PersistentSet<VirtualFile>) -> PersistentSet<VirtualFile> =
-            if (isAdd) {
-                { current -> current.addAll(roots) }
-            } else {
-                { current -> current.removeAll(roots) }
-            }
-
-        val previous =
-            stateRef.getAndUpdate { state ->
-                val nextCurrent = update(state.current)
-                if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
-            }
-        val changed = update(previous.current) != previous.current
+        val changed = updateState { state ->
+            val nextCurrent =
+                if (isAdd) state.current.addAll(roots) else state.current.removeAll(roots)
+            if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
+        }
         if (changed) {
             modificationCount.getAndIncrement()
         }
@@ -140,14 +132,18 @@ internal class VitePressRootTracker(
 
     private fun updatePendingFiles(files: Collection<VirtualFile>): Boolean {
         if (files.isEmpty()) return false
-        val previous =
-            stateRef.getAndUpdate { state ->
-                val nextPendingFiles = state.pendingFiles.addAll(files)
-                if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
-            }
-        val changed = previous.pendingFiles.addAll(files) != previous.pendingFiles
-        if (changed) {
-            modificationCount.getAndIncrement()
+        // Pending reparse queues are invisible to root queries; skipping the modification-count
+        // bump keeps isVitePressRoot/isUnderVitePressRoot caches valid for every tracked file.
+        return updateState { state ->
+            val nextPendingFiles = state.pendingFiles.addAll(files)
+            if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
+        }
+    }
+
+    private fun updateState(transform: (State) -> State): Boolean {
+        var changed = false
+        stateRef.getAndUpdate { state ->
+            transform(state).also { next -> changed = next != state }
         }
         return changed
     }
