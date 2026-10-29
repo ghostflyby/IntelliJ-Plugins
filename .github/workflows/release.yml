@@ -117,6 +117,22 @@ jobs:
           & $gradlew --configuration-cache "${env:GRADLE_PATH}:patchChangelog" --release-note-file="$( $releaseNote.FullName )"
           Remove-Item $releaseNote
 
+      # Gate publishing on the full supported range: the uncapped until-build lets plugins run on
+      # IDEs newer than the compile target, and binary breaks there must not reach the Marketplace.
+      - name: Verify Plugin (full supported range)
+        env:
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:verifyPlugin" "-PpluginVerificationFullRange=true"
+
       # Publish the plugin to JetBrains Marketplace
       - name: Publish Plugin
         env:
@@ -136,7 +152,7 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin" "-PpluginVerificationFullRange=true"
 
       # Create a pull request
       - name: Create Pull Request

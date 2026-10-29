@@ -172,6 +172,12 @@ internal class VitePressTemplateInterpolationHostsTest {
             ),
         )
         checkHosts(
+            "::: info\n{{x}}\n:::\n",
+            listOf(
+                VitePressTemplateInterpolationHost(VitePressTemplateHostKind.Paragraph, TextRange(9, 14), listOf(TextRange(9, 14)), listOf(), listOf(TextRange(9, 14))),
+            ),
+        )
+        checkHosts(
             "text <Comp>{{x}}</Comp> more",
             listOf(
                 VitePressTemplateInterpolationHost(VitePressTemplateHostKind.Paragraph, TextRange(0, 28), listOf(TextRange(11, 16)), listOf(TextRange(5, 23)), listOf(TextRange(5, 23))),

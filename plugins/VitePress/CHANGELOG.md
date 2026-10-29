@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed binary incompatibility with 2026.2-based IDEs caused by a return-type change in the bundled Markdown
+  parsing library.
+- Root tracking and Markdown parsing no longer use APIs deprecated by the libraries bundled with 2026.2 and newer.
+
 ## [1.1.1] - 2026-10-29
 
 ### Changed
