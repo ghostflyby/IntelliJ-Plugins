@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-29
+
 ### Fixed
 
 - Fixed binary incompatibility with 2026.2-based IDEs caused by a return-type change in the bundled Markdown
@@ -61,7 +63,8 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.2...HEAD
+[1.1.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.1...VitePress-v1.1.2
 [1.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.0...VitePress-v1.1.1
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...VitePress-v1.1.0
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...VitePress-v1.0.1
