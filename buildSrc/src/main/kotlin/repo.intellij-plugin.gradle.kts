@@ -68,24 +68,17 @@ intellijPlatform {
             VerifyPluginTask.VerificationReportsFormats.MARKDOWN,
             VerifyPluginTask.VerificationReportsFormats.PLAIN,
         )
+        failureLevel = VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES)
         // Default (PR-time): verify against the compile-target IDE only — Marketplace-resolved
         // target sets ("recommended") are picked at execution time and change under a fixed
         // commit, which made verification results non-reproducible.
         // With -PpluginVerificationFullRange=true (release workflow): switch to the recommended
         // set and gate publishing on the whole supported range; with the uncapped until-build
         // this includes IDEs newer than the compile target, where binary breaks (e.g. changed
-        // library return types) only surface. Deprecated-API usage stays advisory in that mode,
-        // because cross-version workarounds may legitimately keep one deprecated call when the
-        // oldest supported platform has no replacement.
-        val fullRange = providers.gradleProperty("pluginVerificationFullRange").getOrElse("false").toBoolean()
-        failureLevel =
-            VerifyPluginTask.FailureLevel.ALL - setOf(VerifyPluginTask.FailureLevel.EXPERIMENTAL_API_USAGES) -
-            if (fullRange) {
-                setOf(VerifyPluginTask.FailureLevel.DEPRECATED_API_USAGES)
-            } else {
-                emptySet()
-            }
-        if (fullRange) {
+        // library return types) only surface. Deprecated API usage fails the gate; calls that
+        // must span changing library APIs use MethodHandle bridges (see PersistentSetAddAll.kt)
+        // so the bytecode keeps no deprecated method references.
+        if (providers.gradleProperty("pluginVerificationFullRange").getOrElse("false").toBoolean()) {
             ides.recommended()
         } else {
             ides.current()

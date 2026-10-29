@@ -1,0 +1,123 @@
+# Manually triggered full-range plugin verification (Marketplace-recommended IDE set) for
+# mid-cycle checks. The Release workflow runs the same gate before publishing; this workflow
+# makes it available on demand without cutting a release.
+
+name: Verify Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugins:
+        description: "Comma-separated plugin names (e.g. 'VitePress'); empty or 'all' verifies every plugin"
+        required: false
+        default: "all"
+        type: string
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  verify:
+    name: Verify Plugin (${{ inputs.plugins || 'all' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+
+      # Build outputs plus full-repo verification fill most of the runner disk
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          tool-cache: false
+          large-packages: false
+
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+
+      # Set up the Java environment for the next steps
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: jetbrains
+          java-version: 21
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Set up the Gradle environment for the next steps
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.4.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Select Plugin Verification tasks
+        id: plugin-verification
+        env:
+          PLUGINS_INPUT: ${{ inputs.plugins }}
+        run: |
+          [string[]]$selected = @()
+          if ($env:PLUGINS_INPUT -and $env:PLUGINS_INPUT -ne "all")
+          {
+              [string[]]$selected = @($env:PLUGINS_INPUT -split "," |
+                      ForEach-Object { $_.Trim() } |
+                      Where-Object { $_ })
+          }
+
+          foreach ($pluginName in $selected)
+          {
+              $pluginBuildFile = Join-Path $env:GITHUB_WORKSPACE "plugins/$pluginName/build.gradle.kts"
+              if (-not (Test-Path -LiteralPath $pluginBuildFile -PathType Leaf))
+              {
+                  throw "Unknown plugin: $pluginName"
+              }
+          }
+
+          [string[]]$verificationTasks = if ($selected.Count -gt 0)
+          {
+              @($selected | Sort-Object -Unique | ForEach-Object { ":plugins:${_}:verifyPlugin" })
+          }
+          else
+          {
+              @("verifyPlugin")
+          }
+
+          $tasksJson = ConvertTo-Json -InputObject ([string[]]$verificationTasks) -Compress
+          "tasks=$tasksJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Plugin verification tasks: $( $verificationTasks -join ', ' )"
+
+      # Full supported range: Marketplace-recommended IDE set, binary compatibility problems and
+      # deprecated API usage fail the run
+      - name: Run Plugin Verification (full supported range)
+        env:
+          PLUGIN_VERIFICATION_TASKS: ${{ steps.plugin-verification.outputs.tasks }}
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          [string[]]$verificationTasks = @($env:PLUGIN_VERIFICATION_TASKS | ConvertFrom-Json)
+          [string[]]$gradleArguments = @("--configuration-cache")
+          $gradleArguments += $verificationTasks
+          $gradleArguments += "-PpluginVerificationFullRange=true"
+          & $gradlew @gradleArguments
+
+      - name: Collect Plugin Verifier Result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pluginVerifier-result
+          path: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
+
+      - name: Plugin Verifier Summary
+        if: ${{ always() }}
+        env:
+          reports: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
+        run: |
+          Get-ChildItem -Path $env:reports -Filter "*.md" -Recurse -File |
+                  Get-Content |
+                  Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
