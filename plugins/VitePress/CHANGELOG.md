@@ -2,19 +2,11 @@
 
 ## [Unreleased]
 
-### Added
+## [1.1.1] - 2026-10-29
 
 ### Changed
 
 - Removed the upper IntelliJ Platform build compatibility limit so the plugin installs on future IDE versions.
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [1.1.0] - 2026-04-02
 
@@ -63,7 +55,8 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.1...HEAD
+[1.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.0...VitePress-v1.1.1
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...VitePress-v1.1.0
 [1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.0...VitePress-v1.0.1
 [1.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/VitePress-v1.0.0
