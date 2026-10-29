@@ -11,14 +11,6 @@ plugins {
 
 version = "1.1.0"
 
-intellijPlatform {
-    pluginConfiguration {
-        ideaVersion {
-            untilBuild = "261.*"
-        }
-    }
-}
-
 dependencies {
     implementation(project(":modules:intellij-shared"))
 }

@@ -119,19 +119,11 @@ internal class VitePressRootTracker(
 
     private fun updateCurrent(roots: Collection<VirtualFile>, isAdd: Boolean): Boolean {
         if (roots.isEmpty()) return false
-        val update: (PersistentSet<VirtualFile>) -> PersistentSet<VirtualFile> =
-            if (isAdd) {
-                { current -> current.addAllBridge(roots) }
-            } else {
-                { current -> current.removeAllBridge(roots) }
-            }
-
-        val previous =
-            stateRef.getAndUpdate { state ->
-                val nextCurrent = update(state.current)
-                if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
-            }
-        val changed = update(previous.current) != previous.current
+        val changed = updateState { state ->
+            val nextCurrent =
+                if (isAdd) state.current.addAll(roots) else state.current.removeAll(roots)
+            if (nextCurrent == state.current) state else state.copy(current = nextCurrent)
+        }
         if (changed) {
             modificationCount.getAndIncrement()
         }
@@ -140,14 +132,18 @@ internal class VitePressRootTracker(
 
     private fun updatePendingFiles(files: Collection<VirtualFile>): Boolean {
         if (files.isEmpty()) return false
-        val previous =
-            stateRef.getAndUpdate { state ->
-                val nextPendingFiles = state.pendingFiles.addAllBridge(files)
-                if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
-            }
-        val changed = previous.pendingFiles.addAllBridge(files) != previous.pendingFiles
-        if (changed) {
-            modificationCount.getAndIncrement()
+        // Pending reparse queues are invisible to root queries; skipping the modification-count
+        // bump keeps isVitePressRoot/isUnderVitePressRoot caches valid for every tracked file.
+        return updateState { state ->
+            val nextPendingFiles = state.pendingFiles.addAll(files)
+            if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
+        }
+    }
+
+    private fun updateState(transform: (State) -> State): Boolean {
+        var changed = false
+        stateRef.getAndUpdate { state ->
+            transform(state).also { next -> changed = next != state }
         }
         return changed
     }
@@ -190,7 +186,7 @@ internal class VitePressRootTracker(
                 if (state.old == snapshot.old) {
                     nextState = nextState.copy(old = nextState.current)
                 }
-                val remainingPendingFiles = nextState.pendingFiles.removeAllBridge(pendingFiles)
+                val remainingPendingFiles = nextState.pendingFiles.removeAll(pendingFiles)
                 if (remainingPendingFiles != nextState.pendingFiles) {
                     nextState = nextState.copy(pendingFiles = remainingPendingFiles)
                 }
@@ -221,7 +217,7 @@ internal class VitePressRootTracker(
                     }
                 val cacheDirs =
                     addRootsInProject.mapNotNull { root ->
-                        root.findChild(VITEPRESS_CONFIG_DIRECTORY)
+                        root.findChild(VitePressConstants.CONFIG_DIRECTORY)
                             ?.takeIf { it.isDirectory }
                             ?.findChild(VITEPRESS_CACHE_DIRECTORY)
                             ?.takeIf { it.isDirectory }
@@ -316,7 +312,7 @@ internal class VitePressRootTrackerActivity : ProjectActivity {
             readAction {
                 buildSet {
                     fileIndex.iterateContent { f ->
-                        if (f.isDirectory && f.findChild(VITEPRESS_CONFIG_DIRECTORY)?.isDirectory == true) {
+                        if (f.isDirectory && f.findChild(VitePressConstants.CONFIG_DIRECTORY)?.isDirectory == true) {
                             add(f)
                         }
                         true
@@ -328,7 +324,6 @@ internal class VitePressRootTrackerActivity : ProjectActivity {
     }
 }
 
-private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
 private const val VITEPRESS_CACHE_DIRECTORY: String = "cache"
 private val ROOT_REPARSE_DEBOUNCE = 250.milliseconds
 private const val REPARSE_CHUNK_SIZE: Int = 100
@@ -359,7 +354,7 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
 
         events.forEach {
             when (it) {
-                is VFileCreateEvent if it.childName == VITEPRESS_CONFIG_DIRECTORY && it.isDirectory -> {
+                is VFileCreateEvent if it.childName == VitePressConstants.CONFIG_DIRECTORY && it.isDirectory -> {
                     add(it.parent)
                 }
 
@@ -367,7 +362,7 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
                     scheduleReparse { it.parent.findChild(it.childName) }
                 }
 
-                is VFileCopyEvent if (it.newChildName == VITEPRESS_CONFIG_DIRECTORY) -> {
+                is VFileCopyEvent if (it.newChildName == VitePressConstants.CONFIG_DIRECTORY) -> {
                     add(it.newParent)
                 }
 
@@ -380,14 +375,14 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
 
                 is VFileDeleteEvent -> {
                     val f = it.file
-                    if (f.isDirectory && f.name == VITEPRESS_CONFIG_DIRECTORY) {
+                    if (f.isDirectory && f.name == VitePressConstants.CONFIG_DIRECTORY) {
                         remove(f.parent)
                     }
                 }
 
                 is VFileMoveEvent -> {
                     val f = it.file
-                    if (f.isDirectory && f.name == VITEPRESS_CONFIG_DIRECTORY) {
+                    if (f.isDirectory && f.name == VitePressConstants.CONFIG_DIRECTORY) {
                         remove(it.oldParent)
                         add(it.newParent)
                     } else if (f.isDirectory) {
@@ -414,8 +409,8 @@ internal class VitePressRootTrackerFileListener : AsyncFileListener {
                     if (VirtualFile.PROP_NAME == it.propertyName && it.file.isDirectory) {
                         val oldName = it.oldValue as? String
                         val newName = it.newValue as? String
-                        if (oldName == VITEPRESS_CONFIG_DIRECTORY) remove(it.file.parent)
-                        if (newName == VITEPRESS_CONFIG_DIRECTORY) it.file.parent?.let { parent -> add(parent) }
+                        if (oldName == VitePressConstants.CONFIG_DIRECTORY) remove(it.file.parent)
+                        if (newName == VitePressConstants.CONFIG_DIRECTORY) it.file.parent?.let { parent -> add(parent) }
                     } else if (VirtualFile.PROP_NAME == it.propertyName && !it.file.isDirectory) {
                         val oldName = it.oldValue as? String
                         val newName = it.newValue as? String
@@ -486,7 +481,5 @@ internal fun hasVitePressFileState(fileName: String, isUnderVitePressRoot: Boole
 }
 
 private fun hasVitePressFileName(name: String): Boolean {
-    return name.endsWith(VITEPRESS_FILE_EXTENSION, ignoreCase = true)
+    return name.endsWith(VitePressConstants.MARKDOWN_FILE_SUFFIX, ignoreCase = true)
 }
-
-private const val VITEPRESS_FILE_EXTENSION: String = ".md"

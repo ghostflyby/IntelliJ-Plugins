@@ -6,6 +6,8 @@
 
 ### Changed
 
+- Removed the upper IntelliJ Platform build compatibility limit so the plugin installs on future IDE versions.
+
 ### Deprecated
 
 ### Removed
