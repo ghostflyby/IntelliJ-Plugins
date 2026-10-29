@@ -30,6 +30,9 @@ import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import dev.ghostflyby.vitepress.markdown.findVitePressHtmlRange
+import java.lang.invoke.MethodHandle
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.MethodType
 import org.intellij.markdown.ExperimentalApi
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
@@ -67,12 +70,11 @@ internal fun collectTemplateInterpolationHosts(
 ): List<VitePressTemplateInterpolationHost> {
     // The primary constructor is the only non-deprecated one across the bundled markdown versions
     // (@ExperimentalApi in 2026.1's 0.7.3; the (flavour) convenience constructor is deprecated from
-    // 2026.2's version on). buildMarkdownTreeFromString(CharSequence) does not exist in 0.7.3, so
-    // the String overload (deprecated but retained) remains the only cross-version choice.
+    // 2026.2's version on).
     @OptIn(ExperimentalApi::class)
     val root =
         MarkdownParser(VitePressFlavourDescriptor, true, CancellationToken.NonCancellable)
-            .buildMarkdownTreeFromString(sourceCode.toString())
+            .buildMarkdownTreeFromStringCompat(sourceCode)
     val result = mutableListOf<VitePressTemplateInterpolationHost>()
     collectTemplateInterpolationHosts(root, null, sourceCode, result)
     return result
@@ -318,4 +320,22 @@ internal fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
     }
     result += current
     return result
+}
+
+// buildMarkdownTreeFromString(CharSequence) is the non-deprecated entry point from markdown 0.7.4
+// on, but 2026.1's bundled 0.7.3 only has the String overload — a pure forwarder that newer
+// runtimes keep for ABI yet deprecate. Resolve the CharSequence overload reflectively and fall
+// back to the String one, mirroring PersistentSetAddAll.kt: the plugin links on both versions
+// while the bytecode carries no deprecated method references.
+private val buildMarkdownTreeFromStringHandle: MethodHandle? = runCatching {
+    MethodHandles.publicLookup().findVirtual(
+        MarkdownParser::class.java,
+        "buildMarkdownTreeFromString",
+        MethodType.methodType(ASTNode::class.java, CharSequence::class.java),
+    )
+}.getOrNull()
+
+private fun MarkdownParser.buildMarkdownTreeFromStringCompat(text: CharSequence): ASTNode {
+    return buildMarkdownTreeFromStringHandle?.invoke(this, text) as ASTNode?
+        ?: buildMarkdownTreeFromString(text.toString())
 }
