@@ -30,11 +30,13 @@ import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
 import dev.ghostflyby.vitepress.markdown.VitePressFlavourDescriptor
 import dev.ghostflyby.vitepress.markdown.findVitePressHtmlRange
+import org.intellij.markdown.ExperimentalApi
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes
+import org.intellij.markdown.parser.CancellationToken
 import org.intellij.markdown.parser.MarkdownParser
 
 internal enum class VitePressTemplateHostKind {
@@ -63,7 +65,14 @@ internal data class VitePressTemplateInterpolationSnapshot(
 internal fun collectTemplateInterpolationHosts(
     sourceCode: CharSequence,
 ): List<VitePressTemplateInterpolationHost> {
-    val root = MarkdownParser(VitePressFlavourDescriptor).buildMarkdownTreeFromString(sourceCode.toString())
+    // The primary constructor is the only non-deprecated one across the bundled markdown versions
+    // (@ExperimentalApi in 2026.1's 0.7.3; the (flavour) convenience constructor is deprecated from
+    // 2026.2's version on). buildMarkdownTreeFromString(CharSequence) does not exist in 0.7.3, so
+    // the String overload (deprecated but retained) remains the only cross-version choice.
+    @OptIn(ExperimentalApi::class)
+    val root =
+        MarkdownParser(VitePressFlavourDescriptor, true, CancellationToken.NonCancellable)
+            .buildMarkdownTreeFromString(sourceCode.toString())
     val result = mutableListOf<VitePressTemplateInterpolationHost>()
     collectTemplateInterpolationHosts(root, null, sourceCode, result)
     return result
