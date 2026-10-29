@@ -324,10 +324,10 @@ internal fun mergeRanges(ranges: List<TextRange>): List<TextRange> {
 
 // buildMarkdownTreeFromString(CharSequence) is the non-deprecated entry point from markdown 0.7.4
 // on, but 2026.1's bundled 0.7.3 only has the String overload — a pure forwarder that newer
-// runtimes keep for ABI yet deprecate. Resolve the CharSequence overload reflectively and fall
-// back to the String one, mirroring PersistentSetAddAll.kt: the plugin links on both versions
-// while the bytecode carries no deprecated method references.
-private val buildMarkdownTreeFromStringHandle: MethodHandle? = runCatching {
+// runtimes keep for ABI yet deprecate. Both overloads are resolved via MethodHandle, like
+// PersistentSetAddAll.kt: any direct invocation would leave a deprecated method reference in the
+// bytecode for the Plugin Verifier to flag, so the fallback path must stay reflective too.
+private val buildMarkdownTreeFromCharSequenceHandle: MethodHandle? = runCatching {
     MethodHandles.publicLookup().findVirtual(
         MarkdownParser::class.java,
         "buildMarkdownTreeFromString",
@@ -335,7 +335,19 @@ private val buildMarkdownTreeFromStringHandle: MethodHandle? = runCatching {
     )
 }.getOrNull()
 
+private val buildMarkdownTreeFromStringHandle: MethodHandle = runCatching {
+    MethodHandles.publicLookup().findVirtual(
+        MarkdownParser::class.java,
+        "buildMarkdownTreeFromString",
+        MethodType.methodType(ASTNode::class.java, String::class.java),
+    )
+}.getOrElse { e ->
+    throw NoSuchMethodError(
+        "Neither MarkdownParser.buildMarkdownTreeFromString(CharSequence) nor buildMarkdownTreeFromString(String) exists",
+    ).also { it.initCause(e) }
+}
+
 private fun MarkdownParser.buildMarkdownTreeFromStringCompat(text: CharSequence): ASTNode {
-    return buildMarkdownTreeFromStringHandle?.invoke(this, text) as ASTNode?
-        ?: buildMarkdownTreeFromString(text.toString())
+    return buildMarkdownTreeFromCharSequenceHandle?.invoke(this, text) as ASTNode?
+        ?: buildMarkdownTreeFromStringHandle.invoke(this, text.toString()) as ASTNode
 }
