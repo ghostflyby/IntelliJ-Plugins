@@ -321,11 +321,11 @@ jobs:
           {
               "./gradlew"
           }
-          $pluginPaths = & $gradlew tasks --all --console=plain -q |
+          $pluginPaths = & $gradlew getChangelog --dry-run --console=plain |
                   ForEach-Object {
-                      if ($_ -match "^(plugins:[^:]+):getChangelog")
+                      if ($_ -match "^(?:> Task )?(:plugins:[^:]+):getChangelog SKIPPED$")
                       {
-                          ":$( $Matches[1] )"
+                          $Matches[1]
                       }
                   } |
                   Sort-Object -Unique
