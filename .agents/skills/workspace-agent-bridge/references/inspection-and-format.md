@@ -1,14 +1,12 @@
 # Inspection And Format
 
-Load `negotiation-and-discovery.md` first if `BASE` or `SESSION_ID` are not known.
-
-All routes require:
+Load `negotiation-and-discovery.md` first if `BASE` or `SESSION_ID` are not known. All rout es require:
 
 ```text
-X-Ghostflyby-Workspace-Session-Id: <sessionId>
+X-Ghostflyby-Workspace-Sess----------d: <sessionId>
 ```
 
-Default output is Markdown. Do not use JSON as the primary agent-facing format.
+Default output is Mar   kdown. Do not use JSON as the primary agent-facing format.
 
 ## Problems
 
@@ -36,9 +34,9 @@ truncated: false
 timedOut: false
 ---
 ## Problems
-| severity | file | line | inspection | message | fixes |
-| --- | --- | ---: | --- | --- | --- |
-| ERROR | src/Broken.xml | 1 | SyntaxError | Element root is not closed |  |
+| severity | file           | line | inspection  | message                    | fixes |
+|----------|----------------|-----:|-------------|----------------------------|-------|
+| ERROR    | src/Broken.xml |    1 | SyntaxError | Element root is not closed |       |
 ```
 
 ## Inspection Request
@@ -47,7 +45,7 @@ timedOut: false
 POST /api/v1/inspections/{path...}?minSeverity=ERROR&limit=200
 ```
 
-No body inspects the route path. Multi-file targets use patch-like operations:
+Nobody inspects the route path. Multi-file targets use patch-like operations:
 
 ```patch
 *** Begin Patch

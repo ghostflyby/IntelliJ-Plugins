@@ -30,7 +30,7 @@ import org.intellij.plugins.markdown.lang.MarkdownFileType
 
 internal class VitePressFileTypeOverrider : FileTypeOverrider {
     override fun getOverriddenFileType(file: VirtualFile): FileType? {
-        if (!file.extension.equals("md", ignoreCase = true)) {
+        if (!file.name.endsWith(VitePressConstants.MARKDOWN_FILE_SUFFIX, ignoreCase = true)) {
             return null
         }
         val workaroundEnabled = service<VitePressMdFileTypeWorkaroundSettings>().isVueLanguageServiceWorkaroundEnabled

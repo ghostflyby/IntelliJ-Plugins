@@ -5,46 +5,34 @@
  */
 
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
-import org.jetbrains.intellij.platform.gradle.extensions.excludeKotlinStdlib
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
+import org.jetbrains.intellij.platform.gradle.tasks.aware.SplitModeAware
 
 plugins {
     id("repo.intellij-plugin")
-    alias(libs.plugins.kotlin.serialization)
 }
 
-version = "2.0.0"
-
-buildLogic {
-    platformVersion = "2026.1"
-    pluginSinceBuild = "261"
-}
+version = "2.1.0"
 
 dependencies {
-    implementation(libs.ktor.resources)
-
-    implementation(libs.ktor.serialization.kotlinx.json)
-    implementation(libs.ktor.server.content.negotiation)
-    implementation(libs.snakeyaml)
-    implementation(libs.ktor.server.resources)
-    implementation(libs.ktor.server.cio)
-    implementation(project(":modules:intellij-shared"))
-
-    testImplementation(libs.ktor.server.test.host)
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher) {
-        excludeKotlinStdlib()
-    }
     intellijPlatform {
-        pluginComposedModule(project(":modules:intellij-shared"))
+        pluginModule(implementation(project(":plugins:WorkspaceMcpTools:shared")))
+        pluginModule(implementation(project(":plugins:WorkspaceMcpTools:frontend")))
+        // The backend module's classes are composed into the main plugin jar (embedded content
+        // module) so its classloader is the main one, which also sees lib/*.jar — the documented
+        // plugin-with-dependencies model. A separate content-module classloader only sees its own
+        // lib/modules/<module-id>.jar, where our ktor jars do not live.
+        pluginComposedModule(implementation(project(":plugins:WorkspaceMcpTools:backend")))
         testFramework(TestFrameworkType.JUnit5)
-        bundledModule("intellij.platform.vcs.impl")
     }
+
 }
 
-tasks.test {
-    useJUnitPlatform()
-    systemProperty("java.awt.headless", true)
+intellijPlatform {
+    // Plugin Model v2: run the backend and the frontend (JetBrains Client) as separate local
+    // processes; install the plugin into both sandboxes so both sides load their modules.
+    splitMode = true
+    pluginInstallationTarget = SplitModeAware.PluginInstallationTarget.BOTH
 }
 
 tasks.withType<PrepareSandboxTask>().configureEach {

@@ -45,7 +45,6 @@ import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.FileContentUtil
-import com.intellij.util.messages.Topic
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -68,9 +67,8 @@ internal class VitePressMdFileTypeWorkaroundSettings :
 
     init {
         val connection = ApplicationManager.getApplication().messageBus.connect(this)
-        @Suppress("USELESS_CAST")
         connection.subscribe(
-            FileTypeManager.TOPIC as Topic<FileTypeListener>,
+            FileTypeManager.TOPIC,
             object : FileTypeListener {
                 override fun fileTypesChanged(event: com.intellij.openapi.fileTypes.FileTypeEvent) {
                     clearTrackedAssociationIfWorkaroundInactive()
@@ -195,9 +193,8 @@ internal class VitePressApplicationConfigurable : BoundConfigurable(Bundle.messa
         }
 
         val uiDisposable = requireNotNull(disposable)
-        @Suppress("USELESS_CAST")
         ApplicationManager.getApplication().messageBus.connect(uiDisposable).subscribe(
-            FileTypeManager.TOPIC as Topic<FileTypeListener>,
+            FileTypeManager.TOPIC,
             object : FileTypeListener {
                 override fun fileTypesChanged(event: com.intellij.openapi.fileTypes.FileTypeEvent) {
                     ApplicationManager.getApplication().invokeLater {

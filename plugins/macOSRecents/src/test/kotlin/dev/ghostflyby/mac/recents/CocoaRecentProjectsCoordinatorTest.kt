@@ -8,8 +8,8 @@ package dev.ghostflyby.mac.recents
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.test.*
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import org.junit.jupiter.api.Assertions
+import org.junit.jupiter.api.Test
 import java.net.URI
 import kotlin.coroutines.ContinuationInterceptor
 import kotlin.io.path.Path
@@ -35,7 +35,7 @@ internal class CocoaRecentProjectsCoordinatorTest {
             )
         }
 
-        assertEquals(
+        Assertions.assertEquals(
             listOf(
                 "replace:file:///tmp/recent-a,file:///tmp/recent-b,file:///tmp/recent-c",
             ),
@@ -55,7 +55,7 @@ internal class CocoaRecentProjectsCoordinatorTest {
             coordinator.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-b"), uri("/tmp/recent-a")))
         }
 
-        assertEquals(listOf("append:file:///tmp/recent-c"), bridge.operations)
+        Assertions.assertEquals(listOf("append:file:///tmp/recent-c"), bridge.operations)
     }
 
     @Test
@@ -70,7 +70,7 @@ internal class CocoaRecentProjectsCoordinatorTest {
             coordinator.sync(listOf(uri("/tmp/recent-c"), uri("/tmp/recent-a")))
         }
 
-        assertEquals(
+        Assertions.assertEquals(
             listOf(
                 "replace:file:///tmp/recent-a,file:///tmp/recent-c",
             ),
@@ -88,7 +88,7 @@ internal class CocoaRecentProjectsCoordinatorTest {
             coordinator.sync(emptyList())
         }
 
-        assertEquals(listOf("replace:"), bridge.operations)
+        Assertions.assertEquals(listOf("replace:"), bridge.operations)
     }
 
     @Test
@@ -96,12 +96,12 @@ internal class CocoaRecentProjectsCoordinatorTest {
         val startupPath = "/tmp/startup-project.ipr"
         val startupUri = uri(startupPath)
 
-        assertEquals(
+        Assertions.assertEquals(
             listOf(startupUri),
             collectTargetUris(recentPaths = emptyList(), startupProjectPaths = setOf(startupPath)),
         )
 
-        assertEquals(
+        Assertions.assertEquals(
             listOf(startupUri),
             collectTargetUris(recentPaths = listOf(startupPath), startupProjectPaths = setOf(startupPath)),
         )
@@ -118,14 +118,11 @@ internal class CocoaRecentProjectsCoordinatorTest {
             advanceTimeBy(80.milliseconds)
             coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-c", "/tmp/recent-b"))
             advanceTimeBy(99.milliseconds)
-            assertEquals(emptyList<String>(), bridge.operations)
+            Assertions.assertEquals(emptyList<String>(), bridge.operations)
 
             advanceUntilIdle()
 
-            assertEquals(
-                listOf("replace:file:///tmp/recent-b,file:///tmp/recent-c"),
-                bridge.operations,
-            )
+            Assertions.assertEquals(listOf("replace:file:///tmp/recent-b,file:///tmp/recent-c"), bridge.operations)
         }
     }
 
@@ -139,19 +136,19 @@ internal class CocoaRecentProjectsCoordinatorTest {
             coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
             runCurrent()
             advanceUntilIdle()
-            assertEquals(listOf("replace:file:///tmp/startup-project.ipr"), bridge.operations)
+            Assertions.assertEquals(listOf("replace:file:///tmp/startup-project.ipr"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf("/tmp/recent-a"))
             runCurrent()
             advanceUntilIdle()
-            assertEquals(listOf("append:file:///tmp/recent-a"), bridge.operations)
+            Assertions.assertEquals(listOf("append:file:///tmp/recent-a"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(startupPath, "/tmp/recent-a"))
             runCurrent()
             advanceUntilIdle()
-            assertEquals(
+            Assertions.assertEquals(
                 listOf("replace:file:///tmp/recent-a,file:///tmp/startup-project.ipr"),
                 bridge.operations,
             )
@@ -169,19 +166,19 @@ internal class CocoaRecentProjectsCoordinatorTest {
             coordinator.scheduleSync(recentPaths = emptyList(), startupProjectPath = startupPath)
             runCurrent()
             advanceUntilIdle()
-            assertEquals(listOf("replace:file:///tmp/directory-project/.idea/misc.xml"), bridge.operations)
+            Assertions.assertEquals(listOf("replace:file:///tmp/directory-project/.idea/misc.xml"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
             runCurrent()
             advanceUntilIdle()
-            assertEquals(listOf("replace:file:///tmp/directory-project"), bridge.operations)
+            Assertions.assertEquals(listOf("replace:file:///tmp/directory-project"), bridge.operations)
 
             bridge.operations.clear()
             coordinator.scheduleSync(recentPaths = listOf(recentProjectPath))
             runCurrent()
             advanceUntilIdle()
-            assertEquals(emptyList<String>(), bridge.operations)
+            Assertions.assertEquals(emptyList<String>(), bridge.operations)
         }
     }
 

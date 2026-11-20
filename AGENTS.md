@@ -73,4 +73,4 @@ PSI、VFS、Document 读写必须遵循 IntelliJ 线程模型与锁合同。
 
 ## Shared Modules
 
-`AutoCleanKey` 使用指南参见 [intellij-shared-AutoCleanKey](.agents/skills/intellij-shared-AutoCleanKey/SKILL.md)。
+`AutoCleanKey` 使用指南参见 [intellij-shared-AutoCleanKey](.agents/skills/intellij-shared-autocleankey/SKILL.md)。

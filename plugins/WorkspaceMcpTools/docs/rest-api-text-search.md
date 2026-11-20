@@ -13,15 +13,15 @@ URL-encoded full VFS URL.
 
 ## Query Parameters
 
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `query` | string | required | Search text or regex pattern. |
-| `regex` | boolean | `false` | Interpret `query` as a regular expression. |
-| `caseSensitive` | boolean | `true` | Case-sensitive matching. |
-| `wholeWord` | boolean | `false` | Match whole words only. |
-| `context` | string list | `string,comment,other` | Comma-separated syntactic contexts to search in. |
-| `fileFilter` | string | none | Glob pattern for file filtering under the search root. |
-| `limit` | integer | `100` | Maximum hits to return. |
+| Param           | Type        | Default                | Description                                            |
+|-----------------|-------------|------------------------|--------------------------------------------------------|
+| `query`         | string      | required               | Search text or regex pattern.                          |
+| `regex`         | boolean     | `false`                | Interpret `query` as a regular expression.             |
+| `caseSensitive` | boolean     | `true`                 | Case-sensitive matching.                               |
+| `wholeWord`     | boolean     | `false`                | Match whole words only.                                |
+| `context`       | string list | `string,comment,other` | Comma-separated syntactic contexts to search in.       |
+| `fileFilter`    | string      | none                   | Glob pattern for file filtering under the search root. |
+| `limit`         | integer     | `100`                  | Maximum hits to return.                                |
 
 `context` supports `string`, `comment`, and `other`. The combination
 `string,comment` is not supported by IntelliJ `FindModel` and returns `400`.

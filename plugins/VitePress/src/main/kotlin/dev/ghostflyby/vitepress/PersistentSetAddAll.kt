@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
+// 2026.1 (build 261) bundles kotlinx-collections-immutable 0.4.0, which only provides
+// PersistentSet.addAll/removeAll; starting with 2026.2 (build 262) the bundled version deprecates
+// them in favor of addingAll/removingAll. The bridge below prefers the new names and falls back
+// to the old ones, so the plugin links on both without deprecated API usage on newer runtimes.
+
 package dev.ghostflyby.vitepress
 
 import kotlinx.collections.immutable.PersistentSet

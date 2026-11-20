@@ -20,6 +20,10 @@ kotlin {
     compilerOptions {
         jvmTarget = JvmTarget.fromTarget("21")
         jvmDefault = JvmDefaultMode.NO_COMPATIBILITY
+        // The Kotlin runtime comes from the IDE, so compile against the Kotlin bundled with the
+        // oldest supported platform: newer stdlib APIs then fail the build instead of surfacing as
+        // a NoSuchMethodError at runtime.
+        configureBundledKotlinLevel(providers)
     }
     explicitApi()
 }

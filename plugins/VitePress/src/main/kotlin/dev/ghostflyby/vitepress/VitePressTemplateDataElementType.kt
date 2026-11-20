@@ -52,9 +52,8 @@ internal object VitePressTemplateDataElementType : TemplateDataElementType(
         htmlBlockLexer.start(sourceCode)
 
         while (htmlBlockLexer.tokenType != null) {
-            val range = TextRange.create(htmlBlockLexer.tokenStart, htmlBlockLexer.tokenEnd)
-            when (htmlBlockLexer.tokenType) {
-                MarkdownTokenTypes.HTML_BLOCK_CONTENT -> guestRanges += range
+            if (htmlBlockLexer.tokenType == MarkdownTokenTypes.HTML_BLOCK_CONTENT) {
+                guestRanges += TextRange.create(htmlBlockLexer.tokenStart, htmlBlockLexer.tokenEnd)
             }
             htmlBlockLexer.advance()
         }

@@ -6,9 +6,10 @@ filesystem alone. It exposes a local REST API for reading files, searching index
 checking problems, formatting code, and applying workspace edits with IntelliJ-aware safety checks.
 
 The plugin starts a local server at `http://127.0.0.1:63441/api/v1`. If that port is already busy, it scans nearby ports
-and uses the first available one. Agents connect by creating a workspace session for the project or directory they
-intend
-to work in, then use that session for file, search, navigation, inspection, and patch requests.
+and uses the first available one. The server runs only in the IDE backend process, so in remote development setups the
+coding agent must run on the backend host or reach it through a tunnel. Agents connect by creating a workspace session
+for the project or directory they intend to work in, then use that session for file, search, navigation, inspection, and
+patch requests.
 
 The API is optimized for agent-readable Markdown by default, with JSON available for structured clients. It supports
 common coding-agent workflows such as:
@@ -23,7 +24,7 @@ Write access is intentionally limited to project workspace files. Dependency and
 context, and protected paths require explicit confirmation before writes. Delete and move operations use IntelliJ
 refactoring behavior where possible, so agents can update references instead of only moving bytes on disk.
 
-For Codex users, the plugin bundles the `workspace-mcp-rest-api` skill and shows an upgrade notification with actions to
+For Codex users, the plugin bundles the `workspace-agent-bridge` skill and shows an upgrade notification with actions to
 copy or reveal the local skill directory. The bundled skill contains the agent-facing workflow details and examples.
 
 <!-- Plugin description end -->

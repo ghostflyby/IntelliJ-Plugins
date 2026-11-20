@@ -1,0 +1,20 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <depends>com.intellij.modules.kotlin.k2</depends>
+    <extensions defaultExtensionNs="org.jetbrains.kotlin">
+        <!--suppress XmlHighlighting -->
+        <psiReferenceProvider
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogPsiReferenceProviderContributor"/>
+    </extensions>
+    <extensions defaultExtensionNs="com.intellij">
+        <gotoDeclarationHandler
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogGotoDeclarationHandler"/>
+        <referencesSearch
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogReferencesSearcher"/>
+        <useScopeEnlarger
+                implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsKotlinCatalogUseScopeEnlarger"/>
+    </extensions>
+</idea-plugin>

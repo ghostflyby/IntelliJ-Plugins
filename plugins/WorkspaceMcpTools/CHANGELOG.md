@@ -4,6 +4,30 @@
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-28
+
+### Changed
+
+- Split-mode and remote-development support: the REST server now runs only in the IDE backend, and the agent-skill
+  notification renders in the frontend (JetBrains Client) with copy/reveal actions pointing at the local machine's
+  bundled skill folder.
+- In remote development, agents must run on the backend host or forward the backend port manually (Backend Control
+  Center → Ports); there is no programmatic port-forwarding API.
+
+## [2.0.2] - 2026-07-26
+
+### Fixed
+
+- NPE on server launch due to `lazy` concurrency [#275](https://github.com/ghostflyby/IntelliJ-Plugins/pull/275)
+
+## [2.0.1] - 2026-07-02
+
+### Fixed
+
+- Wrong skill name preventing the installation guide
+
+## [2.0.0] - 2026-06-22
+
 ### Added
 
 - Added a Markdown-first REST API for local agent integrations, covering workspace sessions, file reads and metadata,
@@ -142,7 +166,11 @@
 - `ScopeProgramOp` JSON decoding now accepts legacy token name `ATOM` as an alias of `PUSH_ATOM`, fixing
   backward compatibility for previously serialized scope programs.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.4...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.1.0...HEAD
+[2.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.2...WorkspaceMcpTools-v2.1.0
+[2.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.1...WorkspaceMcpTools-v2.0.2
+[2.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v2.0.0...WorkspaceMcpTools-v2.0.1
+[2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.4...WorkspaceMcpTools-v2.0.0
 [1.0.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.3...WorkspaceMcpTools-v1.0.4
 [1.0.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.2...WorkspaceMcpTools-v1.0.3
 [1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/WorkspaceMcpTools-v1.0.1...WorkspaceMcpTools-v1.0.2

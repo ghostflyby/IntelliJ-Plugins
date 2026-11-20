@@ -13,7 +13,20 @@ profile:
         - "scope#$gitignore"
 plugins:
   - id: DevKit
+  # QDJVM Community does not load these by default, so PluginXmlValidity cannot
+  # resolve language="Markdown"/"yaml" in plugin.xml (Radmir Baembitov).
+  - id: org.intellij.plugins.markdown
+  - id: org.jetbrains.plugins.yaml
 exclude:
   - name: All
     paths:
-      - third-party/
+      - plugins/IdeaVimToggleIME
+  # SplitModeModuleKindResolver looks the content-module descriptor up by the IDEA module name
+  # (IntelliJ-Plugins.plugins.WorkspaceMcpTools.backend.xml) and silently falls back to the
+  # "shared" kind when that file is missing, so backend-API uses in this repo are reported as
+  # "should be used in 'backend' module type. Actual module type is 'shared'". Runtime descriptor
+  # names must equal the module ids instead (dev.ghostflyby.mcp.workspace.*.xml). Remove when
+  # IJPL-247655 lands.
+  - name: SplitModeApiUsage
+    paths:
+      - plugins/WorkspaceMcpTools

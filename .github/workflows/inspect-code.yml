@@ -1,0 +1,337 @@
+name: Inspect Code (Qodana)
+
+on:
+  workflow_call:
+    secrets:
+      QODANA_TOKEN:
+        required: true
+      GRADLE_ENCRYPTION_KEY:
+        required: true
+  workflow_dispatch:
+
+jobs:
+  inspect-code:
+    name: Inspect code
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      security-events: write
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          tool-cache: false
+          large-packages: false
+      - name: Fetch Sources
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          submodules: recursive
+      - name: Setup Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: jetbrains
+          java-version: 21
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6.4.1
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Configure IntelliJ Platform IDE Cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle_user_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          ide_cache="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          mkdir -p "$gradle_user_home" "$ide_cache"
+          {
+            printf '\n'
+            printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
+            printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
+          } >> "$gradle_user_home/gradle.properties"
+      - name: Restore IntelliJ Platform IDE Cache
+        id: restore-intellij-platform-ides
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
+          restore-keys: |
+            ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
+      - name: Compute Qodana Cache Layout
+        id: qodana-cache-layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          fingerprint="$(printf '%s\0%s' "$HOME" "$GITHUB_WORKSPACE" | sha256sum | cut -d ' ' -f 1)"
+          # Hash only VCS-tracked Gradle build files, evaluated once here before any
+          # build runs. hashFiles('**/*.gradle.kts', …) also matched build-generated
+          # files (the Kotlin-DSL extracted plugin blocks under buildSrc/build/), so
+          # its save-time re-evaluation produced a different value than the next run's
+          # fresh-checkout one and the cache could never warm-hit.
+          gradle_hash="$(git ls-files -z '*.gradle.kts' 'gradle/libs.versions.toml' | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d ' ' -f 1)"
+          printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
+          printf 'gradle-hash=%s\n' "$gradle_hash" >> "$GITHUB_OUTPUT"
+      # Cache lineage is pinned to (IDE set, Gradle build files, ref). The Gradle hash
+      # moves the key whenever build logic or dependencies change, and the restore-keys
+      # prefix stays on github.ref so a PR can never restore the cache built on main —
+      # with the old refs/heads/main fallback a PR that added a plugin analysed a stale
+      # project, which is where the Kotlin EP XmlHighlighting false positives came from
+      # (JetBrains support, 2026-09). PR refs never save caches, so the prefix can only
+      # ever hit a cache saved by the same ref.
+      - name: Restore Qodana Cache
+        id: restore-qodana-cache
+        if: ${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: qodana-native-v4-2026.3-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            qodana-native-v4-2026.3-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-
+      # The baseline is the accepted problem set of the default branch, so only healthy
+      # main runs write it back (see "Save Qodana baseline" below); every other run
+      # restores it and passes it to Qodana, which is what makes the health check count
+      # NEW problems rather than all of them.
+      - name: Restore Qodana baseline
+        id: restore-qodana-baseline
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/qodana/baseline
+          key: qodana-baseline-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+          restore-keys: |
+            qodana-baseline-${{ runner.os }}-${{ runner.arch }}-
+      - name: Resolve Qodana baseline
+        id: qodana-baseline
+        shell: bash
+        env:
+          BASELINE: ${{ runner.temp }}/qodana/baseline/baseline.sarif.json
+        run: |
+          set -euo pipefail
+
+          args=''
+          if [[ -f "$BASELINE" ]]; then
+            # A baseline must be a SARIF whose results can actually be read; anything
+            # else (truncated JSON, a bare JSON object, a run without results) would be
+            # handed to Qodana and abort the analysis.
+            if jq -e '(.runs | type == "array") and (.runs | length > 0)
+                      and (.runs | all(.results == null or (.results | type == "array")))' \
+                 "$BASELINE" >/dev/null 2>&1; then
+              if accepted=$(jq -er '[.runs[].results[]?] | length' "$BASELINE" 2>/dev/null); then
+                # Quoted: the action re-parses this string with shell-quote, so an
+                # unquoted path containing a space would split into bogus arguments.
+                args="--baseline \"$BASELINE\""
+                echo "Using baseline $BASELINE ($accepted accepted problems)"
+              else
+                echo "::warning::Cannot count the results in $BASELINE; analysing without a baseline"
+              fi
+            else
+              echo "::warning::$BASELINE is not a usable SARIF; analysing without a baseline"
+            fi
+          else
+            echo "No baseline cached yet; analysing without one (every problem counts as new)"
+          fi
+          printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
+      - name: Qodana - Code Inspection
+        uses: JetBrains/qodana-action@v2026.3.1
+        with:
+          use-caches: false
+          cache-dir: ${{ runner.temp }}/qodana/caches
+          args: ${{ steps.qodana-baseline.outputs.args }}
+          # The report artifact carries the analysis-environment forensics (logs,
+          # effective profile, per-inspection coverage, scoped-flow snapshots) that
+          # neither code scanning nor Qodana Cloud keeps; the 2026-09 stale-cache
+          # investigation leaned on it five times. Small and expires — always on.
+          upload-result: true
+        env:
+          QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+          QODANA_ENDPOINT: 'https://qodana.cloud'
+      # A degenerate analysis — Gradle import skipped, so dependency roots stay
+      # unresolved — reports 450-1500+ problems instead of the usual ~20-40, plus a
+      # large `qodana.sanity.results` block. Such a run both rewrites the branch's
+      # code-scanning alert set and signals a broken analysis, so it fails the job and
+      # its SARIF is withheld from the upload.
+      #
+      # The primary metric is NEW problems: results whose `baselineState` is neither
+      # `unchanged` (also in the baseline) nor `absent` (baseline only) — the same filter
+      # qodana-action's annotations use. The baseline is restored above and passed as
+      # `--baseline`; until one exists every problem counts as new, so the count equals
+      # the total. `MAX_TOTAL_PROBLEMS` bounds the report independently of the baseline,
+      # so a baseline that is itself degenerate cannot make a degenerate run look clean.
+      # Limits sit far above the healthy range (<=37 problems, <=12 sanity) and far below
+      # the degenerate one (>=454 problems, >=106 sanity).
+      - name: Verify Qodana analysis health
+        id: analysis-health
+        shell: bash
+        env:
+          SARIF: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          MAX_NEW_PROBLEMS: '150'
+          MAX_TOTAL_PROBLEMS: '250'
+          MAX_SANITY: '50'
+        run: |
+          set -euo pipefail
+
+          fail() {
+            printf 'sick=true\n' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Qodana analysis health'
+              echo
+              printf '**Failed:** %s\n' "$1"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::$1"
+            exit 1
+          }
+
+          # Fail-closed: a missing report means the analysis produced nothing usable, and
+          # that must not be reported as healthy. Also avoids depending on upload-sarif's
+          # own error for a nonexistent path.
+          [[ -f "$SARIF" ]] || fail "Qodana produced no SARIF at $SARIF."
+
+          # [total, new] where new excludes baseline `unchanged`/`absent` results.
+          if ! counts=$(jq -er '
+                [
+                  ([.runs[].results[]?] | length),
+                  ([.runs[].results[]?
+                    | select(.baselineState != "unchanged" and .baselineState != "absent")] | length)
+                ] | @tsv' "$SARIF" 2>/dev/null); then
+            fail "Cannot parse the Qodana SARIF; failing the run and skipping the upload."
+          fi
+          read -r total new <<< "$counts"
+          total=${total:-0}
+          new=${new:-0}
+
+          # Guarded like the counts above: unguarded, a report whose runs[0].properties has
+          # an unexpected shape would abort the step under `set -e` before any output was
+          # written, so the degenerate-report artifact step could not run either.
+          if ! sanity=$(jq -er '(.runs[0].properties["qodana.sanity.results"] // []) | length' "$SARIF" 2>/dev/null); then
+            fail "Cannot read the sanity results from the Qodana SARIF."
+          fi
+          # `wc -c` rather than `du -h`: byte count, no locale- or platform-dependent spacing.
+          sarif_size=$(wc -c < "$SARIF" | tr -d '[:space:]')
+
+          # Reject non-numeric operands up front. `(( ))` errors are swallowed by the
+          # enclosing `if`, so without this a malformed limit would silently read as "not
+          # sick", and leading zeros would be taken as octal.
+          for value in "$new" "$total" "$sanity" \
+                       "$MAX_NEW_PROBLEMS" "$MAX_TOTAL_PROBLEMS" "$MAX_SANITY"; do
+            [[ $value =~ ^[0-9]+$ ]] || fail "Non-numeric problem count or limit: '$value'."
+          done
+
+          sick=false
+          if (( 10#$new >= 10#$MAX_NEW_PROBLEMS )) \
+             || (( 10#$total >= 10#$MAX_TOTAL_PROBLEMS )) \
+             || (( 10#$sanity >= 10#$MAX_SANITY )); then
+            sick=true
+          fi
+          {
+            printf 'sick=%s\n' "$sick"
+            printf 'new-problems=%s\n' "$new"
+            printf 'total-problems=%s\n' "$total"
+            printf 'sanity-problems=%s\n' "$sanity"
+            printf 'sarif-size=%s\n' "$sarif_size"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### Qodana analysis health'
+            echo
+            echo '| metric | value | limit |'
+            echo '| --- | --- | --- |'
+            printf '| new problems | %s | %s |\n' "$new" "$MAX_NEW_PROBLEMS"
+            printf '| total problems | %s | %s |\n' "$total" "$MAX_TOTAL_PROBLEMS"
+            printf '| sanity problems | %s | %s |\n' "$sanity" "$MAX_SANITY"
+            printf '| SARIF size (bytes) | %s | — |\n' "$sarif_size"
+            printf '| verdict | `%s` | |\n' "$sick"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$sick" == 'true' ]]; then
+            echo "::error::Degenerate Qodana analysis (${new} new of ${total} problems, ${sanity} sanity problems). Failing the run and withholding the SARIF so it cannot rewrite code scanning history; the report is uploaded as an artifact."
+            exit 1
+          fi
+          echo "Qodana analysis looks healthy (${new} new of ${total} problems, ${sanity} sanity problems)."
+      - name: Upload degenerate analysis results
+        if: ${{ always() && steps.analysis-health.outputs.sick == 'true' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: qodana-degenerate-${{ github.run_id }}
+          path: ${{ runner.temp }}/qodana/results
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Upload Qodana SARIF
+        if: ${{ steps.analysis-health.outputs.sick == 'false' }}
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+      # Only main advances the baseline, and only from a healthy analysis: a partial or
+      # degenerate run would otherwise be frozen as "accepted" and hide real problems
+      # from every later run. PR branches read main's baseline but never replace it,
+      # so their own problems keep counting as new instead of being silently accepted.
+      # The full SARIF is stored as-is (no trimming) so Qodana's fingerprint matching
+      # sees exactly the document it produced.
+      - name: Save Qodana baseline
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.analysis-health.outputs.sick == 'false' }}
+        shell: bash
+        env:
+          SARIF: ${{ runner.temp }}/qodana/results/qodana.sarif.json
+          BASELINE_DIR: ${{ runner.temp }}/qodana/baseline
+        run: |
+          set -euo pipefail
+          mkdir -p "$BASELINE_DIR"
+          cp "$SARIF" "$BASELINE_DIR/baseline.sarif.json"
+          echo "Baseline updated from this run ($(jq '[.runs[].results[]?] | length' "$BASELINE_DIR/baseline.sarif.json") accepted problems)"
+      - name: Cache Qodana baseline
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.analysis-health.outputs.sick == 'false' && steps.restore-qodana-baseline.outputs.cache-matched-key != format('qodana-baseline-{0}-{1}-{2}', runner.os, runner.arch, github.sha) }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/qodana/baseline
+          key: qodana-baseline-${{ runner.os }}-${{ runner.arch }}-${{ github.sha }}
+      - name: Compute IntelliJ Platform IDE Inventory
+        id: intellij-platform-ides
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_dir="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          inventory_file="$RUNNER_TEMP/intellij-platform-ides-inventory"
+          : > "$inventory_file"
+
+          while IFS= read -r -d '' ide_dir; do
+            relative_name="${ide_dir#"$cache_dir"/}"
+            printf '%s\0' "$relative_name" >> "$inventory_file"
+          done < <(find "$cache_dir" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+          if [[ ! -s "$inventory_file" ]]; then
+            printf '%s\n' '::error::No IntelliJ Platform IDE distributions were resolved'
+            exit 1
+          fi
+
+          fingerprint="$(sha256sum "$inventory_file" | cut -d ' ' -f 1)"
+          key="ijpl-ides-v2-${RUNNER_OS}-${RUNNER_ARCH}-${fingerprint}"
+          {
+            printf 'fingerprint=%s\n' "$fingerprint"
+            printf 'key=%s\n' "$key"
+          } >> "$GITHUB_OUTPUT"
+      - name: Save IntelliJ Platform IDE Cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.intellij-platform-ides.outputs.key != steps.restore-intellij-platform-ides.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ${{ steps.intellij-platform-ides.outputs.key }}
+      - name: Compute Qodana Cache Key
+        id: qodana-cache-key
+        shell: bash
+        env:
+          IDE_CACHE_KEY: ${{ steps.intellij-platform-ides.outputs.key }}
+          LAYOUT_FINGERPRINT: ${{ steps.qodana-cache-layout.outputs.fingerprint }}
+          GRADLE_HASH: ${{ steps.qodana-cache-layout.outputs.gradle-hash }}
+        run: |
+          set -euo pipefail
+          key="qodana-native-v4-2026.3-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-${GRADLE_HASH}-refs/heads/main-${GITHUB_SHA}"
+          printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
+      - name: Save Qodana Cache
+        if: ${{ success() && github.ref == 'refs/heads/main' && steps.qodana-cache-key.outputs.key != steps.restore-qodana-cache.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ runner.temp }}/qodana/caches
+          key: ${{ steps.qodana-cache-key.outputs.key }}
