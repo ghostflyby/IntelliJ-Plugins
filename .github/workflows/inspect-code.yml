@@ -89,9 +89,9 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/qodana/caches
-          key: qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-${{ github.sha }}
+          key: qodana-native-v4-2026.3-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-${{ github.sha }}
           restore-keys: |
-            qodana-native-v4-2026.2-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-
+            qodana-native-v4-2026.3-${{ runner.os }}-${{ runner.arch }}-${{ steps.qodana-cache-layout.outputs.fingerprint }}-${{ steps.restore-intellij-platform-ides.outputs.cache-matched-key }}-${{ steps.qodana-cache-layout.outputs.gradle-hash }}-${{ github.ref }}-
       # The baseline is the accepted problem set of the default branch, so only healthy
       # main runs write it back (see "Save Qodana baseline" below); every other run
       # restores it and passes it to Qodana, which is what makes the health check count
@@ -136,7 +136,7 @@ jobs:
           fi
           printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
       - name: Qodana - Code Inspection
-        uses: JetBrains/qodana-action@v2026.2.2
+        uses: JetBrains/qodana-action@v2026.3.1
         with:
           use-caches: false
           cache-dir: ${{ runner.temp }}/qodana/caches
@@ -327,7 +327,7 @@ jobs:
           GRADLE_HASH: ${{ steps.qodana-cache-layout.outputs.gradle-hash }}
         run: |
           set -euo pipefail
-          key="qodana-native-v4-2026.2-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-${GRADLE_HASH}-refs/heads/main-${GITHUB_SHA}"
+          key="qodana-native-v4-2026.3-${RUNNER_OS}-${RUNNER_ARCH}-${LAYOUT_FINGERPRINT}-${IDE_CACHE_KEY}-${GRADLE_HASH}-refs/heads/main-${GITHUB_SHA}"
           printf 'key=%s\n' "$key" >> "$GITHUB_OUTPUT"
       - name: Save Qodana Cache
         if: ${{ success() && github.ref == 'refs/heads/main' && steps.qodana-cache-key.outputs.key != steps.restore-qodana-cache.outputs.cache-matched-key }}
