@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- bundle HotSwapAgent 2.0.5 (from 2.0.3)
+  [#341](https://github.com/ghostflyby/IntelliJ-Plugins/pull/341)
+
 ## [1.6.0] - 2026-09-14
 
 ### Added
