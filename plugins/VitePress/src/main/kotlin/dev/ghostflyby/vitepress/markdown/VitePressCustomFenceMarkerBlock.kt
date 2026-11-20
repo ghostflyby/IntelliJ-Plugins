@@ -82,7 +82,14 @@ public class VitePressCustomFenceMarkerBlock(
         val nextLineOffset = pos.nextLineOrEofOffset
         realInterestingOffset = nextLineOffset
 
-        val currentLine = nextLineConstraints.eatItselfFromString(pos.currentLine)
+        // Position.currentLine changed its return type from String to CharSequence in the markdown
+        // versions bundled from 2026.2 on, which breaks the binary link of calls compiled against
+        // 2026.1. currentLineFromPosition is stable, and taken from the line-start position it covers
+        // the whole line; for an empty new line nextPosition() stays on a newline position (or null
+        // at EOF), where the fallback matches the empty line.
+        val currentLine = nextLineConstraints.eatItselfFromString(
+            pos.nextPosition()?.takeIf { it.offsetInCurrentLine >= 0 }?.currentLineFromPosition ?: "",
+        )
         if (endsThisFence(currentLine)) {
             allowSubBlocks = false
             val nextOffset = pos.nextPosition(1)?.offset ?: (pos.offset + 1)

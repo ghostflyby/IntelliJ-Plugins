@@ -36,7 +36,7 @@ scope.launch {
 
 `UserDataHolder.putUserData()` 存储的数据必须配合 `Disposable` 清理，防止内存泄漏。
 
-推荐使用 `AutoCleanKey`（详见 [intellij-shared-AutoCleanKey](../intellij-shared-AutoCleanKey/SKILL.md)）：
+推荐使用 `AutoCleanKey`（详见 [intellij-shared-AutoCleanKey](../intellij-shared-autocleankey/SKILL.md)）：
 
 ```kotlin
 val key = Key.create<String>("my.key")

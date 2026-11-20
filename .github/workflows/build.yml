@@ -15,47 +15,74 @@ concurrency:
 jobs:
   build-and-check:
     name: Build and Check
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            primary: true
+            wsl: false
+          - os: windows-latest
+            primary: false
+            wsl: true
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: recursive
+      - name: Free disk space
+        # Build outputs plus full-repo verification fill most of the runner disk
+        # (ENOSPC seen in run 34758371488). Mirror the releaseDraft job.
+        if: ${{ matrix.primary }}
+        uses: jlumbroso/free-disk-space@v2.0.0
+        with:
+          tool-cache: false
+          large-packages: false
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: jetbrains
           java-version: 21
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-      - name: Build plugin
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache buildPlugin
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
+      - name: Setup WSL
+        if: ${{ matrix.wsl }}
+        uses: Vampire/setup-wsl@v7
         with:
-          name: plugin-distributions
-          path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
-          if-no-files-found: error
-      - name: Run Tests
+          distribution: Ubuntu-24.04
+          set-as-default: true
+          use-cache: true
+      - name: Configure IntelliJ Platform IDE Cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle_user_home="${GRADLE_USER_HOME:-$HOME/.gradle}"
+          ide_cache="$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+              ide_cache="$(cygpath -m "$ide_cache")"
+          fi
+          mkdir -p "$gradle_user_home" "$HOME/.cache/JetBrains/IJPL-Gradle/IDEs"
+          {
+              printf '\n'
+              printf '%s\n' 'org.jetbrains.intellij.platform.intellijPlatformIdesCacheEnabled=true'
+              printf 'org.jetbrains.intellij.platform.intellijPlatformIdesCache=%s\n' "$ide_cache"
+          } >> "$gradle_user_home/gradle.properties"
+      - name: Restore IntelliJ Platform IDE Cache
+        id: restore-intellij-platform-ides
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-lookup-${{ github.run_id }}
+          restore-keys: |
+            ijpl-ides-v2-${{ runner.os }}-${{ runner.arch }}-
+      - name: Run Checks
+        if: ${{ matrix.primary }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -65,20 +92,30 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache check
+          & $gradlew --configuration-cache check koverXmlReport
+      - name: Run WSL Tests
+        if: ${{ matrix.wsl }}
+        # WSL tests self-enable on Windows through the EnabledOnWsl condition (the distribution
+        # is discovered from the \\wsl.localhost UNC root — no property or tag switch).
+        # rollout: swap the task list for the root `test` when more plugins ship WSL tests
+        run: '& .\gradlew.bat --configuration-cache :plugins:EnhancedHotSwapEnabler:test'
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: tests-result
+          name: tests-result-${{ matrix.os }}
           path: ${{ github.workspace }}/**/build/reports/tests
       - name: Collect Code Coverage Reports
+        if: ${{ matrix.primary }}
         id: coverage
         run: |
           $reports = Get-ChildItem `
-            -Path (Join-Path $env:GITHUB_WORKSPACE "plugins/*/build/reports/kover/report.xml") `
+            -Path $env:GITHUB_WORKSPACE `
+            -Filter "report.xml" `
             -File `
-            -ErrorAction SilentlyContinue
+            -Recurse `
+            -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -match "[/\\]build[/\\]reports[/\\]kover[/\\]report\.xml$" }
           if (-not $reports)
           {
               exit 0
@@ -90,7 +127,79 @@ jobs:
         with:
           files: ${{ steps.coverage.outputs.files }}
           token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Select Plugin Verification tasks
+        if: ${{ matrix.primary }}
+        id: plugin-verification
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          [string[]]$verificationTasks = @("verifyPlugin")
+
+          if ($env:EVENT_NAME -eq "pull_request")
+          {
+              [string[]]$changedFiles = @(git diff --name-only --no-renames $env:BASE_SHA $env:HEAD_SHA)
+              $diffExitCode = $LASTEXITCODE
+
+              if ($diffExitCode -eq 0 -and $changedFiles.Count -gt 0)
+              {
+                  $excludedPluginsPath = Join-Path $env:GITHUB_WORKSPACE ".ci/excluded-plugins.txt"
+                  [string[]]$excludedPlugins = if (Test-Path -LiteralPath $excludedPluginsPath -PathType Leaf)
+                  {
+                      @(Get-Content -LiteralPath $excludedPluginsPath |
+                              ForEach-Object { $_.Trim() } |
+                              Where-Object { $_ -and -not $_.StartsWith("#") })
+                  }
+                  else
+                  {
+                      @()
+                  }
+
+                  $allChangesMapToPlugins = $true
+                  [string[]]$plugins = @()
+                  foreach ($changedFile in $changedFiles)
+                  {
+                      $normalizedPath = $changedFile.Replace("\", "/")
+                      if ($normalizedPath -notmatch "^plugins/([^/]+)/")
+                      {
+                          $allChangesMapToPlugins = $false
+                          break
+                      }
+
+                      $pluginName = $Matches[1]
+                      $pluginBuildFile = Join-Path $env:GITHUB_WORKSPACE "plugins/$pluginName/build.gradle.kts"
+                      if (-not (Test-Path -LiteralPath $pluginBuildFile -PathType Leaf) -or
+                              $excludedPlugins -contains $pluginName)
+                      {
+                          $allChangesMapToPlugins = $false
+                          break
+                      }
+
+                      $plugins += $pluginName
+                  }
+
+                  if ($allChangesMapToPlugins -and $plugins.Count -gt 0)
+                  {
+                      [string[]]$verificationTasks = @($plugins |
+                              Sort-Object -Unique |
+                              ForEach-Object { ":plugins:${_}:verifyPlugin" })
+                  }
+              }
+              elseif ($diffExitCode -ne 0)
+              {
+                  Write-Warning "Unable to determine changed files; falling back to all Plugin Verifier tasks."
+                  $global:LASTEXITCODE = 0
+              }
+          }
+
+          $tasksJson = ConvertTo-Json -InputObject ([string[]]$verificationTasks) -Compress
+          "tasks=$tasksJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Plugin verification tasks: $( $verificationTasks -join ', ' )"
       - name: Run Plugin Verification tasks
+        if: ${{ matrix.primary }}
+        env:
+          PLUGIN_VERIFICATION_TASKS: ${{ steps.plugin-verification.outputs.tasks }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -100,21 +209,61 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache verifyPlugin
+          [string[]]$verificationTasks = @($env:PLUGIN_VERIFICATION_TASKS | ConvertFrom-Json)
+          [string[]]$gradleArguments = @("--configuration-cache")
+          $gradleArguments += $verificationTasks
+          & $gradlew @gradleArguments
+      - name: Upload plugin distributions
+        if: ${{ always() && hashFiles('plugins/*/build/distributions/*.zip') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-distributions-${{ matrix.os }}
+          path: ${{ github.workspace }}/plugins/*/build/distributions/*.zip
+          if-no-files-found: error
       - name: Collect Plugin Verifier Result
-        if: ${{ always() }}
+        if: ${{ always() && matrix.primary }}
         uses: actions/upload-artifact@v7
         with:
           name: pluginVerifier-result
           path: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
       - name: Plugin Verifier Summary
+        if: ${{ always() && matrix.primary }}
         env:
           reports: ${{ github.workspace }}/plugins/*/build/reports/pluginVerifier
         run: |
           Get-ChildItem -Path $env:reports -Filter "*.md" -Recurse -File |
                   Get-Content |
                   Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-  
+      - name: Compute Windows IntelliJ Platform IDE Inventory
+        if: ${{ matrix.wsl }}
+        id: intellij-platform-ides
+        run: |
+          $cacheDir = Join-Path $env:USERPROFILE ".cache/JetBrains/IJPL-Gradle/IDEs"
+          $inventoryFile = Join-Path $env:RUNNER_TEMP "intellij-platform-ides-inventory"
+          Remove-Item -LiteralPath $inventoryFile -ErrorAction SilentlyContinue
+          Get-ChildItem -Path $cacheDir -Directory -ErrorAction Stop |
+                  Sort-Object Name |
+                  ForEach-Object { [System.IO.File]::AppendAllText($inventoryFile, "$($_.Name)`0") }
+          if (-not (Test-Path -LiteralPath $inventoryFile) -or (Get-Item -LiteralPath $inventoryFile).Length -eq 0)
+          {
+              Write-Error "No IntelliJ Platform IDE distributions were resolved"
+              exit 1
+          }
+          $fingerprint = (Get-FileHash -Algorithm SHA256 -LiteralPath $inventoryFile).Hash.ToLowerInvariant()
+          $key = "ijpl-ides-v2-$env:RUNNER_OS-$env:RUNNER_ARCH-$fingerprint"
+          "fingerprint=$fingerprint" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "key=$key" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Save Windows IntelliJ Platform IDE Cache
+        if: ${{ matrix.wsl && success() && github.ref == 'refs/heads/main' && steps.intellij-platform-ides.outputs.key != steps.restore-intellij-platform-ides.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/JetBrains/IJPL-Gradle/IDEs
+          key: ${{ steps.intellij-platform-ides.outputs.key }}
+      - name: Report disk space
+        if: ${{ always() }}
+        shell: bash
+        run: df -h /
+
 
   inspectCode:
     name: Inspect code
@@ -126,6 +275,7 @@ jobs:
       pull-requests: write
     secrets:
       QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
+      GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
 
 
@@ -138,7 +288,7 @@ jobs:
       contents: write
     steps:
       - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
+        uses: jlumbroso/free-disk-space@v2.0.0
         with:
           tool-cache: false
           large-packages: false
@@ -148,14 +298,14 @@ jobs:
           fetch-depth: 0
           submodules: recursive
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: jetbrains
           java-version: 21
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@v6.4.1
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
           cache-read-only: true

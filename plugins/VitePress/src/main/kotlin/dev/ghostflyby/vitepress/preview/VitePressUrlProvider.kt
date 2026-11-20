@@ -30,6 +30,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.toNioPathOrNull
 import com.intellij.util.Url
 import com.intellij.util.Urls
+import dev.ghostflyby.vitepress.VitePressConstants
 import dev.ghostflyby.vitepress.VitePressFiletype
 import dev.ghostflyby.vitepress.isVitePressRoot
 import java.nio.file.Path
@@ -66,8 +67,8 @@ internal fun VirtualFile.isVitePressFileType(): Boolean {
 private fun buildPreviewRelativePath(rootPath: Path, targetPath: Path): String {
     val relativePath = rootPath.relativize(targetPath)
     val normalized = relativePath.normalize().toString()
-    if (!normalized.endsWith(MARKDOWN_SUFFIX, ignoreCase = true)) return normalized
-    val withoutExtension = normalized.substring(0, normalized.length - MARKDOWN_SUFFIX.length)
+    if (!normalized.endsWith(VitePressConstants.MARKDOWN_FILE_SUFFIX, ignoreCase = true)) return normalized
+    val withoutExtension = normalized.substring(0, normalized.length - VitePressConstants.MARKDOWN_FILE_SUFFIX.length)
     if (withoutExtension == INDEX_PAGE_NAME) return ""
     if (withoutExtension.endsWith("/$INDEX_PAGE_NAME")) return withoutExtension.removeSuffix(INDEX_PAGE_NAME)
     return withoutExtension
@@ -82,5 +83,4 @@ private fun findNearestVitePressRoot(file: VirtualFile): VirtualFile? {
     return null
 }
 
-private const val MARKDOWN_SUFFIX: String = ".md"
 private const val INDEX_PAGE_NAME: String = "index"

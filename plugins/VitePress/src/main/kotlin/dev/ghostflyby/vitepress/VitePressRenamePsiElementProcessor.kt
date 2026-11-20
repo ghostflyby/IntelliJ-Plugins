@@ -2,22 +2,6 @@
  * Copyright (c) 2026 ghostflyby
  * SPDX-FileCopyrightText: 2026 ghostflyby
  * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of IntelliJ-Plugins by ghostflyby
- *
- * IntelliJ-Plugins by ghostflyby is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Lesser General Public
- * License as published by the Free Software Foundation; either
- * version 3.0 of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public
- * License along with this library; if not, see
- * <https://www.gnu.org/licenses/>.
  */
 
 package dev.ghostflyby.vitepress
@@ -26,12 +10,7 @@ import com.intellij.injected.editor.DocumentWindow
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.util.TextRange
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiReference
-import com.intellij.psi.SmartPointerManager
-import com.intellij.psi.SmartPsiFileRange
+import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.refactoring.listeners.RefactoringElementListener
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
@@ -122,7 +101,7 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
     private fun createHostRenamePointers(usages: List<UsageInfo>): List<SmartPsiFileRange> {
         return usages
             .mapNotNull(::toHostRenameTarget)
-            .distinctBy { target -> target.file.virtualFile?.path to target.range }
+            .distinctBy { target -> target.file.viewProvider.virtualFile.path to target.range }
             .map { target ->
                 SmartPointerManager.getInstance(target.file.project)
                     .createSmartPsiFileRangePointer(target.file, target.range)
@@ -186,7 +165,7 @@ internal class VitePressRenamePsiElementProcessor : RenamePsiElementProcessor() 
 
     private fun matchesHostRange(reference: PsiReference, hostFile: PsiFile, hostRange: TextRange): Boolean {
         val target = toHostRenameTarget(reference) ?: return false
-        return target.file.virtualFile == hostFile.virtualFile && target.range == hostRange
+        return target.file.viewProvider.virtualFile == hostFile.virtualFile && target.range == hostRange
     }
 
     private fun toHostRenameTarget(usage: UsageInfo): HostRenameTarget? {

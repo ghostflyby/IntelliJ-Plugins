@@ -30,16 +30,29 @@ val offset = readAction { doc?.getLineStartOffset(line) }
 
 VFS 读写遵循具体 API 的锁注解（`@RequiresReadLock`、`@RequiresWriteLock`）和文档合同。当需要与 PSI/Document 状态保持一致性快照时，获取对应的 read/write access。
 
-## 4. 内部辅助函数不假设调用者上下文
+## 4. 仅在 public API 边界手写线程断言
 
-对于读取 PSI/Document 或需要 VFS access 约束的内部辅助函数，不假设调用者已持有正确的锁。在深层辅助函数中添加显式守卫：
+只有有效 public API 才直接调用 `ThreadingAssertions`。有效可见性需要同时考虑声明及其外层类型；`internal` / `private` 类型中的
+public member 或 override 不属于 public API。
+
+public API 同时保留锁注解，并通过 `generateAssertion = false` 避免 DevKit instrumentation 重复注入断言：
 
 ```kotlin
-fun readPsi(psiFile: PsiFile): String {
-    ApplicationManager.getApplication().assertReadAccessAllowed()
+@RequiresReadLock(generateAssertion = false)
+public fun readPsi(psiFile: PsiFile): String {
+    ThreadingAssertions.assertReadAccess()
     return psiFile.text
 }
 ```
+
+`internal` / `private` 声明只使用对应的线程合同注解，不手写 `ThreadingAssertions`，也不关闭默认 instrumentation：
+
+```kotlin
+@RequiresReadLock
+internal fun readPsi(psiFile: PsiFile): String = psiFile.text
+```
+
+同一规则适用于 `@RequiresWriteLock`、`@RequiresEdt`、`@RequiresBackgroundThread` 等注解与对应断言。
 
 ## 5. 修改 Document 后必须 commit
 

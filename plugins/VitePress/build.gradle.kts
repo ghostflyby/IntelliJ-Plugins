@@ -9,15 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-version = "1.1.0"
-
-intellijPlatform {
-    pluginConfiguration {
-        ideaVersion {
-            untilBuild = "261.*"
-        }
-    }
-}
+version = "1.1.2"
 
 dependencies {
     implementation(project(":modules:intellij-shared"))

@@ -25,7 +25,10 @@ package dev.ghostflyby.vitepress
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.editor.colors.TextAttributesKey
+import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
+import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.PsiUtilCore
 import dev.ghostflyby.vitepress.preview.isVitePressFileType
 import org.intellij.plugins.markdown.highlighting.MarkdownSyntaxHighlighter
@@ -56,9 +59,9 @@ internal class VitePressHeadingInterpolationAnnotator : Annotator {
     }
 
     private fun hostAttributes(
-        elementType: com.intellij.psi.tree.IElementType,
+        elementType: IElementType,
         element: PsiElement,
-    ): com.intellij.openapi.editor.colors.TextAttributesKey? {
+    ): TextAttributesKey? {
         return when (elementType) {
             in headingTokenTypes -> {
                 val headingType = parentHeadingType(element) ?: return null
@@ -72,9 +75,9 @@ internal class VitePressHeadingInterpolationAnnotator : Annotator {
     }
 
     private fun guestRanges(
-        elementType: com.intellij.psi.tree.IElementType,
+        elementType: IElementType,
         element: PsiElement,
-    ): List<com.intellij.openapi.util.TextRange> {
+    ): List<TextRange> {
         return when (elementType) {
             in headingTokenTypes -> element.containingFile.getVitePressHeadingGuestRanges()
             MarkdownElementTypes.LINK_TEXT -> element.containingFile.getVitePressLinkGuestRanges()
@@ -86,25 +89,17 @@ internal class VitePressHeadingInterpolationAnnotator : Annotator {
 private val headingTokenTypes = setOf(MarkdownTokenTypes.ATX_CONTENT, MarkdownTokenTypes.SETEXT_CONTENT)
 private val supportedHostTokenTypes = headingTokenTypes + MarkdownElementTypes.LINK_TEXT
 private val markdownSyntaxHighlighter = MarkdownSyntaxHighlighter()
-private val headingAttributesByType =
-    mapOf(
-        MarkdownElementTypes.ATX_1 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_1)
-            .firstOrNull(),
-        MarkdownElementTypes.ATX_2 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_2)
-            .firstOrNull(),
-        MarkdownElementTypes.ATX_3 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_3)
-            .firstOrNull(),
-        MarkdownElementTypes.ATX_4 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_4)
-            .firstOrNull(),
-        MarkdownElementTypes.ATX_5 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_5)
-            .firstOrNull(),
-        MarkdownElementTypes.ATX_6 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.ATX_6)
-            .firstOrNull(),
-        MarkdownElementTypes.SETEXT_1 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.SETEXT_1)
-            .firstOrNull(),
-        MarkdownElementTypes.SETEXT_2 to markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.SETEXT_2)
-            .firstOrNull(),
-    )
+private val headingAttributesByType: Map<IElementType, TextAttributesKey?> =
+    listOf(
+        MarkdownElementTypes.ATX_1,
+        MarkdownElementTypes.ATX_2,
+        MarkdownElementTypes.ATX_3,
+        MarkdownElementTypes.ATX_4,
+        MarkdownElementTypes.ATX_5,
+        MarkdownElementTypes.ATX_6,
+        MarkdownElementTypes.SETEXT_1,
+        MarkdownElementTypes.SETEXT_2,
+    ).associateWith { markdownSyntaxHighlighter.getTokenHighlights(it).firstOrNull() }
 private val linkTextAttributes =
     markdownSyntaxHighlighter.getTokenHighlights(MarkdownElementTypes.LINK_TEXT).firstOrNull()
 

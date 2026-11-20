@@ -30,6 +30,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.vfs.readText
 import com.intellij.openapi.vfs.toNioPathOrNull
+import dev.ghostflyby.vitepress.VitePressConstants
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.nio.file.Path
@@ -79,10 +80,7 @@ internal class VitePressPackageJsonScriptIndex : Disposable {
     }
 
     private fun resolvePathToVitePressRoot(path: Path): Path? {
-
-        val root = runCatching {
-            virtualFileManager.findFileByNioPath(path)
-        }.getOrNull() ?: return null
+        val root = findFileByPath(path) ?: return null
         val normalizedRoot = normalizeToVitePressRoot(root) ?: return null
         return normalizedRoot.toNioPathOrNull()
     }
@@ -123,43 +121,31 @@ internal fun extractVitePressRootPaths(command: String, packageJsonDirectoryPath
     val resolvedRoots = linkedSetOf<Path>()
     var workingDirectory = packageJsonDirectoryPath
 
-    splitCommandSegments(command).forEach { segment ->
-        val tokens = tokenizeCommandSegment(segment)
-        if (tokens.isEmpty()) return@forEach
-
-        parseCdInvocation(tokens)?.let { cd ->
-            workingDirectory = resolvePathAgainstBase(workingDirectory, cd.targetDirectory) ?: workingDirectory
+    splitCommandIntoTokenSegments(command).forEach { tokens ->
+        parseCdInvocation(tokens)?.let { targetDirectory ->
+            workingDirectory = resolvePathAgainstBase(workingDirectory, targetDirectory) ?: workingDirectory
             return@forEach
         }
 
-        val invocation = parseVitePressInvocation(tokens) ?: return@forEach
-        val rootPath = invocation.rootDirectoryArg?.let { arg ->
-            resolvePathAgainstBase(workingDirectory, arg)
-        } ?: workingDirectory
-        resolvedRoots.add(rootPath.normalize())
+        parseVitePressRoot(tokens, workingDirectory)?.let { rootPath ->
+            resolvedRoots.add(rootPath)
+        }
     }
     return resolvedRoots
 }
 
-private data class ParsedCdInvocation(
-    val targetDirectory: String,
-)
-
-private data class ParsedVitePressInvocation(
-    val rootDirectoryArg: String?,
-)
-
-private fun parseCdInvocation(tokens: List<String>): ParsedCdInvocation? {
+private fun parseCdInvocation(tokens: List<String>): String? {
     if (!tokens.firstOrNull().equals("cd", ignoreCase = true)) return null
-    val targetDirectory =
-        tokens.asSequence()
-            .drop(1)
-            .firstOrNull { token -> token != "--" && !token.startsWith("-") }
-            ?: return null
-    return ParsedCdInvocation(targetDirectory)
+    return tokens.asSequence()
+        .drop(1)
+        .firstOrNull { token -> token != "--" && !token.startsWith("-") }
 }
 
-private fun parseVitePressInvocation(tokens: List<String>): ParsedVitePressInvocation? {
+/**
+ * Resolves the vitepress root directory for one command segment, or returns null when the segment
+ * does not start a vitepress preview/dev invocation (`build` and non-vitepress commands are skipped).
+ */
+private fun parseVitePressRoot(tokens: List<String>, workingDirectory: Path): Path? {
     val vitepressIndex = tokens.indexOfFirst { token -> isVitePressExecutableToken(token) }
     if (vitepressIndex < 0) return null
 
@@ -181,7 +167,10 @@ private fun parseVitePressInvocation(tokens: List<String>): ParsedVitePressInvoc
         }
 
     val rootDirectoryArg = parseVitePressRootArgument(tokens, argumentIndex, command)
-    return ParsedVitePressInvocation(rootDirectoryArg)
+    val rootPath = rootDirectoryArg?.let { arg ->
+        resolvePathAgainstBase(workingDirectory, arg)
+    } ?: workingDirectory
+    return rootPath.normalize()
 }
 
 private fun parseVitePressRootArgument(tokens: List<String>, startIndex: Int, command: String): String? {
@@ -239,17 +228,32 @@ private fun resolvePathAgainstBase(basePath: Path, pathText: String): Path? {
     return if (path.isAbsolute) path.normalize() else basePath.resolve(path).normalize()
 }
 
-private fun splitCommandSegments(command: String): List<String> {
-    val segments = mutableListOf<String>()
+/**
+ * Splits a shell-like command into `;`/`&&`/`||` separated segments and tokenizes each segment,
+ * honoring single/double quotes and backslash escapes. A backslash escapes the next character
+ * (and is dropped) outside single quotes, where it stays literal.
+ */
+private fun splitCommandIntoTokenSegments(command: String): List<List<String>> {
+    val segments = mutableListOf<List<String>>()
+    val tokens = mutableListOf<String>()
     val current = StringBuilder()
     var quote: Char? = null
     var escaped = false
     var index = 0
 
-    fun flush() {
-        val segment = current.toString().trim()
-        if (segment.isNotEmpty()) segments += segment
-        current.setLength(0)
+    fun flushToken() {
+        if (current.isNotEmpty()) {
+            tokens += current.toString()
+            current.setLength(0)
+        }
+    }
+
+    fun flushSegment() {
+        flushToken()
+        if (tokens.isNotEmpty()) {
+            segments += tokens.toList()
+            tokens.clear()
+        }
     }
 
     while (index < command.length) {
@@ -262,104 +266,52 @@ private fun splitCommandSegments(command: String): List<String> {
         }
 
         if (quote != null) {
-            if (ch == quote) quote = null
-            if (ch == '\\' && quote == '"') escaped = true
-            current.append(ch)
+            when (ch) {
+                quote -> quote = null
+                '\\' -> if (quote == '"') escaped = true else current.append(ch)
+                else -> current.append(ch)
+            }
             index++
             continue
         }
 
         when (ch) {
-            '\'', '"' -> {
-                quote = ch
+            '\'', '"' -> quote = ch
+            '\\' -> escaped = true
+            ';' -> flushSegment()
+
+            '&' -> if (index + 1 < command.length && command[index + 1] == '&') {
+                flushSegment()
+                index++
+            } else {
                 current.append(ch)
+            }
+
+            '|' -> if (index + 1 < command.length && command[index + 1] == '|') {
+                flushSegment()
                 index++
-            }
-
-            ';' -> {
-                flush()
-                index++
-            }
-
-            '&' if index + 1 < command.length && command[index + 1] == '&' -> {
-                flush()
-                index += 2
-            }
-
-            '|' if index + 1 < command.length && command[index + 1] == '|' -> {
-                flush()
-                index += 2
-            }
-
-            '\\' -> {
-                escaped = true
+            } else {
                 current.append(ch)
-                index++
             }
 
-            else -> {
-                current.append(ch)
-                index++
-            }
+            else -> if (ch.isWhitespace()) flushToken() else current.append(ch)
         }
+        index++
     }
-    flush()
+    flushSegment()
     return segments
-}
-
-private fun tokenizeCommandSegment(segment: String): List<String> {
-    val tokens = mutableListOf<String>()
-    val current = StringBuilder()
-    var quote: Char? = null
-    var escaped = false
-
-    fun flush() {
-        if (current.isEmpty()) return
-        tokens += current.toString()
-        current.setLength(0)
-    }
-
-    segment.forEach { ch ->
-        if (escaped) {
-            current.append(ch)
-            escaped = false
-            return@forEach
-        }
-
-        if (quote != null) {
-            if (ch == quote) {
-                quote = null
-                return@forEach
-            }
-            if (ch == '\\' && quote == '"') {
-                escaped = true
-                return@forEach
-            }
-            current.append(ch)
-            return@forEach
-        }
-
-        when {
-            ch.isWhitespace() -> flush()
-            ch == '\'' || ch == '"' -> quote = ch
-            ch == '\\' -> escaped = true
-            else -> current.append(ch)
-        }
-    }
-    flush()
-    return tokens
 }
 
 private fun normalizeToVitePressRoot(file: VirtualFile): VirtualFile? {
     if (!file.isValid) return null
     if (file.isDirectory) {
-        if (file.findChild(VITEPRESS_CONFIG_DIRECTORY)?.isDirectory == true) return file
-        if (file.name == VITEPRESS_CONFIG_DIRECTORY) return file.parent
+        if (file.findChild(VitePressConstants.CONFIG_DIRECTORY)?.isDirectory == true) return file
+        if (file.name == VitePressConstants.CONFIG_DIRECTORY) return file.parent
     }
 
     var current: VirtualFile? = if (file.isDirectory) file else file.parent
     while (current != null) {
-        if (current.name == VITEPRESS_CONFIG_DIRECTORY) return current.parent
+        if (current.name == VitePressConstants.CONFIG_DIRECTORY) return current.parent
         current = current.parent
     }
     return null
@@ -390,5 +342,4 @@ private val VITEPRESS_OPTION_VALUE_KINDS = mapOf(
 private const val VITEPRESS_DEV_COMMAND: String = "dev"
 private const val VITEPRESS_PREVIEW_COMMAND: String = "preview"
 private const val VITEPRESS_SERVE_COMMAND: String = "serve"
-private const val VITEPRESS_CONFIG_DIRECTORY: String = ".vitepress"
 private val SCRIPTS_CACHE_KEY = Key.create<PackageJsonScriptsCache>("vitepress.packageJsonScriptsCache")
