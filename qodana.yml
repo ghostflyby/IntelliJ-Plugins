@@ -30,3 +30,23 @@ exclude:
   - name: SplitModeApiUsage
     paths:
       - plugins/WorkspaceMcpTools
+  # Gradle-derived module dependencies are structurally misreported here: test source sets
+  # inherit every implementation() dependency (test sources rarely reference them, and removing
+  # the inherited dependency is impossible without removing the production one), and
+  # pluginModule/pluginComposedModule declarations are packaging directives whose jars must ship
+  # in the sandbox even when the main sources never import them. The build scripts are the source
+  # of truth. Revisit when the inspection understands the IPG plugin-module model.
+  - name: UnnecessaryModuleDependencyInspection
+  # Same false-positive family as the three alerts already dismissed as false positive
+  # (LiveTemplatesWithSelection, macOSRecents, EnhancedHotSwapEnabler): these personal plugins do
+  # not maintain pluginIcon.svg assets.
+  - name: PluginXmlPluginLogo
+  # SplitModeModuleKindResolver attributes the embedded backend content module's dependencies to
+  # the root descriptor, so the plugin looks implicitly backend-only. At runtime the backend
+  # module is required-if-available="intellij.platform.backend", which lets the root and the
+  # frontend content module keep loading in the JetBrains Client; the suggested quick fix (a
+  # root-level backend dependency) would actually break that dual-side loading. Remove when the
+  # resolver understands required-if-available content modules.
+  - name: SplitModeImplicitModuleKind
+    paths:
+      - plugins/WorkspaceMcpTools

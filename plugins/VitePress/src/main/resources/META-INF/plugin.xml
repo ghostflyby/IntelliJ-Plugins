@@ -13,6 +13,8 @@
     <depends>org.jetbrains.plugins.vue</depends>
 
     <applicationListeners>
+        <!--suppress PluginXmlValidity QDJVM resolves the Kotlin listener class but misses its
+             DynamicPluginListener supertype; the source class implements the interface -->
         <listener class="dev.ghostflyby.vitepress.VitePressDynamicPluginListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>

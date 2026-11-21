@@ -10,6 +10,8 @@
     <depends>com.intellij.modules.platform</depends>
 
     <applicationListeners>
+        <!--suppress PluginXmlValidity QDJVM resolves the Kotlin listener class but misses its
+             RecentProjectsChange supertype; the source class implements the interface -->
         <listener class="dev.ghostflyby.mac.recents.CocoaRecentProjectsListener"
                   topic="com.intellij.ide.RecentProjectsManager$RecentProjectsChange" os="mac"/>
     </applicationListeners>
