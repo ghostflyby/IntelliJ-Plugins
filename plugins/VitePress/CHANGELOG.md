@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-21
+
 ### Fixed
 
 - Settings are now persisted across restarts: the file-type workaround and notification-service
@@ -68,7 +70,8 @@
 - Stable top-level HTML block handling for multi-line blocks such as `script`, avoiding fragmented lexing and broken
   embedded highlighting.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.2...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.3...HEAD
+[1.1.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.2...VitePress-v1.1.3
 [1.1.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.1...VitePress-v1.1.2
 [1.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.1.0...VitePress-v1.1.1
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/VitePress-v1.0.1...VitePress-v1.1.0
