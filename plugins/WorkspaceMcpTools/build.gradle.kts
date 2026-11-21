@@ -12,7 +12,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "2.1.0"
+version = "2.1.1"
 
 dependencies {
     intellijPlatform {
