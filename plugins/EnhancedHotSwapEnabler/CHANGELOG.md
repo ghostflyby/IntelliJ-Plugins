@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-11-21
+
 ### Changed
 
 - bundle HotSwapAgent 2.0.5 (from 2.0.3)
@@ -135,7 +137,8 @@
 - Not editing parameters for non-debug starts
 - Wrong Gradle plugin class name
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.6.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.6.1...HEAD
+[1.6.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.6.0...EnhancedHotSwapEnabler-v1.6.1
 [1.6.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.5.7...EnhancedHotSwapEnabler-v1.6.0
 [1.5.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.4.7...EnhancedHotSwapEnabler-v1.5.7
 [1.4.7]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/EnhancedHotSwapEnabler-v1.3.7...EnhancedHotSwapEnabler-v1.4.7
