@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Settings are now persisted across restarts: the file-type workaround and notification-service
+  state classes were not serialized (missing `@Serializable`, and one `@JvmField` hid its property)
+
 ## [1.1.2] - 2026-10-29
 
 ### Fixed

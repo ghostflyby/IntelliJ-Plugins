@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Linked Gradle build state is now persisted across IDE restarts (the state class had no serializer)
+
 ## [0.1.0] - 2026-09-19
 
 ### Added
