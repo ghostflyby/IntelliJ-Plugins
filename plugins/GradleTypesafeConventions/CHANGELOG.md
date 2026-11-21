@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-21
+
 ### Fixed
 
 - Linked Gradle build state is now persisted across IDE restarts (the state class had no serializer)
@@ -49,5 +51,6 @@
 - Restore catalog navigation after Gradle sync when version catalog models are reported by `buildSrc` or another
   resolver beneath the linked Gradle root.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.0...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.1...HEAD
+[0.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.0...GradleTypesafeConventions-v0.1.1
 [0.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/GradleTypesafeConventions-v0.1.0
