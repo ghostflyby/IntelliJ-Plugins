@@ -14,8 +14,8 @@ plugins {
     alias(libs.plugins.kover)
 }
 
-@OptIn(ExperimentalAbiValidation::class)
 kotlin {
+    @OptIn(ExperimentalAbiValidation::class)
     abiValidation()
 }
 

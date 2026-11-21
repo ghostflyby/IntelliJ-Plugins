@@ -6,11 +6,8 @@
 
 package dev.ghostflyby.mcp.sdk
 
-import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.RoamingType
-import com.intellij.openapi.components.Service
-import com.intellij.openapi.components.State
-import com.intellij.openapi.components.Storage
+import com.intellij.openapi.components.*
+import kotlinx.serialization.Serializable
 
 @Service
 @State(
@@ -35,6 +32,7 @@ internal class WorkspaceMcpSdkServerSettings : PersistentStateComponent<Workspac
         myState = state
     }
 
+    @Serializable
     internal data class State(
         val previousVersion: String = "",
     )

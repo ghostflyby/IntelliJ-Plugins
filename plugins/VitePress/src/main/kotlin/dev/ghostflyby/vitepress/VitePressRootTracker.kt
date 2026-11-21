@@ -131,13 +131,12 @@ internal class VitePressRootTracker(
     }
 
     private fun updatePendingFiles(files: Collection<VirtualFile>): Boolean {
-        if (files.isEmpty()) return false
-        // Pending reparse queues are invisible to root queries; skipping the modification-count
-        // bump keeps isVitePressRoot/isUnderVitePressRoot caches valid for every tracked file.
-        return updateState { state ->
+        return !files.isEmpty() && updateState { state ->
             val nextPendingFiles = state.pendingFiles.addAllBridge(files)
             if (nextPendingFiles == state.pendingFiles) state else state.copy(pendingFiles = nextPendingFiles)
         }
+        // Pending reparse queues are invisible to root queries; skipping the modification-count
+        // bump keeps isVitePressRoot/isUnderVitePressRoot caches valid for every tracked file.
     }
 
     private fun updateState(transform: (State) -> State): Boolean {

@@ -22,6 +22,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.Serializable
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.plugins.gradle.model.projectModel.GradleBuildEntity
 import org.jetbrains.plugins.gradle.model.projectModel.modifyGradleBuildEntity
@@ -171,6 +172,7 @@ internal data class TypesafeConventionsGradleBuildCandidate(
     val catalogUrls: Set<String>,
 )
 
+@Serializable
 internal data class TypesafeConventionsGradleBuildPersistentState(
     val buildUrlsByProjectPath: Map<String, List<String>> = emptyMap(),
 )

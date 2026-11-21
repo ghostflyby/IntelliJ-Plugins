@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
@@ -1268,7 +1269,7 @@ internal class SpotlessProjectServiceTest {
         assertEquals(1, stopCount.get())
         assertEquals(1, provider.completionCount.get())
         assertTrue(waitUntil { formatting.isCompleted })
-        assertTrue(runCatching { formatting.await() }.isFailure)
+        assertThrows<CancellationException> { formatting.await() }
     }
 
     @Test
@@ -1297,7 +1298,7 @@ internal class SpotlessProjectServiceTest {
         provider.terminate()
 
         assertTrue(waitUntil { formatting.isCompleted })
-        assertTrue(runCatching { formatting.await() }.isFailure)
+        assertThrows<IllegalStateException> { formatting.await() }
         assertEquals(0, stopCount.get())
         assertEquals(1, provider.completionCount.get())
         assertFalse(spotless.hasRunningDaemons())
@@ -1373,7 +1374,7 @@ internal class SpotlessProjectServiceTest {
         assertEquals(1, provider.completionCount.get())
         assertFalse(spotless.hasRunningDaemons())
         assertTrue(waitUntil { formatting.isCompleted })
-        assertTrue(runCatching { formatting.await() }.isFailure)
+        assertThrows<CancellationException> { formatting.await() }
         assertEquals(0, stopCount.get())
     }
 
@@ -1411,7 +1412,7 @@ internal class SpotlessProjectServiceTest {
         assertTrue(lateHandle.lifetime.isCancelled)
         assertEquals(1, provider.completionCount.get())
         assertFalse(spotless.hasRunningDaemons())
-        assertTrue(runCatching { formatting.await() }.isFailure)
+        assertThrows<CancellationException> { formatting.await() }
     }
 
     @Test
