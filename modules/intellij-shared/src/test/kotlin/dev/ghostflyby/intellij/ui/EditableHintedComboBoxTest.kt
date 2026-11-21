@@ -99,21 +99,6 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
-    fun typingMatchingTextDoesNotCommitSelectedItem() {
-        val comboBox = createComboBox()
-        val path = choice("path", text = "PATH")
-        val project = choice("project", text = "Project")
-        comboBox.addItem(project)
-        comboBox.addItem(path)
-        comboBox.selectedItem = project
-
-        comboBox.editorTextField.text = "PATH"
-
-        assertEquals(project, comboBox.selectedItem)
-        assertEquals("PATH", comboBox.editorTextField.text)
-    }
-
-    @Test
     fun typingCustomTextDoesNotCreateSelectedItem() {
         val comboBox = createComboBox(createCustomValues = true)
         val project = choice("project", text = "Project")
@@ -140,16 +125,87 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
-    fun typingUnresolvedTextDoesNotClearDraft() {
+    fun enterCommitResolvesTypedTextToExistingItem() {
+        val comboBox = createComboBox()
+        val path = choice("path", text = "PATH")
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.addItem(path)
+        comboBox.selectedItem = project
+
+        comboBox.editorTextField.text = "PATH"
+        pressEnter(comboBox)
+
+        assertSame(path, comboBox.selectedItem)
+        assertEquals("PATH", comboBox.editorTextField.text)
+        assertEquals(2, comboBox.model.size)
+    }
+
+    @Test
+    fun enterCommitWithCustomTextCommitsCustomItemWithoutAddingToModel() {
+        val comboBox = createComboBox(createCustomValues = true)
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+
+        comboBox.editorTextField.text = "/usr/local/bin/mill"
+        pressEnter(comboBox)
+
+        assertEquals("custom:/usr/local/bin/mill", (comboBox.selectedItem as Choice).id)
+        assertEquals("/usr/local/bin/mill", comboBox.editorTextField.text)
+        assertEquals(1, comboBox.model.size)
+    }
+
+    @Test
+    fun enterCommitWithUnresolvedTextKeepsDraftAndSelection() {
         val comboBox = createComboBox(createCustomValues = false)
         val project = choice("project", text = "Project")
         comboBox.addItem(project)
         comboBox.selectedItem = project
 
         comboBox.editorTextField.text = "unknown"
+        pressEnter(comboBox)
 
-        assertEquals(project, comboBox.selectedItem)
+        assertSame(project, comboBox.selectedItem)
         assertEquals("unknown", comboBox.editorTextField.text)
+    }
+
+    @Test
+    fun enterCommitWithUnresolvedTextRestoresSelectionTextWhenRejecting() {
+        val comboBox = createComboBox(
+            createCustomValues = false,
+            unresolvedTextPolicy = UnresolvedTextPolicy.REJECT,
+        )
+        val project = choice("project", text = "Project")
+        comboBox.addItem(project)
+        comboBox.selectedItem = project
+
+        comboBox.editorTextField.text = "unknown"
+        pressEnter(comboBox)
+
+        assertSame(project, comboBox.selectedItem)
+        assertEquals("Project", comboBox.editorTextField.text)
+    }
+
+    @Test
+    fun bindSelectedItemSynchronizesBothDirections() {
+        val comboBox = createComboBox()
+        val project = choice("project", text = "Project")
+        val path = choice("path", text = "PATH")
+        comboBox.addItem(project)
+        comboBox.addItem(path)
+        val property = PropertyGraph().property<Choice?>(project)
+        panel {
+            row {
+                cell(comboBox).bindSelectedItem(property)
+            }
+        }
+
+        comboBox.selectedItem = path
+        assertEquals(path, property.get())
+
+        property.set(project)
+        assertEquals(project, comboBox.selectedItem)
     }
 
     @Test
@@ -238,12 +294,12 @@ internal class EditableHintedComboBoxTest {
     fun boundHintsUpdateVisibleEditorAfterUpdateUi() {
         val comboBox = createComboBox()
         val propertyGraph = PropertyGraph()
-        val leftHintProperty = propertyGraph.property("")
+        val trailingHintProperty = propertyGraph.property("")
         val rightHintProperty = propertyGraph.property("")
         panel {
             row {
                 cell(comboBox)
-                    .bindLeftHint(leftHintProperty)
+                    .bindTrailingHint(trailingHintProperty)
                     .bindRightHint(rightHintProperty)
             }
         }
@@ -251,12 +307,12 @@ internal class EditableHintedComboBoxTest {
 
         comboBox.updateUI()
         flushEdt()
-        leftHintProperty.set("/repo/mill")
+        trailingHintProperty.set("/repo/mill")
         rightHintProperty.set("1.0.0")
 
         assertSame(boundEditor, comboBox.editorTextField)
         assertSame(comboBox.editorTextField, comboBox.editor.editorComponent)
-        assertEquals("/repo/mill", comboBox.leftHint)
+        assertEquals("/repo/mill", comboBox.trailingHint)
         assertEquals("1.0.0", comboBox.rightHint)
     }
 
@@ -267,21 +323,21 @@ internal class EditableHintedComboBoxTest {
         comboBox.addItem(project)
         comboBox.selectedItem = project
         val propertyGraph = PropertyGraph()
-        val leftHintProperty = propertyGraph.property("")
+        val trailingHintProperty = propertyGraph.property("")
         val rightHintProperty = propertyGraph.property("")
         panel {
             row {
                 cell(comboBox)
-                    .bindLeftHint(leftHintProperty)
+                    .bindTrailingHint(trailingHintProperty)
                     .bindRightHint(rightHintProperty)
             }
         }
 
         comboBox.editorTextField.text = "PATH"
-        leftHintProperty.set("/repo/mill")
+        trailingHintProperty.set("/repo/mill")
         rightHintProperty.set("1.0.0")
 
-        assertEquals("/repo/mill", comboBox.leftHint)
+        assertEquals("/repo/mill", comboBox.trailingHint)
         assertEquals("1.0.0", comboBox.rightHint)
         assertEquals(project, comboBox.selectedItem)
     }
@@ -312,8 +368,14 @@ internal class EditableHintedComboBoxTest {
         assertNotEquals(initialRightInset, field.margin.right)
     }
 
-    private fun createComboBox(createCustomValues: Boolean = true): EditableHintedComboBox<Choice> {
-        return EditableHintedComboBox(adapter = TestChoiceAdapter(createCustomValues))
+    private fun createComboBox(
+        createCustomValues: Boolean = true,
+        unresolvedTextPolicy: UnresolvedTextPolicy = UnresolvedTextPolicy.KEEP_DRAFT,
+    ): EditableHintedComboBox<Choice> {
+        return EditableHintedComboBox(
+            adapter = TestChoiceAdapter(createCustomValues),
+            unresolvedTextPolicy = unresolvedTextPolicy,
+        )
     }
 
     private fun choice(
@@ -328,6 +390,12 @@ internal class EditableHintedComboBoxTest {
         SwingUtilities.invokeAndWait {}
     }
 
+    private fun pressEnter(comboBox: EditableHintedComboBox<*>) {
+        SwingUtilities.invokeAndWait {
+            comboBox.editorTextField.postActionEvent()
+        }
+    }
+
     private data class Choice(
         val id: String,
         val text: String,
@@ -337,8 +405,8 @@ internal class EditableHintedComboBoxTest {
     private class TestChoiceAdapter(
         private val createCustomValues: Boolean,
     ) : EditableHintedComboBoxAdapter<Choice> {
-        override fun text(t: Choice): String {
-            return t.text
+        override fun text(item: Choice): String {
+            return item.text
         }
 
         override fun fromText(

@@ -14,6 +14,7 @@ import com.intellij.ui.NewUI
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.Row
+import java.awt.event.ItemEvent
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.ComboBoxModel
@@ -32,14 +33,14 @@ public fun <T> Cell<EditableHintedComboBox<T>>.bindRightHint(
     }
 }
 
-public fun <T> Cell<EditableHintedComboBox<T>>.bindLeftHint(
+public fun <T> Cell<EditableHintedComboBox<T>>.bindTrailingHint(
     property: ObservableProperty<String>,
 ): Cell<EditableHintedComboBox<T>> = applyToComponent {
-    leftHint = property.get()
+    trailingHint = property.get()
     val mutex = AtomicBoolean()
     property.afterChange {
         mutex.lockOrSkip {
-            leftHint = it
+            trailingHint = it
         }
     }
 }
@@ -51,12 +52,38 @@ public fun <T> Cell<EditableHintedComboBox<T>>.bindText(
     editorTextField.bind(property)
 }
 
+/**
+ * Binds the resolved selected item two-way. Committing unresolved editor text never changes the
+ * selection, so the property only moves when an item is actually resolved and selected.
+ */
+public fun <T> Cell<EditableHintedComboBox<T>>.bindSelectedItem(
+    property: ObservableMutableProperty<T?>,
+): Cell<EditableHintedComboBox<T>> = applyToComponent {
+    selectedItem = property.get()
+    val mutex = AtomicBoolean()
+    addItemListener { event ->
+        if (event.stateChange == ItemEvent.SELECTED) {
+            mutex.lockOrSkip {
+                @Suppress("UNCHECKED_CAST")
+                property.set(event.item as T?)
+            }
+        }
+    }
+    property.afterChange { value ->
+        mutex.lockOrSkip {
+            selectedItem = value
+        }
+    }
+}
 
 public fun <T> Row.editableHintedComboBox(
     model: ComboBoxModel<T>,
+    adapter: EditableHintedComboBoxAdapter<T> = EditableHintedComboBox.defaultAdapter(),
+    unresolvedTextPolicy: UnresolvedTextPolicy = UnresolvedTextPolicy.KEEP_DRAFT,
     renderer: ListCellRenderer<in T>? = null,
 ): Cell<EditableHintedComboBox<T>> {
-    val box: EditableHintedComboBox<T> = EditableHintedComboBox(model = model)
+    val box: EditableHintedComboBox<T> =
+        EditableHintedComboBox(model = model, adapter = adapter, unresolvedTextPolicy = unresolvedTextPolicy)
     if (renderer == null) {
         if (!NewUI.isEnabled()) {
             box.renderer = SimpleListCellRenderer.create("") { it.toString() }
@@ -71,7 +98,9 @@ public fun <T> Row.editableHintedComboBox(
 
 public fun <T> Row.editableHintedComboBox(
     items: Collection<T>,
+    adapter: EditableHintedComboBoxAdapter<T> = EditableHintedComboBox.defaultAdapter(),
+    unresolvedTextPolicy: UnresolvedTextPolicy = UnresolvedTextPolicy.KEEP_DRAFT,
     renderer: ListCellRenderer<in T>? = null,
 ): Cell<EditableHintedComboBox<T>> {
-    return editableHintedComboBox(DefaultComboBoxModel(Vector(items)), renderer)
+    return editableHintedComboBox(DefaultComboBoxModel(Vector(items)), adapter, unresolvedTextPolicy, renderer)
 }

@@ -13,6 +13,7 @@ import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtilities
 import java.awt.*
+import java.awt.event.ActionEvent
 import java.awt.geom.Rectangle2D
 import javax.swing.ComboBoxModel
 import javax.swing.DefaultComboBoxModel
@@ -20,86 +21,153 @@ import javax.swing.JTextField
 import javax.swing.plaf.basic.BasicComboBoxEditor
 import kotlin.math.ceil
 
-public interface EditableHintedComboBoxAdapter<T> {
-    public fun text(t: T): String
+/**
+ * Converts between model items and editor text.
+ *
+ * Implementations only need to handle *custom* text: the combo box itself first resolves the typed
+ * text against the model items by comparing it with [text]. Only when no item matches does
+ * [fromText] decide what the text commits to; returning `null` leaves the decision to
+ * [EditableHintedComboBox.unresolvedTextPolicy].
+ */
+public fun interface EditableHintedComboBoxAdapter<T> {
+    /**
+     * The editor text shown for [item]. Defaults to `toString()`.
+     */
+    public fun text(item: T): String = item.toString()
 
-    public fun fromText(
-        text: String,
-    ): T?
-
+    /**
+     * Builds the value to commit for text that matches no existing item, or `null` to keep the
+     * text unresolved.
+     */
+    public fun fromText(text: String): T?
 }
 
+/**
+ * What happens when the editor text is committed (Enter) but resolves to no item.
+ */
+public enum class UnresolvedTextPolicy {
+    /**
+     * Keep the typed text and the current selection unchanged.
+     */
+    KEEP_DRAFT,
+
+    /**
+     * Discard the typed text and restore the editor text of the current selection.
+     */
+    REJECT,
+}
 
 public class EditableHintedComboBox<E>(
     model: ComboBoxModel<E> = DefaultComboBoxModel(),
-    public var adapter: EditableHintedComboBoxAdapter<E>? = null,
+    public val adapter: EditableHintedComboBoxAdapter<E> = defaultAdapter(),
+    public val unresolvedTextPolicy: UnresolvedTextPolicy = UnresolvedTextPolicy.KEEP_DRAFT,
 ) : ComboBox<E>(model) {
-    private val hintedEditorTextField = HintOverlayTextField().apply { border = null }
+    private val hintedEditorTextField = HintedTextField().apply { border = null }
     private val comboBoxEditor = object : BasicComboBoxEditor() {
         override fun createEditorComponent(): JTextField {
             return hintedEditorTextField
         }
 
         override fun setItem(anObject: Any?) {
-            val adapter = adapter
-            if (anObject != null && adapter != null) {
-                @Suppress("UNCHECKED_CAST")
-                editor.text = adapter.text(anObject as E)
-            } else super.setItem(anObject)
+            if (anObject == null) {
+                super.setItem(null)
+                return
+            }
+            @Suppress("UNCHECKED_CAST")
+            val text = adapter.text(anObject as E)
+            // Guard from BasicComboBoxEditor (JDK 4203968): setText replaces the document even for
+            // an equal string, resetting the caret and re-firing document listeners.
+            if (text != editor.text) {
+                editor.text = text
+            }
         }
 
+        /**
+         * The editor never reports an unresolved value: text matching an existing item resolves to
+         * that item, custom text goes through [EditableHintedComboBoxAdapter.fromText], and
+         * anything else falls back to the current selection. The IntelliJ combo commit path
+         * (`MyEditor` -> `setSelectedItem(getItem())`) reads this value, so committing an
+         * unresolved draft can neither null the selection nor clear the editor.
+         */
         override fun getItem(): Any? {
-            val adapter = adapter
-            return if (adapter != null)
-                adapter.fromText(editor.text)
-            else
-                super.item
+            val resolved = resolveEditorText()
+            return resolved ?: selectedItem
         }
     }
 
     init {
         isSwingPopup = false
+        // IntelliJ's `ComboBox.setEditor` wraps the editor so `JComboBox.actionPerformed` never
+        // receives editor actions: the wrapper commits through `setSelectedItem(getItem())` on its
+        // own listener. Register ours before that wrapper exists, so REJECT can restore the
+        // selected item's text before the commit runs.
+        hintedEditorTextField.addActionListener(::rejectUnresolvedDraft)
         isEditable = true
         super.setEditor(comboBoxEditor)
     }
 
-    public val editorTextField: ExtendableTextField get() = hintedEditorTextField
-    public var leftHint: String by hintedEditorTextField::trailingHint
-    public var rightHint: String by hintedEditorTextField::rightHint
-
-
-    override fun getPreferredSize(): Dimension {
-        return comboBoxSizeOrFallback { super.getPreferredSize() }
-    }
-
-    private fun comboBoxSizeOrFallback(sizeProvider: () -> Dimension): Dimension {
-        return try {
-            sizeProvider()
-        } catch (_: NullPointerException) {
-            val editorSize = hintedEditorTextField.preferredSize
-            val insets = insets
-            Dimension(
-                editorSize.width + insets.left + insets.right + JBUI.scale(32),
-                editorSize.height + insets.top + insets.bottom,
-            )
+    private fun rejectUnresolvedDraft(event: ActionEvent) {
+        if (unresolvedTextPolicy == UnresolvedTextPolicy.REJECT && resolveEditorText() == null) {
+            comboBoxEditor.setItem(selectedItem)
         }
     }
 
+    private fun resolveEditorText(): E? {
+        val typed = editorTextField.text
+        if (typed.isEmpty()) {
+            return null
+        }
+        return findItemByText(typed) ?: adapter.fromText(typed)
+    }
+
+    private fun findItemByText(text: String): E? {
+        val items = model
+        for (index in 0 until items.size) {
+            val item = items.getElementAt(index) ?: continue
+            if (adapter.text(item) == text) {
+                return item
+            }
+        }
+        return null
+    }
+
+    public val editorTextField: HintedTextField get() = hintedEditorTextField
+    public var trailingHint: String by hintedEditorTextField::trailingHint
+    public var rightHint: String by hintedEditorTextField::rightHint
+
+    public companion object {
+        /**
+         * An adapter that renders items with `toString()` and never creates custom values;
+         * committing unmatched text is governed by [UnresolvedTextPolicy] instead.
+         */
+        public fun <T> defaultAdapter(): EditableHintedComboBoxAdapter<T> =
+            EditableHintedComboBoxAdapter { null }
+    }
 }
 
-internal class HintOverlayTextField : ExtendableTextField() {
+/**
+ * A text field that paints an inline [trailingHint] after the typed text and a right-aligned
+ * [rightHint] at the right edge, reserving editor space for both. The right hint is painted with
+ * the error color while the field outline marks an error.
+ */
+public class HintedTextField : ExtendableTextField() {
     private companion object {
         const val OUTLINE_PROPERTY = "JComponent.outline"
         const val ERROR_OUTLINE = "error"
+        const val GAP = 6
+        const val OUTER_GAP = 8
     }
 
     private var trailingHintValue: String? = null
     private var rightHintValue: String? = null
 
-    private val gap = JBUI.scale(6)
-    private val outerGap = JBUI.scale(8)
+    /**
+     * The margin set from outside; the computed hint/extension reserve is applied on top of it.
+     */
+    private var externalMargin: Insets? = null
+    private var applyingComputedMargin = false
 
-    var trailingHint: String
+    public var trailingHint: String
         get() = trailingHintValue.orEmpty()
         set(value) {
             trailingHintValue = value
@@ -107,7 +175,7 @@ internal class HintOverlayTextField : ExtendableTextField() {
             repaint()
         }
 
-    var rightHint: String
+    public var rightHint: String
         get() = rightHintValue.orEmpty()
         set(value) {
             rightHintValue = value
@@ -123,9 +191,19 @@ internal class HintOverlayTextField : ExtendableTextField() {
         }
     }
 
-    override fun getPreferredSize(): Dimension {
-        val size = super.getPreferredSize()
-        return Dimension(size.width, size.height)
+    override fun updateUI() {
+        super.updateUI()
+        // Re-apply the computed reserve: JBUI scales may have changed (zoom, DPI).
+        updateMargins()
+    }
+
+    override fun setMargin(margin: Insets?) {
+        if (applyingComputedMargin) {
+            super.setMargin(margin)
+            return
+        }
+        externalMargin = margin
+        updateMargins()
     }
 
     private fun textWidth(text: String): Int {
@@ -139,12 +217,22 @@ internal class HintOverlayTextField : ExtendableTextField() {
     private fun updateMargins() {
         val rightText = rightHint
         val rightExtensionWidth = rightExtensionReservedWidth()
-        val rightReserved = if (rightText.isEmpty()) {
-            outerGap + rightExtensionWidth
-        } else {
-            outerGap + rightExtensionWidth + gap + textWidth(rightText)
+        val hintWidth = if (rightText.isEmpty()) 0 else JBUI.scale(GAP) + textWidth(rightText)
+        val rightReserved = JBUI.scale(OUTER_GAP) + rightExtensionWidth + hintWidth
+        val base = externalMargin
+        applyingComputedMargin = true
+        try {
+            super.setMargin(
+                Insets(
+                    base?.top ?: 0,
+                    (base?.left ?: 0) + JBUI.scale(OUTER_GAP),
+                    base?.bottom ?: 0,
+                    (base?.right ?: 0) + rightReserved,
+                )
+            )
+        } finally {
+            applyingComputedMargin = false
         }
-        margin = JBUI.insets(0, outerGap, 0, rightReserved)
     }
 
     private fun rightExtensionReservedWidth(): Int {
@@ -195,6 +283,8 @@ internal class HintOverlayTextField : ExtendableTextField() {
         try {
             g2.font = font
 
+            val gap = JBUI.scale(GAP)
+            val outerGap = JBUI.scale(OUTER_GAP)
             val metrics: FontMetrics = g2.getFontMetrics(font)
             val baseline = (height - metrics.height) / 2 + metrics.ascent
             val rightExtensionWidth = rightExtensionReservedWidth()
