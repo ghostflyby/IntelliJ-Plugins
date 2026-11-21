@@ -30,19 +30,43 @@ import dev.ghostflyby.dcevm.wsl.toDaemonVisiblePath
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
-import org.gradle.util.GradleVersion
 import org.jetbrains.plugins.gradle.service.execution.toGroovyStringLiteral
 import org.jetbrains.plugins.gradle.service.task.GradleTaskManagerExtension
 import org.jetbrains.plugins.gradle.settings.GradleExecutionSettings
 import java.nio.file.Path
 
 internal class DCEVMGradleManagerExtension : GradleTaskManagerExtension {
-    override fun configureTasks(
+
+    // configureTasks(…GradleVersion) is deprecated in 263 and its replacement's
+    // GradleTaskExecutionContext is absent from the 2026.2 compile target.
+    @Suppress("SameReturnValue")
+    override fun executeTasks(
         projectPath: String,
         id: ExternalSystemTaskId,
         settings: GradleExecutionSettings,
-        gradleVersion: GradleVersion?,
-    ) {
+        listener: ExternalSystemTaskNotificationListener,
+    ): Boolean {
+        injectInitScript(projectPath, settings)
+        val project = id.findProject() ?: return false
+        val resolved = effectiveHotSwapConfig(settings, project)
+        settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, resolved.enable.toString())
+        settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
+        settings.addEnvironmentVariable(
+            DCEVM_MANUAL_TASKS_KEY,
+            Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
+        )
+        if (resolved.enableHotswapAgent) {
+            // pass bundled agent jar path to Gradle when agent feature is enabled;
+            // the daemon side (inside the distribution for WSL projects) needs a resolvable path
+            settings.addEnvironmentVariable(
+                HOTSWAP_AGENT_JAR_PATH_ENV_KEY,
+                toDaemonVisiblePath(projectPath, BundledHotSwapAgentJarPath.toAbsolutePath()),
+            )
+        }
+        return false
+    }
+
+    private fun injectInitScript(projectPath: String, settings: GradleExecutionSettings) {
         val classpathJars = listOfNotNull(
             PathManager.getJarPathForClass(IntelliJDcevmGradlePlugin::class.java),
             PathManager.getJarPathForClass(DCEVMSupport::class.java),
@@ -66,31 +90,4 @@ pluginManager.apply(dev.ghostflyby.dcevm.IntelliJDcevmGradlePlugin)
 """.trimIndent(),
         )
     }
-
-    @Suppress("SameReturnValue")
-    override fun executeTasks(
-        projectPath: String,
-        id: ExternalSystemTaskId,
-        settings: GradleExecutionSettings,
-        listener: ExternalSystemTaskNotificationListener,
-    ): Boolean {
-        val project = id.findProject() ?: return false
-        val resolved = effectiveHotSwapConfig(settings, project)
-        settings.addEnvironmentVariable(ENABLE_DCEVM_ENV_KEY, resolved.enable.toString())
-        settings.addEnvironmentVariable(ENABLE_HOTSWAP_AGENT_ENV_KEY, resolved.enableHotswapAgent.toString())
-        settings.addEnvironmentVariable(
-            DCEVM_MANUAL_TASKS_KEY,
-            Json.encodeToString(ListSerializer(String.serializer()), settings.tasks),
-        )
-        if (resolved.enableHotswapAgent) {
-            // pass bundled agent jar path to Gradle when agent feature is enabled;
-            // the daemon side (inside the distribution for WSL projects) needs a resolvable path
-            settings.addEnvironmentVariable(
-                HOTSWAP_AGENT_JAR_PATH_ENV_KEY,
-                toDaemonVisiblePath(projectPath, BundledHotSwapAgentJarPath.toAbsolutePath()),
-            )
-        }
-        return false
-    }
-
 }

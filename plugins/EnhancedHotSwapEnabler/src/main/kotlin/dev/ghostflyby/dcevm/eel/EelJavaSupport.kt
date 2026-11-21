@@ -18,6 +18,7 @@ import com.intellij.execution.wsl.WSLDistribution
 import com.intellij.execution.wsl.WslPath
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.platform.eel.EelDescriptor
+import com.intellij.platform.eel.EelProcess
 import com.intellij.platform.eel.provider.LocalEelDescriptor
 import com.intellij.platform.eel.provider.asEelPath
 import com.intellij.platform.eel.provider.getEelDescriptor
@@ -27,6 +28,9 @@ import dev.ghostflyby.dcevm.DCEVMSupport
 import dev.ghostflyby.dcevm.getDcevmSupport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.lang.invoke.MethodHandle
+import java.lang.invoke.MethodHandles
+import java.lang.invoke.MethodType
 import java.nio.file.Path
 
 private val logger = Logger.getInstance("dev.ghostflyby.dcevm.eel")
@@ -72,7 +76,7 @@ private suspend fun execViaEel(descriptor: EelDescriptor, exe: String): Sequence
         .spawnProcess(exe)
         .args("-XX:+PrintFlagsFinal", "-version")
         .eelIt()
-    return process.convertToJavaProcess()
+    return process.toJvmProcessForReading()
         .inputStream
         .bufferedReader()
         .readLines()
@@ -91,3 +95,32 @@ private fun execViaWslDistribution(distribution: WSLDistribution, linuxJavaExecu
     }
     return output.stdoutLines.asSequence()
 }
+
+// 262: EelProcess.convertToJavaProcess() member; 263 renames it to the top-level
+// convertToJVMProcess() extension. Prefer the new name, fall back to the old ones.
+private val toJvmProcessHandle: MethodHandle = runCatching {
+    MethodHandles.publicLookup().findStatic(
+        Class.forName("com.intellij.platform.eel.EelProcessKt"),
+        "convertToJVMProcess",
+        MethodType.methodType(Process::class.java, EelProcess::class.java),
+    )
+}.recoverCatching {
+    MethodHandles.publicLookup().findVirtual(
+        EelProcess::class.java,
+        "convertToJavaProcess",
+        MethodType.methodType(Process::class.java),
+    )
+}.recoverCatching {
+    MethodHandles.publicLookup().findStatic(
+        Class.forName("com.intellij.platform.eel.EelProcessKt"),
+        "convertToJavaProcess",
+        MethodType.methodType(Process::class.java, EelProcess::class.java),
+    )
+}.getOrElse { e ->
+    throw NoSuchMethodError(
+        "No EelProcess to java.lang.Process adaptation available " +
+            "(tried EelProcessKt.convertToJVMProcess/convertToJavaProcess, EelProcess.convertToJavaProcess)",
+    ).also { it.initCause(e) }
+}
+
+private fun EelProcess.toJvmProcessForReading(): Process = toJvmProcessHandle.invoke(this) as Process
