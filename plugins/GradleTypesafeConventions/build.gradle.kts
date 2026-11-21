@@ -6,6 +6,7 @@
 
 plugins {
     id("repo.intellij-plugin")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 version = "0.1.0"
