@@ -1411,7 +1411,6 @@ private class GradleTypesafeConventionsSyncedProject(
         return "$builds $catalogs"
     }
 
-    @Suppress("UnstableApiUsage")
     private fun moduleGradleState(): String {
         val snapshot = project.workspaceModel.currentSnapshot
         return snapshot.entities<ModuleEntity>()
