@@ -287,6 +287,9 @@ internal class EditableHintedComboBoxTest {
     }
 
     @Test
+    // The extension tooltip is a decorative fixture value that only reserves editor space like
+    // the production usage does; it is never shown to a user.
+    @Suppress("HardCodedStringLiteral")
     fun rightHintAndTrailingExtensionReserveEditorSpace() {
         val comboBox = createComboBox()
         val field = comboBox.editorTextField
