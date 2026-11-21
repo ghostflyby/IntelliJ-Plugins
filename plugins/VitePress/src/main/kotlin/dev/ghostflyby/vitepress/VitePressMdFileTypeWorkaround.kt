@@ -285,8 +285,9 @@ internal class VitePressWorkaroundNotificationService(
         notification.notify(project)
     }
 
+    @Serializable
     internal data class State(
-        @JvmField val hasShownNotification: Boolean = false,
+        val hasShownNotification: Boolean = false,
     )
 }
 

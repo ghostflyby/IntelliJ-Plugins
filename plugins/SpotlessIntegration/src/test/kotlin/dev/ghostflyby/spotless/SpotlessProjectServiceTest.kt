@@ -1242,7 +1242,7 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `core detach during readiness stops published endpoint`() = supervisorScope {
+    suspend fun `core detach during readiness stops published endpoint`(): Unit = supervisorScope {
         val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
             testHttpClient(
@@ -1379,7 +1379,7 @@ internal class SpotlessProjectServiceTest {
     }
 
     @Test
-    suspend fun `late provider handle is stopped and cancelled after execution detach`() = supervisorScope {
+    suspend fun `late provider handle is stopped and cancelled after execution detach`(): Unit = supervisorScope {
         val startGate = CompletableDeferred<Unit>()
         val stopCount = AtomicInteger()
         spotless.client = SpotlessDaemonClient(
