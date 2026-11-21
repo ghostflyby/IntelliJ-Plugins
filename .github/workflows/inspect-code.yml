@@ -73,7 +73,11 @@ jobs:
           # files (the Kotlin-DSL extracted plugin blocks under buildSrc/build/), so
           # its save-time re-evaluation produced a different value than the next run's
           # fresh-checkout one and the cache could never warm-hit.
-          gradle_hash="$(git ls-files -z '*.gradle.kts' 'gradle/libs.versions.toml' | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d ' ' -f 1)"
+          # gradle.properties and the wrapper properties must move the key as well: a
+          # Gradle distribution change must never reuse a project model built by
+          # another Gradle (the 2026-11-20 lineage had a wrapper bump as the only warm
+          # run that forced a re-import — docs/Qodana-WarmCacheSkipSync.md).
+          gradle_hash="$(git ls-files -z '*.gradle.kts' 'gradle/libs.versions.toml' '*gradle.properties' 'gradle/wrapper/gradle-wrapper.properties' | sort -z | xargs -0 -r sha256sum | sha256sum | cut -d ' ' -f 1)"
           printf 'fingerprint=%s\n' "$fingerprint" >> "$GITHUB_OUTPUT"
           printf 'gradle-hash=%s\n' "$gradle_hash" >> "$GITHUB_OUTPUT"
       # Cache lineage is pinned to (IDE set, Gradle build files, ref). The Gradle hash
@@ -146,8 +150,12 @@ jobs:
       # cache hit skipped the sync and came back polluted; every cold run synced and
       # was clean). Any Gradle invocation builds buildSrc first, which restores those
       # artifacts — Qodana can then reuse its cached model against real files.
-      # ~1 min with a warm gradle-home cache. Remove once Qodana re-imports reliably
-      # on fresh workspaces (upstream report pending).
+      # ~1 min with a warm gradle-home cache (mostly FROM-CACHE via the Gradle build
+      # cache). Confirmed 2026-11-21, run 44930735812: with the artifacts materialized
+      # the scan still skipped the sync (opening 12s, no daemon) but came back clean —
+      # 30 problems, zero buildSrc findings — so the cached model itself is valid and
+      # only the artifacts were missing. Remove once Qodana re-imports reliably on
+      # fresh workspaces (upstream report pending).
       - name: Materialize Gradle build state
         shell: bash
         run: ./gradlew help --console=plain
@@ -177,16 +185,21 @@ jobs:
       # `--baseline`; until one exists every problem counts as new, so the count equals
       # the total. `MAX_TOTAL_PROBLEMS` bounds the report independently of the baseline,
       # so a baseline that is itself degenerate cannot make a degenerate run look clean.
-      # Limits sit far above the healthy range (<=37 problems, <=12 sanity) and far below
-      # the degenerate one (>=454 problems, >=106 sanity).
+      # Calibration (2026-11-22): healthy runs sit at <=35 total / <=2 new / 0 sanity;
+      # the warm-cache skip-sync variant (docs/Qodana-WarmCacheSkipSync.md) reported
+      # 75-101 total / 47 new / 0 sanity, the 2026-09 catastrophic one >=454 / >=106
+      # sanity. MAX_TOTAL is the load-bearing wall because it is baseline-independent.
+      # MAX_NEW must stay above the baseline-less total (~35): with no baseline cached
+      # every problem counts as new, so a lower limit would fail the gate and the
+      # baseline could never be re-established.
       - name: Verify Qodana analysis health
         id: analysis-health
         shell: bash
         env:
           SARIF: ${{ runner.temp }}/qodana/results/qodana.sarif.json
-          MAX_NEW_PROBLEMS: '150'
-          MAX_TOTAL_PROBLEMS: '250'
-          MAX_SANITY: '50'
+          MAX_NEW_PROBLEMS: '60'
+          MAX_TOTAL_PROBLEMS: '45'
+          MAX_SANITY: '10'
         run: |
           set -euo pipefail
 
