@@ -67,11 +67,11 @@ jobs:
           }
           $tag = $env:RELEASE_TAG
           $tagPrefix = $tag -replace "-v.*$", ""
-          $gradlePath = & $gradlew tasks --all --console=plain -q |
+          $gradlePath = & $gradlew getChangelog --dry-run --console=plain |
                   ForEach-Object {
-                      if ($_ -match "^(plugins:[^:]+):getChangelog" -and ($Matches[1] -split ":")[-1] -eq $tagPrefix)
+                      if ($_ -match "^(?:> Task )?(:plugins:[^:]+):getChangelog SKIPPED$" -and ($Matches[1] -split ":")[-1] -eq $tagPrefix)
                       {
-                          ":$( $Matches[1] )"
+                          $Matches[1]
                       }
                   } |
                   Select-Object -First 1
