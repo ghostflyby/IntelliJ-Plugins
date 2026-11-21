@@ -115,7 +115,7 @@ internal suspend fun handleSessionDelete(
             return@projectExec WriteResult.Unsupported("Binary deletes are disabled in this phase")
         }
         writeGate(access, FileContentKind.DELETE, force)?.let { return@projectExec it }
-        runCatching {
+        runCatchingRethrowingCancellation {
             deleteFileWithRefactoring(project, file, access.relativePath, force)
         }.fold(
             onSuccess = { result ->

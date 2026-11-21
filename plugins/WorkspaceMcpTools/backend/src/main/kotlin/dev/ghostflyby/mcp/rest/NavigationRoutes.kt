@@ -29,6 +29,7 @@ import io.ktor.http.*
 import io.ktor.server.resources.post
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -177,6 +178,8 @@ private suspend fun handleNavigation(
                 NavOp.Usages -> usages += executeUsages(filePath, range)
                 NavOp.Documentation -> docs += executeDocumentation(filePath, range)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$filePath: ${e.message}"
         }

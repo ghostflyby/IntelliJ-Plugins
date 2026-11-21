@@ -6,11 +6,11 @@ coroutines = "1.10.2"
 opentest4j = "1.3.0"
 ktor = "3.4.3"
 snakeyaml = "2.7"
-hotswap-agent = "2.0.3"
+hotswap-agent = "2.0.5"
 
 # plugins
 changelog = "2.5.0"
-intelliJPlatform = "2.19.0"
+intelliJPlatform = "2.20.1"
 # Kotlin Gradle plugin (compiler toolchain) version only — the Kotlin runtime at execution
 # time is the one bundled with the IntelliJ Platform, and compilerOptions pin
 # languageVersion/apiVersion to it (derived in buildSrc's BundledKotlinLevel from the platform
