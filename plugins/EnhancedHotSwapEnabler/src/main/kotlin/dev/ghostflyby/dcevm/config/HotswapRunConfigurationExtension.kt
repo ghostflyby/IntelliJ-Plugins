@@ -28,6 +28,7 @@ import dev.ghostflyby.dcevm.agent.fixedJvmParameter
 import dev.ghostflyby.dcevm.agent.hotswapAgentParameter
 import dev.ghostflyby.dcevm.eel.detectDcevmSupport
 import dev.ghostflyby.dcevm.missingHotswapAgentAddOpensJvmArgs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.jdom.Element
@@ -175,13 +176,15 @@ internal class HotswapRunConfigurationExtension(private val scope: CoroutineScop
         val future = supportChecks.computeIfAbsent(javaHome) { home ->
             CompletableFuture<DCEVMSupport>().also { future ->
                 scope.launch {
-                    future.complete(
-                        runCatching { detectDcevmSupport(home) }
-                            .getOrElse { error ->
-                                logger.warn("DCEVM detection failed for $home", error)
-                                DCEVMSupport.None
-                            },
-                    )
+                    val support = try {
+                        detectDcevmSupport(home)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (error: Throwable) {
+                        logger.warn("DCEVM detection failed for $home", error)
+                        DCEVMSupport.None
+                    }
+                    future.complete(support)
                 }
             }
         }

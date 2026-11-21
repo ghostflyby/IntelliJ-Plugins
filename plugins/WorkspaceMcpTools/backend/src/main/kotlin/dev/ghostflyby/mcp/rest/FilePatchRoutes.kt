@@ -35,6 +35,7 @@ import io.ktor.server.request.*
 import io.ktor.server.resources.patch
 import io.ktor.server.response.*
 import io.ktor.server.routing.Route
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -258,11 +259,13 @@ private suspend fun applyCodex(
             }
             applied += mapOf("path" to fileRelPath, "operation" to operation.name.lowercase())
             access.file?.let { appliedFiles += it }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$filePath: ${e.message ?: "unknown"}"
         }
     }
-    val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
+    val problems = runCatchingRethrowingCancellation { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
     call.respond(
         HttpStatusCode.OK,
         PatchResponse(applied = applied, failed = failed, references = references, problems = problems),
@@ -324,6 +327,8 @@ private suspend fun applyWorkspaceOperations(
                 error("${kind.wireName} requires a file path when PATCH target is the session root")
             }
             targets.getOrPut(fileRelPath) { WorkspaceOperationTarget(fileRelPath) }.kinds += kind
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$pathForError: ${e.message ?: "unknown"}"
         }
@@ -334,6 +339,8 @@ private suspend fun applyWorkspaceOperations(
             ensurePatchAllowed(access, force)
             access.file?.let { appliedFiles += it }
             access
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$fileRelPath: ${e.message ?: "unknown"}"
             continue
@@ -344,6 +351,8 @@ private suspend fun applyWorkspaceOperations(
         }
         val psiFile = try {
             resolveWritablePsiFile(project, file)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$fileRelPath: ${e.message ?: "unknown"}"
             continue
@@ -369,6 +378,8 @@ private suspend fun applyWorkspaceOperations(
                     )
                 }
                 applied += mapOf("path" to fileRelPath, "operation" to kind.resultName)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 failed += "$fileRelPath: ${kind.wireName}: ${e.message ?: "unknown"}"
             }
@@ -437,11 +448,13 @@ private suspend fun applyGit(
             }
             applied += mapOf("path" to fileRelPath, "operation" to op)
             access.file?.let { appliedFiles += it }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             failed += "$path: ${e.message ?: "unknown"}"
         }
     }
-    val problems = runCatching { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
+    val problems = runCatchingRethrowingCancellation { inspectChangedFiles(project, appliedFiles) }.getOrDefault(emptyList())
     call.respond(
         HttpStatusCode.OK,
         PatchResponse(applied = applied, failed = failed, references = references, problems = problems),
@@ -523,7 +536,7 @@ internal suspend fun inspectChangedFiles(
         }
     }
     return files.flatMap { file ->
-        runCatching { collectRestProblemsForFile(project, file, isOnTheFly) }
+        runCatchingRethrowingCancellation { collectRestProblemsForFile(project, file, isOnTheFly) }
             .getOrDefault(emptyList())
     }.distinctBy { "${it.fileUrl}:${it.line}:${it.message}" }
 }
