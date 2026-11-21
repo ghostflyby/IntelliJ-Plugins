@@ -19,6 +19,8 @@ import org.jetbrains.yaml.psi.YAMLFile
 import org.jetbrains.yaml.psi.YAMLKeyValue
 import org.jetbrains.yaml.psi.YAMLMapping
 import org.jetbrains.yaml.psi.YAMLScalar
+import kotlin.contracts.ExperimentalContracts
+import kotlin.contracts.contract
 
 internal const val SKILL_MD_FILE_NAME = "SKILL.md"
 internal const val SKILL_NAME_KEY = "name"
@@ -35,8 +37,12 @@ internal val PsiFile.isSkillMarkdownFile: Boolean
 internal val VirtualFile.isSkillMarkdownFile: Boolean
     get() = name == SKILL_MD_FILE_NAME
 
+@OptIn(ExperimentalContracts::class)
 internal val PsiFile.hasSkillMdFrontmatter: Boolean
-    get() = firstChild.elementType == SKILL_MD_FRONTMATTER_TYPE
+    get() {
+        contract { returns(true) implies (this@hasSkillMdFrontmatter is MarkdownFile) }
+        return firstChild.elementType == SKILL_MD_FRONTMATTER_TYPE
+    }
 
 internal val PsiDirectory.skillMarkdownFile: PsiFile?
     get() = findFile(SKILL_MD_FILE_NAME)
