@@ -9,18 +9,18 @@ package dev.ghostflyby.mill
 import com.intellij.openapi.diagnostic.logger
 
 internal object MillImportDebugLogger {
-    private const val prefix = "[Mill import] "
+    private const val PREFIX = "[Mill import] "
     private val logger = logger<MillImportDebugLogger>()
 
     fun info(message: String) {
-        logger.info(prefix + message)
+        logger.info(PREFIX + message)
     }
 
     fun warn(message: String, error: Throwable? = null) {
         if (error == null) {
-            logger.warn(prefix + message)
+            logger.warn(PREFIX + message)
         } else {
-            logger.warn(prefix + message, error)
+            logger.warn(PREFIX + message, error)
         }
     }
 

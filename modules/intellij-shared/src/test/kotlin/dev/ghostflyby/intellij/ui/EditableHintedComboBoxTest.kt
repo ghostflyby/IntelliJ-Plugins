@@ -310,7 +310,7 @@ internal class EditableHintedComboBoxTest {
     }
 
     private fun createComboBox(createCustomValues: Boolean = true): EditableHintedComboBox<Choice> {
-        return EditableHintedComboBox<Choice>(adapter = TestChoiceAdapter(createCustomValues))
+        return EditableHintedComboBox(adapter = TestChoiceAdapter(createCustomValues))
     }
 
     private fun choice(

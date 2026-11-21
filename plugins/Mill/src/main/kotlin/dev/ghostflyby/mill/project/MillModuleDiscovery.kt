@@ -22,7 +22,7 @@ internal object MillModuleDiscovery {
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
     ): List<String> {
-        MillImportDebugLogger.info("Running `mill show resolve ${MillConstants.moduleDiscoveryQuery}` in $root")
+        MillImportDebugLogger.info("Running `mill show resolve ${MillConstants.MODULE_DISCOVERY_QUERY}` in $root")
         val result = MillCommandLineUtil.resolveTargets(root, settings)
         if (!result.command.isSuccess) {
             MillImportDebugLogger.warn(
@@ -72,7 +72,7 @@ internal object MillModuleDiscovery {
                 0,
                 MillDiscoveredModule(
                     displayName = projectName,
-                    targetPrefix = MillConstants.rootModulePrefix,
+                    targetPrefix = MillConstants.ROOT_MODULE_PREFIX,
                     projectRoot = root,
                     directory = root,
                 ),
@@ -134,6 +134,6 @@ internal object MillModuleDiscovery {
             return false
         }
 
-        return MillProjectResolverSupport.moduleContentDirectoryNames.any { Files.isDirectory(directory.resolve(it)) }
+        return MillProjectResolverSupport.MODULE_CONTENT_DIRECTORY_NAMES.any { Files.isDirectory(directory.resolve(it)) }
     }
 }

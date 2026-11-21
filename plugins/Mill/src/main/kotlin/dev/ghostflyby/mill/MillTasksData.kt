@@ -11,7 +11,7 @@ import java.io.Serial
 import java.io.Serializable
 
 internal object MillTasksData : Serializable {
-    val key: Key<MillTasksData> = Key.create(MillTasksData::class.java, 227)
+    val KEY: Key<MillTasksData> = Key.create(MillTasksData::class.java, 227)
 
     @Serial
     private const val serialVersionUID: Long = 1L

@@ -42,7 +42,7 @@ public final class MillExternalSystemManager implements ExternalSystemManager<
 
     @Override
     public @NotNull ProjectSystemId getSystemId() {
-        return MillConstants.systemId;
+        return MillConstants.SYSTEM_ID;
     }
 
     @Override

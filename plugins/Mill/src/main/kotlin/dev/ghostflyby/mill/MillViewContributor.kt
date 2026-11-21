@@ -29,15 +29,15 @@ internal const val MILL_TASK_MENU_ID: String = "dev.ghostflyby.mill.taskMenu"
 internal const val MILL_TASK_RUN_ACTION_ID: String = "dev.ghostflyby.mill.runTask"
 
 internal class MillViewContributor : ExternalSystemViewContributor() {
-    override fun getSystemId() = MillConstants.systemId
+    override fun getSystemId() = MillConstants.SYSTEM_ID
 
-    override fun getKeys(): List<Key<*>> = listOf(MillTasksData.key)
+    override fun getKeys(): List<Key<*>> = listOf(MillTasksData.KEY)
 
     override fun createNodes(
         externalProjectsView: ExternalProjectsView,
         dataNodes: MultiMap<Key<*>?, DataNode<*>?>?,
     ): List<ExternalSystemNode<*>> {
-        val millTaskNodes = dataNodes?.get(MillTasksData.key).orEmpty()
+        val millTaskNodes = dataNodes?.get(MillTasksData.KEY).orEmpty()
         return millTaskNodes.mapNotNull { dataNode ->
             @Suppress("UNCHECKED_CAST")
             (dataNode as? DataNode<MillTasksData>)?.let { MillTasksRootNode(externalProjectsView, it) }

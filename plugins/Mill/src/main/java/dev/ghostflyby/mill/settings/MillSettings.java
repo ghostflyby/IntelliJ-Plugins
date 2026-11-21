@@ -20,7 +20,7 @@ import java.util.Collections;
 import java.util.Set;
 
 @Service(Service.Level.PROJECT)
-@State(name = "MillSettings", storages = @Storage(MillConstants.settingsFileName))
+@State(name = "MillSettings", storages = @Storage(MillConstants.SETTINGS_FILE_NAME))
 public final class MillSettings extends AbstractExternalSystemSettings<
         MillSettings,
         MillProjectSettings,
@@ -36,7 +36,7 @@ public final class MillSettings extends AbstractExternalSystemSettings<
     }
 
     public static @NotNull MillSettings getInstance(@NotNull Project project) {
-        return ((ComponentManager) project).getService(MillSettings.class);
+        return project.getService(MillSettings.class);
     }
 
     @Override

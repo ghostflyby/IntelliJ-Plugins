@@ -45,7 +45,7 @@ internal class MillLinkProjectAction : DumbAwareAction() {
             )
             return
         }
-        if (!ExternalSystemTrustedProjectDialog.confirmLoadingUntrustedProject(project, MillConstants.systemId)) {
+        if (!ExternalSystemTrustedProjectDialog.confirmLoadingUntrustedProject(project, MillConstants.SYSTEM_ID)) {
             return
         }
 
@@ -54,7 +54,7 @@ internal class MillLinkProjectAction : DumbAwareAction() {
         }
         ExternalSystemUtil.linkExternalProject(
             settings,
-            ImportSpecBuilder(project, MillConstants.systemId)
+            ImportSpecBuilder(project, MillConstants.SYSTEM_ID)
                 .withActivateToolWindowOnStart(true)
                 .withCallback(MillImportRefreshCallback(project)),
         )
@@ -88,7 +88,7 @@ internal class MillLinkProjectAction : DumbAwareAction() {
 
     private fun notify(project: Project, title: String, content: String) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup(MillConstants.notificationGroupId)
+            .getNotificationGroup(MillConstants.NOTIFICATION_GROUP_ID)
             .createNotification(title, content, NotificationType.INFORMATION)
             .notify(project)
     }

@@ -19,6 +19,7 @@ import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
+import kotlin.time.Duration
 
 @TestApplication
 internal class MillConfigurableViewModelTest {
@@ -47,13 +48,13 @@ internal class MillConfigurableViewModelTest {
         val model = createModel(projectPath)
 
         val pathChoice = model.executableChoicesProperty.get()
-            .single { it.inputMatchText == MillConstants.defaultExecutable }
+            .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
         model.executableSelectedChoiceProperty.set(pathChoice)
 
         val appliedSettings = applyModel(model)
         val appliedProject = appliedSettings.single()
         Assertions.assertEquals(MillExecutableSource.MANUAL, appliedProject.millExecutableSource)
-        Assertions.assertEquals(MillConstants.defaultExecutable, appliedProject.millExecutablePath)
+        Assertions.assertEquals(MillConstants.DEFAULT_EXECUTABLE, appliedProject.millExecutablePath)
     }
 
     @Test
@@ -99,7 +100,7 @@ internal class MillConfigurableViewModelTest {
             ),
         )
 
-        model.executableInputTextProperty.set(MillConstants.defaultExecutable)
+        model.executableInputTextProperty.set(MillConstants.DEFAULT_EXECUTABLE)
 
         Assertions.assertEquals("/usr/local/bin/mill", model.executableInputLeftHintProperty.get())
         val appliedProject = applyModel(model).single()
@@ -240,7 +241,7 @@ internal class MillConfigurableViewModelTest {
         waitUntil { model.executableVersionTextProperty.get() == "project" }
 
         val pathChoice = model.executableChoicesProperty.get()
-            .single { it.inputMatchText == MillConstants.defaultExecutable }
+            .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
         model.executableSelectedChoiceProperty.set(pathChoice)
         waitUntil { model.executableVersionTextProperty.get() == "path" }
 
@@ -430,7 +431,7 @@ internal class MillConfigurableViewModelTest {
 
         waitUntil { selector.rightHint == "project" }
         selector.selectedItem = model.executableChoicesProperty.get()
-            .single { it.inputMatchText == MillConstants.defaultExecutable }
+            .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
         waitUntil { selector.rightHint == "path" }
         selector.selectedItem = model.executableChoicesProperty.get()
             .single { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
@@ -447,7 +448,7 @@ internal class MillConfigurableViewModelTest {
         val secondSettings = MillProjectSettings().also {
             it.externalProjectPath = secondProjectPath
             it.millExecutableSource = MillExecutableSource.MANUAL
-            it.millExecutablePath = MillConstants.defaultExecutable
+            it.millExecutablePath = MillConstants.DEFAULT_EXECUTABLE
         }
         val model = MillConfigurableViewModel(
             linkedProjectSettings = listOf(firstSettings, secondSettings),
@@ -455,7 +456,7 @@ internal class MillConfigurableViewModelTest {
             discoverExecutables = { projectPath ->
                 when (projectPath.toString()) {
                     firstProjectPath -> MillExecutableDiscovery(
-                        projectWrapper = Path.of(firstProjectPath, MillConstants.wrapperScriptName),
+                        projectWrapper = Path.of(firstProjectPath, MillConstants.WRAPPER_SCRIPT_NAME),
                         pathExecutables = listOf(Path.of("/usr/local/bin/mill-first")),
                     )
 
@@ -475,7 +476,7 @@ internal class MillConfigurableViewModelTest {
                     errorDetails = null,
                 )
             },
-            draftProbeDebounceMillis = 0,
+            draftProbeDebounce = Duration.ZERO,
         )
 
         waitUntil { model.executableVersionTextProperty.get() == "first" }
@@ -513,7 +514,7 @@ internal class MillConfigurableViewModelTest {
             parentDisposable = disposable,
             discoverExecutables = { discovery },
             probeExecutable = probe,
-            draftProbeDebounceMillis = 0,
+            draftProbeDebounce = Duration.ZERO,
         )
     }
 

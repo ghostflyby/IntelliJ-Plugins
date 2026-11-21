@@ -15,7 +15,7 @@ import dev.ghostflyby.mill.MillConstants
 @State(name = "MillLocalSettings", storages = [Storage(StoragePathMacros.CACHE_FILE)])
 internal class MillLocalSettings(
     project: Project,
-) : AbstractExternalSystemLocalSettings<MillLocalSettings.State>(MillConstants.systemId, project, State()),
+) : AbstractExternalSystemLocalSettings<MillLocalSettings.State>(MillConstants.SYSTEM_ID, project, State()),
     PersistentStateComponent<MillLocalSettings.State> {
 
     override fun getState(): State = state

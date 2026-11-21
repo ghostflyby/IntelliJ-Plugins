@@ -21,7 +21,7 @@ internal data class MillModuleOutputs(
 )
 
 internal object MillModuleOutputResolver {
-    private const val outputDirectoryEnvironmentVariable: String = "MILL_OUTPUT_DIR"
+    private const val OUTPUT_DIRECTORY_ENVIRONMENT_VARIABLE: String = "MILL_OUTPUT_DIR"
 
     fun resolveModuleOutputs(
         module: MillDiscoveredModule,
@@ -90,7 +90,7 @@ internal object MillModuleOutputResolver {
     }
 
     internal fun resolveOutputRoot(projectRoot: Path, settings: MillExecutionSettings?): Path {
-        val configuredOutputRoot = settings?.env?.get(outputDirectoryEnvironmentVariable)
+        val configuredOutputRoot = settings?.env?.get(OUTPUT_DIRECTORY_ENVIRONMENT_VARIABLE)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: return projectRoot.resolve("out").normalize()
@@ -106,7 +106,7 @@ internal object MillModuleOutputResolver {
     private fun resolveModuleOutputRoot(module: MillDiscoveredModule, settings: MillExecutionSettings?): Path {
         val outputRoot = resolveOutputRoot(module.projectRoot, settings)
         return when (module.targetPrefix) {
-            MillConstants.rootModulePrefix -> outputRoot
+            MillConstants.ROOT_MODULE_PREFIX -> outputRoot
             else -> outputRoot.resolve(module.targetPrefix.replace('.', '/')).normalize()
         }
     }

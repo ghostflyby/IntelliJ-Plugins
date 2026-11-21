@@ -18,7 +18,7 @@ internal class MillProjectOpenProcessor : ProjectOpenProcessor() {
     private val importProvider = MillOpenProjectProvider()
 
     override val name: String
-        get() = MillConstants.systemId.readableName
+        get() = MillConstants.SYSTEM_ID.readableName
 
     override val icon: Icon
         get() = DefaultExternalSystemUiAware.INSTANCE.projectIcon

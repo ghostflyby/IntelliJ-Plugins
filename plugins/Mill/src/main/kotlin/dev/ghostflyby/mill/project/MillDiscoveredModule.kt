@@ -20,6 +20,6 @@ internal data class MillDiscoveredModule(
         get() = productionModulePrefix != null || targetPrefix.endsWith(".test")
 
     fun queryTarget(suffix: String): String {
-        return if (targetPrefix == MillConstants.rootModulePrefix) suffix else "$targetPrefix.$suffix"
+        return if (targetPrefix == MillConstants.ROOT_MODULE_PREFIX) suffix else "$targetPrefix.$suffix"
     }
 }

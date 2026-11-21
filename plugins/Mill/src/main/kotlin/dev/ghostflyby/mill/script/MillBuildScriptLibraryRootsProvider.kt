@@ -38,7 +38,7 @@ private class MillBuildScriptSyntheticLibrary(
 
     override fun getPresentableText(): String {
         val projectName = projectRoot.fileName?.toString().orEmpty().ifBlank { "Mill" }
-        return "$projectName/${MillConstants.buildScriptFileName}"
+        return "$projectName/${MillConstants.BUILD_SCRIPT_FILE_NAME}"
     }
 
     override fun getLocationString(): String = projectRoot.toString()
