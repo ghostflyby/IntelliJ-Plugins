@@ -44,6 +44,9 @@ public fun interface EditableHintedComboBoxAdapter<T> {
 
 /**
  * What happens when the editor text is committed (Enter) but resolves to no item.
+ *
+ * Note: like with stock IntelliJ editable combo boxes, pressing Enter also activates the dialog's
+ * default button after the commit; the component cannot suppress that platform behavior.
  */
 public enum class UnresolvedTextPolicy {
     /**
@@ -121,6 +124,13 @@ public class EditableHintedComboBox<E>(
     }
 
     private fun findItemByText(text: String): E? {
+        // Prefer the selected instance when its text matches: with duplicate display labels a
+        // commit must not silently switch to the first look-alike item.
+        @Suppress("UNCHECKED_CAST")
+        val selected = selectedItem as? E
+        if (selected != null && adapter.text(selected) == text) {
+            return selected
+        }
         val items = model
         for (index in 0 until items.size) {
             val item = items.getElementAt(index) ?: continue
@@ -313,6 +323,8 @@ public class HintedTextField : ExtendableTextField() {
             }
 
             if (rightText.isNotEmpty()) {
+                // String comparison matches DarculaUIUtil.getOutline: the platform honors the
+                // outline client property only in its String form.
                 g2.color = if (getClientProperty(OUTLINE_PROPERTY) == ERROR_OUTLINE) {
                     JBColor.namedColor("Label.errorForeground", JBColor.RED)
                 } else {

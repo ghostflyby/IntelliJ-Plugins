@@ -10,7 +10,6 @@ import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
 import com.intellij.openapi.observable.util.bind
 import com.intellij.openapi.observable.util.lockOrSkip
-import com.intellij.ui.NewUI
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.Row
@@ -84,12 +83,10 @@ public fun <T> Row.editableHintedComboBox(
 ): Cell<EditableHintedComboBox<T>> {
     val box: EditableHintedComboBox<T> =
         EditableHintedComboBox(model = model, adapter = adapter, unresolvedTextPolicy = unresolvedTextPolicy)
-    if (renderer == null) {
-        if (!NewUI.isEnabled()) {
-            box.renderer = SimpleListCellRenderer.create("") { it.toString() }
-        }
-    } else {
-        box.renderer = renderer
+    // The default renderer derives its text from the adapter so the dropdown list stays consistent
+    // with the editor text; pass [renderer] to take over rendering entirely.
+    box.renderer = renderer ?: SimpleListCellRenderer.create("") { item ->
+        item?.let(adapter::text) ?: ""
     }
 
     return cell(box)
