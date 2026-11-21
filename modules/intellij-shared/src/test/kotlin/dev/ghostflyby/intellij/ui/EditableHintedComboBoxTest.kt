@@ -337,13 +337,13 @@ internal class EditableHintedComboBoxTest {
                     ).component
                 }
             }
-        }
 
-        assertSame(UnresolvedTextPolicy.REJECT, box.unresolvedTextPolicy)
-        assertNotNull(box.renderer)
-        assertEquals("Project", box.editorTextField.text)
-        val rendered = box.renderer.getListCellRendererComponent(JList(), choice("path", text = "PATH"), 0, false, false)
-        assertEquals("PATH", (rendered as JLabel).text)
+            assertSame(UnresolvedTextPolicy.REJECT, box.unresolvedTextPolicy)
+            assertNotNull(box.renderer)
+            assertEquals("Project", box.editorTextField.text)
+            val rendered = box.renderer.getListCellRendererComponent(JList(), choice("path", text = "PATH"), 0, false, false)
+            assertEquals("PATH", (rendered as JLabel).text)
+        }
     }
 
     @Test
