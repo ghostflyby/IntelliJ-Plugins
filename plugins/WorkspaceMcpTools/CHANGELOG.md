@@ -14,6 +14,10 @@
 - In remote development, agents must run on the backend host or forward the backend port manually (Backend Control
   Center → Ports); there is no programmatic port-forwarding API.
 
+### Fixed
+
+- SDK server notification state is now persisted across restarts (the settings state class was not serialized)
+
 ## [2.0.2] - 2026-07-26
 
 ### Fixed
