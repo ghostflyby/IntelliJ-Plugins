@@ -21,3 +21,59 @@ public final class dev/ghostflyby/intellij/PluginInfoKt {
 	public static final fun getPluginVersion (Ljava/lang/Class;)Ljava/lang/String;
 }
 
+public final class dev/ghostflyby/intellij/ui/EditableHintedComboBox : com/intellij/openapi/ui/ComboBox {
+	public static final field Companion Ldev/ghostflyby/intellij/ui/EditableHintedComboBox$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;)V
+	public synthetic fun <init> (Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getAdapter ()Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;
+	public final fun getEditorTextField ()Ldev/ghostflyby/intellij/ui/HintedTextField;
+	public final fun getRightHint ()Ljava/lang/String;
+	public final fun getTrailingHint ()Ljava/lang/String;
+	public final fun getUnresolvedTextPolicy ()Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;
+	public final fun setRightHint (Ljava/lang/String;)V
+	public final fun setTrailingHint (Ljava/lang/String;)V
+}
+
+public final class dev/ghostflyby/intellij/ui/EditableHintedComboBox$Companion {
+	public final fun defaultAdapter ()Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;
+}
+
+public abstract interface class dev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter {
+	public abstract fun fromText (Ljava/lang/String;)Ljava/lang/Object;
+	public fun text (Ljava/lang/Object;)Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/intellij/ui/EditableHintedComboBoxUiDslKt {
+	public static final fun bindRightHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun bindSelectedItem (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableMutableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun bindText (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableMutableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun bindTrailingHint (Lcom/intellij/ui/dsl/builder/Cell;Lcom/intellij/openapi/observable/properties/ObservableProperty;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun editableHintedComboBox (Lcom/intellij/ui/dsl/builder/Row;Ljava/util/Collection;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;Ljavax/swing/ListCellRenderer;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static final fun editableHintedComboBox (Lcom/intellij/ui/dsl/builder/Row;Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;Ljavax/swing/ListCellRenderer;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static synthetic fun editableHintedComboBox$default (Lcom/intellij/ui/dsl/builder/Row;Ljava/util/Collection;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;Ljavax/swing/ListCellRenderer;ILjava/lang/Object;)Lcom/intellij/ui/dsl/builder/Cell;
+	public static synthetic fun editableHintedComboBox$default (Lcom/intellij/ui/dsl/builder/Row;Ljavax/swing/ComboBoxModel;Ldev/ghostflyby/intellij/ui/EditableHintedComboBoxAdapter;Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;Ljavax/swing/ListCellRenderer;ILjava/lang/Object;)Lcom/intellij/ui/dsl/builder/Cell;
+}
+
+public final class dev/ghostflyby/intellij/ui/HintedTextField : com/intellij/ui/components/fields/ExtendableTextField {
+	public fun <init> ()V
+	public fun addExtension (Lcom/intellij/ui/components/fields/ExtendableTextComponent$Extension;)V
+	public final fun getRightHint ()Ljava/lang/String;
+	public final fun getTrailingHint ()Ljava/lang/String;
+	public fun removeExtension (Lcom/intellij/ui/components/fields/ExtendableTextComponent$Extension;)V
+	public fun setExtensions ([Lcom/intellij/ui/components/fields/ExtendableTextComponent$Extension;)V
+	public fun setFont (Ljava/awt/Font;)V
+	public fun setMargin (Ljava/awt/Insets;)V
+	public final fun setRightHint (Ljava/lang/String;)V
+	public final fun setTrailingHint (Ljava/lang/String;)V
+	public fun updateUI ()V
+}
+
+public final class dev/ghostflyby/intellij/ui/UnresolvedTextPolicy : java/lang/Enum {
+	public static final field KEEP_DRAFT Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;
+	public static final field REJECT Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;
+	public static fun values ()[Ldev/ghostflyby/intellij/ui/UnresolvedTextPolicy;
+}
+
