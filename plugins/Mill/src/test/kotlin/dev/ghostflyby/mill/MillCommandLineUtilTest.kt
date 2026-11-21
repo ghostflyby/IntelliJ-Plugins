@@ -46,15 +46,15 @@ internal class MillCommandLineUtilTest {
     fun `resolves bare manual mill command via path even when project wrapper exists`() {
         val root = Files.createTempDirectory("mill-project")
         try {
-            Files.writeString(root.resolve(MillConstants.wrapperScriptName), "#!/bin/sh\n")
+            Files.writeString(root.resolve(MillConstants.WRAPPER_SCRIPT_NAME), "#!/bin/sh\n")
 
             val resolved = MillCommandLineUtil.resolveExecutable(
                 projectRoot = root,
                 executableSource = MillExecutableSource.MANUAL,
-                configuredExecutablePath = MillConstants.defaultExecutable,
+                configuredExecutablePath = MillConstants.DEFAULT_EXECUTABLE,
             )
 
-            assertEquals(MillConstants.defaultExecutable, resolved)
+            assertEquals(MillConstants.DEFAULT_EXECUTABLE, resolved)
         } finally {
             deleteRecursively(root)
         }

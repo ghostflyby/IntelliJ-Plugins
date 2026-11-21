@@ -71,13 +71,13 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
             MillModuleJdkResolver.resolve(
                 module = MillDiscoveredModule(
                     displayName = projectData.externalName,
-                    targetPrefix = MillConstants.rootModulePrefix,
+                    targetPrefix = MillConstants.ROOT_MODULE_PREFIX,
                     projectRoot = root,
                     directory = root,
                 ),
                 settings = settings,
             )?.let { jdkHomePath ->
-                projectNode.createChild(MillProjectJdkData.key, MillProjectJdkData(jdkHomePath))
+                projectNode.createChild(MillProjectJdkData.KEY, MillProjectJdkData(jdkHomePath))
             }
 
             progressReporter.progress(55, "Discovering Mill modules")
@@ -86,7 +86,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 "Resolved ${resolvedTargets.size} target(s): ${MillImportDebugLogger.sample(resolvedTargets)}",
             )
             val discoveredModules = MillModuleDiscovery.discoverModulesFromTargets(root, projectData.externalName, resolvedTargets)
-                .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, MillConstants.rootModulePrefix, root, root)) }
+                .ifEmpty { listOf(MillDiscoveredModule(projectData.externalName, MillConstants.ROOT_MODULE_PREFIX, root, root)) }
             MillImportDebugLogger.warn(
                 "Discovered ${discoveredModules.size} module(s): ${
                     MillImportDebugLogger.sample(discoveredModules.map { "${it.targetPrefix} -> ${it.directory}" })
@@ -156,7 +156,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                     )
                 }
                 it.scalaSdkData?.let { scalaSdkData ->
-                    moduleNode.createChild(MillScalaSdkData.key, scalaSdkData)
+                    moduleNode.createChild(MillScalaSdkData.KEY, scalaSdkData)
                 }
                 it.jdkHomePath?.let { jdkHomePath ->
                     moduleData.setProperty(MillModuleJdkHomeProperty, jdkHomePath)
@@ -201,7 +201,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                             "scalacJars=${scalaSdkData.scalacClasspath.size} scaladocJars=${scalaSdkData.scaladocClasspath.size} " +
                             "replJars=${scalaSdkData.replClasspath.size}",
                     )
-                    node.createChild(MillScalaSdkData.key, scalaSdkData)
+                    node.createChild(MillScalaSdkData.KEY, scalaSdkData)
                 } ?: MillImportDebugLogger.info("Module `${module.targetPrefix}` has no Scala SDK metadata")
                 MillModuleJdkResolver.resolve(
                     module = module,
@@ -221,7 +221,7 @@ internal class MillProjectResolver : ExternalSystemProjectResolver<MillExecution
                 MillProjectResolverSupport.createTaskData(root, discoveredModules, resolvedTargets)
             }
             MillImportDebugLogger.info("Created ${tasks.size} task node(s)")
-            val tasksNode = projectNode.createChild(MillTasksData.key, MillTasksData)
+            val tasksNode = projectNode.createChild(MillTasksData.KEY, MillTasksData)
             tasks.forEach { task ->
                 tasksNode.createChild(ProjectKeys.TASK, task)
             }

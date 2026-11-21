@@ -10,31 +10,31 @@ import com.intellij.openapi.externalSystem.model.ProjectSystemId
 
 public object MillConstants {
     @JvmField
-    public val systemId: ProjectSystemId = ProjectSystemId("MILL", "Mill")
+    public val SYSTEM_ID: ProjectSystemId = ProjectSystemId("MILL", "Mill")
 
-    public const val defaultExecutable: String = "mill"
-    public const val moduleTypeId: String = "JAVA_MODULE"
-    public const val settingsFileName: String = "mill.xml"
-    public const val versionFileName: String = ".mill-version"
-    public const val scalaSdkPrefix: String = "Mill"
-    public const val notificationGroupId: String = "dev.ghostflyby.mill.import"
-    public const val wrapperScriptName: String = "mill"
-    public const val wrapperBatchName: String = "mill.bat"
-    public const val rootModulePrefix: String = "<root>"
-    public const val moduleDiscoveryQuery: String = "__"
-    public const val moduleFilesDirectory: String = ".idea/modules"
-    public const val buildScriptModuleName: String = "mill-build_"
-    public const val buildScriptFileName: String = "build.mill"
-    public const val buildScriptOutputDirectory: String = "out/mill-build"
-    public const val buildScriptGeneratedSourcesFileName: String = "generatedScriptSources.json"
-    public const val buildScriptClasspathFileName: String = "compileClasspath.json"
-
-    @JvmField
-    public val projectFileNames: Set<String> = linkedSetOf(buildScriptFileName, "build.mill.yaml")
+    public const val DEFAULT_EXECUTABLE: String = "mill"
+    public const val MODULE_TYPE_ID: String = "JAVA_MODULE"
+    public const val SETTINGS_FILE_NAME: String = "mill.xml"
+    public const val VERSION_FILE_NAME: String = ".mill-version"
+    public const val SCALA_SDK_PREFIX: String = "Mill"
+    public const val NOTIFICATION_GROUP_ID: String = "dev.ghostflyby.mill.import"
+    public const val WRAPPER_SCRIPT_NAME: String = "mill"
+    public const val WRAPPER_BATCH_NAME: String = "mill.bat"
+    public const val ROOT_MODULE_PREFIX: String = "<root>"
+    public const val MODULE_DISCOVERY_QUERY: String = "__"
+    public const val MODULE_FILES_DIRECTORY: String = ".idea/modules"
+    public const val BUILD_SCRIPT_MODULE_NAME: String = "mill-build_"
+    public const val BUILD_SCRIPT_FILE_NAME: String = "build.mill"
+    public const val BUILD_SCRIPT_OUTPUT_DIRECTORY: String = "out/mill-build"
+    public const val BUILD_SCRIPT_GENERATED_SOURCES_FILE_NAME: String = "generatedScriptSources.json"
+    public const val BUILD_SCRIPT_CLASSPATH_FILE_NAME: String = "compileClasspath.json"
 
     @JvmField
-    public val configFileNames: Set<String> = linkedSetOf(
-        *projectFileNames.toTypedArray(),
-        versionFileName,
+    public val PROJECT_FILE_NAMES: Set<String> = linkedSetOf(BUILD_SCRIPT_FILE_NAME, "build.mill.yaml")
+
+    @JvmField
+    public val CONFIG_FILE_NAMES: Set<String> = linkedSetOf(
+        *PROJECT_FILE_NAMES.toTypedArray(),
+        VERSION_FILE_NAME,
     )
 }

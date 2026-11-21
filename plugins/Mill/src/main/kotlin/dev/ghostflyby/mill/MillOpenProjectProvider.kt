@@ -21,7 +21,7 @@ import dev.ghostflyby.mill.settings.MillProjectSettings
 // AbstractOpenProjectProvider is still experimental on 2025.3, but it is the
 // platform entry point used by external-system project opening/linking flows.
 internal class MillOpenProjectProvider : AbstractOpenProjectProvider() {
-    override val systemId: ProjectSystemId = MillConstants.systemId
+    override val systemId: ProjectSystemId = MillConstants.SYSTEM_ID
 
     override fun isProjectFile(file: VirtualFile): Boolean {
         return !file.isDirectory && MillProjectResolverSupport.isProjectFileName(file.name)

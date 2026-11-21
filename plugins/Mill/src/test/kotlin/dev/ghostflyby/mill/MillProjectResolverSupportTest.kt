@@ -97,7 +97,7 @@ internal class MillProjectResolverSupportTest {
     fun `omits sentinel prefix for default module query targets`() {
         val rootModule = MillDiscoveredModule(
             "sample",
-            MillConstants.rootModulePrefix,
+            MillConstants.ROOT_MODULE_PREFIX,
             Path.of("/tmp/project"),
             Path.of("/tmp/project"),
         )
@@ -325,14 +325,14 @@ internal class MillProjectResolverSupportTest {
     fun `loads mill build script model from mill output files`() {
         val root = Files.createTempDirectory("mill-script")
         try {
-            val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory).createDirectories()
+            val outputRoot = root.resolve(MillConstants.BUILD_SCRIPT_OUTPUT_DIRECTORY).createDirectories()
             val supportRoot = outputRoot.resolve("generatedScriptSources.dest/support").createDirectories()
             val wrappedRoot = outputRoot.resolve("generatedScriptSources.dest/wrapped").createDirectories()
             val classesRoot = outputRoot.resolve("compile-resources").createDirectories()
             val jarPath = Files.write(root.resolve("mill-libs_3-1.1.3.jar"), byteArrayOf())
 
             Files.writeString(
-                outputRoot.resolve(MillConstants.buildScriptGeneratedSourcesFileName),
+                outputRoot.resolve(MillConstants.BUILD_SCRIPT_GENERATED_SOURCES_FILE_NAME),
                 """
                 {
                   "value": {
@@ -343,7 +343,7 @@ internal class MillProjectResolverSupportTest {
                 """.trimIndent(),
             )
             Files.writeString(
-                outputRoot.resolve(MillConstants.buildScriptClasspathFileName),
+                outputRoot.resolve(MillConstants.BUILD_SCRIPT_CLASSPATH_FILE_NAME),
                 """
                 {
                   "value": [
@@ -399,9 +399,9 @@ internal class MillProjectResolverSupportTest {
     fun `requires wrapped json export for build script compile classpath`() {
         val root = Files.createTempDirectory("mill-script")
         try {
-            val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory).createDirectories()
+            val outputRoot = root.resolve(MillConstants.BUILD_SCRIPT_OUTPUT_DIRECTORY).createDirectories()
             Files.writeString(
-                outputRoot.resolve(MillConstants.buildScriptClasspathFileName),
+                outputRoot.resolve(MillConstants.BUILD_SCRIPT_CLASSPATH_FILE_NAME),
                 """["/tmp/coursier/cache/mill-core.jar"]""",
             )
 
@@ -416,7 +416,7 @@ internal class MillProjectResolverSupportTest {
     @Test
     fun `filters mill build output paths from displayed script dependencies`() {
         val root = Path.of("/tmp/project")
-        val outputRoot = root.resolve(MillConstants.buildScriptOutputDirectory)
+        val outputRoot = root.resolve(MillConstants.BUILD_SCRIPT_OUTPUT_DIRECTORY)
         val classpath = listOf(
             outputRoot.resolve("compile-resources"),
             Path.of("/tmp/coursier/cache/mill-core.jar"),
@@ -576,7 +576,7 @@ internal class MillProjectResolverSupportTest {
         val projectRoot = Path.of("/tmp/project")
         val module = MillProjectResolverSupport.buildModuleData(projectRoot, projectRoot.resolve("foo"), "foo")
 
-        assertEquals(projectRoot.resolve(MillConstants.moduleFilesDirectory).toString(), module.moduleFileDirectoryPath)
+        assertEquals(projectRoot.resolve(MillConstants.MODULE_FILES_DIRECTORY).toString(), module.moduleFileDirectoryPath)
         assertEquals(projectRoot.toString(), module.linkedExternalProjectPath)
     }
 
@@ -800,7 +800,7 @@ internal class MillProjectResolverSupportTest {
                 projectRoot = root,
                 executableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT,
                 executablePath = "",
-                arguments = listOf("resolve", MillConstants.moduleDiscoveryQuery),
+                arguments = listOf("resolve", MillConstants.MODULE_DISCOVERY_QUERY),
             )
 
             assertEquals(wrapper.toString(), command.first())
@@ -813,7 +813,7 @@ internal class MillProjectResolverSupportTest {
     fun `creates default resolve task for module discovery query`() {
         val tasks = MillProjectResolverSupport.createTaskData(Path.of("/tmp/project"))
 
-        assertTrue(tasks.any { it.name == "resolve ${MillConstants.moduleDiscoveryQuery}" })
+        assertTrue(tasks.any { it.name == "resolve ${MillConstants.MODULE_DISCOVERY_QUERY}" })
         assertTrue(tasks.none { it.name == "resolve _" })
     }
 
@@ -831,7 +831,7 @@ internal class MillProjectResolverSupportTest {
                 "tools/mill",
             )
 
-            assertEquals(wrapper.toString(), executable)
+            assertEquals(executable, wrapper.toString())
         } finally {
             deleteRecursively(root)
         }
@@ -847,7 +847,7 @@ internal class MillProjectResolverSupportTest {
                 "",
             )
 
-            assertEquals(MillConstants.defaultExecutable, executable)
+            assertEquals(MillConstants.DEFAULT_EXECUTABLE, executable)
         } finally {
             deleteRecursively(root)
         }
@@ -874,7 +874,7 @@ internal class MillProjectResolverSupportTest {
         return DataNode(
             ProjectKeys.TASK,
             TaskData(
-                MillConstants.systemId,
+                MillConstants.SYSTEM_ID,
                 name,
                 root.toString(),
                 "Task $name",

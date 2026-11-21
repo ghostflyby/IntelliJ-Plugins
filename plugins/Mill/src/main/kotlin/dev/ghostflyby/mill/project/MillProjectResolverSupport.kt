@@ -17,11 +17,11 @@ import java.nio.file.Path
 
 public object MillProjectResolverSupport {
     @JvmField
-    public val moduleContentDirectoryNames: Set<String> = linkedSetOf("src", "resources", "test/src", "test/resources")
+    public val MODULE_CONTENT_DIRECTORY_NAMES: Set<String> = linkedSetOf("src", "resources", "test/src", "test/resources")
 
     @JvmStatic
     public fun isProjectFileName(fileName: String): Boolean {
-        return fileName in MillConstants.projectFileNames
+        return fileName in MillConstants.PROJECT_FILE_NAMES
     }
 
     @JvmStatic
@@ -37,7 +37,7 @@ public object MillProjectResolverSupport {
         }
 
         throw ExternalSystemException(
-            "Mill project root not found for '$projectPath'. Expected one of ${MillConstants.configFileNames.joinToString()}.",
+            "Mill project root not found for '$projectPath'. Expected one of ${MillConstants.CONFIG_FILE_NAMES.joinToString()}.",
         )
     }
 
@@ -53,18 +53,18 @@ public object MillProjectResolverSupport {
     @JvmStatic
     public fun buildProjectData(root: Path): ProjectData {
         val projectName = root.fileName?.toString().orEmpty().ifBlank { "Mill" }
-        return ProjectData(MillConstants.systemId, projectName, root.toString(), root.toString()).apply {
+        return ProjectData(MillConstants.SYSTEM_ID, projectName, root.toString(), root.toString()).apply {
             description = "Imported from Mill build files."
         }
     }
 
     @JvmStatic
     public fun buildModuleData(projectRoot: Path, moduleDir: Path, moduleName: String): ModuleData {
-        val moduleFilesDirectory = projectRoot.resolve(MillConstants.moduleFilesDirectory).normalize()
+        val moduleFilesDirectory = projectRoot.resolve(MillConstants.MODULE_FILES_DIRECTORY).normalize()
         return ModuleData(
             "$moduleName:${moduleDir.toAbsolutePath()}",
-            MillConstants.systemId,
-            MillConstants.moduleTypeId,
+            MillConstants.SYSTEM_ID,
+            MillConstants.MODULE_TYPE_ID,
             moduleName,
             moduleFilesDirectory.toString(),
             projectRoot.toString(),
@@ -97,7 +97,7 @@ public object MillProjectResolverSupport {
         sourceRoots: Collection<Pair<ExternalSystemSourceType, Path>>,
         excludedRoots: Collection<Path>,
     ): ContentRootData {
-        return ContentRootData(MillConstants.systemId, root.toString()).apply {
+        return ContentRootData(MillConstants.SYSTEM_ID, root.toString()).apply {
             sourceRoots
                 .distinct()
                 .forEach { (type, path) ->
@@ -112,7 +112,7 @@ public object MillProjectResolverSupport {
     @JvmStatic
     public fun buildLibraryDependency(ownerModule: ModuleData, binaryPath: Path): LibraryDependencyData {
         val libraryName = binaryPath.fileName?.toString().orEmpty().ifBlank { binaryPath.toString() }
-        val libraryData = LibraryData(MillConstants.systemId, libraryName).apply {
+        val libraryData = LibraryData(MillConstants.SYSTEM_ID, libraryName).apply {
             addPath(LibraryPathType.BINARY, binaryPath.toString())
         }
         return LibraryDependencyData(ownerModule, libraryData, LibraryLevel.PROJECT).apply {
@@ -195,7 +195,7 @@ public object MillProjectResolverSupport {
     ): String? {
         val changedPath = Path.of(changedFileOrDirPath).toAbsolutePath().normalize()
         val changedFileName = changedPath.fileName?.toString()
-        val isWatchedFile = changedFileName != null && changedFileName in MillConstants.configFileNames
+        val isWatchedFile = changedFileName != null && changedFileName in MillConstants.CONFIG_FILE_NAMES
 
         return linkedProjectPaths.firstOrNull { linkedProjectPath ->
             val root = Path.of(linkedProjectPath).toAbsolutePath().normalize()
@@ -210,14 +210,14 @@ public object MillProjectResolverSupport {
     @JvmStatic
     public fun findAffectedExternalProjectFiles(projectPath: String): List<File> {
         val root = findProjectRoot(projectPath)
-        return MillConstants.configFileNames
+        return MillConstants.CONFIG_FILE_NAMES
             .map(root::resolve)
             .filter(Files::exists)
             .map(Path::toFile)
     }
 
     private fun containsMillConfig(path: Path): Boolean {
-        return MillConstants.configFileNames.any { Files.exists(path.resolve(it)) }
+        return MillConstants.CONFIG_FILE_NAMES.any { Files.exists(path.resolve(it)) }
     }
 
     private fun detectSourceRoots(root: Path): List<Pair<ExternalSystemSourceType, Path>> {
@@ -254,8 +254,8 @@ public object MillProjectResolverSupport {
         return listOf(
             task(
                 root,
-                "resolve ${MillConstants.moduleDiscoveryQuery}",
-                "Resolve available Mill targets under ${MillConstants.moduleDiscoveryQuery}",
+                "resolve ${MillConstants.MODULE_DISCOVERY_QUERY}",
+                "Resolve available Mill targets under ${MillConstants.MODULE_DISCOVERY_QUERY}",
             ),
             task(root, "__.compile", "Compile all Mill modules"),
             task(root, "__.test", "Run tests for all Mill modules", isTest = true),
@@ -289,7 +289,7 @@ public object MillProjectResolverSupport {
     private fun presentableModuleLabel(module: MillDiscoveredModule?): String {
         return when (module?.targetPrefix) {
             null -> "the selected Mill target"
-            MillConstants.rootModulePrefix -> "the root Mill module"
+            MillConstants.ROOT_MODULE_PREFIX -> "the root Mill module"
             else -> "Mill module `${module.displayName}`"
         }
     }
@@ -301,7 +301,7 @@ public object MillProjectResolverSupport {
         isTest: Boolean = false,
     ): TaskData {
         return TaskData(
-            MillConstants.systemId,
+            MillConstants.SYSTEM_ID,
             name,
             root.toString(),
             description,

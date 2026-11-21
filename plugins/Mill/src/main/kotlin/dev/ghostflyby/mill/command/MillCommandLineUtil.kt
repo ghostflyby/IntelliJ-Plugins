@@ -142,8 +142,8 @@ internal object MillCommandLineUtil {
                     MillImportDebugLogger.info("Using detected Mill wrapper `$resolved`")
                     return resolved
                 }
-                MillImportDebugLogger.info("Falling back to Mill executable command `${MillConstants.defaultExecutable}`")
-                MillConstants.defaultExecutable
+                MillImportDebugLogger.info("Falling back to Mill executable command `${MillConstants.DEFAULT_EXECUTABLE}`")
+                MillConstants.DEFAULT_EXECUTABLE
             }
 
             MillExecutableSource.MANUAL -> {
@@ -167,7 +167,7 @@ internal object MillCommandLineUtil {
             projectRoot = projectRoot,
             settings = probeSettings,
             arguments = executableProbeArguments,
-            timeoutMillis = executableProbeTimeoutMillis,
+            timeoutMillis = EXECUTABLE_PROBE_TIMEOUT_MILLIS,
         )
         if (command.isSuccess) {
             val version = parseSingleStringValue(command.stdout)
@@ -182,7 +182,7 @@ internal object MillCommandLineUtil {
         val failureMessage = if (command.startupFailed) {
             "The Mill process could not be started."
         } else if (command.timedOut) {
-            "The Mill process timed out after ${executableProbeTimeoutMillis / 1000} seconds."
+            "The Mill process timed out after ${EXECUTABLE_PROBE_TIMEOUT_MILLIS / 1000} seconds."
         } else {
             command.failureDetails.ifBlank {
                 "The Mill process exited with code ${command.exitCode ?: -1}."
@@ -201,18 +201,18 @@ internal object MillCommandLineUtil {
         executablePath: String,
         resolvedExecutable: String,
     ): String {
-        if (resolvedExecutable != MillConstants.defaultExecutable) {
+        if (resolvedExecutable != MillConstants.DEFAULT_EXECUTABLE) {
             return resolvedExecutable
         }
-        if (executableSource != MillExecutableSource.MANUAL || executablePath.trim() != MillConstants.defaultExecutable) {
+        if (executableSource != MillExecutableSource.MANUAL || executablePath.trim() != MillConstants.DEFAULT_EXECUTABLE) {
             return resolvedExecutable
         }
-        return PathEnvironmentVariableUtil.findInPath(MillConstants.defaultExecutable)
+        return PathEnvironmentVariableUtil.findInPath(MillConstants.DEFAULT_EXECUTABLE)
             ?.toPath()
             ?.toAbsolutePath()
             ?.normalize()
             ?.toString()
-            ?: findExecutableByCommandLookup(MillConstants.defaultExecutable)
+            ?: findExecutableByCommandLookup(MillConstants.DEFAULT_EXECUTABLE)
             ?: resolvedExecutable
     }
 
@@ -276,9 +276,9 @@ internal object MillCommandLineUtil {
         val rawExecutable = configuredExecutablePath.trim()
         if (rawExecutable.isEmpty()) {
             MillImportDebugLogger.warn(
-                "Manual Mill executable path is blank, falling back to PATH `${MillConstants.defaultExecutable}`",
+                "Manual Mill executable path is blank, falling back to PATH `${MillConstants.DEFAULT_EXECUTABLE}`",
             )
-            return MillConstants.defaultExecutable
+            return MillConstants.DEFAULT_EXECUTABLE
         }
         val configuredPath = runCatching { Path.of(rawExecutable) }.getOrNull()
         if (configuredPath != null) {
@@ -373,7 +373,7 @@ internal object MillCommandLineUtil {
     }
 
     private fun readStreamAsync(stream: InputStream, charset: java.nio.charset.Charset): FutureTask<String> {
-        val task = FutureTask<String> {
+        val task: FutureTask<String> = FutureTask {
             stream.bufferedReader(charset).use { it.readText() }
         }
         Thread(task, "MillCommandLineUtil-stream-reader").apply {
@@ -402,7 +402,7 @@ internal object MillCommandLineUtil {
         projectRoot: Path,
         settings: MillExecutionSettings?,
     ): MillCommandValueResult<List<String>> {
-        val command = runCommand(projectRoot, settings, listOf("show", "resolve", MillConstants.moduleDiscoveryQuery))
+        val command = runCommand(projectRoot, settings, listOf("show", "resolve", MillConstants.MODULE_DISCOVERY_QUERY))
         val values = if (command.isSuccess) parseStringList(command.stdout).filter(String::isNotBlank) else emptyList()
         MillImportDebugLogger.info(
             "`mill ${command.invocation}` parsed ${values.size} target(s): ${MillImportDebugLogger.sample(values)}",
@@ -492,17 +492,17 @@ internal object MillCommandLineUtil {
         val normalizedVersion = version?.trim().takeUnless { it.isNullOrEmpty() }
             ?: return Bundle.message(
                 "settings.mill.executable.status.invalid.minimum.unknown",
-                minimumSupportedMillVersion,
+                MINIMUM_SUPPORTED_MILL_VERSION,
             )
         val parsedVersion = SemVer.parseFromText(normalizedVersion)
             ?: return Bundle.message(
                 "settings.mill.executable.status.invalid.minimum.unknown",
-                minimumSupportedMillVersion,
+                MINIMUM_SUPPORTED_MILL_VERSION,
             )
         return if (parsedVersion < minimumSupportedMillSemVer) {
             Bundle.message(
                 "settings.mill.executable.status.invalid.minimum",
-                minimumSupportedMillVersion,
+                MINIMUM_SUPPORTED_MILL_VERSION,
                 normalizedVersion,
             )
         } else {
@@ -530,8 +530,8 @@ internal object MillCommandLineUtil {
 
     private fun discoverWrapper(projectRoot: Path): Path? {
         val candidates = buildList {
-            add(projectRoot.resolve(MillConstants.wrapperScriptName))
-            add(projectRoot.resolve(MillConstants.wrapperBatchName))
+            add(projectRoot.resolve(MillConstants.WRAPPER_SCRIPT_NAME))
+            add(projectRoot.resolve(MillConstants.WRAPPER_BATCH_NAME))
         }
         return candidates.firstOrNull(Files::isRegularFile)
     }
@@ -552,9 +552,9 @@ internal object MillCommandLineUtil {
 
     private fun executableNamesForCurrentPlatform(): List<String> {
         return if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-            listOf(MillConstants.wrapperBatchName, "mill.cmd", "mill.exe", MillConstants.wrapperScriptName)
+            listOf(MillConstants.WRAPPER_BATCH_NAME, "mill.cmd", "mill.exe", MillConstants.WRAPPER_SCRIPT_NAME)
         } else {
-            listOf(MillConstants.wrapperScriptName)
+            listOf(MillConstants.WRAPPER_SCRIPT_NAME)
         }
     }
 
@@ -570,7 +570,7 @@ internal object MillCommandLineUtil {
             return null
         }
         val parsed = runCatching { json.parseToJsonElement(trimmed) }.getOrNull() ?: return null
-        return (parsed as? JsonObject)?.get(jsonValueFieldName) ?: parsed
+        return (parsed as? JsonObject)?.get(JSON_VALUE_FIELD_NAME) ?: parsed
     }
 
     internal fun normalizeOutputValue(value: String): String {
@@ -598,9 +598,9 @@ internal object MillCommandLineUtil {
     }
 
     private val executableProbeArguments = listOf("show", "version")
-    private const val executableProbeTimeoutMillis = 10_000
-    private const val minimumSupportedMillVersion = "1.1.5"
-    private val minimumSupportedMillSemVer = requireNotNull(SemVer.parseFromText(minimumSupportedMillVersion))
-    private const val jsonValueFieldName = "value"
+    private const val EXECUTABLE_PROBE_TIMEOUT_MILLIS = 10_000
+    private const val MINIMUM_SUPPORTED_MILL_VERSION = "1.1.5"
+    private val minimumSupportedMillSemVer = requireNotNull(SemVer.parseFromText(MINIMUM_SUPPORTED_MILL_VERSION))
+    private const val JSON_VALUE_FIELD_NAME = "value"
     private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
 }

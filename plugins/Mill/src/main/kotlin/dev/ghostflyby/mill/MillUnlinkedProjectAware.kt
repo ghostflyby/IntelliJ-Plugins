@@ -28,7 +28,7 @@ import java.nio.file.Path
 // sync bridge for linkAndLoadProject(Project, String), which Marketplace counts
 // as a deprecated API usage in the generated classfile.
 internal class MillUnlinkedProjectAware : ExternalSystemUnlinkedProjectAware {
-    override val systemId = MillConstants.systemId
+    override val systemId = MillConstants.SYSTEM_ID
 
     override fun buildFileExtensions(): Array<String> = arrayOf("sc", "mill", "yaml")
 

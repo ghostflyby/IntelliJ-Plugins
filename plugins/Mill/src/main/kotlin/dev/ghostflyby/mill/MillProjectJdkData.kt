@@ -11,9 +11,9 @@ import com.intellij.openapi.externalSystem.model.project.AbstractExternalEntityD
 
 internal class MillProjectJdkData(
     val jdkHomePath: String,
-) : AbstractExternalEntityData(MillConstants.systemId) {
+) : AbstractExternalEntityData(MillConstants.SYSTEM_ID) {
     companion object {
         @JvmField
-        val key: Key<MillProjectJdkData> = Key.create(MillProjectJdkData::class.java, 226)
+        val KEY: Key<MillProjectJdkData> = Key.create(MillProjectJdkData::class.java, 226)
     }
 }

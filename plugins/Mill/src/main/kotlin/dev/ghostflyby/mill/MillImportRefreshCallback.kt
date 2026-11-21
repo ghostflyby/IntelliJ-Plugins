@@ -65,7 +65,7 @@ internal class MillImportRefreshCallback(
                 )
                 thisLogger().warn("Mill import result: $content")
                 NotificationGroupManager.getInstance()
-                    .getNotificationGroup(MillConstants.notificationGroupId)
+                    .getNotificationGroup(MillConstants.NOTIFICATION_GROUP_ID)
                     .createNotification(Bundle.message("import.finished.title"), content, NotificationType.INFORMATION)
                     .notify(project)
             },
@@ -86,7 +86,7 @@ internal class MillImportRefreshCallback(
         )
         thisLogger().warn("Mill import failed: $content")
         NotificationGroupManager.getInstance()
-            .getNotificationGroup(MillConstants.notificationGroupId)
+            .getNotificationGroup(MillConstants.NOTIFICATION_GROUP_ID)
             .createNotification(Bundle.message("import.failed.title"), content, NotificationType.ERROR)
             .notify(project)
     }

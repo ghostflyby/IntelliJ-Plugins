@@ -20,15 +20,16 @@ import dev.ghostflyby.mill.command.MillExecutableProbeResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.nio.file.Path
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
-@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
     private val discoverExecutables: (Path) -> MillExecutableDiscovery = MillCommandLineUtil::discoverExecutables,
     private val probeExecutable: (Path, MillExecutableSource, String) -> MillExecutableProbeResult = MillCommandLineUtil::probeExecutable,
-    private val draftProbeDebounceMillis: Long = 300,
+    private val draftProbeDebounce: Duration = 300.milliseconds,
 ) {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val _originalSettingsByPath = MutableStateFlow(originalSettingsMap(linkedProjectSettings))
@@ -63,11 +64,11 @@ internal class MillConfigurableViewModel(
             .distinctUntilChanged()
             .flatMapLatest { projectPaths ->
                 if (projectPaths.isEmpty()) {
-                    flowOf(emptyMap<String, MillExecutableDiscovery>())
+                    flowOf(emptyMap())
                 } else {
                     val discoveryFlows: Iterable<Flow<Pair<String, MillExecutableDiscovery>>> =
                         projectPaths.map { projectPath ->
-                            flow<Pair<String, MillExecutableDiscovery>> {
+                            flow {
                                 val discovery = runInterruptible(Dispatchers.IO) {
                                     discoverExecutables(Path.of(projectPath))
                                 }
@@ -112,7 +113,7 @@ internal class MillConfigurableViewModel(
                 }
             }
             if (probeFlows.isEmpty()) {
-                emptyFlow<MillCommittedProbeEvent>()
+                emptyFlow()
             } else {
                 probeFlows.merge()
             }
@@ -193,8 +194,8 @@ internal class MillConfigurableViewModel(
                 ) {
                     return@transformLatest
                 }
-                if (draftProbeDebounceMillis > 0) {
-                    delay(draftProbeDebounceMillis)
+                if (draftProbeDebounce.isPositive()) {
+                    delay(draftProbeDebounce)
                 }
                 val result = runInterruptible(Dispatchers.IO) {
                     probeExecutable(
@@ -284,7 +285,7 @@ internal class MillConfigurableViewModel(
         val selectedPath = _selectedProjectPath.value
         val nextSelectedPath = when {
             selectedPath in nextProjectStatesByPath -> selectedPath
-            nextProjectStatesByPath.isNotEmpty() -> nextProjectStatesByPath.keys.sorted().first()
+            nextProjectStatesByPath.isNotEmpty() -> nextProjectStatesByPath.keys.minOf { it }
             else -> ""
         }
         _selectedProjectPath.value = nextSelectedPath
@@ -490,16 +491,16 @@ internal class MillConfigurableViewModel(
                 ?: selectedProbe
                     ?.takeIf {
                         state.executableSource == MillExecutableSource.MANUAL &&
-                                state.manualExecutablePath == MillConstants.defaultExecutable
+                                state.manualExecutablePath == MillConstants.DEFAULT_EXECUTABLE
                     }
                     ?.resolvedExecutable
-                    ?.takeUnless { it == MillConstants.defaultExecutable }
+                    ?.takeUnless { it == MillConstants.DEFAULT_EXECUTABLE }
                 ?: pathExecutables.firstOrNull(),
             source = MillExecutableSource.MANUAL,
-            manualPath = MillConstants.defaultExecutable,
+            manualPath = MillConstants.DEFAULT_EXECUTABLE,
             tooltipText = buildPathTooltip(pathExecutables),
             editorTextOverride = Bundle.message("settings.mill.executable.choice.path"),
-            inputMatchText = MillConstants.defaultExecutable,
+            inputMatchText = MillConstants.DEFAULT_EXECUTABLE,
         )
         choices[pathChoice.key] = pathChoice
 
@@ -554,9 +555,9 @@ internal class MillConfigurableViewModel(
 
     private fun expectedProjectWrapperPath(projectRoot: Path): String {
         val wrapperName = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-            MillConstants.wrapperBatchName
+            MillConstants.WRAPPER_BATCH_NAME
         } else {
-            MillConstants.wrapperScriptName
+            MillConstants.WRAPPER_SCRIPT_NAME
         }
         return projectRoot.resolve(wrapperName).normalize().toString()
     }

@@ -51,7 +51,7 @@ internal class MillReloadProjectAction : DumbAwareAction() {
         FileDocumentManager.getInstance().saveAllDocuments()
         ExternalSystemUtil.refreshProject(
             externalProjectPath,
-            ImportSpecBuilder(project, MillConstants.systemId)
+            ImportSpecBuilder(project, MillConstants.SYSTEM_ID)
                 .withActivateToolWindowOnStart(true)
                 .withCallback(MillImportRefreshCallback(project)),
         )
@@ -96,7 +96,7 @@ internal class MillReloadProjectAction : DumbAwareAction() {
 
     private fun notify(project: Project, title: String, content: String) {
         NotificationGroupManager.getInstance()
-            .getNotificationGroup(MillConstants.notificationGroupId)
+            .getNotificationGroup(MillConstants.NOTIFICATION_GROUP_ID)
             .createNotification(title, content, NotificationType.WARNING)
             .notify(project)
     }

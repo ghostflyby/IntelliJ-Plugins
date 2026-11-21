@@ -8,7 +8,7 @@ package dev.ghostflyby.mill
 
 import com.intellij.openapi.externalSystem.service.execution.AbstractExternalSystemTaskConfigurationType
 
-internal class MillExternalTaskConfigurationType : AbstractExternalSystemTaskConfigurationType(MillConstants.systemId) {
+internal class MillExternalTaskConfigurationType : AbstractExternalSystemTaskConfigurationType(MillConstants.SYSTEM_ID) {
     override fun getConfigurationFactoryId(): String = "Mill"
 
     override fun isDumbAware(): Boolean = true

@@ -11,7 +11,7 @@ import com.intellij.openapi.externalSystem.settings.AbstractExternalSystemSettin
 import com.intellij.openapi.project.Project
 import dev.ghostflyby.mill.settings.MillSettings
 
-internal class MillToolWindowFactory : AbstractExternalSystemToolWindowFactory(MillConstants.systemId) {
+internal class MillToolWindowFactory : AbstractExternalSystemToolWindowFactory(MillConstants.SYSTEM_ID) {
     override fun getSettings(project: Project): AbstractExternalSystemSettings<*, *, *> {
         return MillSettings.getInstance(project)
     }

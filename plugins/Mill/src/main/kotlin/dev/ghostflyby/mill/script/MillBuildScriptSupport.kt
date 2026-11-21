@@ -40,23 +40,23 @@ internal object MillBuildScriptSupport {
     }
 
     internal fun isBuildScriptFileName(fileName: String): Boolean {
-        return fileName == MillConstants.buildScriptFileName
+        return fileName == MillConstants.BUILD_SCRIPT_FILE_NAME
     }
 
     internal fun outputDirectory(projectRoot: Path): Path {
-        return projectRoot.resolve(MillConstants.buildScriptOutputDirectory).normalize()
+        return projectRoot.resolve(MillConstants.BUILD_SCRIPT_OUTPUT_DIRECTORY).normalize()
     }
 
     internal fun buildScriptFile(projectRoot: Path): Path {
-        return projectRoot.resolve(MillConstants.buildScriptFileName).normalize()
+        return projectRoot.resolve(MillConstants.BUILD_SCRIPT_FILE_NAME).normalize()
     }
 
     internal fun generatedSourcesFile(projectRoot: Path): Path {
-        return outputDirectory(projectRoot).resolve(MillConstants.buildScriptGeneratedSourcesFileName)
+        return outputDirectory(projectRoot).resolve(MillConstants.BUILD_SCRIPT_GENERATED_SOURCES_FILE_NAME)
     }
 
     internal fun compileClasspathFile(projectRoot: Path): Path {
-        return outputDirectory(projectRoot).resolve(MillConstants.buildScriptClasspathFileName)
+        return outputDirectory(projectRoot).resolve(MillConstants.BUILD_SCRIPT_CLASSPATH_FILE_NAME)
     }
 
     internal fun scalaVersionFile(projectRoot: Path): Path {

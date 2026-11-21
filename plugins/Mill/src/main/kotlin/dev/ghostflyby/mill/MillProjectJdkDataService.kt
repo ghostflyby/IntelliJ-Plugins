@@ -17,7 +17,7 @@ import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 
 internal class MillProjectJdkDataService : AbstractProjectDataService<MillProjectJdkData, Sdk>() {
-    override fun getTargetDataKey(): Key<MillProjectJdkData> = MillProjectJdkData.key
+    override fun getTargetDataKey(): Key<MillProjectJdkData> = MillProjectJdkData.KEY
 
     override fun importData(
         toImport: Collection<DataNode<MillProjectJdkData>>,

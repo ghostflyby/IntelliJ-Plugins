@@ -14,9 +14,9 @@ internal class MillScalaSdkData(
     val scalacClasspath: List<String>,
     val scaladocClasspath: List<String>,
     val replClasspath: List<String>,
-) : AbstractExternalEntityData(MillConstants.systemId) {
+) : AbstractExternalEntityData(MillConstants.SYSTEM_ID) {
     companion object {
         @JvmField
-        val key: Key<MillScalaSdkData> = Key.create(MillScalaSdkData::class.java, 225)
+        val KEY: Key<MillScalaSdkData> = Key.create(MillScalaSdkData::class.java, 225)
     }
 }

@@ -32,7 +32,7 @@ internal object MillExecutableConfigurationUtil {
         if (
             normalizedSource == MillExecutableSource.PROJECT_DEFAULT_SCRIPT &&
             rawPath.isNotEmpty() &&
-            rawPath != MillConstants.defaultExecutable
+            rawPath != MillConstants.DEFAULT_EXECUTABLE
         ) {
             // Treat legacy custom executable values as an explicit manual override.
             return MillExecutableConfiguration(MillExecutableSource.MANUAL, rawPath)

@@ -31,8 +31,8 @@ internal object MillBuildScriptModuleResolver {
         }
 
         val module = MillDiscoveredModule(
-            displayName = MillConstants.buildScriptModuleName,
-            targetPrefix = MillConstants.rootModulePrefix,
+            displayName = MillConstants.BUILD_SCRIPT_MODULE_NAME,
+            targetPrefix = MillConstants.ROOT_MODULE_PREFIX,
             projectRoot = projectRoot,
             directory = projectRoot,
         )

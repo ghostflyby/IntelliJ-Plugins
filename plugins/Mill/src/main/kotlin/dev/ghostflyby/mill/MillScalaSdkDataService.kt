@@ -24,7 +24,7 @@ import scala.jdk.javaapi.CollectionConverters
 import java.nio.file.Path
 
 internal class MillScalaSdkDataService : AbstractProjectDataService<MillScalaSdkData, Module>() {
-    override fun getTargetDataKey(): Key<MillScalaSdkData> = MillScalaSdkData.key
+    override fun getTargetDataKey(): Key<MillScalaSdkData> = MillScalaSdkData.KEY
 
     override fun importData(
         toImport: Collection<DataNode<MillScalaSdkData>>,
@@ -53,7 +53,7 @@ internal class MillScalaSdkDataService : AbstractProjectDataService<MillScalaSdk
                     toScalaSeq(data.scaladocClasspath),
                     Option.empty(),
                     replClasspath,
-                    MillConstants.scalaSdkPrefix,
+                    MillConstants.SCALA_SDK_PREFIX,
                     modelsProvider,
                 )
                 LOG.info("[Mill import] Scala SDK configured for module ${ideModule.name}")

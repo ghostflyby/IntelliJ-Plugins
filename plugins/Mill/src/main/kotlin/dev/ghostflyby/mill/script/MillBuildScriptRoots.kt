@@ -17,7 +17,7 @@ import java.nio.file.Path
 
 internal object MillBuildScriptRoots {
     fun resolveRoots(project: Project, file: VirtualFile): List<VirtualFile> {
-        val model = findModel(project, file) ?: return emptyList()
+        val model = findModel(file) ?: return emptyList()
         return model.resolveRoots.mapNotNull(::findResolveRoot).distinct()
     }
 
@@ -44,7 +44,7 @@ internal object MillBuildScriptRoots {
             .distinct()
     }
 
-    private fun findModel(project: Project, file: VirtualFile): MillBuildScriptModel? {
+    private fun findModel(file: VirtualFile): MillBuildScriptModel? {
         if (!MillBuildScriptSupport.isBuildScriptFile(file)) {
             return null
         }
