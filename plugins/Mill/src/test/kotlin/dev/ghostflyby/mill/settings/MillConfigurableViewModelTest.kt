@@ -102,7 +102,7 @@ internal class MillConfigurableViewModelTest {
 
         model.executableInputTextProperty.set(MillConstants.DEFAULT_EXECUTABLE)
 
-        Assertions.assertEquals("/usr/local/bin/mill", model.executableInputLeftHintProperty.get())
+        waitUntil { model.executableInputLeftHintProperty.get() == "/usr/local/bin/mill" }
         val appliedProject = applyModel(model).single()
         Assertions.assertEquals(MillExecutableSource.PROJECT_DEFAULT_SCRIPT, appliedProject.millExecutableSource)
         Assertions.assertEquals("", appliedProject.millExecutablePath)
@@ -121,7 +121,7 @@ internal class MillConfigurableViewModelTest {
 
         model.executableInputTextProperty.set("mill")
 
-        Assertions.assertEquals("/usr/local/bin/mill", model.executableInputLeftHintProperty.get())
+        waitUntil { model.executableInputLeftHintProperty.get() == "/usr/local/bin/mill" }
     }
 
     @Test
@@ -131,7 +131,7 @@ internal class MillConfigurableViewModelTest {
 
         model.executableInputTextProperty.set("custom-mill")
 
-        Assertions.assertEquals("", model.executableInputLeftHintProperty.get())
+        waitUntil { model.executableInputLeftHintProperty.get().isEmpty() }
     }
 
     @Test
@@ -141,7 +141,7 @@ internal class MillConfigurableViewModelTest {
 
         model.executableInputTextProperty.set("tools/mill")
 
-        Assertions.assertEquals("/tmp/mill-project/tools/mill", model.executableInputLeftHintProperty.get())
+        waitUntil { model.executableInputLeftHintProperty.get() == "/tmp/mill-project/tools/mill" }
         val appliedProject = applyModel(model).single()
         Assertions.assertEquals(MillExecutableSource.PROJECT_DEFAULT_SCRIPT, appliedProject.millExecutableSource)
         Assertions.assertEquals("", appliedProject.millExecutablePath)
@@ -488,7 +488,7 @@ internal class MillConfigurableViewModelTest {
             model.executableSelectedChoiceProperty.get()?.editorText,
             model.executableInputTextProperty.get(),
         )
-        Assertions.assertEquals("/opt/mill-second/bin/mill", model.executableInputLeftHintProperty.get())
+        waitUntil { model.executableInputLeftHintProperty.get() == "/opt/mill-second/bin/mill" }
     }
 
     private fun createModel(
