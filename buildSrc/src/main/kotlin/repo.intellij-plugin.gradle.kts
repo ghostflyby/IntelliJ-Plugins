@@ -9,6 +9,9 @@ import org.jetbrains.changelog.markdownToHTML
 import org.jetbrains.intellij.platform.gradle.Constants
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
 import org.jetbrains.intellij.platform.gradle.utils.asPath
 
@@ -123,17 +126,25 @@ listOf(
 }
 
 
-// Finalizers run even when publishPlugin fails: upload only while the release is still a draft,
-// so a re-run never replaces a published asset (a failed query skips; publishing happens later).
-fun isReleaseDraft(tag: String): Boolean =
-    runCatching {
-        val process = ProcessBuilder("gh", "release", "view", tag, "--json", "isDraft", "--jq", ".isDraft")
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().readText().trim()
-        process.waitFor()
-        output == "true"
-    }.getOrDefault(false)
+// A ValueSource is the configuration-cache-safe way to derive a value from an external command:
+// the source and its parameters serialize into the cache entry instead of capturing script objects.
+abstract class ReleaseDraftSource : ValueSource<Boolean, ReleaseDraftSource.Parameters> {
+    interface Parameters : ValueSourceParameters {
+        val tag: Property<String>
+    }
+
+    override fun obtain(): Boolean {
+        val tag = parameters.tag.orNull ?: return false
+        return runCatching {
+            val process = ProcessBuilder("gh", "release", "view", tag, "--json", "isDraft", "--jq", ".isDraft")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            process.waitFor()
+            output == "true"
+        }.getOrDefault(false)
+    }
+}
 
 
 tasks {
@@ -155,6 +166,11 @@ tasks {
     val ghReleaseTag = providers.environmentVariable("GH_RELEASE_TAG")
     val path =
         buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
+    // Finalizers run even when publishPlugin fails: upload only while the release is still a draft
+    // (a failed query yields false; publishing happens in a later workflow step anyway).
+    val isReleaseDraft = providers.of(ReleaseDraftSource::class) {
+        parameters.tag.value(ghReleaseTag)
+    }
 
     val upload = tasks.register<Exec>("uploadReleaseAssets") {
         inputs.property("ghReleaseTag", ghReleaseTag)
@@ -162,7 +178,7 @@ tasks {
         inputs.file(path)
         group = "publishing"
         description = "Uploads release assets to GitHub for the specified tag."
-        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent && isReleaseDraft(ghReleaseTag.get()) }
+        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent && isReleaseDraft.get() }
         commandLine("gh")
         argumentProviders.add {
             buildList {
