@@ -18,6 +18,7 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.swing.ComboBoxModel
 import javax.swing.DefaultComboBoxModel
+import javax.swing.JList
 import javax.swing.ListCellRenderer
 
 public fun <T> Cell<EditableHintedComboBox<T>>.bindRightHint(
@@ -84,9 +85,13 @@ public fun <T> Row.editableHintedComboBox(
     val box: EditableHintedComboBox<T> =
         EditableHintedComboBox(model = model, adapter = adapter, unresolvedTextPolicy = unresolvedTextPolicy)
     // The default renderer derives its text from the adapter so the dropdown list stays consistent
-    // with the editor text; pass [renderer] to take over rendering entirely.
-    box.renderer = renderer ?: SimpleListCellRenderer.create("") { item ->
-        item?.let(adapter::text) ?: ""
+    // with the editor text; pass [renderer] to take over rendering entirely. Subclassing is the
+    // only stable entry point: both create() factories are deprecated for removal, and the
+    // textListCellRenderer helper is @ApiStatus.Internal in current IDE builds.
+    box.renderer = renderer ?: object : SimpleListCellRenderer<T>() {
+        override fun customize(list: JList<out T>, value: T?, index: Int, selected: Boolean, hasFocus: Boolean) {
+            text = value?.let(adapter::text) ?: ""
+        }
     }
 
     return cell(box)

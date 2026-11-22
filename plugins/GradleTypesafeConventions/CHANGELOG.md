@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-22
+
+### Added
+
+- IDE errors are now reported to JetBrains Marketplace.
+
 ## [0.1.1] - 2026-11-21
 
 ### Fixed
@@ -51,6 +57,7 @@
 - Restore catalog navigation after Gradle sync when version catalog models are reported by `buildSrc` or another
   resolver beneath the linked Gradle root.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.2...HEAD
+[0.1.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.1...GradleTypesafeConventions-v0.1.2
 [0.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleTypesafeConventions-v0.1.0...GradleTypesafeConventions-v0.1.1
 [0.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/GradleTypesafeConventions-v0.1.0

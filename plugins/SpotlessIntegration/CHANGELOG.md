@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-11-22
+
+### Added
+
+- IDE errors are now reported to JetBrains Marketplace.
+
 ## [2.0.1] - 2026-09-16
 
 ### Changed
@@ -82,7 +88,8 @@
 - Initial release of the Spotless Integration plugin for IntelliJ IDEA.
 - Support for automatic code formatting using Spotless.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.1...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.2...HEAD
+[2.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.1...SpotlessIntegration-v2.0.2
 [2.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v2.0.0...SpotlessIntegration-v2.0.1
 [2.0.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.1.0...SpotlessIntegration-v2.0.0
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/SpotlessIntegration-v1.0.0...SpotlessIntegration-v1.1.0

@@ -12,6 +12,7 @@
     <depends optional="true" config-file="java.xml">com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
         <formattingService implementation="dev.ghostflyby.spotless.SpotlessFormatingService"/>
         <statusBarWidgetFactory id="dev.ghostflyby.spotless.statusBar"
                                 implementation="dev.ghostflyby.spotless.SpotlessStatusBarWidgetFactory"

@@ -8,7 +8,7 @@ plugins {
     id("repo.intellij-plugin")
 }
 
-version = "1.1.0"
+version = "1.1.1"
 
 dependencies {
     testImplementation(libs.kotlinx.coroutines.test) {
