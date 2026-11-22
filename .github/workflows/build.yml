@@ -34,7 +34,7 @@ jobs:
           submodules: recursive
       - name: Free disk space
         # Build outputs plus full-repo verification fill most of the runner disk
-        # (ENOSPC seen in run 34758371488). Mirror the releaseDraft job.
+        # (ENOSPC seen in run 34758371488).
         if: ${{ matrix.primary }}
         uses: jlumbroso/free-disk-space@v2.0.0
         with:
@@ -276,80 +276,3 @@ jobs:
     secrets:
       QODANA_TOKEN: ${{ secrets.QODANA_TOKEN }}
       GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-
-
-
-  releaseDraft:
-    name: Release draft
-    if: github.event_name == 'push'
-    needs: [ build-and-check, inspectCode ]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v2.0.0
-        with:
-          tool-cache: false
-          large-packages: false
-      - name: Fetch Sources
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          submodules: recursive
-      - name: Setup Java
-        uses: actions/setup-java@v6
-        with:
-          distribution: jetbrains
-          java-version: 21
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.4.1
-        with:
-          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
-          cache-read-only: true
-      - name: Create release drafts
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          $pluginPaths = & $gradlew getChangelog --dry-run --console=plain |
-                  ForEach-Object {
-                      if ($_ -match "^(?:> Task )?(:plugins:[^:]+):getChangelog SKIPPED$")
-                      {
-                          $Matches[1]
-                      }
-                  } |
-                  Sort-Object -Unique
-
-          foreach ($pluginPath in $pluginPaths)
-          {
-              $tagPrefix = ($pluginPath -split ":")[-1]
-              $properties = & $gradlew --configuration-cache "${pluginPath}:properties" --console=plain -q
-              $versionLine = $properties | Where-Object { $_ -like "version:*" } | Select-Object -First 1
-              $version = $versionLine.Substring("version:".Length).Trim()
-              $changelog = (& $gradlew --configuration-cache "${pluginPath}:getChangelog" --unreleased --no-header --no-empty-sections --console=plain -q) -join [Environment]::NewLine
-              
-              $releaseIds = gh api "repos/{owner}/{repo}/releases" `
-              --jq ".[] | select(.draft == true and (.tag_name | startswith(`"$tagPrefix-v`"))) | .id"
-              foreach ($releaseId in $releaseIds)
-              {
-                  if ($releaseId)
-                  {
-                      gh api -X DELETE "repos/{owner}/{repo}/releases/$releaseId"
-                  }
-              }
-
-              gh release create "$tagPrefix-v$version" `
-                      --draft `
-                      --title "$tagPrefix v$version" `
-                      --notes "$changelog"
-          }

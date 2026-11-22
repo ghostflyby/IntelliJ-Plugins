@@ -123,6 +123,19 @@ listOf(
 }
 
 
+// Finalizers run even when publishPlugin fails: upload only while the release is still a draft,
+// so a re-run never replaces a published asset (a failed query skips; publishing happens later).
+fun isReleaseDraft(tag: String): Boolean =
+    runCatching {
+        val process = ProcessBuilder("gh", "release", "view", tag, "--json", "isDraft", "--jq", ".isDraft")
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        output == "true"
+    }.getOrDefault(false)
+
+
 tasks {
     tasks.withType<PrepareSandboxTask> {
         disabledPlugins.add("org.jetbrains.completion.full.line")
@@ -149,7 +162,7 @@ tasks {
         inputs.file(path)
         group = "publishing"
         description = "Uploads release assets to GitHub for the specified tag."
-        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
+        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent && isReleaseDraft(ghReleaseTag.get()) }
         commandLine("gh")
         argumentProviders.add {
             buildList {
@@ -157,6 +170,8 @@ tasks {
                 add("upload")
                 add(ghReleaseTag.get())
                 add(path.get().toString())
+                // replaces the draft asset on re-run; onlyIf guards published releases
+                add("--clobber")
             }
         }
     }
