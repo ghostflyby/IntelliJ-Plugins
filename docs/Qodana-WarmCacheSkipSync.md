@@ -97,8 +97,11 @@ Result — confirmed in the strongest form:
 ## Fixes
 
 1. **`Materialize Gradle build state` step** (`.github/workflows/inspect-code.yml`):
-   `./gradlew help --console=plain` before every scan. Workaround; remove once
-   Qodana re-imports reliably on fresh workspaces.
+   `./gradlew resolveDependencies --console=plain` before every scan. Any Gradle
+   invocation builds buildSrc first, which covers this variant; resolving every
+   resolvable configuration additionally materializes the external jars the
+   cached model references, which covers the variant below. Workaround; remove
+   once Qodana re-imports reliably on fresh workspaces.
 2. **Health-gate recalibration** (2026-11-22): `MAX_TOTAL_PROBLEMS` 250→45 —
    the load-bearing, baseline-independent wall (healthy ≤35, skip-sync variant
    ≥75); `MAX_NEW_PROBLEMS` 150→60 — must stay above the baseline-less total
@@ -107,6 +110,25 @@ Result — confirmed in the strongest form:
 3. **Cache-key hash extended** to `*gradle.properties` and
    `gradle/wrapper/gradle-wrapper.properties`: a distribution change must
    never reuse a model built by another Gradle.
+4. **Resolve-all coverage** (2026-11-22, run 44992135785): a warm main run
+   restored a cache whose model was structurally complete — 402 libraries and
+   72 modules, name-identical to the healthy run's model — but whose jar paths
+   dangled: the jars were absent from the workspace, and with the import
+   skipped (0-byte `gradle-import.log` vs 12.5 MB on the healthy run) nothing
+   ever downloaded them. Signature: 1906 `Roots ... were not resolved`
+   warnings (34 on a healthy run), 102 Unresolved-reference sanity findings
+   concentrated in test scopes (junit5, `com.intellij.testFramework`, ktor),
+   and 507 `UnusedSymbol` false positives — 597 total / 570 new. The health
+   gate caught it and withheld the SARIF. `resolveDependencies` (root
+   `build.gradle.kts`, registered on every project) closes this layer: it
+   resolves the external module artifacts of every resolvable configuration
+   via an `artifactView` filtered to `ModuleComponentIdentifier`, so jars land
+   at exactly the content-addressed paths the model references while
+   project-built artifacts stay out of the resolution — resolving whole
+   configurations would otherwise execute build tasks (a kover/sandbox-wired
+   configuration ran `:plugins:SpotlessIntegration:test` to completion). The
+   views are `@Classpath`-normalized task inputs, so resolution is driven by
+   input fingerprinting and the task is configuration-cache safe.
 
 ## Related upstream
 

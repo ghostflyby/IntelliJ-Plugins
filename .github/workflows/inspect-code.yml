@@ -139,26 +139,12 @@ jobs:
             echo "No baseline cached yet; analysing without one (every problem counts as new)"
           fi
           printf 'args=%s\n' "$args" >> "$GITHUB_OUTPUT"
-      # A warm Qodana cache reuses the IntelliJ project model but skips the Gradle
-      # import entirely, and nothing materializes the build-generated artifacts that
-      # the model references: the version-catalog accessor classes under
-      # buildSrc/build (generatePrecompiledScriptPluginAccessors, compilePluginsBlocks,
-      # generateLibrariesForLibs). A fresh CI checkout has no build/ outputs and the
-      # Qodana cache-dir never carries them, so every alias() chain in the buildSrc
-      # precompiled script plugins degrades to error-type resolution and reports the
-      # KotlinUnreachableCode cascade (2026-11-20..22, 13-run lineage: every warm
-      # cache hit skipped the sync and came back polluted; every cold run synced and
-      # was clean). Any Gradle invocation builds buildSrc first, which restores those
-      # artifacts — Qodana can then reuse its cached model against real files.
-      # ~1 min with a warm gradle-home cache (mostly FROM-CACHE via the Gradle build
-      # cache). Confirmed 2026-11-21, run 44930735812: with the artifacts materialized
-      # the scan still skipped the sync (opening 12s, no daemon) but came back clean —
-      # 30 problems, zero buildSrc findings — so the cached model itself is valid and
-      # only the artifacts were missing. Remove once Qodana re-imports reliably on
-      # fresh workspaces (upstream report pending).
+      # Materializes what a warm Qodana cache cannot carry: buildSrc script artifacts
+      # (any Gradle invocation builds buildSrc) and the external jars the cached
+      # project model references. Rationale: docs/Qodana-WarmCacheSkipSync.md.
       - name: Materialize Gradle build state
         shell: bash
-        run: ./gradlew help --console=plain
+        run: ./gradlew resolveDependencies --console=plain
       - name: Qodana - Code Inspection
         uses: JetBrains/qodana-action@v2026.3.1
         with:
