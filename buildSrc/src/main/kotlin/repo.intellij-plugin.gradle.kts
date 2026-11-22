@@ -10,6 +10,7 @@ import org.jetbrains.intellij.platform.gradle.Constants
 import org.jetbrains.intellij.platform.gradle.extensions.IntelliJPlatformTestingExtension
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 import org.jetbrains.intellij.platform.gradle.tasks.VerifyPluginTask
+import org.jetbrains.intellij.platform.gradle.utils.asPath
 
 plugins {
     id("repo.intellij-module")
@@ -135,6 +136,36 @@ tasks {
 
     processResources {
         from(rootProject.file("LICENSE"))
+    }
+
+    val isGitHubActions = providers.environmentVariable("GITHUB_ACTIONS").map { it.toBoolean() }
+    val ghReleaseTag = providers.environmentVariable("GH_RELEASE_TAG")
+    val path =
+        buildPlugin.flatMap { it.archiveFile }.map { it.asPath }
+
+    val upload = tasks.register<Exec>("uploadReleaseAssets") {
+        inputs.property("ghReleaseTag", ghReleaseTag)
+        inputs.property("isGitHubActions", isGitHubActions)
+        inputs.file(path)
+        group = "publishing"
+        description = "Uploads release assets to GitHub for the specified tag."
+        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
+        commandLine("gh")
+        argumentProviders.add {
+            buildList {
+                add("release")
+                add("upload")
+                add(ghReleaseTag.get())
+                add(path.get().toString())
+                // Re-running the Release workflow replaces the draft asset; a published
+                // (immutable) release rejects the upload regardless.
+                add("--clobber")
+            }
+        }
+    }
+
+    publishPlugin {
+        finalizedBy(upload)
     }
 
     verifyPlugin {

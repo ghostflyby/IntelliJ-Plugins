@@ -1,7 +1,8 @@
 # GitHub Actions Workflow for the tag-driven release process: pushing a "<PluginName>-vX.Y.Z" tag
-# builds and verifies the plugin, publishes the GitHub release (assets are uploaded while the
-# release is still a draft, which keeps the flow compatible with immutable releases), and publishes
-# the plugin to the JetBrains Marketplace.
+# verifies the plugin and publishes it to the JetBrains Marketplace — the core of the release. The
+# GitHub release wraps it: a draft is created first, the Gradle-side uploadReleaseAssets task
+# uploads the distribution to it (assets must be in place before publishing, which immutable
+# releases enforce), and publishing the draft is the finishing step.
 # Running the publishPlugin task requires all the following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
 # See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
 
@@ -139,52 +140,6 @@ jobs:
           $changelog | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      # Roll the Unreleased section into the version section before anything is built: the
-      # changelog content feeds plugin.xml changeNotes, so patching first keeps the GitHub
-      # release asset and the Marketplace upload byte-identical (one build, one zip).
-      - name: Patch Changelog
-        env:
-          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:patchChangelog"
-
-      # Build the distribution once: the GitHub release asset and the Marketplace upload both come
-      # from this build (publishPlugin stays up-to-date for it afterwards), so the attested bits
-      # match what was verified.
-      - name: Build Plugin Distribution
-        id: distribution
-        env:
-          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
-          MODULE_PATH: ${{ steps.mod.outputs.module_path }}
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:buildPlugin"
-
-          $distributions = Join-Path $env:GITHUB_WORKSPACE "${env:MODULE_PATH}/build/distributions"
-          $zip = Get-ChildItem -Path $distributions -Filter "*.zip" -File |
-                  Sort-Object LastWriteTime -Descending |
-                  Select-Object -First 1
-          if (-not $zip)
-          {
-              throw "No plugin distribution found in '$distributions'."
-          }
-          "zip_path=$( $zip.FullName )" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
       # Gate publishing on the full supported range: the uncapped until-build lets plugins run on
       # IDEs newer than the compile target, and binary breaks there must not reach the Marketplace.
       - name: Verify Plugin (full supported range)
@@ -201,41 +156,52 @@ jobs:
           }
           & $gradlew --configuration-cache "${env:GRADLE_PATH}:verifyPlugin" "-PpluginVerificationFullRange=true"
 
-      # Assets must be in place before the release is published: immutable releases reject any
-      # asset change after publishing. The draft is attached to the existing tag and published
-      # only after verification passed, so a failing build never locks a broken release.
-      - name: Upload Assets to Draft Release
+      # The GitHub release wraps the Marketplace publish: the draft is created here, the
+      # Gradle-side uploadReleaseAssets task (finalizedBy publishPlugin) uploads the built
+      # distribution to it while it is still a draft — which is what immutable releases
+      # require — and the finishing step below publishes it after the Marketplace succeeded.
+      - name: Create Draft Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
           PLUGIN_NAME: ${{ steps.validate.outputs.plugin_name }}
           VERSION: ${{ steps.validate.outputs.version }}
           CHANGELOG: ${{ steps.validate.outputs.changelog }}
-          ZIP_PATH: ${{ steps.distribution.outputs.zip_path }}
         run: |
-          $tag = $env:RELEASE_TAG
-          gh release view $tag --json isDraft | Out-Null
+          gh release view $env:RELEASE_TAG --json isDraft | Out-Null
           if ($LASTEXITCODE -ne 0)
           {
-              gh release create $tag `
+              gh release create $env:RELEASE_TAG `
                   --draft `
                   --title "$env:PLUGIN_NAME v$env:VERSION" `
                   --notes "$env:CHANGELOG"
           }
 
-          $release = gh release view $tag --json isDraft | ConvertFrom-Json
-          if ($release.isDraft)
+      # Publish the plugin to JetBrains Marketplace — the core of the release. patchChangelog
+      # runs through its publishPlugin task dependency and patches the working tree used by the
+      # changelog pull request below.
+      - name: Publish Plugin
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_RELEASE_TAG: ${{ github.ref_name }}
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
+        run: |
+          $gradlew = if ($IsWindows)
           {
-              $checksums = Join-Path (Split-Path $env:ZIP_PATH -Parent) "checksums.txt"
-              $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $env:ZIP_PATH).Hash.ToLowerInvariant()
-              "$hash  $( Split-Path $env:ZIP_PATH -Leaf )" | Set-Content -LiteralPath $checksums -Encoding ascii
-              gh release upload $tag $env:ZIP_PATH $checksums --clobber
+              ".\gradlew.bat"
           }
           else
           {
-              Write-Host "Release '$tag' is already published; skipping asset upload."
+              "./gradlew"
           }
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin" "-PpluginVerificationFullRange=true"
 
+      # Finish the GitHub release: publishing turns the draft — whose assets were uploaded by
+      # the Gradle task — into the release; skipped when it is already published
       - name: Publish GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -251,9 +217,7 @@ jobs:
               Write-Host "Release '$($env:RELEASE_TAG)' is already published."
           }
 
-      # Land the patched changelog back on main before the Marketplace upload: if publishPlugin
-      # then fails, a re-run only retries the upload while this pull request already exists.
-      # Idempotent so a failed run can be re-run safely.
+      # Land the patched changelog back on main; idempotent so a failed run can be re-run safely
       - name: Create Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -298,24 +262,3 @@ jobs:
 
               gh pr merge "$prUrl" --squash --auto
           }
-
-      # Publish the plugin to JetBrains Marketplace as the last step: if it fails, everything
-      # before it (release, assets, changelog pull request) is already in place, and a re-run
-      # only retries this upload
-      - name: Publish Plugin
-        env:
-          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
