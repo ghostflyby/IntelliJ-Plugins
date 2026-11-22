@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- IDE errors are now reported to JetBrains Marketplace.
 
 ### Changed
 

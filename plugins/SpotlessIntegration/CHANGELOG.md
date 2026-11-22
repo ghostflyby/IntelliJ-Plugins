@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- IDE errors are now reported to JetBrains Marketplace.
+
 ## [2.0.1] - 2026-09-16
 
 ### Changed

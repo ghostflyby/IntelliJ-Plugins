@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### Added
+- IDE errors are now reported to JetBrains Marketplace.
+
 ### Fixed
 
 - SDK server notification state is now persisted across restarts (the settings state class was not serialized)

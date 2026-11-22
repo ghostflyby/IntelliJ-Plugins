@@ -13,4 +13,7 @@
         <module name="dev.ghostflyby.mcp.workspace.backend" loading="embedded" required-if-available="intellij.platform.backend"/>
     </content>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+    </extensions>
 </idea-plugin>

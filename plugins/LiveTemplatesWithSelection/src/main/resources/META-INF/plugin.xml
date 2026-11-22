@@ -9,6 +9,7 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
         <editorFactoryListener
                 implementation="dev.ghostflyby.selectionlivetemplate.SelectionTemplatesEditorFactoryListener"/>
         <liveTemplateSubstitutor
