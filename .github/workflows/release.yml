@@ -89,8 +89,6 @@ jobs:
           {
               throw "No Gradle plugin project found for release tag '$tag'."
           }
-          $modPath = $gradlePath.TrimStart(":").Replace(":", "/")
-          "module_path=$modPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "gradle_path=$gradlePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       # Fail fast on mismatched or empty inputs: an immutable release burns the tag name

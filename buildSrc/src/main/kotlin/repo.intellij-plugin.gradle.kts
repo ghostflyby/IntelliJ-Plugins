@@ -123,6 +123,23 @@ listOf(
 }
 
 
+// Finalizers run even when publishPlugin fails: on a re-run against an already-published release
+// (e.g. publishPlugin hitting the Marketplace duplicate-version rejection), the upload must not
+// replace the published asset — Gradle zip archives are not reproducible, so the bytes would
+// change. Uploading only while the release is still a draft keeps that path safe regardless of the
+// repository's immutable-releases setting. A failed query skips the upload, which cannot strand a
+// published asset: the workflow publishes the release in a later step that needs the same gh CLI.
+fun isReleaseDraft(tag: String): Boolean =
+    runCatching {
+        val process = ProcessBuilder("gh", "release", "view", tag, "--json", "isDraft", "--jq", ".isDraft")
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().readText().trim()
+        process.waitFor()
+        output == "true"
+    }.getOrDefault(false)
+
+
 tasks {
     tasks.withType<PrepareSandboxTask> {
         disabledPlugins.add("org.jetbrains.completion.full.line")
@@ -149,7 +166,7 @@ tasks {
         inputs.file(path)
         group = "publishing"
         description = "Uploads release assets to GitHub for the specified tag."
-        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent }
+        onlyIf { isGitHubActions.get() && ghReleaseTag.isPresent && isReleaseDraft(ghReleaseTag.get()) }
         commandLine("gh")
         argumentProviders.add {
             buildList {
@@ -157,8 +174,8 @@ tasks {
                 add("upload")
                 add(ghReleaseTag.get())
                 add(path.get().toString())
-                // Re-running the Release workflow replaces the draft asset; a published
-                // (immutable) release rejects the upload regardless.
+                // Re-running the Release workflow replaces the draft asset; the onlyIf draft
+                // guard above keeps published releases untouched.
                 add("--clobber")
             }
         }
