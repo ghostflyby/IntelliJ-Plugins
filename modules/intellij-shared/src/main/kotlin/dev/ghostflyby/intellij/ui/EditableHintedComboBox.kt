@@ -13,7 +13,6 @@ import com.intellij.ui.components.fields.ExtendableTextField
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtilities
 import java.awt.*
-import java.awt.event.ActionEvent
 import java.awt.geom.Rectangle2D
 import javax.swing.ComboBoxModel
 import javax.swing.DefaultComboBoxModel
@@ -104,15 +103,13 @@ public class EditableHintedComboBox<E>(
         // receives editor actions: the wrapper commits through `setSelectedItem(getItem())` on its
         // own listener. Register ours before that wrapper exists, so REJECT can restore the
         // selected item's text before the commit runs.
-        hintedEditorTextField.addActionListener(::rejectUnresolvedDraft)
+        hintedEditorTextField.addActionListener {
+            if (unresolvedTextPolicy == UnresolvedTextPolicy.REJECT && resolveEditorText() == null) {
+                comboBoxEditor.setItem(this.selectedItem)
+            }
+        }
         isEditable = true
         super.setEditor(comboBoxEditor)
-    }
-
-    private fun rejectUnresolvedDraft(event: ActionEvent) {
-        if (unresolvedTextPolicy == UnresolvedTextPolicy.REJECT && resolveEditorText() == null) {
-            comboBoxEditor.setItem(selectedItem)
-        }
     }
 
     private fun resolveEditorText(): E? {
@@ -233,12 +230,12 @@ public class HintedTextField : ExtendableTextField() {
         applyingComputedMargin = true
         try {
             super.setMargin(
-                Insets(
+                JBUI.insets(
                     base?.top ?: 0,
                     (base?.left ?: 0) + JBUI.scale(OUTER_GAP),
                     base?.bottom ?: 0,
                     (base?.right ?: 0) + rightReserved,
-                )
+                ),
             )
         } finally {
             applyingComputedMargin = false
