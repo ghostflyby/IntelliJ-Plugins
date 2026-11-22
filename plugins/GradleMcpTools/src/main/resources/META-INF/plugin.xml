@@ -10,6 +10,9 @@
     <depends>com.intellij.gradle</depends>
     <depends>com.intellij.mcpServer</depends>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+    </extensions>
     <extensions defaultExtensionNs="com.intellij.mcpServer">
         <mcpToolset implementation="dev.ghostflyby.mcp.gradle.GradleMcpTools"/>
     </extensions>

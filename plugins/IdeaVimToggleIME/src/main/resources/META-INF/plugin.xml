@@ -9,6 +9,9 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>IdeaVIM</depends>
 
+    <extensions defaultExtensionNs="com.intellij">
+        <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
+    </extensions>
     <extensions defaultExtensionNs="IdeaVIM">
         <vimExtension name="autotoggleime" implementation="dev.ghostflyby.ideavim.toggleIME.DisableImeInNormal"/>
     </extensions>
