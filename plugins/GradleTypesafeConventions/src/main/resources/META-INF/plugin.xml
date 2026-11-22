@@ -20,7 +20,7 @@
     <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
         <projectResolve
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsProjectResolverExtension"/>
-        <!--suppress PluginXmlValidity Experimental API usage -->
+        <!--suppress UnstableExtensionsUsage Experimental API usage -->
         <syncContributor
                 implementation="dev.ghostflyby.typesafeconventions.gradle.TypesafeConventionsGradleSyncContributor"/>
     </extensions>
