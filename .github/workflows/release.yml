@@ -1,8 +1,6 @@
 # GitHub Actions Workflow for the tag-driven release process: pushing a "<PluginName>-vX.Y.Z" tag
-# verifies the plugin and publishes it to the JetBrains Marketplace — the core of the release. The
-# GitHub release wraps it: a draft is created first, the Gradle-side uploadReleaseAssets task
-# uploads the distribution to it (assets must be in place before publishing, which immutable
-# releases enforce), and publishing the draft is the finishing step.
+# verifies the plugin and publishes it to the JetBrains Marketplace; the GitHub release wraps it —
+# assets are uploaded to a draft (immutable releases require that) and the draft is published last.
 # Running the publishPlugin task requires all the following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
 # See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
 
@@ -38,8 +36,7 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository at the pushed release tag; full history is needed so the
-      # validation step can assert that the tag commit is on main
+      # Check out the repository at the pushed release tag; full history lets validation check it is on main
       - name: Fetch Sources
         uses: actions/checkout@v7
         with:
@@ -91,8 +88,7 @@ jobs:
           }
           "gradle_path=$gradlePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      # Fail fast on mismatched or empty inputs: an immutable release burns the tag name
-      # permanently, so a mis-tagged or empty release must never reach the publish step.
+      # Fail fast: an immutable release burns the tag name, so bad input must not reach the publish step
       - name: Validate Release Inputs
         id: validate
         env:
@@ -108,8 +104,7 @@ jobs:
               "./gradlew"
           }
           $tag = $env:RELEASE_TAG
-          # The changelog-update pull request branches from the tag commit: a tag pushed from an
-          # unmerged branch would squash-merge that branch's commits into main unreviewed.
+          # The changelog PR branches from the tag commit: require the tag to be on main
           git merge-base --is-ancestor HEAD origin/main
           if ($LASTEXITCODE -ne 0)
           {
@@ -154,10 +149,7 @@ jobs:
           }
           & $gradlew --configuration-cache "${env:GRADLE_PATH}:verifyPlugin" "-PpluginVerificationFullRange=true"
 
-      # The GitHub release wraps the Marketplace publish: the draft is created here, the
-      # Gradle-side uploadReleaseAssets task (finalizedBy publishPlugin) uploads the built
-      # distribution to it while it is still a draft — which is what immutable releases
-      # require — and the finishing step below publishes it after the Marketplace succeeded.
+      # uploadReleaseAssets (finalizedBy publishPlugin) fills this draft; the step below publishes it
       - name: Create Draft Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -175,9 +167,7 @@ jobs:
                   --notes "$env:CHANGELOG"
           }
 
-      # Publish the plugin to JetBrains Marketplace — the core of the release. patchChangelog
-      # runs through its publishPlugin task dependency and patches the working tree used by the
-      # changelog pull request below.
+      # Publish the plugin to JetBrains Marketplace; patchChangelog (task dependency) patches the tree for the PR below
       - name: Publish Plugin
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
@@ -198,8 +188,7 @@ jobs:
           }
           & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin" "-PpluginVerificationFullRange=true"
 
-      # Finish the GitHub release: publishing turns the draft — whose assets were uploaded by
-      # the Gradle task — into the release; skipped when it is already published
+      # Finish the GitHub release; skipped when already published
       - name: Publish GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -215,7 +204,7 @@ jobs:
               Write-Host "Release '$($env:RELEASE_TAG)' is already published."
           }
 
-      # Land the patched changelog back on main; idempotent so a failed run can be re-run safely
+      # Land the patched changelog back on main; idempotent on re-run
       - name: Create Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

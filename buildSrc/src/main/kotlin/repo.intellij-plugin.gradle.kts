@@ -123,12 +123,8 @@ listOf(
 }
 
 
-// Finalizers run even when publishPlugin fails: on a re-run against an already-published release
-// (e.g. publishPlugin hitting the Marketplace duplicate-version rejection), the upload must not
-// replace the published asset — Gradle zip archives are not reproducible, so the bytes would
-// change. Uploading only while the release is still a draft keeps that path safe regardless of the
-// repository's immutable-releases setting. A failed query skips the upload, which cannot strand a
-// published asset: the workflow publishes the release in a later step that needs the same gh CLI.
+// Finalizers run even when publishPlugin fails: upload only while the release is still a draft,
+// so a re-run never replaces a published asset (a failed query skips; publishing happens later).
 fun isReleaseDraft(tag: String): Boolean =
     runCatching {
         val process = ProcessBuilder("gh", "release", "view", tag, "--json", "isDraft", "--jq", ".isDraft")
@@ -174,8 +170,7 @@ tasks {
                 add("upload")
                 add(ghReleaseTag.get())
                 add(path.get().toString())
-                // Re-running the Release workflow replaces the draft asset; the onlyIf draft
-                // guard above keeps published releases untouched.
+                // replaces the draft asset on re-run; onlyIf guards published releases
                 add("--clobber")
             }
         }
