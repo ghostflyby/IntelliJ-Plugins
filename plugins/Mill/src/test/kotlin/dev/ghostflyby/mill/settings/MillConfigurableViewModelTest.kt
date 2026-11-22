@@ -377,10 +377,10 @@ internal class MillConfigurableViewModelTest {
                 as EditableHintedComboBox<MillExecutableChoice>
 
         selector.editorTextField.text = "mill"
-        waitUntil { selector.leftHint == "/usr/local/bin/mill" }
+        waitUntil { selector.trailingHint == "/usr/local/bin/mill" }
 
         selector.editorTextField.text = "tools/mill"
-        waitUntil { selector.leftHint == "/tmp/mill-project/tools/mill" }
+        waitUntil { selector.trailingHint == "/tmp/mill-project/tools/mill" }
     }
 
     @Test
@@ -400,10 +400,10 @@ internal class MillConfigurableViewModelTest {
             manualPath = "tools/mill",
             tooltipText = "tools/mill",
         )
-        waitUntil { selector.leftHint == "/tmp/mill-project/tools/mill" }
+        waitUntil { selector.trailingHint == "/tmp/mill-project/tools/mill" }
 
         selector.editorTextField.text = "other/mill"
-        waitUntil { selector.leftHint == "/tmp/mill-project/other/mill" }
+        waitUntil { selector.trailingHint == "/tmp/mill-project/other/mill" }
     }
 
     @Test
