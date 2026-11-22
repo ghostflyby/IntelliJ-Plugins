@@ -4,18 +4,11 @@
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-11-22
+
 ### Added
+
 - IDE errors are now reported to JetBrains Marketplace.
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [1.1.2] - 2026-03-25
 
@@ -42,7 +35,8 @@
 - Gradle task and project operations now report MCP activity updates for better runtime observability.
 - `run_gradle_tasks` now uses IDE background progress so task runs are visible and cancelable from the IDE.
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.2...HEAD
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.3...HEAD
+[1.1.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.2...GradleMcpTools-v1.1.3
 [1.1.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.1...GradleMcpTools-v1.1.2
 [1.1.1]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/GradleMcpTools-v1.1.0...GradleMcpTools-v1.1.1
 [1.1.0]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/GradleMcpTools-v1.1.0
