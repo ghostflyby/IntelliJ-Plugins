@@ -4,18 +4,11 @@
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-11-22
+
 ### Added
+
 - IDE errors are now reported to JetBrains Marketplace.
-
-### Changed
-
-### Deprecated
-
-### Removed
-
-### Fixed
-
-### Security
 
 ## [1.0.4] - 2025-12-13
 
@@ -48,8 +41,9 @@
 
 - Stop using internal APIs
 
-[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.4...HEAD
-[1.0.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.3...v1.0.4
-[1.0.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.2...v1.0.3
-[1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/v1.0.1...v1.0.2
-[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/v1.0.1
+[Unreleased]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/LiveTemplatesWithSelection-v1.0.5...HEAD
+[1.0.5]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/LiveTemplatesWithSelection-v1.0.4...LiveTemplatesWithSelection-v1.0.5
+[1.0.4]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/LiveTemplatesWithSelection-v1.0.3...LiveTemplatesWithSelection-v1.0.4
+[1.0.3]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/LiveTemplatesWithSelection-v1.0.2...LiveTemplatesWithSelection-v1.0.3
+[1.0.2]: https://github.com/ghostflyby/IntelliJ-Plugins/compare/LiveTemplatesWithSelection-v1.0.1...LiveTemplatesWithSelection-v1.0.2
+[1.0.1]: https://github.com/ghostflyby/IntelliJ-Plugins/commits/LiveTemplatesWithSelection-v1.0.1
