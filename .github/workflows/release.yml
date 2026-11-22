@@ -37,9 +37,12 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository at the pushed release tag
+      # Check out the current repository at the pushed release tag; full history is needed so the
+      # validation step can assert that the tag commit is on main
       - name: Fetch Sources
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       # Set up the Java environment for the next steps
       - name: Setup Java
@@ -106,6 +109,13 @@ jobs:
               "./gradlew"
           }
           $tag = $env:RELEASE_TAG
+          # The changelog-update pull request branches from the tag commit: a tag pushed from an
+          # unmerged branch would squash-merge that branch's commits into main unreviewed.
+          git merge-base --is-ancestor HEAD origin/main
+          if ($LASTEXITCODE -ne 0)
+          {
+              throw "Release tag '$tag' does not point at a commit on 'main'; merge the version bump before pushing the tag."
+          }
           $pluginName = ($env:GRADLE_PATH -split ":")[-1]
           $tagVersion = $tag.Substring($pluginName.Length + "-v".Length)
 
@@ -241,27 +251,9 @@ jobs:
               Write-Host "Release '$($env:RELEASE_TAG)' is already published."
           }
 
-      # Publish the plugin to JetBrains Marketplace (the patched CHANGELOG.md in this working tree
-      # is what the changelog pull request below commits)
-      - name: Publish Plugin
-        env:
-          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
-        run: |
-          $gradlew = if ($IsWindows)
-          {
-              ".\gradlew.bat"
-          }
-          else
-          {
-              "./gradlew"
-          }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
-
-      # Land the patched changelog back on main; idempotent so a failed run can be re-run safely
+      # Land the patched changelog back on main before the Marketplace upload: if publishPlugin
+      # then fails, a re-run only retries the upload while this pull request already exists.
+      # Idempotent so a failed run can be re-run safely.
       - name: Create Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -282,8 +274,21 @@ jobs:
             --description "Pull requests with release changelog update" `
             --force
 
-          gh pr view $branch --json url | Out-Null
-          if ($LASTEXITCODE -ne 0)
+          gh pr view $branch --json state,url | Out-Null
+          if ($LASTEXITCODE -eq 0)
+          {
+              $pr = gh pr view $branch --json state,url | ConvertFrom-Json
+              if ($pr.state -eq "OPEN")
+              {
+                  Write-Host "Pull request for '$branch' already exists: $($pr.url)"
+                  gh pr merge "$($pr.url)" --squash --auto
+              }
+              else
+              {
+                  Write-Host "Pull request for '$branch' is $($pr.state); nothing to merge."
+              }
+          }
+          else
           {
               $prUrl = gh pr create `
                 --title "chore: Changelog update - $version [skip ci]" `
@@ -293,7 +298,24 @@ jobs:
 
               gh pr merge "$prUrl" --squash --auto
           }
+
+      # Publish the plugin to JetBrains Marketplace as the last step: if it fails, everything
+      # before it (release, assets, changelog pull request) is already in place, and a re-run
+      # only retries this upload
+      - name: Publish Plugin
+        env:
+          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
           else
           {
-              Write-Host "Pull request for '$branch' already exists."
+              "./gradlew"
           }
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
