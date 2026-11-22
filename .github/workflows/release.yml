@@ -1,11 +1,19 @@
-# GitHub Actions Workflow created for handling the release process based on the draft release prepared with the Build workflow.
+# GitHub Actions Workflow for the tag-driven release process: pushing a "<PluginName>-vX.Y.Z" tag
+# builds and verifies the plugin, publishes the GitHub release (assets are uploaded while the
+# release is still a draft, which keeps the flow compatible with immutable releases), and publishes
+# the plugin to the JetBrains Marketplace.
 # Running the publishPlugin task requires all the following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
 # See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
 
 name: Release
 on:
-  release:
-    types: [ published ]
+  push:
+    tags:
+      - '*-v[0-9]*'
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 defaults:
   run:
@@ -13,7 +21,7 @@ defaults:
 
 jobs:
 
-  # Prepare and publish the plugin to JetBrains Marketplace repository
+  # Build, verify, publish the GitHub release, and publish the plugin to JetBrains Marketplace
   release:
     name: Publish Plugin
     runs-on: ubuntu-latest
@@ -29,11 +37,9 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # Check out the current repository
+      # Check out the current repository at the pushed release tag
       - name: Fetch Sources
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
 
       # Set up the Java environment for the next steps
       - name: Setup Java
@@ -55,7 +61,7 @@ jobs:
       - name: Resolve module
         id: mod
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $gradlew = if ($IsWindows)
           {
@@ -83,24 +89,12 @@ jobs:
           "module_path=$modPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "gradle_path=$gradlePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
-      # Set environment variables
-      - name: Export Properties
-        id: properties
+      # Fail fast on mismatched or empty inputs: an immutable release burns the tag name
+      # permanently, so a mis-tagged or empty release must never reach the publish step.
+      - name: Validate Release Inputs
+        id: validate
         env:
-          RELEASE_BODY: ${{ github.event.release.body }}
-        run: |
-          $changelog = $env:RELEASE_BODY -replace "(?m)^\s*$", ""
-          $changelog = $changelog.TrimStart()
-
-          "changelog<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          $changelog | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-
-      # Update the Unreleased section with the current release note
-      - name: Patch Changelog
-        if: ${{ github.event.release.body != '' }}
-        env:
-          CHANGELOG: ${{ github.event.release.body }}
+          RELEASE_TAG: ${{ github.ref_name }}
           GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
         run: |
           $gradlew = if ($IsWindows)
@@ -111,11 +105,75 @@ jobs:
           {
               "./gradlew"
           }
-          $releaseNote = New-TemporaryFile
-          Set-Content -Path $releaseNote -Value $env:CHANGELOG -Encoding utf8
+          $tag = $env:RELEASE_TAG
+          $pluginName = ($env:GRADLE_PATH -split ":")[-1]
+          $tagVersion = $tag.Substring($pluginName.Length + "-v".Length)
 
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:patchChangelog" --release-note-file="$( $releaseNote.FullName )"
-          Remove-Item $releaseNote
+          $properties = & $gradlew --configuration-cache "${env:GRADLE_PATH}:properties" --console=plain -q
+          $versionLine = $properties | Where-Object { $_ -like "version:*" } | Select-Object -First 1
+          $version = $versionLine.Substring("version:".Length).Trim()
+          if ($version -ne $tagVersion)
+          {
+              throw "Tag '$tag' does not match the Gradle version '$version' of '${env:GRADLE_PATH}'."
+          }
+
+          $changelog = (& $gradlew --configuration-cache "${env:GRADLE_PATH}:getChangelog" --unreleased --no-header --no-empty-sections --console=plain -q) -join [Environment]::NewLine
+          if (-not $changelog.Trim())
+          {
+              throw "The Unreleased section of '${env:GRADLE_PATH}' is empty. Add changelog entries before pushing the release tag."
+          }
+
+          "plugin_name=$pluginName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "changelog<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          $changelog | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # Roll the Unreleased section into the version section before anything is built: the
+      # changelog content feeds plugin.xml changeNotes, so patching first keeps the GitHub
+      # release asset and the Marketplace upload byte-identical (one build, one zip).
+      - name: Patch Changelog
+        env:
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:patchChangelog"
+
+      # Build the distribution once: the GitHub release asset and the Marketplace upload both come
+      # from this build (publishPlugin stays up-to-date for it afterwards), so the attested bits
+      # match what was verified.
+      - name: Build Plugin Distribution
+        id: distribution
+        env:
+          GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
+          MODULE_PATH: ${{ steps.mod.outputs.module_path }}
+        run: |
+          $gradlew = if ($IsWindows)
+          {
+              ".\gradlew.bat"
+          }
+          else
+          {
+              "./gradlew"
+          }
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:buildPlugin"
+
+          $distributions = Join-Path $env:GITHUB_WORKSPACE "${env:MODULE_PATH}/build/distributions"
+          $zip = Get-ChildItem -Path $distributions -Filter "*.zip" -File |
+                  Sort-Object LastWriteTime -Descending |
+                  Select-Object -First 1
+          if (-not $zip)
+          {
+              throw "No plugin distribution found in '$distributions'."
+          }
+          "zip_path=$( $zip.FullName )" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       # Gate publishing on the full supported range: the uncapped until-build lets plugins run on
       # IDEs newer than the compile target, and binary breaks there must not reach the Marketplace.
@@ -133,15 +191,64 @@ jobs:
           }
           & $gradlew --configuration-cache "${env:GRADLE_PATH}:verifyPlugin" "-PpluginVerificationFullRange=true"
 
-      # Publish the plugin to JetBrains Marketplace
+      # Assets must be in place before the release is published: immutable releases reject any
+      # asset change after publishing. The draft is attached to the existing tag and published
+      # only after verification passed, so a failing build never locks a broken release.
+      - name: Upload Assets to Draft Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          PLUGIN_NAME: ${{ steps.validate.outputs.plugin_name }}
+          VERSION: ${{ steps.validate.outputs.version }}
+          CHANGELOG: ${{ steps.validate.outputs.changelog }}
+          ZIP_PATH: ${{ steps.distribution.outputs.zip_path }}
+        run: |
+          $tag = $env:RELEASE_TAG
+          gh release view $tag --json isDraft | Out-Null
+          if ($LASTEXITCODE -ne 0)
+          {
+              gh release create $tag `
+                  --draft `
+                  --title "$env:PLUGIN_NAME v$env:VERSION" `
+                  --notes "$env:CHANGELOG"
+          }
+
+          $release = gh release view $tag --json isDraft | ConvertFrom-Json
+          if ($release.isDraft)
+          {
+              $checksums = Join-Path (Split-Path $env:ZIP_PATH -Parent) "checksums.txt"
+              $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $env:ZIP_PATH).Hash.ToLowerInvariant()
+              "$hash  $( Split-Path $env:ZIP_PATH -Leaf )" | Set-Content -LiteralPath $checksums -Encoding ascii
+              gh release upload $tag $env:ZIP_PATH $checksums --clobber
+          }
+          else
+          {
+              Write-Host "Release '$tag' is already published; skipping asset upload."
+          }
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $isDraft = gh release view $env:RELEASE_TAG --json isDraft --jq .isDraft
+          if ($isDraft -eq "true")
+          {
+              gh release edit $env:RELEASE_TAG --draft=false
+          }
+          else
+          {
+              Write-Host "Release '$($env:RELEASE_TAG)' is already published."
+          }
+
+      # Publish the plugin to JetBrains Marketplace (the patched CHANGELOG.md in this working tree
+      # is what the changelog pull request below commits)
       - name: Publish Plugin
         env:
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_RELEASE_TAG: ${{ github.event.release.tag_name }}
           GRADLE_PATH: ${{ steps.mod.outputs.gradle_path }}
         run: |
           $gradlew = if ($IsWindows)
@@ -152,14 +259,13 @@ jobs:
           {
               "./gradlew"
           }
-          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin" "-PpluginVerificationFullRange=true"
+          & $gradlew --configuration-cache "${env:GRADLE_PATH}:publishPlugin"
 
-      # Create a pull request
+      # Land the patched changelog back on main; idempotent so a failed run can be re-run safely
       - name: Create Pull Request
-        if: ${{ github.event.release.body != '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           $version = $env:RELEASE_TAG
           $branch = "changelog-update-$version"
@@ -168,18 +274,26 @@ jobs:
           git config user.email "action@github.com"
           git config user.name "GitHub Action"
 
-          git checkout -b $branch
+          git checkout -B $branch
           git commit -am "chore: Changelog update - $version [skip ci]"
-          git push --set-upstream origin $branch
-          
+          git push --force origin $branch
+
           gh label create "$label" `
             --description "Pull requests with release changelog update" `
             --force
 
-          $prUrl = gh pr create `
-            --title "chore: Changelog update - $version [skip ci]" `
-            --body "Current pull request contains patched CHANGELOG.md file for the $version version." `
-            --label "$label" `
-            --head "$branch"
-          
-          gh pr merge "$prUrl" --squash --auto
+          gh pr view $branch --json url | Out-Null
+          if ($LASTEXITCODE -ne 0)
+          {
+              $prUrl = gh pr create `
+                --title "chore: Changelog update - $version [skip ci]" `
+                --body "Current pull request contains patched CHANGELOG.md file for the $version version." `
+                --label "$label" `
+                --head "$branch"
+
+              gh pr merge "$prUrl" --squash --auto
+          }
+          else
+          {
+              Write-Host "Pull request for '$branch' already exists."
+          }
