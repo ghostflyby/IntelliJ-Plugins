@@ -904,8 +904,11 @@ internal data class MillExecutableChoice(
 internal fun <T> StateFlow<T>.toObservable(scope: CoroutineScope): ObservableProperty<T> {
     val listeners = FlowChangeListeners(this, scope)
     return object : ObservableProperty<T> {
+        // The delivered value, not the flow's current one: the latter can be a transient that
+        // the collector will never deliver again (see FlowChangeListeners.current), and a
+        // reader in that window must not wait for a notification that cannot come.
         override fun get(): T {
-            return value
+            return listeners.current
         }
 
         override fun afterChange(parentDisposable: Disposable?, listener: (T) -> Unit) {
@@ -962,37 +965,55 @@ internal fun <T> StateFlow<T>.toReducerObservable(
  * registered later and already observed the same change.
  */
 private class FlowChangeListeners<T>(private val flow: StateFlow<T>, scope: CoroutineScope) {
-    private class Entry<T>(@Volatile var last: T, val listener: (T) -> Unit)
+    private class Entry<T>(var last: T, val listener: (T) -> Unit)
 
-    private val entries = CopyOnWriteArrayList<Entry<T>>()
+    private val entries = ArrayList<Entry<T>>()
+
+    /**
+     * The value last delivered to listeners (or the initial one). A StateFlow only hands a
+     * collector values that differ from the last one it handed *that collector*, so a value that
+     * moves away and back (a transient `""` between two identical versions) is never delivered
+     * again. Registrations and `get()` therefore use this delivered value instead of
+     * `flow.value`: a listener registered while the flow sits on such a transient gets the same
+     * value its predecessors observed and needs no notification that will never arrive.
+     */
+    @Volatile
+    var current: T = flow.value
+        private set
+
+    // Registration and delivery are serialized: a listener is either registered before a
+    // delivery pass (and receives its value) or after it (and starts from the delivered value).
+    // Without this, a pass could publish a value between the entry's `last` capture and its
+    // insertion, leaving the listener waiting for a notification that already happened.
+    private val lock = Any()
 
     init {
         scope.launch {
-            flow.collect { current ->
-                // Compare against each listener's own last value rather than dropping by
-                // position: a change landing between a listener's registration and its first
-                // delivery still reaches it, and conflated intermediate values need no count.
-                val snapshot = entries.toList()
-                if (snapshot.any { current != it.last }) {
-                    withContext(Dispatchers.UI) {
-                        snapshot.forEach { entry ->
-                            if (current != entry.last) {
-                                entry.last = current
-                                entry.listener(current)
-                            }
-                        }
+            flow.collect { value ->
+                // Registration and delivery order is fixed before the UI hop: listeners
+                // registered after this point start from the published value and need no
+                // notification that already started. View bindings run on the UI thread, as
+                // Swing requires; the hop is the only threading requirement of the adapter.
+                val pending: List<Entry<T>>
+                synchronized(lock) {
+                    if (value == current && entries.all { value == it.last }) {
+                        return@collect
                     }
+                    current = value
+                    pending = entries.filter { value != it.last }.onEach { it.last = value }
+                }
+                withContext(Dispatchers.UI) {
+                    pending.forEach { entry -> entry.listener(value) }
                 }
             }
         }
     }
 
     fun register(parentDisposable: Disposable?, listener: (T) -> Unit) {
-        val entry = Entry(flow.value, listener)
-        entries += entry
+        val entry = synchronized(lock) { Entry(current, listener).also(entries::add) }
         parentDisposable?.let {
             Disposer.register(it) {
-                entries.remove(entry)
+                synchronized(lock) { entries.remove(entry) }
             }
         }
     }

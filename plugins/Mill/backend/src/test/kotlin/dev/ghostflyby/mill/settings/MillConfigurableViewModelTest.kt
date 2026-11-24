@@ -25,6 +25,7 @@ import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 // Test methods are suspend functions when they await completion notifications; the waits use
 // [nextValue] or an interruptible latch wait instead of polling. Swing work hops to the UI thread
@@ -268,22 +269,22 @@ internal class MillConfigurableViewModelTest {
         )
         val initialVersion = model.executableVersionTextProperty.nextValue("project")
         val pathVersion = model.executableVersionTextProperty.nextValue("path")
-        initialVersion.await()
+        initialVersion.awaitStep("initial project version hint", model.executableVersionTextProperty::get)
 
         val pathChoice = model.executableChoicesProperty.get()
             .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
         model.executableSelectedChoiceProperty.set(pathChoice)
-        pathVersion.await()
+        pathVersion.awaitStep("path choice version hint", model.executableVersionTextProperty::get)
 
         val projectChoice = model.executableChoicesProperty.get()
             .single { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
         val projectVersion = model.executableVersionTextProperty.nextValue("project")
         model.executableSelectedChoiceProperty.set(projectChoice)
-        projectVersion.await()
+        projectVersion.awaitStep("project choice version hint", model.executableVersionTextProperty::get)
         // Switching choices clears the cached results, so "project" above was produced by the
         // committed probe's finish — nothing is in flight any more; assert that explicitly so a
         // future change cannot end the test with a probe still running.
-        model.committedProbesRunning.first { !it }
+        awaitCommittedProbesIdle(model)
     }
 
     @Test
@@ -607,6 +608,26 @@ internal class MillConfigurableViewModelTest {
             deferred.complete(get())
         }
         return deferred
+    }
+
+    /**
+     * [Deferred.await] with a labeled bound. The class-level timeout alone only reports that the
+     * method timed out; the label and current value identify the transition the ViewModel never
+     * produced. The bound is far above the instant transitions awaited here, so exceeding it is
+     * a missing value, not a slow machine.
+     */
+    private suspend fun <T> Deferred<T>.awaitStep(step: String, current: () -> Any?): T = try {
+        withTimeout(AWAIT_SECONDS.seconds) { await() }
+    } catch (timeout: TimeoutCancellationException) {
+        throw AssertionError("$step: no value within ${AWAIT_SECONDS}s (current `${current()}`)", timeout)
+    }
+
+    private suspend fun awaitCommittedProbesIdle(model: MillConfigurableViewModel) {
+        try {
+            withTimeout(AWAIT_SECONDS.seconds) { model.committedProbesRunning.first { !it } }
+        } catch (timeout: TimeoutCancellationException) {
+            throw AssertionError("committed probes still running after ${AWAIT_SECONDS}s", timeout)
+        }
     }
 
     /**

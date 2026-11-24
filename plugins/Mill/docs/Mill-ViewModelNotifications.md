@@ -31,6 +31,13 @@ current value, `set()` updates the underlying flow or runs the ViewModel reducer
    widget stale until the next change. Each entry now carries its own `last` value: it receives
    every value different from what it already knows about, including the value present at
    registration time if it changes before the first delivery.
+3. **Registration ordered against delivery, from the delivered value.** A StateFlow only hands a
+   collector values that differ from the last one it handed *that collector*, so a property that
+   moves away and back (a transient `""` between two identical version texts) is never delivered
+   again. The adapter therefore publishes each value to `current` and marks the receiving entries
+   under the same lock that `register` takes: a listener is either registered before a delivery
+   pass (and receives the value) or after it (and starts from `current`, which `get()` also
+   returns). A listener can never end up waiting for a notification that already happened.
 
 Delivery is conflated by `StateFlow`: listeners see values, not every intermediate state. Code
 that must observe an intermediate value (for synchronization) has to make it distinguishable
