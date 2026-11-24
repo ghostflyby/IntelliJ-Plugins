@@ -11,9 +11,9 @@ Last Updated: 2026-11-24
 
 ## Recently Completed
 
-1. Migrated to the modular Plugin Model v2 layout (`shared` + embedded `backend` content
-   modules) with split-mode development (`runIdeBackend` / `runIdeSplitMode`); see
-   `docs/Mill-ModularSplitMigration.md`.
+1. Migrated to the modular Plugin Model v2 layout (`shared` + `frontend` + embedded `backend`
+   content modules) with split-mode development (`runIdeBackend` / `runIdeFrontend` /
+   `runIdeSplitMode`); see `docs/Mill-ModularSplitMigration.md`.
 2. WSL execution targets: linked projects under `\\wsl.localhost\...` import and run Mill
    inside the distribution (`wsl.exe -d ... --exec`), with target↔UNC path conversion for
    imported roots, libraries, and JDK homes; EEL container targets are detected and reported
@@ -22,13 +22,16 @@ Last Updated: 2026-11-24
    Kotlin with settings-file-compatible state, and demoted success-path `warn` logging to
    `info`.
 4. Replaced the configurable's test polling with completion-notification tests (suspend methods,
-   `Deferred` listeners, class-level `@Timeout`) and fixed the two adapter defects they exposed
-   (a listener losing the change that landed just after registration, and per-listener
-   collectors leaving delivery order undefined); see `docs/Mill-ViewModelNotifications.md`.
+   `Deferred` listeners, class-level `@Timeout`) and fixed the adapter defects they exposed
+   (lost first change, undefined delivery order, a registration racing a conflated delivery);
+   see `docs/Mill-ViewModelNotifications.md`.
 5. Kept WSL execution working where the platform's EEL daemon cannot start: `wsl.exe` is
    spawned through a plain `ProcessBuilder`, no UNC working directory is passed, and bare
    commands are resolved inside the distribution through the login shell; the WSL CI leg
    exercises the same spawn path.
+6. Exposed executable discovery/probing from the frontend through the platform split-mode RPC
+   (`MillBackendRpcApi` + backend `remoteApiProvider`), so the settings page works in the
+   JetBrains Client without spawning processes on the client.
 
 Archived notes:
 `plugins/Mill/docs/Mill-ToolWindowTasks.md`,

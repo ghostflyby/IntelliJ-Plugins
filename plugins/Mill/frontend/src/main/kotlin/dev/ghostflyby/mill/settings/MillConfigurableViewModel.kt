@@ -15,13 +15,15 @@ import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.util.Disposer
 import dev.ghostflyby.mill.Bundle
 import dev.ghostflyby.mill.MillConstants
-import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.command.MillExecutableDiscovery
 import dev.ghostflyby.mill.command.MillExecutableProbeResult
+import dev.ghostflyby.mill.rpc.MillBackendRpcApi
+import dev.ghostflyby.mill.rpc.toDiscovery
+import dev.ghostflyby.mill.rpc.toProbeResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.nio.file.Path
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -29,11 +31,33 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class MillConfigurableViewModel(
     linkedProjectSettings: Collection<MillProjectSettings>,
     parentDisposable: Disposable,
-    private val discoverExecutables: (Path) -> MillExecutableDiscovery =
-        { projectRoot -> MillCommandLineUtil.discoverExecutables(projectRoot, targetFor(projectRoot.toString())) },
-    private val probeExecutable: (Path, MillExecutableSource, String) -> MillExecutableProbeResult =
+    // Discovery and probing spawn processes on the host, so they go through the backend RPC
+    // channel: the implementation is resolved locally in a monolith IDE and remotely in a
+    // split-mode frontend. A missing backend (frontend without the backend module) degrades to
+    // no discovery and no version hints instead of spawning anything on the client.
+    private val discoverExecutables: suspend (Path) -> MillExecutableDiscovery = { projectRoot ->
+        runCatching {
+            MillBackendRpcApi.getInstance().discoverExecutables(projectRoot.toString()).toDiscovery()
+        }.getOrElse { error ->
+            MillImportDebugLogger.warn("Mill executable discovery RPC failed: ${error.message}")
+            MillExecutableDiscovery(projectWrapper = null, pathExecutables = emptyList())
+        }
+    },
+    private val probeExecutable: suspend (Path, MillExecutableSource, String) -> MillExecutableProbeResult =
         { projectRoot, executableSource, executablePath ->
-            MillCommandLineUtil.probeExecutable(projectRoot, executableSource, executablePath, targetFor(projectRoot.toString()))
+            runCatching {
+                MillBackendRpcApi.getInstance()
+                    .probeExecutable(projectRoot.toString(), executableSource.name, executablePath)
+                    .toProbeResult()
+            }.getOrElse { error ->
+                MillImportDebugLogger.warn("Mill executable probe RPC failed: ${error.message}")
+                MillExecutableProbeResult(
+                    resolvedExecutable = executablePath,
+                    isValid = true,
+                    version = null,
+                    errorDetails = null,
+                )
+            }
         },
     private val draftProbeDebounce: Duration = 300.milliseconds,
 ) {
@@ -75,7 +99,7 @@ internal class MillConfigurableViewModel(
                     val discoveryFlows: Iterable<Flow<Pair<String, MillExecutableDiscovery>>> =
                         projectPaths.map { projectPath ->
                             flow {
-                                val discovery = runInterruptible(Dispatchers.IO) {
+                                val discovery = withContext(Dispatchers.IO) {
                                     discoverExecutables(Path.of(projectPath))
                                 }
                                 emit(projectPath to discovery)
@@ -107,7 +131,7 @@ internal class MillConfigurableViewModel(
                     flow {
                         emit(MillCommittedProbeEvent.Started(state))
                         delay(300.milliseconds)
-                        val result = runInterruptible(Dispatchers.IO) {
+                        val result = withContext(Dispatchers.IO) {
                             probeExecutable(
                                 Path.of(state.externalProjectPath),
                                 state.executableSource,
@@ -211,7 +235,7 @@ internal class MillConfigurableViewModel(
                 if (draftProbeDebounce.isPositive()) {
                     delay(draftProbeDebounce)
                 }
-                val result = runInterruptible(Dispatchers.IO) {
+                val result = withContext(Dispatchers.IO) {
                     probeExecutable(
                         Path.of(draftState.externalProjectPath),
                         draftState.executableSource,
@@ -786,15 +810,6 @@ internal class MillConfigurableViewModel(
         return settingsByPath.values.associate { settings ->
             settings.externalProjectPath to MillLinkedProjectSettingsState.from(settings)
         }
-    }
-
-    private companion object {
-        private val executionTargetsByPath = ConcurrentHashMap<String, MillExecutionTarget>()
-
-        // Detection may reach the EEL provider (or its daemon); cache per path so repeated probes
-        // do not pay for it. Companion-level so constructor-parameter defaults may reference it.
-        private fun targetFor(projectPath: String): MillExecutionTarget =
-            executionTargetsByPath.computeIfAbsent(projectPath) { MillExecutionTargets.detect(Path.of(it)) }
     }
 }
 

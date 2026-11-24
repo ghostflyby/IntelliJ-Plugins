@@ -1,0 +1,8 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<!-- Content module of plugins that consume the shared widgets (Mill ships it as
+     lib/modules/dev.ghostflyby.intellij.shared.jar). Other plugins embed the same jar. -->
+<idea-plugin>
+</idea-plugin>

@@ -6,17 +6,17 @@
 
 plugins {
     id("repo.intellij-module")
+    id("rpc")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 dependencies {
     implementation(project(":plugins:Mill:shared"))
 
-    // Settings UI widgets (EditableHintedComboBox) come from the shared repo module, which the
-    // root build composes into the main plugin jar alongside this backend module.
-    implementation(project(":modules:intellij-shared"))
-
     intellijPlatform {
         bundledModule("intellij.platform.backend")
+        bundledModule("intellij.platform.kernel.backend")
+        bundledModule("intellij.platform.rpc.backend")
         bundledPlugin("com.intellij.java")
         compatiblePlugin("org.intellij.scala")
     }

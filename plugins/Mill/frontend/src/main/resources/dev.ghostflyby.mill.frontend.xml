@@ -1,0 +1,52 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.frontend"/>
+        <module name="dev.ghostflyby.mill.shared"/>
+        <module name="dev.ghostflyby.intellij.shared"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <notificationGroup
+                id="dev.ghostflyby.mill.import"
+                bundle="messages.Bundle"
+                key="notification.group.display.name"
+                displayType="BALLOON"/>
+        <externalSystemViewContributor id="mill" implementation="dev.ghostflyby.mill.MillViewContributor"/>
+        <externalSystemUnlinkedProjectAware implementation="dev.ghostflyby.mill.MillUnlinkedProjectAware"/>
+        <configurationType implementation="dev.ghostflyby.mill.MillExternalTaskConfigurationType"/>
+        <projectOpenProcessor
+                id="mill"
+                implementation="dev.ghostflyby.mill.MillProjectOpenProcessor"
+                order="first"/>
+        <projectConfigurable
+                groupId="build.tools"
+                groupWeight="115"
+                id="reference.settingsdialog.project.mill"
+                bundle="messages.Bundle"
+                key="settings.display.name"
+                instance="dev.ghostflyby.mill.settings.MillConfigurable"/>
+        <toolWindow id="Mill" anchor="right" factoryClass="dev.ghostflyby.mill.MillToolWindowFactory"/>
+    </extensions>
+    <actions>
+        <group id="dev.ghostflyby.mill.taskMenu" popup="true"/>
+        <action
+                id="dev.ghostflyby.mill.linkProject"
+                class="dev.ghostflyby.mill.MillLinkProjectAction">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+        <action
+                id="dev.ghostflyby.mill.runTask"
+                class="dev.ghostflyby.mill.MillRunTaskAction">
+            <add-to-group group-id="dev.ghostflyby.mill.taskMenu" anchor="first"/>
+        </action>
+        <action
+                id="dev.ghostflyby.mill.reloadProject"
+                class="dev.ghostflyby.mill.MillReloadProjectAction">
+            <add-to-group group-id="BuildMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

@@ -24,6 +24,8 @@ internal class PluginDescriptorTest {
         assertEquals(
             listOf(
                 "dev.ghostflyby.mill.shared" to """loading="required"""",
+                "dev.ghostflyby.intellij.shared" to """loading="required"""",
+                "dev.ghostflyby.mill.frontend" to "",
                 "dev.ghostflyby.mill.backend" to """loading="embedded" required-if-available="intellij.platform.backend"""",
             ),
             entries,

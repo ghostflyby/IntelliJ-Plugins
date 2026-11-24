@@ -7,6 +7,8 @@
 plugins {
     id("repo.intellij-module")
     `java-library`
+    id("rpc")
+    alias(libs.plugins.kotlin.serialization)
 }
 
 // The composed jar is named after the module id by the repo.intellij-module convention.

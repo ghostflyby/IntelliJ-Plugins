@@ -211,11 +211,14 @@ internal class MillConfigurableViewModelTest {
             probe = { _, _, executablePath ->
                 if (executablePath.endsWith("first")) {
                     slowProbeStarted.countDown()
-                    // Block until the ViewModel cancels the stale draft probe.
+                    // Suspend until the ViewModel cancels the stale draft probe. The probe seam is
+                    // suspend precisely so probes stay cancellable (the production implementation
+                    // is a cancellable RPC call); a blocking sleep would ignore cancellation.
                     try {
-                        TimeUnit.SECONDS.sleep(10)
-                    } catch (_: InterruptedException) {
+                        delay(10_000)
+                    } catch (cancelled: CancellationException) {
                         slowProbeCancelled.countDown()
+                        throw cancelled
                     }
                     MillExecutableProbeResult(
                         resolvedExecutable = executablePath,
@@ -558,7 +561,7 @@ internal class MillConfigurableViewModelTest {
             projectWrapper = null,
             pathExecutables = emptyList(),
         ),
-        probe: (Path, MillExecutableSource, String) -> MillExecutableProbeResult = { _, _, executablePath ->
+        probe: suspend (Path, MillExecutableSource, String) -> MillExecutableProbeResult = { _, _, executablePath ->
             MillExecutableProbeResult(
                 resolvedExecutable = executablePath,
                 isValid = true,

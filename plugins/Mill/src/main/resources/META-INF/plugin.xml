@@ -8,6 +8,8 @@
     <vendor>ghostflyby</vendor>
     <content>
         <module name="dev.ghostflyby.mill.shared" loading="required"/>
+        <module name="dev.ghostflyby.intellij.shared" loading="required"/>
+        <module name="dev.ghostflyby.mill.frontend"/>
         <module name="dev.ghostflyby.mill.backend" loading="embedded" required-if-available="intellij.platform.backend"/>
     </content>
 

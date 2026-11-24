@@ -33,9 +33,12 @@
 
 ### Changed
 
-- Restructured the plugin into modular Plugin Model v2 content modules (shared + embedded backend) gated on
-  `intellij.platform.backend`, so the plugin no longer loads on split-mode frontends (JetBrains Client) while keeping
-  the full UI via backend replication, and split-mode development runs are available locally.
+- Split the plugin into `shared`, `frontend` and `backend` content modules and install it on both
+  sides of a split-mode setup: the settings page, tool window and actions now run in the
+  JetBrains Client and on the backend, while the external-system resolver, task execution and
+  host-side executable probing stay backend-side (probing reaches the backend through the
+  platform's split-mode RPC). `modules/intellij-shared`'s widgets ship as a content module of the
+  plugin.
 - Changed the Mill tool window task tree to use the raw dotted task names as nested path segments instead of synthetic
   task groups or display-name rewriting.
 - Refined Mill project settings so executable selection is split into project script and manual command/path modes,

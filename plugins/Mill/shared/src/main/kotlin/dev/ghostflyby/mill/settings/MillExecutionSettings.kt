@@ -8,16 +8,16 @@ package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.externalSystem.model.settings.ExternalSystemExecutionSettings
 
-internal class MillExecutionSettings : ExternalSystemExecutionSettings {
-    var millExecutableSource: MillExecutableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT
-    var millExecutablePath: String = ""
-    var useMillMetadataDuringImport: Boolean = true
-    var createPerModuleTaskNodes: Boolean = true
-    var target: MillExecutionTarget = MillExecutionTarget.Local
+public class MillExecutionSettings : ExternalSystemExecutionSettings {
+    public var millExecutableSource: MillExecutableSource = MillExecutableSource.PROJECT_DEFAULT_SCRIPT
+    public var millExecutablePath: String = ""
+    public var useMillMetadataDuringImport: Boolean = true
+    public var createPerModuleTaskNodes: Boolean = true
+    public var target: MillExecutionTarget = MillExecutionTarget.Local
 
-    constructor() : super()
+    public constructor() : super()
 
-    constructor(other: MillExecutionSettings) : super(other) {
+    public constructor(other: MillExecutionSettings) : super(other) {
         millExecutableSource = other.millExecutableSource
         millExecutablePath = other.millExecutablePath
         useMillMetadataDuringImport = other.useMillMetadataDuringImport

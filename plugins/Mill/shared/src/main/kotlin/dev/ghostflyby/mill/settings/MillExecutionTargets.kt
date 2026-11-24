@@ -17,8 +17,8 @@ import com.intellij.platform.eel.provider.LocalEelDescriptor
 import com.intellij.platform.eel.provider.getEelDescriptor
 import java.nio.file.Path
 
-internal object MillExecutionTargets {
-    fun detect(projectRoot: Path): MillExecutionTarget {
+public object MillExecutionTargets {
+    public fun detect(projectRoot: Path): MillExecutionTarget {
         // WSL detection must not rely on the EEL descriptor: WslEelProvider is gated by
         // WslIjentAvailabilityService.useIjentForWslNioFileSystem(), so WSL UNC paths resolve to
         // LocalEelDescriptor when the gate is off and the descriptor route misses them.

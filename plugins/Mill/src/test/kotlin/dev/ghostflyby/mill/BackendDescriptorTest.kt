@@ -31,16 +31,23 @@ internal class BackendDescriptorTest {
     }
 
     @Test
-    fun `external system integration and its UI live on the backend`() {
+    fun `external system integration and host-side work live on the backend`() {
         val descriptor = descriptor()
         assertTrue("externalSystemManager" in descriptor)
-        assertTrue("projectConfigurable" in descriptor)
-        assertTrue("toolWindow" in descriptor)
-        // Tool window, settings and actions read external-system state that only exists on the
-        // backend, and backend Swing replicates to the JetBrains Client; the notification group
-        // stays backend-side too until a Remote Topic bridge exists (see
-        // WorkspaceMcpTools-ModularSplitMigration.md for the same limitation).
-        assertTrue("notificationGroup" in descriptor)
+        assertTrue("externalProjectDataService" in descriptor)
+        assertTrue("additionalLibraryRootsProvider" in descriptor)
+        assertTrue("resolveScopeEnlarger" in descriptor)
+        assertTrue("fileTypeOverrider" in descriptor)
+        assertTrue(
+            "platform.rpc.backend.remoteApiProvider" in descriptor,
+            "the backend provides the executable discovery/probing RPC implementation",
+        )
+        // The settings UI, tool window and actions read settings/state that also exists in a
+        // split-mode frontend, so they live in the frontend module; the backend keeps the
+        // external-system resolver, task manager, data services and host-side probing.
+        assertFalse("projectConfigurable" in descriptor)
+        assertFalse("toolWindow" in descriptor)
+        assertFalse("<actions>" in descriptor)
     }
 
     private fun descriptor(): String {

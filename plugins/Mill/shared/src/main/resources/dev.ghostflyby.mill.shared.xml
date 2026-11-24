@@ -3,4 +3,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 <idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.rpc"/>
+    </dependencies>
 </idea-plugin>

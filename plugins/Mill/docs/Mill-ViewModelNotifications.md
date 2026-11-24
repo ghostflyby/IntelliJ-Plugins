@@ -51,11 +51,15 @@ properties. `committedProbesRunning` exposes the in-flight set of the committed-
 directly and is used as an explicit fence in tests that must know the committed result has been
 reduced.
 
-## Test Patterns (`MillConfigurableViewModelTest`)
+## Test Patterns (`MillConfigurableViewModelTest`, frontend module)
 
-- `@TestApplication`, class-level `@Timeout(10)`, `projectFixture` and `disposableFixture`.
+- `@TestApplication`, class-level `@Timeout(20)`, `projectFixture` and `disposableFixture`.
   Every model is created against a dedicated `modelParent` disposable that `@AfterEach` disposes
   before the project fixture tears down, so model coroutines and probes stop first.
+- The view model lives in the frontend module and takes `suspend` discovery/probe seams; the
+  production defaults call the backend RPC API (`MillBackendRpcApi`), while tests pass stubs that
+  can suspend and are cancelled like a real probe. In a monolith the same RPC descriptor
+  resolves to the local backend implementation, so there is no split-mode-only code path.
 - Test methods are `suspend` functions; the platform JUnit5 framework supports them. No
   `runBlocking`, no `KotlinCoroutineExtension`.
 - `onUi` runs Swing work as `CoroutineScope(Dispatchers.UI).async { }.await()`. It deliberately

@@ -6,7 +6,7 @@ Reference patterns: `plugins/EnhancedHotSwapEnabler` `EelJavaSupport.kt`, `Targe
 
 ## Design
 
-`MillExecutionTarget` (`backend/.../settings/MillExecutionTarget.kt`) models where a linked
+`MillExecutionTarget` (`shared/.../settings/MillExecutionTarget.kt`) models where a linked
 Mill project lives: `Local`, `Wsl(distribution)`, or `Eel(description)` (detected, not
 executable yet). It is `Serializable` and carried inside `MillExecutionSettings` into the
 external-system remote process, so **everything that consumes it is plain-JVM**: `wsl.exe`
@@ -20,7 +20,11 @@ process calls and string-level path conversion only. The IDE-side detector
 - Non-local `getEelDescriptor()` results become `Eel` targets; importing them fails fast with
   "not supported yet" instead of running a Linux binary on the host.
 
-## Command Layer (MillCommandLineUtil)
+## Command Layer (MillCommandLineUtil, shared)
+
+The command layer lives in the `shared` content module: the backend resolver and the backend RPC
+implementation both use it. The frontend view model reaches it through `MillBackendRpcApi`, so
+probing always runs on the host that owns the project (see `Mill-ModularSplitMigration.md`).
 
 - `createCommandLine` branches on the target: local builds the Mill command as before; WSL
   builds `wsl.exe -d <distro> --cd <linuxProjectRoot> --exec <exe> <args...>` (`--exec`

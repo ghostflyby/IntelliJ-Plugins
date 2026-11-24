@@ -10,8 +10,8 @@ import com.intellij.openapi.externalSystem.model.Key
 import java.io.Serial
 import java.io.Serializable
 
-internal object MillTasksData : Serializable {
-    val KEY: Key<MillTasksData> = Key.create(MillTasksData::class.java, 227)
+public object MillTasksData : Serializable {
+    public val KEY: Key<MillTasksData> = Key.create(MillTasksData::class.java, 227)
 
     @Serial
     private const val serialVersionUID: Long = 1L
