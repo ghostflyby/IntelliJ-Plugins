@@ -26,9 +26,16 @@
 - A dedicated Mill task tree in the external-system tool window while keeping direct task execution.
 - A registered `Mill` tool window factory so linked Mill projects now show a real External System tool window, not just task data behind the scenes.
 - A `Link Mill Project` action so existing IDEA projects can explicitly attach a Mill build and open the Mill tool window.
+- WSL execution target support: Mill projects opened from `\\wsl.localhost\...` paths import and run Mill inside the
+  distribution, including executable discovery, `show`-based metadata queries, task execution, and target-to-Windows
+  path conversion for imported content roots, libraries, and JDK homes. Other EEL targets (dev containers, remotes)
+  are detected and reported as not supported yet.
 
 ### Changed
 
+- Restructured the plugin into modular Plugin Model v2 content modules (shared + embedded backend) gated on
+  `intellij.platform.backend`, so the plugin no longer loads on split-mode frontends (JetBrains Client) while keeping
+  the full UI via backend replication, and split-mode development runs are available locally.
 - Changed the Mill tool window task tree to use the raw dotted task names as nested path segments instead of synthetic
   task groups or display-name rewriting.
 - Refined Mill project settings so executable selection is split into project script and manual command/path modes,

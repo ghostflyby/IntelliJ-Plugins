@@ -10,6 +10,10 @@ and `build.mill` script model loading.
 Current implementation provides:
 
 - Mill project root detection from `build.mill`, `build.mill.yaml`, and `.mill-version`
+- WSL execution targets: projects under `\\wsl.localhost\...` import and run Mill inside the distribution, with
+  target-to-Windows path conversion for imported roots, libraries, and JDK homes
+- Split-mode (remote development) safe: the plugin is a modular Plugin Model v2 plugin that loads on the IDE backend
+  only and keeps its full UI through backend replication
 - Project Settings controls for executable source selection (project script or manual command/path, including a PATH
   shortcut suggestion), metadata-backed
   import, and per-module task nodes

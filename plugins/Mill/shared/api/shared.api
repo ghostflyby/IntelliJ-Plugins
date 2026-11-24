@@ -1,0 +1,169 @@
+public final class dev/ghostflyby/mill/Bundle : com/intellij/DynamicBundle {
+	public static final field INSTANCE Ldev/ghostflyby/mill/Bundle;
+	public static final fun message (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+	public static final fun messagePointer (Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/function/Supplier;
+}
+
+public final class dev/ghostflyby/mill/MillConstants {
+	public static final field BUILD_SCRIPT_CLASSPATH_FILE_NAME Ljava/lang/String;
+	public static final field BUILD_SCRIPT_FILE_NAME Ljava/lang/String;
+	public static final field BUILD_SCRIPT_GENERATED_SOURCES_FILE_NAME Ljava/lang/String;
+	public static final field BUILD_SCRIPT_MODULE_NAME Ljava/lang/String;
+	public static final field BUILD_SCRIPT_OUTPUT_DIRECTORY Ljava/lang/String;
+	public static final field CONFIG_FILE_NAMES Ljava/util/Set;
+	public static final field DEFAULT_EXECUTABLE Ljava/lang/String;
+	public static final field INSTANCE Ldev/ghostflyby/mill/MillConstants;
+	public static final field MODULE_DISCOVERY_QUERY Ljava/lang/String;
+	public static final field MODULE_FILES_DIRECTORY Ljava/lang/String;
+	public static final field MODULE_TYPE_ID Ljava/lang/String;
+	public static final field NOTIFICATION_GROUP_ID Ljava/lang/String;
+	public static final field PROJECT_FILE_NAMES Ljava/util/Set;
+	public static final field ROOT_MODULE_PREFIX Ljava/lang/String;
+	public static final field SCALA_SDK_PREFIX Ljava/lang/String;
+	public static final field SETTINGS_FILE_NAME Ljava/lang/String;
+	public static final field SYSTEM_ID Lcom/intellij/openapi/externalSystem/model/ProjectSystemId;
+	public static final field VERSION_FILE_NAME Ljava/lang/String;
+	public static final field WRAPPER_BATCH_NAME Ljava/lang/String;
+	public static final field WRAPPER_SCRIPT_NAME Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/mill/MillImportDebugLogger {
+	public static final field INSTANCE Ldev/ghostflyby/mill/MillImportDebugLogger;
+	public final fun info (Ljava/lang/String;)V
+	public final fun sample (Ljava/util/Collection;I)Ljava/lang/String;
+	public static synthetic fun sample$default (Ldev/ghostflyby/mill/MillImportDebugLogger;Ljava/util/Collection;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun trim (Ljava/lang/String;I)Ljava/lang/String;
+	public static synthetic fun trim$default (Ldev/ghostflyby/mill/MillImportDebugLogger;Ljava/lang/String;IILjava/lang/Object;)Ljava/lang/String;
+	public final fun warn (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public static synthetic fun warn$default (Ldev/ghostflyby/mill/MillImportDebugLogger;Ljava/lang/String;Ljava/lang/Throwable;ILjava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mill/project/MillDiscoveredModule {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun component1 ()Ljava/lang/String;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun component3 ()Ljava/nio/file/Path;
+	public final fun component4 ()Ljava/nio/file/Path;
+	public final fun component5 ()Ljava/lang/String;
+	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;)Ldev/ghostflyby/mill/project/MillDiscoveredModule;
+	public static synthetic fun copy$default (Ldev/ghostflyby/mill/project/MillDiscoveredModule;Ljava/lang/String;Ljava/lang/String;Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;ILjava/lang/Object;)Ldev/ghostflyby/mill/project/MillDiscoveredModule;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getDirectory ()Ljava/nio/file/Path;
+	public final fun getDisplayName ()Ljava/lang/String;
+	public final fun getProductionModulePrefix ()Ljava/lang/String;
+	public final fun getProjectRoot ()Ljava/nio/file/Path;
+	public final fun getTargetPrefix ()Ljava/lang/String;
+	public fun hashCode ()I
+	public final fun isTestModule ()Z
+	public final fun queryTarget (Ljava/lang/String;)Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/mill/project/MillProjectResolverSupport {
+	public static final field INSTANCE Ldev/ghostflyby/mill/project/MillProjectResolverSupport;
+	public static final field MODULE_CONTENT_DIRECTORY_NAMES Ljava/util/Set;
+	public static final fun buildBuildScriptContentRoot (Ljava/nio/file/Path;Ljava/util/Collection;)Lcom/intellij/openapi/externalSystem/model/project/ContentRootData;
+	public static final fun buildContentRoot (Ljava/nio/file/Path;)Lcom/intellij/openapi/externalSystem/model/project/ContentRootData;
+	public static final fun buildContentRoot (Ljava/nio/file/Path;Ljava/util/Collection;)Lcom/intellij/openapi/externalSystem/model/project/ContentRootData;
+	public static final fun buildLibraryDependency (Lcom/intellij/openapi/externalSystem/model/project/ModuleData;Ljava/nio/file/Path;)Lcom/intellij/openapi/externalSystem/model/project/LibraryDependencyData;
+	public static final fun buildModuleData (Ljava/nio/file/Path;Ljava/nio/file/Path;Ljava/lang/String;)Lcom/intellij/openapi/externalSystem/model/project/ModuleData;
+	public static final fun buildModuleDependency (Lcom/intellij/openapi/externalSystem/model/project/ModuleData;Lcom/intellij/openapi/externalSystem/model/project/ModuleData;)Lcom/intellij/openapi/externalSystem/model/project/ModuleDependencyData;
+	public static final fun buildProjectData (Ljava/nio/file/Path;)Lcom/intellij/openapi/externalSystem/model/project/ProjectData;
+	public static final fun createTaskData (Ljava/nio/file/Path;)Ljava/util/List;
+	public final fun createTaskData (Ljava/nio/file/Path;Ljava/util/Collection;Ljava/util/Collection;)Ljava/util/List;
+	public static final fun findAffectedExternalProjectFiles (Ljava/lang/String;)Ljava/util/List;
+	public static final fun findAffectedExternalProjectPath (Ljava/lang/String;Ljava/util/Collection;)Ljava/lang/String;
+	public final fun findLinkedProjectPathForContext (Ljava/lang/String;Ljava/util/Collection;)Ljava/lang/String;
+	public static final fun findProjectRoot (Ljava/lang/String;)Ljava/nio/file/Path;
+	public final fun hasMillConfig (Ljava/lang/String;)Z
+	public static final fun isProjectFileName (Ljava/lang/String;)Z
+	public static final fun presentableProjectName (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/mill/settings/MillExecutableConfiguration {
+	public fun <init> (Ldev/ghostflyby/mill/settings/MillExecutableSource;Ljava/lang/String;)V
+	public final fun component1 ()Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public final fun component2 ()Ljava/lang/String;
+	public final fun copy (Ldev/ghostflyby/mill/settings/MillExecutableSource;Ljava/lang/String;)Ldev/ghostflyby/mill/settings/MillExecutableConfiguration;
+	public static synthetic fun copy$default (Ldev/ghostflyby/mill/settings/MillExecutableConfiguration;Ldev/ghostflyby/mill/settings/MillExecutableSource;Ljava/lang/String;ILjava/lang/Object;)Ldev/ghostflyby/mill/settings/MillExecutableConfiguration;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getManualPath ()Ljava/lang/String;
+	public final fun getSource ()Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class dev/ghostflyby/mill/settings/MillExecutableConfigurationUtil {
+	public static final field INSTANCE Ldev/ghostflyby/mill/settings/MillExecutableConfigurationUtil;
+	public static final fun normalize (Ldev/ghostflyby/mill/settings/MillExecutableSource;Ljava/lang/String;)Ldev/ghostflyby/mill/settings/MillExecutableConfiguration;
+}
+
+public final class dev/ghostflyby/mill/settings/MillExecutableSource : java/lang/Enum {
+	public static final field MANUAL Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public static final field PROJECT_DEFAULT_SCRIPT Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public static fun values ()[Ldev/ghostflyby/mill/settings/MillExecutableSource;
+}
+
+public final class dev/ghostflyby/mill/settings/MillLocalSettings : com/intellij/openapi/externalSystem/settings/AbstractExternalSystemLocalSettings, com/intellij/openapi/components/PersistentStateComponent {
+	public static final field Companion Ldev/ghostflyby/mill/settings/MillLocalSettings$Companion;
+	public fun <init> (Lcom/intellij/openapi/project/Project;)V
+	public static final fun getInstance (Lcom/intellij/openapi/project/Project;)Ldev/ghostflyby/mill/settings/MillLocalSettings;
+	public synthetic fun getState ()Lcom/intellij/openapi/externalSystem/settings/AbstractExternalSystemLocalSettings$State;
+	public fun getState ()Ldev/ghostflyby/mill/settings/MillLocalSettings$State;
+	public synthetic fun getState ()Ljava/lang/Object;
+	public fun loadState (Ldev/ghostflyby/mill/settings/MillLocalSettings$State;)V
+	public synthetic fun loadState (Ljava/lang/Object;)V
+}
+
+public final class dev/ghostflyby/mill/settings/MillLocalSettings$Companion {
+	public final fun getInstance (Lcom/intellij/openapi/project/Project;)Ldev/ghostflyby/mill/settings/MillLocalSettings;
+}
+
+public final class dev/ghostflyby/mill/settings/MillLocalSettings$State : com/intellij/openapi/externalSystem/settings/AbstractExternalSystemLocalSettings$State {
+	public fun <init> ()V
+}
+
+public final class dev/ghostflyby/mill/settings/MillProjectSettings : com/intellij/openapi/externalSystem/settings/ExternalProjectSettings {
+	public fun <init> ()V
+	public synthetic fun clone ()Lcom/intellij/openapi/externalSystem/settings/ExternalProjectSettings;
+	public fun clone ()Ldev/ghostflyby/mill/settings/MillProjectSettings;
+	public synthetic fun clone ()Ljava/lang/Object;
+	public final fun getCreatePerModuleTaskNodes ()Z
+	public final fun getMillExecutablePath ()Ljava/lang/String;
+	public final fun getMillExecutableSource ()Ldev/ghostflyby/mill/settings/MillExecutableSource;
+	public final fun getUseMillMetadataDuringImport ()Z
+	public final fun setCreatePerModuleTaskNodes (Z)V
+	public final fun setMillExecutablePath (Ljava/lang/String;)V
+	public final fun setMillExecutableSource (Ldev/ghostflyby/mill/settings/MillExecutableSource;)V
+	public final fun setUseMillMetadataDuringImport (Z)V
+}
+
+public final class dev/ghostflyby/mill/settings/MillSettings : com/intellij/openapi/externalSystem/settings/AbstractExternalSystemSettings, com/intellij/openapi/components/PersistentStateComponent {
+	public static final field Companion Ldev/ghostflyby/mill/settings/MillSettings$Companion;
+	public fun <init> (Lcom/intellij/openapi/project/Project;)V
+	public synthetic fun checkSettings (Lcom/intellij/openapi/externalSystem/settings/ExternalProjectSettings;Lcom/intellij/openapi/externalSystem/settings/ExternalProjectSettings;)V
+	public synthetic fun copyExtraSettingsFrom (Lcom/intellij/openapi/externalSystem/settings/AbstractExternalSystemSettings;)V
+	public static final fun getInstance (Lcom/intellij/openapi/project/Project;)Ldev/ghostflyby/mill/settings/MillSettings;
+	public fun getState ()Ldev/ghostflyby/mill/settings/MillSettings$State;
+	public synthetic fun getState ()Ljava/lang/Object;
+	public fun loadState (Ldev/ghostflyby/mill/settings/MillSettings$State;)V
+	public synthetic fun loadState (Ljava/lang/Object;)V
+	public fun subscribe (Lcom/intellij/openapi/externalSystem/settings/ExternalSystemSettingsListener;Lcom/intellij/openapi/Disposable;)V
+}
+
+public final class dev/ghostflyby/mill/settings/MillSettings$Companion {
+	public final fun getInstance (Lcom/intellij/openapi/project/Project;)Ldev/ghostflyby/mill/settings/MillSettings;
+}
+
+public final class dev/ghostflyby/mill/settings/MillSettings$State : com/intellij/openapi/externalSystem/settings/AbstractExternalSystemSettings$State {
+	public fun <init> ()V
+	public fun getLinkedExternalProjectsSettings ()Ljava/util/Set;
+	public fun setLinkedExternalProjectsSettings (Ljava/util/Set;)V
+}
+
+public abstract interface class dev/ghostflyby/mill/settings/MillSettingsListener : com/intellij/openapi/externalSystem/settings/ExternalSystemSettingsListener {
+}
+
