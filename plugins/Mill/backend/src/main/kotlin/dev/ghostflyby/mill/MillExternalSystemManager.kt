@@ -111,9 +111,15 @@ internal class MillExternalSystemManager : ExternalSystemManager<
         val json = PathManager.getJarPathForClass(Json::class.java)
         val core = PathManager.getJarPathForClass(StringFormat::class.java)
         val coroutines = PathManager.getJarPathForClass(Deferred::class.java)
+        // The platform derives the remote classpath from the manager and resolver classes only —
+        // the jar with the embedded backend — so the plugin's shared content-module jar (settings
+        // state, constants, executable configuration) must be added explicitly; without it the
+        // remote process cannot load the serialized MillExecutionSettings.
+        val sharedContentModule = PathManager.getJarPathForClass(MillConstants::class.java)
 
         parameters.classPath.add(json)
         parameters.classPath.add(core)
         parameters.classPath.add(coroutines)
+        parameters.classPath.add(sharedContentModule)
     }
 }
