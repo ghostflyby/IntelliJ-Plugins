@@ -28,8 +28,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import java.io.InputStream
+import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -144,7 +146,11 @@ internal object MillCommandLineUtil {
         target: MillExecutionTarget = MillExecutionTarget.Local,
     ): String {
         val resolved = resolveLocalExecutable(projectRoot, executableSource, configuredExecutablePath)
-        return if (target is MillExecutionTarget.Wsl) toTargetExecutablePath(target, resolved) else resolved
+        return if (target is MillExecutionTarget.Wsl) {
+            toHostPath(target, resolveTargetExecutable(projectRoot, target, resolved))
+        } else {
+            resolved
+        }
     }
 
     private fun resolveLocalExecutable(
@@ -277,8 +283,13 @@ internal object MillCommandLineUtil {
         )
         val target = settings?.target ?: MillExecutionTarget.Local
         val command = buildTargetCommand(projectRoot, target, executableConfiguration, arguments)
-        return GeneralCommandLine(command)
-            .withWorkingDirectory(projectRoot)
+        val commandLine = GeneralCommandLine(command)
+        if (target !is MillExecutionTarget.Wsl) {
+            // `--cd` already selects the working directory inside the distribution; handing a
+            // \\wsl.localhost path to CreateProcess as the working directory is not reliable.
+            commandLine.withWorkingDirectory(projectRoot)
+        }
+        return commandLine
             .withEnvironment(settings?.env ?: emptyMap())
             .withParentEnvironmentType(
                 if (settings?.isPassParentEnvs != false) {
@@ -287,6 +298,81 @@ internal object MillCommandLineUtil {
                     GeneralCommandLine.ParentEnvironmentType.NONE
                 },
             )
+    }
+
+    // Starts the process. WSL commands bypass GeneralCommandLine's process creation on purpose:
+    // for remote-looking targets it may route the command through the platform's EEL daemon,
+    // which some environments refuse to launch (an elevated Windows CI runner fails with
+    // ELEVATED_PRIVILEGES), while wsl.exe alone needs no platform machinery.
+    internal fun startProcess(
+        commandLine: GeneralCommandLine,
+        settings: MillExecutionSettings?,
+    ): Process {
+        val target = settings?.target ?: MillExecutionTarget.Local
+        if (target !is MillExecutionTarget.Wsl) {
+            return commandLine.toProcessBuilder().start()
+        }
+        val builder = ProcessBuilder(listOf(commandLine.exePath) + commandLine.parametersList.list)
+        val environment = builder.environment()
+        if (settings?.isPassParentEnvs == false) {
+            environment.clear()
+        }
+        environment.putAll(settings?.env ?: emptyMap())
+        return builder.start()
+    }
+
+    // wsl.exe forwards the distribution's UTF-8 output; the local charset is only right for
+    // native commands.
+    internal fun processCharset(commandLine: GeneralCommandLine, settings: MillExecutionSettings?): Charset =
+        if (settings?.target is MillExecutionTarget.Wsl) Charsets.UTF_8 else commandLine.charset
+
+    // Bare commands (e.g. `mill`) must be looked up in the distribution's login shell — the host
+    // PATH knows nothing about the profile that sets up in-distribution tools. Absolute, unc and
+    // project-relative executables already resolve from the target project root, so they pass
+    // through untouched.
+    internal fun resolveTargetExecutable(
+        projectRoot: Path,
+        target: MillExecutionTarget.Wsl,
+        resolved: String,
+    ): String {
+        val candidate = toTargetExecutablePath(target, resolved)
+        if (!simpleCommandPattern.matches(candidate)) {
+            return candidate
+        }
+        val cacheKey = "${target.distribution}:$candidate"
+        targetCommandPaths[cacheKey]?.let { return it }
+        val discovered = findTargetCommandPath(projectRoot, target, candidate) ?: return candidate
+        targetCommandPaths[cacheKey] = discovered
+        return discovered
+    }
+
+    // `command -v` in a login shell is the only reliable way to locate a command inside the
+    // distribution; the returned path is a target-style path usable as argv[0] after `--exec`.
+    internal fun findTargetCommandPath(
+        projectRoot: Path,
+        target: MillExecutionTarget.Wsl,
+        command: String,
+    ): String? {
+        if (!simpleCommandPattern.matches(command)) {
+            return null
+        }
+        val commandLine = GeneralCommandLine(
+            buildWslCommandLine(target, projectRoot, listOf("sh", "-lc", "command -v $command")),
+        )
+        val discoverySettings = MillExecutionSettings().apply { this.target = target }
+        val result = runProcess(
+            commandLine = commandLine,
+            settings = discoverySettings,
+            projectRoot = projectRoot,
+            arguments = emptyList(),
+            timeoutMillis = EXECUTABLE_PROBE_TIMEOUT_MILLIS,
+        )
+        if (!result.isSuccess) {
+            return null
+        }
+        return result.stdout.lineSequence()
+            .map(String::trim)
+            .firstOrNull { it.startsWith("/") }
     }
 
     private fun buildTargetCommand(
@@ -307,7 +393,8 @@ internal object MillCommandLineUtil {
             projectRoot = projectRoot,
             argv = buildList {
                 add(
-                    toTargetExecutablePath(
+                    resolveTargetExecutable(
+                        projectRoot,
                         target,
                         resolveLocalExecutable(projectRoot, executableConfiguration.source, executableConfiguration.manualPath),
                     ),
@@ -370,19 +457,19 @@ internal object MillCommandLineUtil {
         settings: MillExecutionSettings?,
         arguments: List<String>,
         timeoutMillis: Int = 0,
-    ): MillCommandResult = runProcess(createCommandLine(projectRoot, settings, arguments), projectRoot, arguments, timeoutMillis)
+    ): MillCommandResult = runProcess(createCommandLine(projectRoot, settings, arguments), settings, projectRoot, arguments, timeoutMillis)
 
     private fun runProcess(
         commandLine: GeneralCommandLine,
+        settings: MillExecutionSettings?,
         projectRoot: Path,
         arguments: List<String>,
         timeoutMillis: Int,
     ): MillCommandResult {
         var process: Process? = null
         return try {
-            val processBuilder = commandLine.toProcessBuilder()
-            process = processBuilder.start()
-            val charset = commandLine.charset
+            process = startProcess(commandLine, settings)
+            val charset = processCharset(commandLine, settings)
             val stdoutReader = readStreamAsync(process.inputStream, charset)
             val stderrReader = readStreamAsync(process.errorStream, charset)
             val finished = if (timeoutMillis > 0) {
@@ -443,7 +530,7 @@ internal object MillCommandLineUtil {
         }
     }
 
-    private fun readStreamAsync(stream: InputStream, charset: java.nio.charset.Charset): FutureTask<String> {
+    private fun readStreamAsync(stream: InputStream, charset: Charset): FutureTask<String> {
         val task: FutureTask<String> = FutureTask {
             stream.bufferedReader(charset).use { it.readText() }
         }
@@ -635,27 +722,17 @@ internal object MillCommandLineUtil {
     // PATH discovery must happen inside the target: the host PATH knows nothing about the
     // distribution's shell profile.
     private fun discoverTargetPathExecutables(projectRoot: Path, target: MillExecutionTarget.Wsl): List<Path> {
-        val commandLine = GeneralCommandLine(
-            buildWslCommandLine(
-                target,
-                projectRoot,
-                listOf("sh", "-lc", "command -v ${MillConstants.DEFAULT_EXECUTABLE}"),
-            ),
-        )
-        val command = runProcess(commandLine, projectRoot, emptyList(), EXECUTABLE_PROBE_TIMEOUT_MILLIS)
-        if (!command.isSuccess) {
+        val discovered = findTargetCommandPath(projectRoot, target, MillConstants.DEFAULT_EXECUTABLE)
+        if (discovered == null) {
             MillImportDebugLogger.info(
                 "Target PATH discovery for `${target.distribution}` produced no `${MillConstants.DEFAULT_EXECUTABLE}`",
             )
             return emptyList()
         }
-        return command.stdout.lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
+        return listOf(discovered)
             .map { toHostPath(target, it) }
             .mapNotNull { runCatching { Path.of(it).toAbsolutePath().normalize() }.getOrNull() }
             .distinct()
-            .toList()
     }
 
     // UNC \\wsl.localhost\<distro>\foo or \\wsl$\<distro>\foo -> /foo. Values without a WSL UNC
@@ -740,4 +817,9 @@ internal object MillCommandLineUtil {
     private val windowsPathPattern = Regex("""^[A-Za-z]:[\\/].*""")
     private const val WSL_EXE = "wsl.exe"
     private val wslUncPrefix = Regex("""^\\\\wsl(\.localhost|\$)\\[^\\]+\\?""", RegexOption.IGNORE_CASE)
+    private val simpleCommandPattern = Regex("""^[A-Za-z0-9._+-]+$""")
+
+    // Positive cache only: a command missing now can appear after the user installs it in the
+    // distribution, so misses must not stick.
+    private val targetCommandPaths = ConcurrentHashMap<String, String>()
 }

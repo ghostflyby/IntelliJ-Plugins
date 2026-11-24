@@ -13,48 +13,61 @@ import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.settings.MillExecutionTarget
 import dev.ghostflyby.mill.settings.MillExecutionTargets
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledOnOs
+import org.junit.jupiter.api.condition.OS
 import java.nio.file.Path
 
 /**
  * Real-distribution integration test: self-skips when no WSL distribution is installed (Linux,
  * macOS, or a bare Windows runner), mirroring EnhancedHotSwapEnabler's `@EnabledOnWsl` rollout
  * pattern without needing the Mill launcher inside the distribution.
+ *
+ * The lookup paths exercised here spawn `wsl.exe` directly (not through GeneralCommandLine), so
+ * this test also pins that WSL execution keeps working on hosts where the platform's EEL daemon
+ * refuses to start.
  */
 @TestApplication
+@EnabledOnOs(OS.WINDOWS)
 internal class MillWslExecutionTest {
 
     @Test
     fun `detects the wsl target for unc project roots`() {
-        val distribution = defaultDistribution() ?: return
-
-        val projectRoot = Path.of("""\\wsl.localhost\${distribution.id}\home""")
+        // Detection parses the UNC root, so it needs no installed distribution.
+        val projectRoot = Path.of("""\\wsl.localhost\Ubuntu-24.04\home""")
 
         val target = MillExecutionTargets.detect(projectRoot)
+
         assertTrue(target is MillExecutionTarget.Wsl, "expected a WSL target for $projectRoot but got $target")
-        assertEquals(distribution.id, (target as MillExecutionTarget.Wsl).distribution)
+        assertEquals("Ubuntu-24.04", (target as MillExecutionTarget.Wsl).distribution)
     }
 
     @Test
-    fun `target path discovery spawns wsl exe and parses its output`() {
-        val distribution = defaultDistribution() ?: return
+    fun `login shell lookup resolves commands inside the distribution`() {
+        val distribution = installedDistribution() ?: return
         val target = MillExecutionTarget.Wsl(distribution.id)
         val projectRoot = Path.of("""\\wsl.localhost\${distribution.id}\home""")
 
-        val discovery = MillCommandLineUtil.discoverExecutables(projectRoot, target)
+        val shellPath = MillCommandLineUtil.findTargetCommandPath(projectRoot, target, "sh")
 
-        // A bare distribution has no `mill` on PATH, so the meaningful assertion is that the
-        // wsl.exe spawn completed and produced parsable output; when a distribution does carry
-        // a mill launcher, every discovered path must point at one.
-        assertTrue(
-            discovery.pathExecutables.all { it.toString().contains("mill", ignoreCase = true) },
-            "unexpected discovered executables: ${discovery.pathExecutables}",
+        assertNotNull(shellPath, "`sh` must resolve inside ${distribution.id}")
+        assertTrue(shellPath!!.startsWith("/"), "expected a target-style path but got $shellPath")
+        assertNull(
+            MillCommandLineUtil.findTargetCommandPath(projectRoot, target, "ghostflyby-missing-command"),
+            "an unknown command must not resolve",
+        )
+        assertEquals(
+            shellPath,
+            MillCommandLineUtil.resolveTargetExecutable(projectRoot, target, "sh"),
+            "bare commands must go through the login-shell lookup",
         )
     }
 
-    private fun defaultDistribution() = runCatching {
+    private fun installedDistribution() = runCatching {
         service<WslDistributionManager>().installedDistributionsFuture.get()
     }.getOrNull()
         ?.sortedBy { it.id.lowercase() }

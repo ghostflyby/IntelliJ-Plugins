@@ -26,14 +26,27 @@ process calls and string-level path conversion only. The IDE-side detector
   builds `wsl.exe -d <distro> --cd <linuxProjectRoot> --exec <exe> <args...>` (`--exec`
   bypasses the shell so argv quoting survives; `--cd` makes wrapper scripts resolve against
   the project); `Eel` throws with a clear message.
+- WSL processes are started by `startProcess` through a plain `ProcessBuilder` instead of
+  `GeneralCommandLine.toProcessBuilder()`. For remote-looking commands the platform may route
+  process creation through its EEL daemon, and environments that refuse to start that daemon
+  (an elevated Windows CI runner answers `Failure(82 (ELEVATED_PRIVILEGES))`) would otherwise
+  break every Mill call. The argv is rebuilt from `exePath + parametersList.list`, so the
+  command is unchanged; output is decoded as UTF-8 (the distribution's encoding).
+- A `\\wsl.localhost` path is never handed to `CreateProcess` as the working directory: the
+  `--cd` argument already selects it inside the distribution.
 - Path conversion: `toTargetPath` maps `\\wsl.localhost\<distro>\…` / `\\wsl$\<distro>\…` to
   `/…`; `toHostPath` maps absolute `/…` values from `mill show` output back to
   `\\wsl.localhost\<distro>\…` UNC so the IDE project model (content roots, libraries, JDK
   homes, build-script classpaths) resolves real files. Non-absolute values (versions, target
   names) pass through untouched.
-- Wrapper discovery keeps using host-side NIO over the UNC root (works from Windows); PATH
-  discovery runs inside the distribution (`sh -lc "command -v mill"`) because the host PATH
-  knows nothing about the shell profile.
+- Wrapper discovery keeps using host-side NIO over the UNC root (works from Windows). A bare
+  command (e.g. `mill`) is resolved inside the distribution with
+  `sh -lc "command -v <cmd>"` — the host PATH knows nothing about the shell profile that sets
+  up in-distribution tools. `findTargetCommandPath` is the single lookup entry point
+  (`discoverExecutables` and `resolveTargetExecutable` both use it); successful lookups are
+  cached per `"<distro>:<command>"`, misses are not, so installing a launcher later is picked
+  up. Only simple command tokens are looked up; absolute, UNC and project-relative paths bypass
+  the shell entirely.
 - `probeExecutable`/`discoverExecutables`/`resolveExecutable` take a `MillExecutionTarget`
   (defaulting to `Local`, which is why all pre-existing call sites and tests are unchanged).
 
@@ -52,6 +65,9 @@ process calls and string-level path conversion only. The IDE-side detector
   args containing spaces rely on wsl.exe's argv reconstruction.
 - EEL container targets: detected and reported as unsupported; execution needs the same
   Ijent-backed machinery EnhancedHotSwapEnabler parked on IJPL-178929 / IJPL-243361.
-- CI: the Windows/WSL matrix leg runs `:plugins:Mill:test` — `MillWslExecutionTest` self-skips
-  without a distribution and otherwise exercises real `wsl.exe` target detection and PATH
-  discovery (no Mill launcher needed inside the distro).
+- CI: the Windows/WSL matrix leg runs
+  `:plugins:Mill:backend:test --tests "dev.ghostflyby.mill.wsl.MillWslExecutionTest"`.
+  `MillWslExecutionTest` is `@EnabledOnOs(WINDOWS)`; the UNC-detection test needs no installed
+  distribution, and the login-shell test self-skips without one. Its lookups spawn `wsl.exe`
+  directly — the same path production uses — so the leg also guards against the EEL-daemon
+  regression that motivated `startProcess`.

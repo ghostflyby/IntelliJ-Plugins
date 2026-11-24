@@ -18,6 +18,7 @@ import com.intellij.openapi.externalSystem.task.ExternalSystemTaskManager
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
 import dev.ghostflyby.mill.settings.MillExecutionSettings
+import java.io.IOException
 import java.nio.file.Path
 
 internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings> {
@@ -32,7 +33,14 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
 
         listener.onStart(projectRoot.toString(), id)
         try {
-            val output = CapturingProcessHandler(commandLine).runProcess()
+            // The process is started by MillCommandLineUtil so that WSL targets never go through
+            // GeneralCommandLine's remote/EEL routing; only the output plumbing stays here.
+            val process = MillCommandLineUtil.startProcess(commandLine, settings)
+            val output = CapturingProcessHandler(
+                process,
+                MillCommandLineUtil.processCharset(commandLine, settings),
+                commandLine.commandLineString,
+            ).runProcess()
             publishOutput(id, listener, output)
             when {
                 output.isCancelled -> {
@@ -55,12 +63,23 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
                 else -> listener.onSuccess(projectRoot.toString(), id)
             }
         } catch (error: ExecutionException) {
-            val wrapped = ExternalSystemException("Failed to start Mill process.", error)
-            listener.onFailure(projectRoot.toString(), id, wrapped)
-            throw wrapped
+            throw failToStart(projectRoot, id, listener, error)
+        } catch (error: IOException) {
+            throw failToStart(projectRoot, id, listener, error)
         } finally {
             listener.onEnd(projectRoot.toString(), id)
         }
+    }
+
+    private fun failToStart(
+        projectRoot: Path,
+        id: ExternalSystemTaskId,
+        listener: ExternalSystemTaskNotificationListener,
+        cause: Exception,
+    ): ExternalSystemException {
+        val wrapped = ExternalSystemException("Failed to start Mill process.", cause)
+        listener.onFailure(projectRoot.toString(), id, wrapped)
+        return wrapped
     }
 
     override fun cancelTask(id: ExternalSystemTaskId, listener: ExternalSystemTaskNotificationListener): Boolean = false
