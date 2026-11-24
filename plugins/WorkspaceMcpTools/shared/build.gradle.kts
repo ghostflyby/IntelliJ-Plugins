@@ -9,11 +9,6 @@ plugins {
     `java-library`
 }
 
-// The platform resolves content-module jars as lib/modules/<module-id>.jar
-// (PluginDescriptorLoader.loadPluginSubDescriptors), and the sandbox ships the module's composed
-// jar, so its archive name must match the module name declared in the root plugin.xml.
-tasks.composedJar {
-    archiveFileName = "dev.ghostflyby.mcp.workspace.shared.jar"
-}
+// The composed jar is named after the module id by the repo.intellij-module convention.
 
 // Platform and test dependencies come from the repo.intellij-module convention.

@@ -35,6 +35,7 @@ IntelliJ-Plugins/
 │   ├── IdeaVimToggleIME/
 │   ├── LiveTemplatesWithSelection/
 │   ├── macOSRecents/
+│   ├── Mill/
 │   ├── SpotlessIntegration/
 │   ├── VitePress/
 │   └── WorkspaceMcpTools/
@@ -46,6 +47,7 @@ IntelliJ-Plugins/
 
 - 插件标准布局：`build.gradle.kts`、`src/`、`README.md`、`CHANGELOG.md`、`TODO.md`。
 - 部分插件通过 `projects.txt` 声明嵌套 Gradle 子项目（例：`plugins/SpotlessIntegration/projects.txt` 含 `ModelBuilderService`）。增删条目时保持目录名与 Gradle include 一致。
+- Plugin Model v2 拆分插件（例：`plugins/Mill/projects.txt` 含 `shared`/`backend`，`plugins/WorkspaceMcpTools/projects.txt` 含 `shared`/`frontend`/`backend`）：内容模块 jar 必须命名为 `lib/modules/<module-id>.jar`，sandbox 目录按完整项目路径消歧——两者均由 `repo.intellij-module` 约定自动处理（见 `docs/Sandbox-Naming.md`）。
 - 每个插件根目录维护 `TODO.md`，记录当前计划/重构项，简短、可执行、英文。
 - 计划项完成后，将最终说明移入插件内的 `docs/<PluginName>-<Topic>.md`，然后刷新 `TODO.md` 为下一阶段计划。
 
