@@ -72,6 +72,11 @@ reduced.
   a version distinct from the committed probe's, because a shared version completed the wait
   immediately from the already-present committed result and let the assertion race the draft
   preview (the transient empty hint while a new probe runs).
+- Model-value waits use the ViewModel's own flow (`executableVersionTextValues`) rather than the
+  observable property. Property notifications are delivered on the UI thread; a headless run
+  must not depend on how quickly that queue is serviced (a busy or stalled EDT turned a model
+  transition into a test timeout). Widgets are still asserted through the property notification,
+  where the EDT hop is the point.
 - No `waitUntil`-style polling: the tests suspend on notifications.
 
 ## Probe Restarts and the Transient Empty Hint

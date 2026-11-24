@@ -231,6 +231,11 @@ internal class MillConfigurableViewModel(
             versionTextForPreview(previewState, probeState, draftProbe)
         }.stateIn(scope, SharingStarted.Eagerly, "")
 
+    // Model-level value stream: tests that synchronize on the version await this flow instead of
+    // the observable property, whose notifications are delivered on the UI thread (which a
+    // headless run may service late; the value itself is published without that hop).
+    internal val executableVersionTextValues: StateFlow<String> = executableVersionTextFlow
+
     private val executableValidationMessageFlow: StateFlow<String?> =
         combine(selectedProjectStateFlow, committedProbeStateFlow) { selectedState, probeState ->
             executableValidationMessage(selectedState, probeState)

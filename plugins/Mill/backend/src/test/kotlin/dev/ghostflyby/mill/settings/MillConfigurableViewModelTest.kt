@@ -267,20 +267,17 @@ internal class MillConfigurableViewModelTest {
                 )
             },
         )
-        val initialVersion = model.executableVersionTextProperty.nextValue("project")
-        val pathVersion = model.executableVersionTextProperty.nextValue("path")
-        initialVersion.awaitStep("initial project version hint", model.executableVersionTextProperty::get)
+        awaitVersion(model, "project", "initial project version hint")
 
         val pathChoice = model.executableChoicesProperty.get()
             .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
         model.executableSelectedChoiceProperty.set(pathChoice)
-        pathVersion.awaitStep("path choice version hint", model.executableVersionTextProperty::get)
+        awaitVersion(model, "path", "path choice version hint")
 
         val projectChoice = model.executableChoicesProperty.get()
             .single { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
-        val projectVersion = model.executableVersionTextProperty.nextValue("project")
         model.executableSelectedChoiceProperty.set(projectChoice)
-        projectVersion.awaitStep("project choice version hint", model.executableVersionTextProperty::get)
+        awaitVersion(model, "project", "project choice version hint")
         // Switching choices clears the cached results, so "project" above was produced by the
         // committed probe's finish — nothing is in flight any more; assert that explicitly so a
         // future change cannot end the test with a probe still running.
@@ -611,15 +608,21 @@ internal class MillConfigurableViewModelTest {
     }
 
     /**
-     * [Deferred.await] with a labeled bound. The class-level timeout alone only reports that the
-     * method timed out; the label and current value identify the transition the ViewModel never
-     * produced. The bound is far above the instant transitions awaited here, so exceeding it is
-     * a missing value, not a slow machine.
+     * Awaits the model's own version flow. Unlike the observable property (whose notifications
+     * run on the UI thread), this synchronizes on the value the ViewModel produces, so a
+     * headless run does not depend on how quickly the UI queue is serviced. Values rest between
+     * the phases of a test, and a fresh `first` collector cannot miss its start value.
      */
-    private suspend fun <T> Deferred<T>.awaitStep(step: String, current: () -> Any?): T = try {
-        withTimeout(AWAIT_SECONDS.seconds) { await() }
-    } catch (timeout: TimeoutCancellationException) {
-        throw AssertionError("$step: no value within ${AWAIT_SECONDS}s (current `${current()}`)", timeout)
+    private suspend fun awaitVersion(model: MillConfigurableViewModel, expected: String, step: String) {
+        try {
+            withTimeout(AWAIT_SECONDS.seconds) { model.executableVersionTextValues.first { it == expected } }
+        } catch (timeout: TimeoutCancellationException) {
+            throw AssertionError(
+                "$step: version `$expected` not reached within ${AWAIT_SECONDS}s " +
+                        "(current `${model.executableVersionTextValues.value}`)",
+                timeout,
+            )
+        }
     }
 
     private suspend fun awaitCommittedProbesIdle(model: MillConfigurableViewModel) {
