@@ -21,11 +21,20 @@ Last Updated: 2026-11-24
 3. Converted the remaining Java sources (`MillExternalSystemManager`, `MillSettings`) to
    Kotlin with settings-file-compatible state, and demoted success-path `warn` logging to
    `info`.
+4. Replaced the configurable's test polling with completion-notification tests (suspend methods,
+   `Deferred` listeners, class-level `@Timeout`) and fixed the two adapter defects they exposed
+   (a listener losing the change that landed just after registration, and per-listener
+   collectors leaving delivery order undefined); see `docs/Mill-ViewModelNotifications.md`.
+5. Kept WSL execution working where the platform's EEL daemon cannot start: `wsl.exe` is
+   spawned through a plain `ProcessBuilder`, no UNC working directory is passed, and bare
+   commands are resolved inside the distribution through the login shell; the WSL CI leg
+   exercises the same spawn path.
 
 Archived notes:
 `plugins/Mill/docs/Mill-ToolWindowTasks.md`,
 `plugins/Mill/docs/Mill-ModularSplitMigration.md`,
-`plugins/Mill/docs/Mill-WslEelExecution.md`
+`plugins/Mill/docs/Mill-WslEelExecution.md`,
+`plugins/Mill/docs/Mill-ViewModelNotifications.md`
 
 ## Active Next
 

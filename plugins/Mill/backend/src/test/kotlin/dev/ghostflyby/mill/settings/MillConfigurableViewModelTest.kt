@@ -389,23 +389,34 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `editor draft text updates bound right hint without committing settings`() {
+        // The draft must report a version of its own: with one version for every probe, the wait
+        // below could be satisfied by the committed project-default probe and then race the draft
+        // preview, which legitimately blanks the hint while its probe is in flight.
+        val draftVersionText = "draft-1.2.3"
         val model = createModel(
             projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 MillExecutableProbeResult(
                     resolvedExecutable = executablePath,
                     isValid = true,
-                    version = "1.2.3",
+                    version = if (executablePath == "/usr/local/bin/mill") draftVersionText else "committed",
                     errorDetails = null,
                 )
             },
         )
         val selector = createSelector(model)
-        val version = model.executableVersionTextProperty.nextValue("1.2.3")
+        // Read the widget inside the notification of the draft version: the view's binding was
+        // registered before this listener, so it must already be updated at that point. Reading
+        // after an arbitrary wake-up would depend on later probe restarts.
+        val hintWhenNotified = CompletableDeferred<String>()
+        model.executableVersionTextProperty.afterChange(disposable) { value ->
+            if (value == draftVersionText) {
+                hintWhenNotified.complete(selector.rightHint)
+            }
+        }
 
         onUi { selector.editorTextField.text = "/usr/local/bin/mill" }
-        version.await()
-        Assertions.assertEquals("1.2.3", onUi { selector.rightHint })
+        Assertions.assertEquals(draftVersionText, hintWhenNotified.await())
 
         val appliedProject = applyModel(model).single()
         Assertions.assertEquals(MillExecutableSource.PROJECT_DEFAULT_SCRIPT, appliedProject.millExecutableSource)

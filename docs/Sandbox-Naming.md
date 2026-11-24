@@ -42,9 +42,11 @@ For every non-root project applying `repo.intellij-module`:
    `<module-id>.jar` automatically — the platform-required rename can no longer be forgotten.
 
 Plugin roots keep their previous naming (leaf names are unique among plugin directories), so
-existing root sandboxes do not move. Stale leaf-named sandbox directories
-(`shared`, `frontend`, `backend`, `intellij-shared`) were deleted once; they are disposable
-build caches.
+existing root sandboxes do not move: a plugin project also applies `repo.intellij-module`, and
+the convention therefore restores `sandboxContainer`/`projectName` whenever
+`repo.intellij-plugin` is applied in the same project, overriding the dotted-path values it set
+for content-module subprojects. Stale leaf-named sandbox directories (`shared`, `frontend`,
+`backend`, `intellij-shared`) were deleted once; they are disposable build caches.
 
 ## Known Leftover
 
