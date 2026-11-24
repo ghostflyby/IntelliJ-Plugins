@@ -14,7 +14,7 @@ import com.intellij.psi.search.SearchScope
 
 internal class MillBuildScriptResolveScopeEnlarger : ResolveScopeEnlarger() {
     override fun getAdditionalResolveScope(file: VirtualFile, project: Project): SearchScope? {
-        val roots = MillBuildScriptRoots.resolveRoots(project, file)
+        val roots = MillBuildScriptRoots.resolveRoots(file)
         if (roots.isEmpty()) {
             return null
         }

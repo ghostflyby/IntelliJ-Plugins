@@ -239,11 +239,12 @@ internal object MillCommandLineUtil {
             ?.toAbsolutePath()
             ?.normalize()
             ?.toString()
-            ?: findExecutableByCommandLookup(MillConstants.DEFAULT_EXECUTABLE)
+            ?: findExecutableByCommandLookup()
             ?: resolvedExecutable
     }
 
-    private fun findExecutableByCommandLookup(commandName: String): String? {
+    private fun findExecutableByCommandLookup(): String? {
+        val commandName = MillConstants.DEFAULT_EXECUTABLE
         val locatorCommand = when {
             System.getProperty("os.name").startsWith("Windows", ignoreCase = true) -> listOf("where.exe", commandName)
             else -> listOf("/usr/bin/env", "which", commandName)
@@ -335,7 +336,7 @@ internal object MillCommandLineUtil {
         target: MillExecutionTarget.Wsl,
         resolved: String,
     ): String {
-        val candidate = toTargetExecutablePath(target, resolved)
+        val candidate = toTargetExecutablePath(resolved)
         if (!simpleCommandPattern.matches(candidate)) {
             return candidate
         }
@@ -404,7 +405,7 @@ internal object MillCommandLineUtil {
         )
 
         is MillExecutionTarget.Eel -> throw ExecutionException(
-            "Mill projects on non-local execution targets are not supported yet: ${target.description}"
+            Bundle.message("execution.target.unsupported", target.description),
         )
     }
 
@@ -419,7 +420,7 @@ internal object MillCommandLineUtil {
         add("-d")
         add(target.distribution)
         add("--cd")
-        add(toTargetPath(target, projectRoot))
+        add(toTargetPath(projectRoot))
         add("--exec")
         addAll(argv)
     }
@@ -737,7 +738,7 @@ internal object MillCommandLineUtil {
 
     // UNC \\wsl.localhost\<distro>\foo or \\wsl$\<distro>\foo -> /foo. Values without a WSL UNC
     // prefix (bare commands, target-style paths) are returned unchanged.
-    internal fun toTargetPath(target: MillExecutionTarget.Wsl, hostPath: Path): String {
+    internal fun toTargetPath(hostPath: Path): String {
         val normalized = hostPath.toString().replace('/', '\\')
         val prefix = wslUncPrefix.find(normalized) ?: return normalized
         return "/" + normalized.substring(prefix.value.length).replace('\\', '/')
@@ -755,9 +756,9 @@ internal object MillCommandLineUtil {
         else -> value
     }
 
-    private fun toTargetExecutablePath(target: MillExecutionTarget.Wsl, resolved: String): String = when {
+    private fun toTargetExecutablePath(resolved: String): String = when {
         resolved.startsWith("\\\\wsl.localhost\\", ignoreCase = true) || resolved.startsWith("\\\\wsl$\\", ignoreCase = true) ->
-            toTargetPath(target, Path.of(resolved))
+            toTargetPath(Path.of(resolved))
 
         else -> resolved
     }

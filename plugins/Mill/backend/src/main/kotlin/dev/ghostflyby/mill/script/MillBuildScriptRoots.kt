@@ -16,7 +16,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 internal object MillBuildScriptRoots {
-    fun resolveRoots(project: Project, file: VirtualFile): List<VirtualFile> {
+    fun resolveRoots(file: VirtualFile): List<VirtualFile> {
         val model = findModel(file) ?: return emptyList()
         return model.resolveRoots.mapNotNull(::findResolveRoot).distinct()
     }

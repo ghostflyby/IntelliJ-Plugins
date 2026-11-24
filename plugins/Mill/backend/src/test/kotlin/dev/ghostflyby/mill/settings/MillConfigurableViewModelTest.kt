@@ -26,13 +26,13 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration
 
-// Test methods are suspend functions: they suspend on completion notifications ([nextValue],
-// latch awaits) instead of polling, and Swing work hops to the UI thread via [onUi]. The waiting
-// itself never happens on that thread: property change listeners (and with them the view's
-// bindings) are delivered there.
-    @TestApplication
-    @Timeout(10)
-    internal class MillConfigurableViewModelTest {
+// Test methods are suspend functions when they await completion notifications; the waits use
+// [nextValue] or an interruptible latch wait instead of polling. Swing work hops to the UI thread
+// via [onUi]. The waiting itself never happens on that thread: property change listeners (and
+// with them the view's bindings) are delivered there.
+@TestApplication
+@Timeout(10)
+internal class MillConfigurableViewModelTest {
     private val projectFixture = projectFixture(openAfterCreation = true)
     private val project by projectFixture
     private val disposable by disposableFixture()
@@ -47,10 +47,9 @@ import kotlin.time.Duration
         Disposer.dispose(modelParent)
     }
 
-        @Test
-        suspend fun `selecting project executable choice stores project default source`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+    @Test
+    fun `selecting project executable choice stores project default source`() {
+        val model = createModel()
 
         val projectChoice = model.executableChoicesProperty.get()
             .single { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
@@ -63,9 +62,8 @@ import kotlin.time.Duration
     }
 
     @Test
-    suspend fun `selecting path executable choice stores default manual command`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+    fun `selecting path executable choice stores default manual command`() {
+        val model = createModel()
 
         val pathChoice = model.executableChoicesProperty.get()
             .single { it.inputMatchText == MillConstants.DEFAULT_EXECUTABLE }
@@ -78,9 +76,8 @@ import kotlin.time.Duration
     }
 
     @Test
-    suspend fun `selecting manual executable choice stores explicit manual path`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+    fun `selecting manual executable choice stores explicit manual path`() {
+        val model = createModel()
         val manualChoice = MillExecutableChoice(
             key = "manual:/usr/local/bin/mill",
             displayName = "mill",
@@ -99,9 +96,8 @@ import kotlin.time.Duration
     }
 
     @Test
-    suspend fun `selected choice initializes executable draft text and left hint`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+    fun `selected choice initializes executable draft text and left hint`() {
+        val model = createModel()
         val projectChoice = model.executableChoicesProperty.get()
             .single { it.source == MillExecutableSource.PROJECT_DEFAULT_SCRIPT }
 
@@ -111,9 +107,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `typing path choice draft updates left hint without committing settings`() {
-        val projectPath = "/tmp/mill-project"
         val model = createModel(
-            projectPath = projectPath,
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,
                 pathExecutables = listOf(Path.of("/usr/local/bin/mill")),
@@ -131,9 +125,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `typing executable name draft uses discovered path as left hint`() {
-        val projectPath = "/tmp/mill-project"
         val model = createModel(
-            projectPath = projectPath,
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,
                 pathExecutables = listOf(Path.of("/usr/local/bin/mill")),
@@ -148,8 +140,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `typing unknown executable name draft does not resolve against project root`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+        val model = createModel()
         val leftHint = model.executableInputLeftHintProperty.nextValue("")
 
         model.executableInputTextProperty.set("custom-mill")
@@ -159,8 +150,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `typing manual path draft updates left hint without committing settings`() {
-        val projectPath = "/tmp/mill-project"
-        val model = createModel(projectPath)
+        val model = createModel()
         val leftHint = model.executableInputLeftHintProperty.nextValue("/tmp/mill-project/tools/mill")
 
         model.executableInputTextProperty.set("tools/mill")
@@ -173,9 +163,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `draft probe success updates version hint without committing settings`() {
-        val projectPath = "/tmp/mill-project"
         val model = createModel(
-            projectPath = projectPath,
             probe = { _, _, executablePath ->
                 MillExecutableProbeResult(
                     resolvedExecutable = executablePath,
@@ -199,7 +187,6 @@ import kotlin.time.Duration
     @Test
     suspend fun `draft probe failure updates version hint to bang`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 MillExecutableProbeResult(
                     resolvedExecutable = executablePath,
@@ -220,7 +207,6 @@ import kotlin.time.Duration
         val slowProbeStarted = CountDownLatch(1)
         val slowProbeCancelled = CountDownLatch(1)
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 if (executablePath.endsWith("first")) {
                     slowProbeStarted.countDown()
@@ -249,19 +235,24 @@ import kotlin.time.Duration
 
         val newerVersion = model.executableVersionTextProperty.nextValue("2.0.0")
         model.executableInputTextProperty.set("/tmp/first")
-        Assertions.assertTrue(slowProbeStarted.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the slow draft probe never started")
+        Assertions.assertTrue(
+            runInterruptible(Dispatchers.IO) { slowProbeStarted.await(AWAIT_SECONDS, TimeUnit.SECONDS) },
+            "the slow draft probe never started",
+        )
         model.executableInputTextProperty.set("/tmp/second")
         newerVersion.await()
 
         // The stale result never lands because its probe is cancelled once a newer draft exists.
-        Assertions.assertTrue(slowProbeCancelled.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the stale draft probe was not cancelled")
+        Assertions.assertTrue(
+            runInterruptible(Dispatchers.IO) { slowProbeCancelled.await(AWAIT_SECONDS, TimeUnit.SECONDS) },
+            "the stale draft probe was not cancelled",
+        )
         Assertions.assertEquals("2.0.0", model.executableVersionTextProperty.get())
     }
 
     @Test
     suspend fun `selecting another executable choice refreshes version hint for that choice`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,
                 pathExecutables = listOf(Path.of("/usr/local/bin/mill")),
@@ -298,7 +289,6 @@ import kotlin.time.Duration
     @Test
     suspend fun `committed probe success updates version hint when draft matches selected choice`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, source, _ ->
                 MillExecutableProbeResult(
                     resolvedExecutable = source.name,
@@ -321,7 +311,6 @@ import kotlin.time.Duration
         val committedProbeMayFinish = CountDownLatch(1)
         val committedProbeStarted = CountDownLatch(1)
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 if (executablePath.isBlank()) {
                     committedProbeStarted.countDown()
@@ -343,7 +332,10 @@ import kotlin.time.Duration
             },
         )
 
-        Assertions.assertTrue(committedProbeStarted.await(AWAIT_SECONDS, TimeUnit.SECONDS), "the committed probe never started")
+        Assertions.assertTrue(
+            runInterruptible(Dispatchers.IO) { committedProbeStarted.await(AWAIT_SECONDS, TimeUnit.SECONDS) },
+            "the committed probe never started",
+        )
         val draftVersion = model.executableVersionTextProperty.nextValue("draft")
         model.executableInputTextProperty.set("/usr/local/bin/mill")
         draftVersion.await()
@@ -367,7 +359,6 @@ import kotlin.time.Duration
     @Test
     suspend fun `draft probe result does not commit settings state`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 MillExecutableProbeResult(
                     resolvedExecutable = executablePath,
@@ -394,7 +385,6 @@ import kotlin.time.Duration
         // preview, which legitimately blanks the hint while its probe is in flight.
         val draftVersionText = "draft-1.2.3"
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             probe = { _, _, executablePath ->
                 MillExecutableProbeResult(
                     resolvedExecutable = executablePath,
@@ -426,7 +416,6 @@ import kotlin.time.Duration
     @Test
     suspend fun `editor draft text updates bound left hint`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,
                 pathExecutables = listOf(Path.of("/usr/local/bin/mill")),
@@ -447,7 +436,7 @@ import kotlin.time.Duration
 
     @Test
     suspend fun `editor draft text updates left hint after selecting inline manual choice`() {
-        val model = createModel(projectPath = "/tmp/mill-project")
+        val model = createModel()
         val selector = createSelector(model)
         val selectionHint = model.executableInputLeftHintProperty.nextValue("/tmp/mill-project/tools/mill")
 
@@ -473,7 +462,6 @@ import kotlin.time.Duration
     @Test
     suspend fun `selector choice changes update bound right hint`() {
         val model = createModel(
-            projectPath = "/tmp/mill-project",
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,
                 pathExecutables = listOf(Path.of("/usr/local/bin/mill")),
@@ -555,7 +543,7 @@ import kotlin.time.Duration
         // The selected choice lags the project switch: it is derived asynchronously from the new
         // project's state, so await it explicitly instead of inferring it from another property.
         val secondProjectChoice = model.executableSelectedChoiceProperty.nextValueWhere {
-            it?.source == MillExecutableSource.MANUAL && it?.manualPath == MillConstants.DEFAULT_EXECUTABLE
+            it != null && it.source == MillExecutableSource.MANUAL && it.manualPath == MillConstants.DEFAULT_EXECUTABLE
         }
         firstVersion.await()
 
@@ -567,7 +555,7 @@ import kotlin.time.Duration
     }
 
     private fun createModel(
-        projectPath: String,
+        projectPath: String = "/tmp/mill-project",
         discovery: MillExecutableDiscovery = MillExecutableDiscovery(
             projectWrapper = null,
             pathExecutables = emptyList(),
@@ -600,7 +588,7 @@ import kotlin.time.Duration
     }
 
     /**
-     * A completion notification for [property] reaching [expected]. Create it *before* the action
+     * A completion notification for `property` reaching [expected]. Create it *before* the action
      * that causes the change: the listener then cannot miss the change, and by the time the
      * deferred completes, listeners registered earlier (the view's bindings) have already run.
      * A value that is already present completes immediately.

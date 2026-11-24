@@ -6,6 +6,7 @@
 
 package dev.ghostflyby.mill.script
 
+import dev.ghostflyby.mill.Bundle
 import org.jetbrains.plugins.scala.LanguageFileTypeBase
 import org.jetbrains.plugins.scala.ScalaLanguage
 import org.jetbrains.plugins.scala.finder.FileTypeWithIsolatedDeclarations
@@ -14,9 +15,9 @@ import org.jetbrains.plugins.scala.icons.Icons
 import javax.swing.Icon
 
 internal object MillBuildScriptFileType : LanguageFileTypeBase(ScalaLanguage.INSTANCE), FileTypeWithIsolatedDeclarations {
-    override fun getName(): String = "Mill Build Script"
+    override fun getName(): String = Bundle.message("filetype.mill.name")
 
-    override fun getDescription(): String = "Mill build script"
+    override fun getDescription(): String = Bundle.message("filetype.mill.description")
 
     override fun getDefaultExtension(): String = "mill"
 

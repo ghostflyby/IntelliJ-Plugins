@@ -10,7 +10,7 @@ import com.intellij.openapi.externalSystem.model.ProjectSystemId
 
 public object MillConstants {
     @JvmField
-    public val SYSTEM_ID: ProjectSystemId = ProjectSystemId("MILL", "Mill")
+    public val SYSTEM_ID: ProjectSystemId = ProjectSystemId("MILL", Bundle.message("system.display.name"))
 
     public const val DEFAULT_EXECUTABLE: String = "mill"
     public const val MODULE_TYPE_ID: String = "JAVA_MODULE"

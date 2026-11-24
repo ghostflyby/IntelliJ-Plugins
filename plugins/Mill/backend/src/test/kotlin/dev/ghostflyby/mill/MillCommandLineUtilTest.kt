@@ -110,18 +110,16 @@ internal class MillCommandLineUtilTest {
 
     @Test
     fun `converts wsl unc paths to target paths`() {
-        val target = MillExecutionTarget.Wsl("Ubuntu-24.04")
-
         assertEquals(
             "/home/user/proj",
-            MillCommandLineUtil.toTargetPath(target, Path.of("""\\wsl.localhost\Ubuntu-24.04\home\user\proj""")),
+            MillCommandLineUtil.toTargetPath(Path.of("""\\wsl.localhost\Ubuntu-24.04\home\user\proj""")),
         )
         assertEquals(
             "/home/user/proj",
-            MillCommandLineUtil.toTargetPath(target, Path.of("""\\wsl$\ubuntu-24.04\home\user\proj""")),
+            MillCommandLineUtil.toTargetPath(Path.of("""\\wsl$\ubuntu-24.04\home\user\proj""")),
         )
-        assertEquals("/", MillCommandLineUtil.toTargetPath(target, Path.of("""\\wsl.localhost\Ubuntu-24.04""")))
-        assertEquals("mill", MillCommandLineUtil.toTargetPath(target, Path.of("mill")))
+        assertEquals("/", MillCommandLineUtil.toTargetPath(Path.of("""\\wsl.localhost\Ubuntu-24.04""")))
+        assertEquals("mill", MillCommandLineUtil.toTargetPath(Path.of("mill")))
     }
 
     @Test
