@@ -15,7 +15,9 @@ import org.jetbrains.plugins.scala.icons.Icons
 import javax.swing.Icon
 
 internal object MillBuildScriptFileType : LanguageFileTypeBase(ScalaLanguage.INSTANCE), FileTypeWithIsolatedDeclarations {
-    override fun getName(): String = Bundle.message("filetype.mill.name")
+    // The file type name is a persistent key (FileTypeManager lookups, .idea/misc.xml file
+    // mappings), so it stays literal; only the description is localized.
+    override fun getName(): String = "Mill Build Script"
 
     override fun getDescription(): String = Bundle.message("filetype.mill.description")
 

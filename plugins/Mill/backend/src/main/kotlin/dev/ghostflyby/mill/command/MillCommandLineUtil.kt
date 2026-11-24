@@ -315,10 +315,13 @@ internal object MillCommandLineUtil {
         }
         val builder = ProcessBuilder(listOf(commandLine.exePath) + commandLine.parametersList.list)
         val environment = builder.environment()
-        if (settings?.isPassParentEnvs == false) {
-            environment.clear()
-        }
-        environment.putAll(settings?.env ?: emptyMap())
+        // Mirror the command line instead of ProcessBuilder's own System.getenv() default: it
+        // already resolved ParentEnvironmentType.CONSOLE/NONE and carries the configured map.
+        environment.clear()
+        environment.putAll(commandLine.effectiveEnvironment)
+        // wsl.exe prints its own diagnostics as UTF-16LE unless asked for UTF-8; the process
+        // output is decoded as UTF-8, so failure messages would otherwise be garbled.
+        environment["WSL_UTF8"] = "1"
         return builder.start()
     }
 

@@ -29,10 +29,9 @@ internal class MillTaskManager : ExternalSystemTaskManager<MillExecutionSettings
         listener: ExternalSystemTaskNotificationListener,
     ) {
         val projectRoot = MillProjectResolverSupport.findProjectRoot(projectPath)
-        val commandLine = createCommandLine(projectRoot, settings)
-
         listener.onStart(projectRoot.toString(), id)
         try {
+            val commandLine = createCommandLine(projectRoot, settings)
             // The process is started by MillCommandLineUtil so that WSL targets never go through
             // GeneralCommandLine's remote/EEL routing; only the output plumbing stays here.
             val process = MillCommandLineUtil.startProcess(commandLine, settings)

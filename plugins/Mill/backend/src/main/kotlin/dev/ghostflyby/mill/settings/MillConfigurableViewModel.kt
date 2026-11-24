@@ -8,6 +8,7 @@ package dev.ghostflyby.mill.settings
 
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.UI
+import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.observable.properties.ObservableMutableProperty
 import com.intellij.openapi.observable.properties.ObservableProperty
 import com.intellij.openapi.options.ConfigurationException
@@ -21,7 +22,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -1007,8 +1007,19 @@ private class FlowChangeListeners<T>(private val flow: StateFlow<T>, scope: Coro
                     current = value
                     pending = entries.filter { value != it.last }.onEach { it.last = value }
                 }
+                if (pending.isEmpty()) {
+                    return@collect
+                }
                 withContext(Dispatchers.UI) {
-                    pending.forEach { entry -> entry.listener(value) }
+                    pending.forEach { entry ->
+                        // One failing binding must not kill the property's collector: the
+                        // remaining listeners still need their notifications.
+                        try {
+                            entry.listener(value)
+                        } catch (error: Exception) {
+                            Logger.getInstance(FlowChangeListeners::class.java).error(error)
+                        }
+                    }
                 }
             }
         }

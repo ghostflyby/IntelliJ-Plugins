@@ -63,6 +63,10 @@ process calls and string-level path conversion only. The IDE-side detector
 
 - Environment variables from settings are not forwarded into WSL yet (`WSLENV` plumbing);
   args containing spaces rely on wsl.exe's argv reconstruction.
+- Bare-command resolution uses `sh -lc`, which reads login profiles (`/etc/profile`,
+  `~/.profile`) but not interactive files such as `~/.bashrc`/`~/.zshrc`. A launcher whose PATH
+  is exported only from an interactive shell file is not found; configure an absolute path in
+  that case.
 - EEL container targets: detected and reported as unsupported; execution needs the same
   Ijent-backed machinery EnhancedHotSwapEnabler parked on IJPL-178929 / IJPL-243361.
 - CI: the Windows/WSL matrix leg runs

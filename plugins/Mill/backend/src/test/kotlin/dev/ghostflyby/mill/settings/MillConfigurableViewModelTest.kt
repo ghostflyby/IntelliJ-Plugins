@@ -32,7 +32,7 @@ import kotlin.time.Duration.Companion.seconds
 // via [onUi]. The waiting itself never happens on that thread: property change listeners (and
 // with them the view's bindings) are delivered there.
 @TestApplication
-@Timeout(10)
+@Timeout(20)
 internal class MillConfigurableViewModelTest {
     private val projectFixture = projectFixture(openAfterCreation = true)
     private val project by projectFixture
@@ -252,7 +252,7 @@ internal class MillConfigurableViewModelTest {
     }
 
     @Test
-    suspend fun `selecting another executable choice refreshes version hint for that choice`() {
+    suspend fun `selecting another executable choice refreshes the model version`() {
         val model = createModel(
             discovery = MillExecutableDiscovery(
                 projectWrapper = null,

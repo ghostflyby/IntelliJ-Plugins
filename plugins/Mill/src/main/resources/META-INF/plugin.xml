@@ -10,11 +10,6 @@
         <module name="dev.ghostflyby.mill.shared" loading="required"/>
         <module name="dev.ghostflyby.mill.backend" loading="embedded" required-if-available="intellij.platform.backend"/>
     </content>
-    <dependencies>
-        <!-- Installation target is the backend IDE only (see docs/Mill-ModularSplitMigration.md);
-             declare it explicitly so split-mode tooling does not have to infer it. -->
-        <module name="intellij.platform.backend"/>
-    </dependencies>
 
     <extensions defaultExtensionNs="com.intellij">
         <errorHandler implementation="com.intellij.diagnostic.JetBrainsMarketplaceErrorReportSubmitter"/>
