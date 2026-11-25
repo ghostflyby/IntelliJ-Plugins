@@ -6,7 +6,7 @@ Reference patterns: `plugins/EnhancedHotSwapEnabler` `EelJavaSupport.kt`, `Targe
 
 ## Design
 
-`MillExecutionTarget` (`shared/.../settings/MillExecutionTarget.kt`) models where a linked
+`MillExecutionTarget` (`backend/.../settings/MillExecutionTarget.kt`) models where a linked
 Mill project lives: `Local`, `Wsl(distribution)`, or `Eel(description)` (detected, not
 executable yet). It is `Serializable` and carried inside `MillExecutionSettings` into the
 external-system remote process, so **everything that consumes it is plain-JVM**: `wsl.exe`
@@ -20,11 +20,11 @@ process calls and string-level path conversion only. The IDE-side detector
 - Non-local `getEelDescriptor()` results become `Eel` targets; importing them fails fast with
   "not supported yet" instead of running a Linux binary on the host.
 
-## Command Layer (MillCommandLineUtil, shared)
+## Command Layer (MillCommandLineUtil, backend)
 
-The command layer lives in the `shared` content module: the backend resolver and the backend RPC
-implementation both use it. The frontend view model reaches it through `MillBackendRpcApi`, so
-probing always runs on the host that owns the project (see `Mill-ModularSplitMigration.md`).
+The command layer lives in the `backend` content module: it spawns processes and therefore never
+runs in a split-mode frontend. The frontend reaches it through `MillBackendRpcApi`, so probing
+always runs on the host that owns the project (see `Mill-ModularSplitMigration.md`).
 
 - `createCommandLine` branches on the target: local builds the Mill command as before; WSL
   builds `wsl.exe -d <distro> --cd <linuxProjectRoot> --exec <exe> <args...>` (`--exec`
@@ -59,9 +59,9 @@ probing always runs on the host that owns the project (see `Mill-ModularSplitMig
 - `MillExternalSystemManager.getExecutionSettingsProvider` detects the target from the linked
   project path and serializes it into `MillExecutionSettings`; the remote resolver and task
   manager pick it up transparently.
-- `MillConfigurableViewModel` detects the target per project (inside the existing
-  `runInterruptible(Dispatchers.IO)` blocks — the EEL provider must not be touched on EDT) and
-  threads it into the injected discovery/probe lambdas.
+- `MillBackendRpcApiImpl` (backend) detects the target from the requested project path before
+  discovery/probing; the frontend settings view model only sends the project path and executable
+  configuration over RPC, so the EEL provider is touched on the backend host only.
 
 ## Known Limitations
 

@@ -11,9 +11,9 @@ split-mode development loop:
 
 | Module                          | Gradle project | Loading                            | Content                                                                                        |
 |---------------------------------|----------------|------------------------------------|------------------------------------------------------------------------------------------------|
-| `dev.ghostflyby.mill.shared`    | `shared`       | `required`                         | `MillConstants`, `Bundle` + messages, `MillImportDebugLogger`, settings state (`MillSettings`, `MillLocalSettings`, `MillProjectSettings`, `MillSettingsListener`, `MillExecutableSource`/`MillExecutableConfiguration`), `MillExecutionTarget`/`MillExecutionSettings`, `MillCommandLineUtil`, `MillTasksData`, `MillDiscoveredModule`, `MillProjectResolverSupport`, the RPC API + DTOs |
+| `dev.ghostflyby.mill.shared`    | `shared`       | `required`                         | `MillConstants`, `Bundle` + messages, `MillImportDebugLogger`, settings state (`MillSettings`, `MillLocalSettings`, `MillProjectSettings`, `MillSettingsListener`, `MillExecutableSource`/`MillExecutableConfiguration`), pure probe result data (`MillExecutableDiscovery`/`MillExecutableProbeResult`), `MillTasksData`, `MillDiscoveredModule`, `MillProjectResolverSupport`, the RPC API + DTOs |
 | `dev.ghostflyby.mill.frontend`  | `frontend`     | default (frontend)                 | Settings UI (`MillConfigurable`, view, view model, selector), tool window factory/task tree/view contributor, link/reload/run-task actions, run-configuration type, open/link flow (`MillProjectOpenProcessor`, `MillOpenProjectProvider`, `MillUnlinkedProjectAware`), import refresh callback, notification group |
-| `dev.ghostflyby.mill.backend`   | `backend`      | `embedded`, `required-if-available="intellij.platform.backend"` | External-system manager/resolver/task manager, `project/`/`sdk/`/`script/`, data services, file type/roots/resolve-scope integration |
+| `dev.ghostflyby.mill.backend`   | `backend`      | `embedded`, `required-if-available="intellij.platform.backend"` | External-system manager/resolver/task manager, command layer (`MillCommandLineUtil`) and execution target/settings, language-agnostic project import (`project/`), Java/JDK import (`java/`), Scala SDK import (`scala/`), build-script integration (`script/`), data services, file type/roots/resolve-scope integration |
 | `dev.ghostflyby.intellij.shared`| `modules/intellij-shared` | `required`                | Shared widgets (`EditableHintedComboBox`) used by the settings UI; Mill ships them as a content module because content-module classloaders cannot see `lib/*.jar` |
 
 - Root `plugin.xml` declares only metadata plus `<content>` and the Marketplace error handler;
@@ -59,14 +59,15 @@ the descriptor/client-stub code generation and must match the repository's Kotli
 - Content-module classloaders never see the plugin's `lib/*.jar`, which is why the backend is
   embedded (it needs kotlinx-serialization for the `show` JSON import) — same rationale as
   WorkspaceMcpTools' backend.
-- `MillExecutionSettings` now lives in `shared` (the frontend view model constructs it for
-  probing); the external-system remote process still sees it because
-  `enhanceRemoteProcessing` adds the shared content-module jar to the remote classpath.
+- `MillExecutionSettings` lives in `backend` (main jar) and crosses into the external-system
+  remote process; the frontend only sees the RPC DTOs. `MillExecutableDiscovery` and
+  `MillExecutableProbeResult` stay in `shared` because both the backend implementation and the
+  frontend view model consume them, but they are pure data — no process handling is shared.
 - `MillTasksData` lives in `shared` because both the backend resolver (produces the DataNode)
   and the frontend view contributor (renders it) reference the key.
 - Cross-module APIs in `shared` are explicitly `public` (`Bundle`, `MillImportDebugLogger`,
-  settings classes, execution target/settings, the command-line util and its result types,
-  `MillTasksData`, `MillDiscoveredModule`, `MillProjectResolverSupport`, the RPC API/DTOs);
+  settings classes, the pure probe result data, `MillTasksData`, `MillDiscoveredModule`,
+  `MillProjectResolverSupport`, the RPC API/DTOs);
   ABI dumps live at `shared/api/shared.api`, `frontend/api/frontend.api` and
   `backend/api/backend.api`.
 - IJPG names module jars and sandboxes per-project; the repo conventions now handle both
