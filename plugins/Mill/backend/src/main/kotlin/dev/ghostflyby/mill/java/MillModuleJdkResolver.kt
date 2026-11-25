@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mill.sdk
+package dev.ghostflyby.mill.java
 
 import dev.ghostflyby.mill.MillImportDebugLogger
 import dev.ghostflyby.mill.command.MillCommandLineUtil

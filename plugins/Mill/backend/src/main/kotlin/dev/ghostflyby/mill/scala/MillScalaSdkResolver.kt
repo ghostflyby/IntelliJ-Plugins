@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mill.sdk
+package dev.ghostflyby.mill.scala
 
 import com.intellij.execution.process.ProcessOutputType
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import dev.ghostflyby.mill.MillImportDebugLogger
-import dev.ghostflyby.mill.MillScalaSdkData
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.MillDiscoveredModule
 import dev.ghostflyby.mill.settings.MillExecutionSettings

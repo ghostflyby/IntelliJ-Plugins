@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.java
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
@@ -22,8 +22,6 @@ import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.VirtualFileManager
-import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
-import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
 import java.nio.file.Path
 import kotlin.io.path.exists
 

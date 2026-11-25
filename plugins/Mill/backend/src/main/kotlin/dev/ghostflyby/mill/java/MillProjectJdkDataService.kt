@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.java
 
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.externalSystem.model.DataNode

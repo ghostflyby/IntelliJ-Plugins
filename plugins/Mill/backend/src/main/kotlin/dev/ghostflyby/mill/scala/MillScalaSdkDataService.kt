@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 
-package dev.ghostflyby.mill
+package dev.ghostflyby.mill.scala
 
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.externalSystem.model.DataNode
@@ -15,6 +15,7 @@ import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsPr
 import com.intellij.openapi.externalSystem.service.project.manage.AbstractProjectDataService
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.project.Project
+import dev.ghostflyby.mill.MillConstants
 import org.jetbrains.plugins.scala.project.ReplClasspath
 import org.jetbrains.plugins.scala.project.`ReplClasspath$`
 import org.jetbrains.plugins.scala.project.external.`ScalaSdkUtils$`

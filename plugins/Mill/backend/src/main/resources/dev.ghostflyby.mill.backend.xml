@@ -19,9 +19,9 @@
         <additionalLibraryRootsProvider implementation="dev.ghostflyby.mill.script.MillBuildScriptLibraryRootsProvider"/>
         <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
         <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
-        <externalProjectDataService implementation="dev.ghostflyby.mill.MillScalaSdkDataService"/>
-        <externalProjectDataService implementation="dev.ghostflyby.mill.MillProjectJdkDataService"/>
-        <externalProjectDataService implementation="dev.ghostflyby.mill.MillModuleJdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.scala.MillScalaSdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.java.MillProjectJdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.java.MillModuleJdkDataService"/>
     </extensions>
     <extensions defaultExtensionNs="org.intellij.scala">
         <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>

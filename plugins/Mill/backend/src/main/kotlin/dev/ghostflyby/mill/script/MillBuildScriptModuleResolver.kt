@@ -8,9 +8,9 @@ package dev.ghostflyby.mill.script
 
 import com.intellij.openapi.externalSystem.model.project.ContentRootData
 import dev.ghostflyby.mill.MillConstants
-import dev.ghostflyby.mill.MillScalaSdkData
 import dev.ghostflyby.mill.project.MillDiscoveredModule
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
+import dev.ghostflyby.mill.scala.MillScalaSdkData
 import java.nio.file.Files
 import java.nio.file.Path
 

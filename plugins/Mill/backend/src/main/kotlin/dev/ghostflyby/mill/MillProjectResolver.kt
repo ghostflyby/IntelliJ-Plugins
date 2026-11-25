@@ -14,11 +14,13 @@ import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskId
 import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskNotificationListener
 import com.intellij.openapi.externalSystem.service.project.ExternalSystemProjectResolver
 import dev.ghostflyby.mill.command.MillCommandLineUtil
+import dev.ghostflyby.mill.java.MillModuleJdkHomeProperty
+import dev.ghostflyby.mill.java.MillModuleJdkResolver
+import dev.ghostflyby.mill.java.MillProjectJdkData
 import dev.ghostflyby.mill.project.*
+import dev.ghostflyby.mill.scala.MillScalaSdkData
+import dev.ghostflyby.mill.scala.MillScalaSdkResolver
 import dev.ghostflyby.mill.script.MillBuildScriptModuleResolver
-import dev.ghostflyby.mill.sdk.MillModuleJdkHomeProperty
-import dev.ghostflyby.mill.sdk.MillModuleJdkResolver
-import dev.ghostflyby.mill.sdk.MillScalaSdkResolver
 import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
 import dev.ghostflyby.mill.settings.MillExecutionSettings
 import java.nio.file.Path

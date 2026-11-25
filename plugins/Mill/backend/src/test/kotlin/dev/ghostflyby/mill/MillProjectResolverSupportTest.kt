@@ -11,7 +11,7 @@ import com.intellij.openapi.roots.DependencyScope
 import dev.ghostflyby.mill.command.MillCommandLineUtil
 import dev.ghostflyby.mill.project.*
 import dev.ghostflyby.mill.script.MillBuildScriptSupport
-import dev.ghostflyby.mill.sdk.MillModuleJdkSupport
+import dev.ghostflyby.mill.java.MillModuleJdkSupport
 import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
 import dev.ghostflyby.mill.settings.MillExecutableSource
 import dev.ghostflyby.mill.settings.MillExecutionSettings
