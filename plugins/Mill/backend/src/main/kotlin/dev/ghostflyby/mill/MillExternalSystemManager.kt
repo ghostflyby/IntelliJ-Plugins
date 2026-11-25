@@ -21,14 +21,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Pair
 import com.intellij.util.Function
 import dev.ghostflyby.mill.project.MillProjectResolverSupport
-import dev.ghostflyby.mill.settings.MillExecutionSettings
-import dev.ghostflyby.mill.settings.MillExecutionTargets
-import dev.ghostflyby.mill.settings.MillExecutableConfigurationUtil
-import dev.ghostflyby.mill.settings.MillExecutableSource
-import dev.ghostflyby.mill.settings.MillLocalSettings
-import dev.ghostflyby.mill.settings.MillProjectSettings
-import dev.ghostflyby.mill.settings.MillSettings
-import dev.ghostflyby.mill.settings.MillSettingsListener
+import dev.ghostflyby.mill.settings.*
 import kotlinx.coroutines.Deferred
 import kotlinx.serialization.StringFormat
 import kotlinx.serialization.json.Json
@@ -36,6 +29,7 @@ import java.io.File
 import java.nio.file.Path
 import javax.swing.Icon
 
+@Suppress("UsagesOfObsoleteApi")
 internal class MillExternalSystemManager : ExternalSystemManager<
     MillProjectSettings,
     MillSettingsListener,
