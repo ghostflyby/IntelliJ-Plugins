@@ -36,23 +36,23 @@ import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
-public data class MillCommandResult(
-    public val projectRoot: Path,
-    public val arguments: List<String>,
-    public val commandLineString: String,
-    public val stdout: String,
-    public val stderr: String,
-    public val exitCode: Int?,
-    public val startupFailed: Boolean,
-    public val timedOut: Boolean,
+internal data class MillCommandResult(
+    val projectRoot: Path,
+    val arguments: List<String>,
+    val commandLineString: String,
+    val stdout: String,
+    val stderr: String,
+    val exitCode: Int?,
+    val startupFailed: Boolean,
+    val timedOut: Boolean,
 ) {
-    public val invocation: String
+    val invocation: String
         get() = arguments.joinToString(" ")
 
-    public val isSuccess: Boolean
+    val isSuccess: Boolean
         get() = !startupFailed && !timedOut && exitCode == 0
 
-    public val failureDetails: String
+    val failureDetails: String
         get() = stderr.ifBlank { stdout }.trim().ifBlank {
             when {
                 timedOut -> "The Mill process timed out."
@@ -61,7 +61,7 @@ public data class MillCommandResult(
             }
         }
 
-    public fun reportFailure(
+    internal fun reportFailure(
         taskId: ExternalSystemTaskId,
         listener: ExternalSystemTaskNotificationListener,
         failureContext: String,
@@ -89,30 +89,18 @@ public data class MillCommandResult(
     }
 }
 
-public data class MillCommandValueResult<T>(
-    public val command: MillCommandResult,
-    public val value: T,
+internal data class MillCommandValueResult<T>(
+    val command: MillCommandResult,
+    val value: T,
 )
 
-public data class MillExecutableProbeResult(
-    public val resolvedExecutable: String,
-    public val isValid: Boolean,
-    public val version: String?,
-    public val errorDetails: String?,
-)
-
-public data class MillExecutableDiscovery(
-    public val projectWrapper: Path?,
-    public val pathExecutables: List<Path>,
-)
-
-public object MillCommandLineUtil {
+internal object MillCommandLineUtil {
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
 
-    public fun buildMillCommand(
+    internal fun buildMillCommand(
         projectRoot: Path,
         executableSource: MillExecutableSource,
         executablePath: String,
@@ -125,7 +113,7 @@ public object MillCommandLineUtil {
         }
     }
 
-    public fun discoverExecutables(
+    internal fun discoverExecutables(
         projectRoot: Path,
         target: MillExecutionTarget = MillExecutionTarget.Local,
     ): MillExecutableDiscovery {
@@ -139,7 +127,7 @@ public object MillCommandLineUtil {
         )
     }
 
-    public fun resolveExecutable(
+    internal fun resolveExecutable(
         projectRoot: Path,
         executableSource: MillExecutableSource,
         configuredExecutablePath: String,
@@ -177,7 +165,7 @@ public object MillCommandLineUtil {
         }
     }
 
-    public fun probeExecutable(
+    internal fun probeExecutable(
         projectRoot: Path,
         executableSource: MillExecutableSource,
         executablePath: String,
@@ -273,7 +261,7 @@ public object MillCommandLineUtil {
         }
     }
 
-    public fun createCommandLine(
+    internal fun createCommandLine(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         arguments: List<String>,
@@ -305,7 +293,7 @@ public object MillCommandLineUtil {
     // for remote-looking targets it may route the command through the platform's EEL daemon,
     // which some environments refuse to launch (an elevated Windows CI runner fails with
     // ELEVATED_PRIVILEGES), while wsl.exe alone needs no platform machinery.
-    public fun startProcess(
+    internal fun startProcess(
         commandLine: GeneralCommandLine,
         settings: MillExecutionSettings?,
     ): Process {
@@ -332,14 +320,14 @@ public object MillCommandLineUtil {
 
     // wsl.exe forwards the distribution's UTF-8 output; the local charset is only right for
     // native commands.
-    public fun processCharset(commandLine: GeneralCommandLine, settings: MillExecutionSettings?): Charset =
+    internal fun processCharset(commandLine: GeneralCommandLine, settings: MillExecutionSettings?): Charset =
         if (settings?.target is MillExecutionTarget.Wsl) Charsets.UTF_8 else commandLine.charset
 
     // Bare commands (e.g. `mill`) must be looked up in the distribution's login shell — the host
     // PATH knows nothing about the profile that sets up in-distribution tools. Absolute, unc and
     // project-relative executables already resolve from the target project root, so they pass
     // through untouched.
-    public fun resolveTargetExecutable(
+    internal fun resolveTargetExecutable(
         projectRoot: Path,
         target: MillExecutionTarget.Wsl,
         resolved: String,
@@ -357,7 +345,7 @@ public object MillCommandLineUtil {
 
     // `command -v` in a login shell is the only reliable way to locate a command inside the
     // distribution; the returned path is a target-style path usable as argv[0] after `--exec`.
-    public fun findTargetCommandPath(
+    internal fun findTargetCommandPath(
         projectRoot: Path,
         target: MillExecutionTarget.Wsl,
         command: String,
@@ -419,7 +407,7 @@ public object MillCommandLineUtil {
 
     // Runs the given argv inside the WSL distribution. `--exec` bypasses the default shell so
     // argv quoting survives, and `--cd` makes wrapper scripts resolve against the project root.
-    public fun buildWslCommandLine(
+    internal fun buildWslCommandLine(
         target: MillExecutionTarget.Wsl,
         projectRoot: Path,
         argv: List<String>,
@@ -461,7 +449,7 @@ public object MillCommandLineUtil {
         return rawExecutable
     }
 
-    public fun runCommand(
+    internal fun runCommand(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         arguments: List<String>,
@@ -565,7 +553,7 @@ public object MillCommandLineUtil {
         runCatching(stream::close)
     }
 
-    public fun resolveTargets(
+    internal fun resolveTargets(
         projectRoot: Path,
         settings: MillExecutionSettings?,
     ): MillCommandValueResult<List<String>> {
@@ -577,7 +565,7 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(command, values)
     }
 
-    public fun showStringValues(
+    internal fun showStringValues(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         showTarget: String,
@@ -595,7 +583,7 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(command, values)
     }
 
-    public fun showStringValue(
+    internal fun showStringValue(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         showTarget: String,
@@ -611,7 +599,7 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(command, value)
     }
 
-    public fun showPaths(
+    internal fun showPaths(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         showTarget: String,
@@ -630,7 +618,7 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(values.command, paths)
     }
 
-    public fun showBinaryPaths(
+    internal fun showBinaryPaths(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         showTarget: String,
@@ -639,7 +627,7 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(values.command, filterBinaryLibraryPaths(values.value))
     }
 
-    public fun readJavaHome(
+    internal fun readJavaHome(
         projectRoot: Path,
         settings: MillExecutionSettings?,
         targetPrefix: String,
@@ -655,18 +643,18 @@ public object MillCommandLineUtil {
         return MillCommandValueResult(command, value)
     }
 
-    public fun parseStringList(output: String): List<String> = decodeOutputOrNull(
+    internal fun parseStringList(output: String): List<String> = decodeOutputOrNull(
         output = output,
         strategy = ListSerializer(String.serializer()),
     ).orEmpty()
         .map(::normalizeOutputValue)
 
-    public fun parseSingleStringValue(output: String): String? = decodeOutputOrNull(
+    internal fun parseSingleStringValue(output: String): String? = decodeOutputOrNull(
         output = output,
         strategy = String.serializer(),
     )?.let(::normalizeOutputValue)
 
-    public fun validateSupportedMillVersion(version: String?): String? {
+    internal fun validateSupportedMillVersion(version: String?): String? {
         val normalizedVersion = version?.trim().takeUnless { it.isNullOrEmpty() }
             ?: return Bundle.message(
                 "settings.mill.executable.status.invalid.minimum.unknown",
@@ -688,7 +676,7 @@ public object MillCommandLineUtil {
         }
     }
 
-    public fun parseJavaHome(output: String): String? {
+    internal fun parseJavaHome(output: String): String? {
         return output.lineSequence()
             .map(String::trim)
             .firstNotNullOfOrNull { line ->
@@ -698,7 +686,7 @@ public object MillCommandLineUtil {
             }
     }
 
-    public fun filterBinaryLibraryPaths(paths: Iterable<Path>): List<Path> {
+    internal fun filterBinaryLibraryPaths(paths: Iterable<Path>): List<Path> {
         return paths.asSequence()
             .filter(Files::isRegularFile)
             .filter(::isBinaryLibraryPath)
@@ -746,7 +734,7 @@ public object MillCommandLineUtil {
 
     // UNC \\wsl.localhost\<distro>\foo or \\wsl$\<distro>\foo -> /foo. Values without a WSL UNC
     // prefix (bare commands, target-style paths) are returned unchanged.
-    public fun toTargetPath(hostPath: Path): String {
+    internal fun toTargetPath(hostPath: Path): String {
         val normalized = hostPath.toString().replace('/', '\\')
         val prefix = wslUncPrefix.find(normalized) ?: return normalized
         return "/" + normalized.substring(prefix.value.length).replace('\\', '/')
@@ -754,7 +742,7 @@ public object MillCommandLineUtil {
 
     // Absolute target paths (Mill `show` output) become \\wsl.localhost\<distro>\... UNC paths so
     // the IDE-side project model resolves real files; non-absolute values pass through untouched.
-    public fun toHostPath(target: MillExecutionTarget, value: String): String = when (target) {
+    internal fun toHostPath(target: MillExecutionTarget, value: String): String = when (target) {
         is MillExecutionTarget.Wsl -> if (value.startsWith("/")) {
             """\\wsl.localhost\${target.distribution}\${value.removePrefix("/").replace('/', '\\')}"""
         } else {
@@ -794,7 +782,7 @@ public object MillCommandLineUtil {
         return (parsed as? JsonObject)?.get(JSON_VALUE_FIELD_NAME) ?: parsed
     }
 
-    public fun normalizeOutputValue(value: String): String {
+    internal fun normalizeOutputValue(value: String): String {
         if (value.startsWith("/") || windowsPathPattern.matches(value)) {
             return value
         }
