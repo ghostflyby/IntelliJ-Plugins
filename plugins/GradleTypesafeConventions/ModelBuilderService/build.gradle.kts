@@ -5,7 +5,7 @@
  */
 
 plugins {
-    id("repo.intellij-lib")
+    id("repo.intellij-module")
 }
 
 dependencies.intellijPlatform {

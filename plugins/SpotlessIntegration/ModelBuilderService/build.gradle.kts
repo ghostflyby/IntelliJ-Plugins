@@ -7,7 +7,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("repo.intellij-lib")
+    id("repo.intellij-module")
 }
 
 // The tooling model builder is loaded inside arbitrary Gradle daemons, which may run an older JVM
