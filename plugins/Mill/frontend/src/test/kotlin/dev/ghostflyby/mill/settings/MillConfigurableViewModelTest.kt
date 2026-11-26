@@ -215,7 +215,7 @@ internal class MillConfigurableViewModelTest {
                     // suspend precisely so probes stay cancellable (the production implementation
                     // is a cancellable RPC call); a blocking sleep would ignore cancellation.
                     try {
-                        delay(10_000)
+                        delay(10.seconds)
                     } catch (cancelled: CancellationException) {
                         slowProbeCancelled.countDown()
                         throw cancelled

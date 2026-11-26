@@ -38,6 +38,10 @@ internal class MillConfigurableViewModel(
     private val discoverExecutables: suspend (Path) -> MillExecutableDiscovery = { projectRoot ->
         runCatching {
             MillBackendRpcApi.getInstance().discoverExecutables(projectRoot.toString()).toDiscovery()
+        }.onFailure {
+            if (it is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
         }.getOrElse { error ->
             MillImportDebugLogger.warn("Mill executable discovery RPC failed: ${error.message}")
             MillExecutableDiscovery(projectWrapper = null, pathExecutables = emptyList())
@@ -49,6 +53,10 @@ internal class MillConfigurableViewModel(
                 MillBackendRpcApi.getInstance()
                     .probeExecutable(projectRoot.toString(), executableSource.name, executablePath)
                     .toProbeResult()
+            }.onFailure {
+                if (it is CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                }
             }.getOrElse { error ->
                 MillImportDebugLogger.warn("Mill executable probe RPC failed: ${error.message}")
                 MillExecutableProbeResult(
