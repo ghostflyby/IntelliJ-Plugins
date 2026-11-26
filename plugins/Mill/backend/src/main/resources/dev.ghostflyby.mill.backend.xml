@@ -1,0 +1,30 @@
+<!-- Copyright (c) 2026 ghostflyby -->
+<!-- SPDX-FileCopyrightText: 2026 ghostflyby -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
+
+<idea-plugin>
+    <dependencies>
+        <module name="intellij.platform.backend"/>
+        <module name="intellij.platform.externalSystem"/>
+        <module name="intellij.platform.externalSystem.impl"/>
+        <module name="intellij.platform.kernel.backend"/>
+        <module name="intellij.platform.rpc.backend"/>
+        <module name="dev.ghostflyby.mill.shared"/>
+        <plugin id="com.intellij.java"/>
+        <plugin id="org.intellij.scala"/>
+    </dependencies>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <platform.rpc.backend.remoteApiProvider implementation="dev.ghostflyby.mill.rpc.MillBackendRpcApiProvider"/>
+        <fileTypeOverrider implementation="dev.ghostflyby.mill.script.MillBuildScriptFileTypeOverrider"/>
+        <additionalLibraryRootsProvider implementation="dev.ghostflyby.mill.script.MillBuildScriptLibraryRootsProvider"/>
+        <resolveScopeEnlarger implementation="dev.ghostflyby.mill.script.MillBuildScriptResolveScopeEnlarger"/>
+        <externalSystemManager implementation="dev.ghostflyby.mill.MillExternalSystemManager"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.scala.MillScalaSdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.java.MillProjectJdkDataService"/>
+        <externalProjectDataService implementation="dev.ghostflyby.mill.java.MillModuleJdkDataService"/>
+    </extensions>
+    <extensions defaultExtensionNs="org.intellij.scala">
+        <scalaLanguageDerivative implementation="dev.ghostflyby.mill.script.MillBuildScriptScalaLanguageDerivative"/>
+    </extensions>
+</idea-plugin>

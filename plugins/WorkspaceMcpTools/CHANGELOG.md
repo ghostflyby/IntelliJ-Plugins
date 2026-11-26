@@ -7,6 +7,12 @@
 ### Added
 - IDE errors are now reported to JetBrains Marketplace.
 
+### Changed
+- Development sandboxes for the `shared`/`frontend` content modules moved from the leaf-named
+  `.intellijPlatform/sandbox/<frontend|shared|backend>/` directories (shared with any other
+  plugin's identically named modules) to path-derived per-project locations, handled centrally
+  by the repository build conventions — no effect on packaged distributions.
+
 ### Fixed
 
 - SDK server notification state is now persisted across restarts (the settings state class was not serialized)

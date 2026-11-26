@@ -98,7 +98,9 @@ jobs:
         # WSL tests self-enable on Windows through the EnabledOnWsl condition (the distribution
         # is discovered from the \\wsl.localhost UNC root — no property or tag switch).
         # rollout: swap the task list for the root `test` when more plugins ship WSL tests
-        run: '& .\gradlew.bat --configuration-cache :plugins:EnhancedHotSwapEnabler:test'
+        # (the Mill filter keeps the rest of its backend suite off this leg; the WSL class
+        # self-skips through its own distribution check).
+        run: '& .\gradlew.bat --configuration-cache :plugins:EnhancedHotSwapEnabler:test :plugins:Mill:backend:test --tests "dev.ghostflyby.mill.wsl.MillWslExecutionTest"'
       - name: Collect Tests Result
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7

@@ -17,6 +17,7 @@ import com.intellij.psi.PsiManager
 import com.intellij.testFramework.IndexingTestUtil
 import com.intellij.testFramework.junit5.TestApplication
 import com.intellij.testFramework.junit5.fixture.*
+import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -143,7 +144,7 @@ internal class FileSearchRoutesTest {
         restTestApplication {
             val sessionClient = client.withRestSession(projectPathFixture.get().resolve("src/in").toString(), json)
 
-            val response = sessionClient.get(searchFilesUrl(query = "AlphaFile"))
+            val response = sessionClient.getSearchFiles(searchFilesUrl(query = "AlphaFile"), project)
             Assertions.assertEquals(HttpStatusCode.OK, response.status, response.bodyAsText())
             Assertions.assertEquals(TestMarkdownContentType, response.responseContentType())
             val body = response.bodyAsText()
@@ -151,6 +152,18 @@ internal class FileSearchRoutesTest {
             Assertions.assertTrue(body.contains("| name | path | encodedFileUrl | fileType | score |"), body)
             Assertions.assertTrue(body.contains("AlphaFile.kt"), body)
         }
+    }
+
+    // The endpoint documents 503 while indexes update; a test that races the tail of indexing
+    // must follow the documented contract instead of assuming the setup wait covered every
+    // reindex (the request's own root refresh can start one).
+    private suspend fun HttpClient.getSearchFiles(url: String, project: Project): HttpResponse {
+        val response = get(url)
+        if (response.status != HttpStatusCode.ServiceUnavailable) {
+            return response
+        }
+        IndexingTestUtil.waitUntilIndexesAreReady(project)
+        return get(url)
     }
 
     private fun items(body: String): JsonArray {
