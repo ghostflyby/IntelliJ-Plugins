@@ -26,7 +26,7 @@ internal class PluginDescriptorTest {
                 "dev.ghostflyby.mill.shared" to """loading="required"""",
                 "dev.ghostflyby.intellij.shared" to """loading="required"""",
                 "dev.ghostflyby.mill.frontend" to "",
-                "dev.ghostflyby.mill.backend" to """loading="embedded" required-if-available="intellij.platform.backend"""",
+                "dev.ghostflyby.mill.backend" to """loading="optional" required-if-available="intellij.platform.backend"""",
             ),
             entries,
             "the root descriptor must declare the content modules with their split-mode loading rules",

@@ -6,6 +6,7 @@
     <dependencies>
         <module name="intellij.platform.backend"/>
         <module name="intellij.platform.externalSystem"/>
+        <module name="intellij.platform.externalSystem.impl"/>
         <module name="intellij.platform.kernel.backend"/>
         <module name="intellij.platform.rpc.backend"/>
         <module name="dev.ghostflyby.mill.shared"/>

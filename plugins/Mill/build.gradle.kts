@@ -21,12 +21,13 @@ dependencies {
         // classloader can see them.
         pluginModule(implementation(project(":plugins:Mill:frontend")))
         pluginModule(implementation(project(":modules:intellij-shared")))
-        // The backend module's classes are composed into the main plugin jar (embedded content
-        // module), so they run on the MAIN classloader, which also sees lib/*.jar — the
-        // documented plugin-with-dependencies model. A separate content-module classloader
-        // would only see its own lib/modules/<module-id>.jar and miss kotlinx-serialization
-        // used by the `show` JSON import.
-        pluginComposedModule(implementation(project(":plugins:Mill:backend")))
+        // The backend must be a real content module, not an embedded one: the platform ignores
+        // required-if-available for embedded/required modules
+        // (PluginContentDescriptor.ModuleItem.determineLoadingRule), so an embedded backend would
+        // still load in a split-mode frontend and report intellij.platform.backend as missing.
+        // The module jar carries the external-system resolver and is skipped when the backend
+        // module is unavailable.
+        pluginModule(implementation(project(":plugins:Mill:backend")))
     }
 }
 
