@@ -1,4 +1,4 @@
-public final class dev/ghostflyby/mill/Bundle : com/intellij/DynamicBundle {
+public final class dev/ghostflyby/mill/Bundle {
 	public static final field INSTANCE Ldev/ghostflyby/mill/Bundle;
 	public static final fun message (Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 	public static final fun messagePointer (Ljava/lang/String;[Ljava/lang/Object;)Ljava/util/function/Supplier;

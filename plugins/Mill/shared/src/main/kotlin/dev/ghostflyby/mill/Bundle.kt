@@ -13,13 +13,15 @@ import java.util.function.Supplier
 
 private const val BUNDLE: String = "messages.Bundle"
 
-public object Bundle : DynamicBundle(Bundle::class.java, BUNDLE) {
+private val bundle = DynamicBundle(Bundle::class.java, BUNDLE)
+
+public object Bundle {
     @JvmStatic
     public fun message(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls String =
-        getMessage(key, *params)
+        bundle.getMessage(key, *params)
 
     @JvmStatic
     @Nls
     public fun messagePointer(@PropertyKey(resourceBundle = BUNDLE) key: String, vararg params: Any): @Nls Supplier<String> =
-        getLazyMessage(key, *params)
+        bundle.getLazyMessage(key, *params)
 }
